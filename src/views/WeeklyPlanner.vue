@@ -109,6 +109,12 @@ function copyLastWeek() {
       <button class="btn sm icon-only" title="Print A4" @click="print"><span class="icon sm">print</span></button>
     </div>
 
+    <!-- phones: backlog & days don't fit stacked — full-height screens with a switch on top (ISS-22) -->
+    <nav class="phone-switch" aria-label="Backlog or week">
+      <button :class="{ on: !ui.backlogOnly }" @click="ui.backlogOnly = false"><span class="icon sm">view_agenda</span>Days</button>
+      <button :class="{ on: ui.backlogOnly }" @click="ui.backlogOnly = true"><span class="icon sm">inbox</span>Backlog</button>
+    </nav>
+
     <div class="body" :class="{ only: ui.backlogOnly }">
       <BacklogPanel :focus="ui.backlogOnly" @focus="ui.backlogOnly = !ui.backlogOnly" />
 
@@ -170,6 +176,7 @@ function copyLastWeek() {
 
 <style scoped>
 .wp { display: flex; flex-direction: column; height: 100%; }
+.phone-switch { display: none; }
 .guide { display: flex; align-items: center; gap: 12px; padding: 7px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; min-height: 42px; }
 .next { font-weight: 600; gap: 6px; }
 .select.small { height: 24px; font-size: 11px; }
@@ -212,8 +219,14 @@ function copyLastWeek() {
 /* phone (ISS-3): backlog becomes a capped section on top, day columns swipe horizontally,
    the panel rail becomes a bottom strip and the side panel a bottom sheet */
 @media (max-width: 640px) {
+  .phone-switch { display: flex; gap: 6px; padding: 6px 10px 0; }
+  .phone-switch button { flex: 1; justify-content: center; border: 1px solid var(--border); background: transparent; border-radius: 3px; padding: 7px 6px; display: flex; align-items: center; gap: 6px; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+  .phone-switch button.on { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
   .body { display: flex; flex-direction: column; }
-  .body > .backlog { flex: none; max-height: 34vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  /* one screen at a time: the tab above picks Days (default) or Backlog, each full height */
+  .body > .backlog { display: none; }
+  .body.only > .backlog { display: flex; flex: 1; max-height: none; border-bottom: 0; }
+  .body.only > .ctx { display: none; } /* the week context lives on the desktop backlog-only view */
   .days { flex: 1; min-height: 0; display: flex; overflow: auto; scroll-snap-type: x proximity; padding: 10px; }
   /* ISS-22: the day column must fit its content (schedule!) — capped viewport height would clip it */
   .days :deep(.day) { flex: 0 0 82vw; width: 82vw; scroll-snap-align: start; height: 100%; overflow-y: auto; }
