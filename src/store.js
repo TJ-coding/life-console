@@ -275,6 +275,8 @@ export function normalizeState() {
   ensureSettings()
   // SIGs may depend on other SIGs (ISS-5); the field is optional, so default it instead of a migration
   for (const p of state.plans ?? []) for (const s of p.sigs ?? []) if (!Array.isArray(s.deps)) s.deps = []
+  // an internal (earlier, personal) deadline beside the hard due date (ISS-9); also optional
+  for (const d of state.deadlines ?? []) if (d.internal === undefined) d.internal = ''
 }
 normalizeState()
 watch(state, (v) => {

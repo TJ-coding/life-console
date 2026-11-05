@@ -13,7 +13,7 @@ defineProps({ d: { type: Object, required: true }, label: { type: String, defaul
     <span class="what">
       <span class="inst-lbl"><span class="tiny upper muted">{{ label }}</span><span class="pill mono" :class="urgency(d.due)">{{ dueStatus(d.due) }}</span></span>
       <span class="name clamp2">{{ d.title }}</span>
-      <span class="meta mono small muted">{{ relDay(d.due.slice(0, 10), todayISO()) }} · {{ d.due.slice(11) }}<Chip v-if="d.source" :id="d.source" /></span>
+      <span class="meta mono small muted">{{ relDay(d.due.slice(0, 10), todayISO()) }} · {{ d.due.slice(11) }}<span v-if="d.internal" class="int" :title="'Internal deadline (yours)'"> · INT {{ d.internal }}</span><Chip v-if="d.source" :id="d.source" /></span>
     </span>
     <span class="clock">
       <span class="inst-big mono" :class="urgency(d.due)">{{ bigCountdown(d.due) }}</span>
@@ -28,6 +28,7 @@ defineProps({ d: { type: Object, required: true }, label: { type: String, defaul
 .what { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .pill { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; padding: 1px 6px; border: 1px solid currentColor; border-radius: 2px; }
 .name { font-weight: 600; font-size: 22px; line-height: 28px; }
+.meta .int { color: var(--info); }
 .meta { display: flex; align-items: center; gap: 8px; }
 .clock { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .inst-big { font-size: 48px; line-height: 50px; }

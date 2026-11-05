@@ -32,6 +32,7 @@ function remove() {
         <div class="grid">
           <label class="field"><span>Date</span><input v-model="date" type="date" class="input mono" /></label>
           <label class="field"><span>Time</span><input v-model="time" type="time" class="input mono" /></label>
+          <label class="field"><span>Internal deadline (yours)</span><input v-model="d.internal" type="date" class="input mono" title="Working target before the hard deadline; leave empty if none" /></label>
           <label class="field"><span>Source (course / plan / goal)</span><input v-model.trim="d.source" class="input mono" placeholder="ST2001spA" /></label>
           <label class="field"><span>Priority</span>
             <select v-model.number="d.priority" class="select mono"><option v-for="p in 5" :key="p" :value="p">P{{ p }}</option></select>

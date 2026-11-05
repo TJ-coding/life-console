@@ -174,6 +174,25 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
           </tbody>
         </table>
         <div v-if="!rows.length" class="empty">No todos match. Type above to add one, or press <span class="kbd">N</span>.</div>
+
+        <!-- phone (ISS-10): the table's select/id columns waste the width, so cards instead —
+             the name leads, then what's next: done · P · time · when · links; open = tap -->
+        <div v-if="rows.length" class="cards">
+          <div v-for="t in rows" :key="t.id" class="card" :class="{ done: t.done }" @click="open(t)">
+            <div class="r1 row">
+              <input type="checkbox" :checked="t.done" title="Done" @click.stop @change="toggleTodo(t.id)" />
+              <Prio :p="t.priority" />
+              <span class="ttl grow ellipsis"><span v-if="partLabel(t)" class="part mono">{{ partLabel(t) }}</span>{{ t.title }}</span>
+              <span class="mono small muted">{{ t.timeMin }}m</span>
+            </div>
+            <div class="r2 row small">
+              <span class="mono" :class="t.scheduled ? 'ok' : 'muted'">{{ t.scheduled ? `${wd(t.scheduled.date)}${t.scheduled.start ? ' ' + t.scheduled.start : ''}` : 'inbox' }}</span>
+              <span v-if="t.due" class="mono" :class="!t.done && diffDays(T, t.due) < 0 ? 'danger' : t.due === T ? 'warn' : 'muted'">due {{ relDay(t.due, T) }}</span>
+              <Chip v-for="l in t.links.slice(0, 3)" :key="l" :id="l" />
+              <span v-if="t.links.length > 3" class="mono muted">+{{ t.links.length - 3 }}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <footer class="stats mono small">
@@ -214,5 +233,17 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
 .grip { vertical-align: middle; margin-left: -6px; cursor: grab; opacity: 0.5; }
 .chips { display: flex; gap: 4px; overflow: hidden; }
 .stats { display: flex; gap: 18px; padding: 8px 16px; border-top: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+/* phone card list (ISS-10): no select column, name first */
+.cards { display: none; }
+@media (max-width: 640px) {
+  .tbl { display: none; }
+  .cards { display: flex; flex-direction: column; }
+  .card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .card:active { background: var(--surface-2); }
+  .card.done .ttl { text-decoration: line-through; color: var(--muted); }
+  .r2 { flex-wrap: wrap; gap: 10px; }
+  .card .part { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 2px; padding: 0 3px; margin-right: 6px; }
+  .qa button { display: none; } /* the input alone adds on Enter */
+}
 @media (max-width: 900px) { .inbox { grid-template-columns: 1fr; } .filters { display: none; } }
 </style>

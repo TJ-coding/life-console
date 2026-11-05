@@ -109,7 +109,7 @@ const open = (d) => { ui.deadlineId = d.id }
             <div class="ttl">{{ d.title }}</div>
             <div class="meta mono">
               <span :class="isOverdue(d) ? 'danger' : ''">{{ wd(d.due) }} {{ fmtSlash(d.due) }} {{ d.due.slice(11) }}</span>
-              <span v-if="isOverdue(d)" class="danger">· {{ countdown(d.due).slice(1) }} ago</span>
+              <span v-if="d.internal" class="int" :title="`Internal deadline (yours)`">INT {{ wd(d.internal) }} {{ fmtSlash(d.internal) }}</span>
               <Chip v-if="d.source" :id="d.source" />
               <span v-if="d.vital" class="vital ellipsis">{{ d.vital }}</span>
             </div>
@@ -145,7 +145,7 @@ const open = (d) => { ui.deadlineId = d.id }
           </div>
           <button
             v-for="d in c.items" :key="d.id" class="ev" :class="{ over: isOverdue(d), done: d.done }"
-            :title="`${d.title} · ${d.due.slice(11)}${d.vital ? ' · ' + d.vital : ''}`" @click.stop="open(d)"
+            :title="`${d.title} · ${d.due.slice(11)}${d.internal ? ' · INT ' + d.internal : ''}${d.vital ? ' · ' + d.vital : ''}`" @click.stop="open(d)"
           >
             <span class="mono">{{ d.due.slice(11) }}</span> {{ d.title }}
           </button>
@@ -186,6 +186,7 @@ const open = (d) => { ui.deadlineId = d.id }
 .ttl { font-size: 15px; font-weight: 600; line-height: 20px; }
 .main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); min-width: 0; }
+.meta .int { color: var(--info); }
 .meta > * { flex: none; }
 .meta .vital { flex: 1 1 auto; min-width: 0; font-family: Inter, sans-serif; }
 .month { padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 10px; }
