@@ -10,6 +10,8 @@ import FocusMode from './views/FocusMode.vue'
 import Deadlines from './views/Deadlines.vue'
 import ModulePlaceholder from './views/ModulePlaceholder.vue'
 import { applyTheme } from './store'
+import { startSync } from './sync'
+import { refreshPush } from './push'
 import './styles.css'
 
 const router = createRouter({
@@ -33,3 +35,9 @@ router.beforeEach((to) => (to.name === 'day' && !/^\d{4}-\d{2}-\d{2}$/.test(to.p
 
 applyTheme()
 createApp(App).use(router).mount('#app')
+
+// sync with the server (no-op without one), then the service worker for offline + push
+startSync()
+if ('serviceWorker' in navigator && window.isSecureContext && import.meta.env.PROD) {
+  navigator.serviceWorker.register('/sw.js').then(() => refreshPush()).catch((e) => console.warn('service worker', e))
+}

@@ -31,6 +31,15 @@ jobs:
       - run: npm run build
       - name: Build the Docker image (same Dockerfile Dokploy uses)
         run: docker build -t life-console:ci .
+      - name: Smoke-test the container (app, sync API, push key)
+        run: |
+          docker run -d --name lc -p 8080:80 life-console:ci
+          for i in $(seq 1 20); do curl -fs localhost:8080/api/health && break; sleep 1; done
+          curl -fs localhost:8080/ | grep -q '<title>Life Console'
+          curl -fs localhost:8080/manifest.webmanifest | grep -q '"standalone"'
+          curl -fs localhost:8080/api/push/key | grep -q publicKey
+          curl -fs -X PUT localhost:8080/api/state -H 'Content-Type: application/json' -d '{"state":{"todos":[]},"baseVersion":0}' | grep -q '"version":1'
+          docker logs lc
 
   deploy:
     needs: build

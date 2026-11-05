@@ -206,12 +206,35 @@ function load() {
   } catch { /* ignore */ }
   return null
 }
-export const state = reactive(load() ?? seed())
+const loaded = load()
+/** true if this browser already had planner data saved (vs. a fresh demo seed) */
+export const hadLocalData = loaded !== null
+export const state = reactive(loaded ?? seed())
 /** Every todo carries a numeric `order` used to rank todos that share a priority. */
 export function ensureOrder() {
   state.todos?.forEach((t, i) => { if (typeof t.order !== 'number') t.order = (i + 1) * 1000 })
 }
-ensureOrder()
+/** Notification preferences live in the synced document so the server scheduler can read them. */
+export const NOTIFY_DEFAULTS = {
+  notify: { blocks: true, deadlines: true, daily: true, wellbeing: true },
+  blockLeadMin: 5, briefingTime: '07:30', eveningTime: '21:00', bedTime: '23:00', windDownMin: 60, caffeineWarnMin: 30,
+}
+export function ensureSettings() {
+  if (!state.settings) state.settings = {}
+  const s = state.settings
+  for (const [k, v] of Object.entries(NOTIFY_DEFAULTS)) if (s[k] === undefined) s[k] = typeof v === 'object' ? { ...v } : v
+  for (const [k, v] of Object.entries(NOTIFY_DEFAULTS.notify)) if (s.notify[k] === undefined) s.notify[k] = v
+  // the server schedules in this timezone; keep it in step with the device you're using
+  let tz = 'UTC'
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { /* ignore */ }
+  if (s.timezone !== tz) s.timezone = tz
+}
+/** Bring any loaded / synced / imported document up to the current shape. */
+export function normalizeState() {
+  ensureOrder()
+  ensureSettings()
+}
+normalizeState()
 watch(state, (v) => {
   try { localStorage.setItem(KEY, JSON.stringify(v)) } catch { /* ignore */ }
 }, { deep: true })
@@ -220,7 +243,7 @@ export function resetDemo() {
   const fresh = seed()
   for (const k of Object.keys(state)) delete state[k]
   Object.assign(state, fresh)
-  ensureOrder()
+  normalizeState()
 }
 
 /* ───────────── transient UI state ───────────── */

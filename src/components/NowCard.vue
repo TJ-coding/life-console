@@ -86,6 +86,9 @@ function start(t) {
 .now-card.free { border-left-color: var(--muted); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .tag-row { gap: 10px; }
+.main > .row { flex-wrap: wrap; row-gap: 4px; }
+.main > .row > * { flex: none; }
+.main > .row > .ellipsis { flex: 1 1 140px; }
 .tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 2px; background: var(--stamp); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }
 .free-tag { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
 .pulse { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: pulse 1.6s infinite; }

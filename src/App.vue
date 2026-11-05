@@ -8,6 +8,17 @@ import TodoDrawer from './components/TodoDrawer.vue'
 import SplitDialog from './components/SplitDialog.vue'
 import DeadlineDialog from './components/DeadlineDialog.vue'
 import { useNow } from './now'
+import { sync, chooseSync } from './sync'
+
+const SYNC_TEXT = { choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', error: 'ERROR' }
+const SYNC_ICON = { choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', error: 'error' }
+const TABS = [
+  { to: '/', icon: 'radar', label: 'Today', key: 'today' },
+  { to: '/week', icon: 'calendar_month', label: 'Plan', key: 'week' },
+  { to: '/todos', icon: 'checklist', label: 'Todos', key: 'todos' },
+  { to: '/deadlines', icon: 'alarm', label: 'Deadlines', key: 'deadlines' },
+  { to: '/settings', icon: 'settings', label: 'Settings', key: 'settings' },
+]
 
 // "What now" — shown in the top bar on every screen and in the browser tab title.
 const now = useNow()
@@ -24,6 +35,7 @@ const clock = computed(() => {
   return `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`
 })
 const T = computed(() => todayISO())
+const reload = () => window.location.reload()
 const openCount = computed(() => state.todos.filter((t) => !t.done).length)
 const overdueCount = computed(() => { void ui.now.getMinutes(); return state.deadlines.filter(isOverdue).length })
 const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name === 'day' ? 'today' : route.name))
@@ -156,7 +168,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <div class="spacer"></div>
       <div class="side-foot mono small">
         <div class="row"><span class="icon sm muted">cloud_sync</span><span class="muted grow">ClickUp sync</span><span class="ok">MOCK</span></div>
-        <div class="row"><span class="icon sm muted">save</span><span class="muted grow">Storage</span><span class="ok">LOCAL</span></div>
+        <router-link to="/settings" class="row synclink" :title="sync.message || 'Sync status'">
+          <span class="icon sm muted">{{ SYNC_ICON[sync.status] }}</span><span class="muted grow">Sync</span>
+          <span :class="sync.status === 'synced' ? 'ok' : ['signed-out', 'error'].includes(sync.status) ? 'danger' : 'warn'">{{ SYNC_TEXT[sync.status] }}</span>
+        </router-link>
       </div>
     </aside>
 
@@ -179,8 +194,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </header>
 
       <main class="content">
+        <div v-if="sync.status === 'signed-out'" class="banner">
+          <span class="icon sm">lock</span>Your sign-in expired, so changes aren't syncing.
+          <button class="btn sm" @click="reload">Reload to sign in</button>
+        </div>
         <router-view />
       </main>
+
+      <nav class="tabbar" aria-label="Main">
+        <router-link v-for="t in TABS" :key="t.key" :to="t.to" class="tab" :class="{ on: activeKey === t.key }">
+          <span class="icon">{{ t.icon }}</span><span>{{ t.label }}</span>
+          <i v-if="t.key === 'deadlines' && overdueCount" class="tabbadge">{{ overdueCount }}</i>
+        </router-link>
+      </nav>
 
       <footer class="statusbar mono">
         <span><span class="kbd">⌘K</span> Command</span>
@@ -203,6 +229,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <CommandPalette />
     <TodoDrawer />
     <SplitDialog />
+    <div v-if="sync.status === 'choose'" class="choose-scrim">
+      <div class="choose panel" role="dialog" aria-label="Choose which planner to keep">
+        <div class="panel-h"><span class="icon sm">sync_problem</span><h2>Which planner should this device use?</h2></div>
+        <div class="panel-b col">
+          <p class="small">This device already has planner data, and the server has a planner from another device
+            (saved {{ sync.pending?.updatedAt ? new Date(sync.pending.updatedAt).toLocaleString() : '' }}{{ sync.pending?.device ? ' on ' + sync.pending.device : '' }}).
+            They'll stay in sync from now on.</p>
+          <button class="btn primary big" @click="chooseSync('server')"><span class="icon sm">cloud_download</span>Use the server's planner<small>recommended for a new phone or browser — this device's copy is replaced</small></button>
+          <button class="btn big" @click="chooseSync('device')"><span class="icon sm">cloud_upload</span>Use this device's planner<small>replaces the server copy everywhere (the server keeps a backup)</small></button>
+          <p class="tiny muted">Unsure? Export this device's data first in Settings → Data.</p>
+        </div>
+      </div>
+    </div>
     <DeadlineDialog />
     <transition name="fade">
       <div v-if="ui.toast" class="toast mono">
@@ -253,5 +292,31 @@ nav { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
   .nav, .exec { justify-content: center; padding: 0; }
   .statusbar span:nth-child(n + 5) { display: none; }
   .nowpill .muted { display: none; }
+}
+.choose-scrim { position: fixed; inset: 0; z-index: 70; background: var(--scrim); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.choose { max-width: 520px; width: 100%; }
+.btn.big { height: auto; padding: 10px 12px; flex-direction: column; align-items: flex-start; gap: 3px; white-space: normal; text-align: left; }
+.btn.big small { font: 400 11px/14px Inter, sans-serif; opacity: 0.85; }
+.synclink { color: inherit; }
+.synclink:hover .muted { color: var(--text); }
+.banner { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: color-mix(in srgb, var(--danger) 12%, var(--surface)); border-bottom: 1px solid var(--danger); color: var(--text); font-size: 12px; }
+.tabbar { display: none; }
+/* phone: bottom tab bar instead of the sidebar; respect the notch / home indicator */
+@media (max-width: 640px) {
+  .app { grid-template-columns: 1fr; height: 100dvh; }
+  .sidebar, .statusbar, .pill, .crumb { display: none !important; }
+  .topbar { padding: env(safe-area-inset-top) 10px 0; height: calc(48px + env(safe-area-inset-top)); gap: 6px; }
+  .topbar .kbd { display: none; }
+  .topbar .btn:not(.icon-only) { font-size: 0; gap: 0; padding: 0 6px; }
+  .topbar .btn .icon { font-size: 18px; }
+  .nowpill { flex: 1; max-width: none; }
+  .tabbar {
+    display: flex; flex-direction: row; gap: 0; overflow: visible; flex: none; border-top: 1px solid var(--border); background: var(--surface);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tab { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 5px; color: var(--muted); font-size: 10px; }
+  .tab.on { color: var(--accent); }
+  .tabbadge { position: absolute; top: 2px; left: 55%; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: var(--danger); color: #fff; font: 700 9px/15px 'JetBrains Mono', monospace; font-style: normal; }
+  .toast { bottom: calc(64px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px); }
 }
 </style>

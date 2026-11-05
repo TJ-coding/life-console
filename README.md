@@ -4,8 +4,10 @@ A Vue 3 + Vite prototype of the Life Console spec (`../stitch_new_project_worksp
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
+npm run dev:server   # API + push scheduler on :8787 (data in ./.data)
+npm run dev          # app on http://localhost:5173 (proxies /api to :8787)
 ```
+Without the server the app still runs: sync stays off and data lives in the browser.
 
 ## What's in it
 | Screen | Route | Works |
@@ -55,8 +57,20 @@ Each part is an ordinary task labelled `1/3`, `2/3`… in date order, sharing th
 
 - Category colours (`--cat-*` in `styles.css`) come from the validated categorical palette. They're separate from the status colours (green = done, amber = warning, red = overdue).
 
+## Phone app, sync and notifications
+- **Install** (needs HTTPS): on iPhone use Safari → Share → *Add to Home Screen*; on Android use Chrome → *Install app*. Then go to Settings → Notifications → *Turn on for this device*. iOS needs 16.4+ and only delivers push to Home Screen apps.
+- **Sync:** the planner is one document on the server (`/api/state`, versioned). Devices push edits after about 1.5s and pull every 30s, on focus and when back online. Conflicts are three-way merged per record and field (`src/merge.js`); only clashes on the same field go to the newest edit, and the server keeps backups of overwritten versions. A device with its own data asks once whether to use the server's copy or its own.
+- **Notifications** (server scheduler, `server/schedule.mjs`, in the timezone of the device you last used):
+  - **Blocks and tasks:** N min before each block or timed task starts, plus *Time's up* when a timed task ends, with a **Mark done** action.
+  - **Deadlines:** 1 day and 1 hour before, and at the due time.
+  - **Daily:** a morning briefing, and an evening sign-off reminder.
+  - **Wellbeing:** a caffeine cutoff warning and a wind-down reminder.
+
+  Each kind can be toggled, and its times set, in Settings.
+- **Server** (`server/`): plain Node `http` plus `web-push`. Data, subscriptions and VAPID keys live in `DATA_DIR` (`/data`, a Docker volume).
+
 ## Deployment
-Live at **http://life-console.tj-coding.uk** (also http://dokpoly.netbird.cloud). Both are reachable only on the NetBird network: `life-console.tj-coding.uk` is a DNS-only (grey-cloud) Cloudflare A record pointing at the server's NetBird address `100.82.103.214`, so anyone can look it up but only NetBird peers can connect. Dokploy (project *Life Console*, app `life-console`) builds the `Dockerfile` (Vite build → nginx) from `main` via its GitHub App integration.
+Live at **http://life-console.tj-coding.uk** (also http://dokpoly.netbird.cloud). Both are reachable only on the NetBird network: `life-console.tj-coding.uk` is a DNS-only (grey-cloud) Cloudflare A record pointing at the server's NetBird address `100.82.103.214`, so anyone can look it up but only NetBird peers can connect. Dokploy (project *Life Console*, app `life-console`) builds the `Dockerfile` (Vite build → Node server, volume at `/data`) from `main` via its GitHub App integration.
 - Pushing to `main` runs `.github/workflows/deploy.yml`. It builds the app and the Docker image, joins NetBird as a temporary peer, calls Dokploy's `application.deploy`, and waits until Dokploy reports `done`.
 - Needs: secrets `DOKPLOY_API_KEY` and `NETBIRD_SETUP_KEY` (reusable and ephemeral, in a group allowed to reach the Dokploy peer), plus variables `DOKPLOY_URL` and `DOKPLOY_APPLICATION_ID`.
 - Dokploy's own auto-deploy is off, so every deploy comes from Actions (or a manual deploy in Dokploy).
