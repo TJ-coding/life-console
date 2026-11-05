@@ -136,7 +136,7 @@ function seed() {
       todo('T-110', 'Refactor CARVER weight vector', { timeMin: 45, lsd: 'S', priority: 1, links: ['SP-03'] }),
       todo('T-111', 'Draft sensor spec sheet', { timeMin: 60, lsd: 'L', priority: 2, links: ['ST2001spA'] }),
       todo('T-112', 'Reorganise lab Obsidian notes', { timeMin: 30, lsd: 'D', priority: 3 }),
-      todo('T-113', 'GPU cluster script fix for batch jobs', { timeMin: 40, lsd: 'S', priority: 2, links: ['SIG-01.2'] }),
+      todo('T-113', 'GPU cluster script fix for batch jobs', { timeMin: 40, lsd: 'S', priority: 2, links: ['SIG-01.2', 'DL-2'] }),
       todo('T-114', 'Table 2 metric delta confirmation', { timeMin: 30, lsd: 'S', priority: 2, links: ['SIG-01.2'] }),
       todo('T-115', 'Submit ST2001 lab assignment', { timeMin: 20, lsd: 'S', priority: 2, due: D(4), scheduled: { date: D(4), start: null }, links: ['SIG-02.1'] }),
       todo('T-116', 'Weekly financial takt pass', { timeMin: 20, lsd: 'D', priority: 4, scheduled: { date: D(5), start: null } }),
@@ -271,6 +271,21 @@ export function migrateDoc(doc) {
   return doc
 }
 
+/**
+ * Backfill: a task linked to a deadline (a `DL-…` link) inherits that date as its due when its own
+ * due date is unset. The personal internal target wins; else the hard due date's day part. Running
+ * in normalizeState (load / sync / import) and on store changes keeps it true at real time.
+ */
+function backfillLinkedDues() {
+  const byId = new Map((state.deadlines ?? []).map((d) => [d.id, d]))
+  for (const t of state.todos ?? []) {
+    if (t.due) continue
+    const d = (t.links ?? []).filter((l) => linkType(l) === 'deadline').map((l) => byId.get(l)).find(Boolean)
+    const due = d && (d.internal || (d.due ?? '').slice(0, 10))
+    if (due) t.due = due
+  }
+}
+
 /** Bring any loaded / synced / imported document up to the current shape. */
 export function normalizeState() {
   migrateDoc(state)
@@ -280,9 +295,11 @@ export function normalizeState() {
   for (const p of state.plans ?? []) for (const s of p.sigs ?? []) if (!Array.isArray(s.deps)) s.deps = []
   // an internal (earlier, personal) deadline beside the hard due date (ISS-9); also optional
   for (const d of state.deadlines ?? []) if (d.internal === undefined) d.internal = ''
+  backfillLinkedDues()
 }
 normalizeState()
 watch(state, (v) => {
+  backfillLinkedDues()
   try { localStorage.setItem(KEY, JSON.stringify(v)) } catch { /* ignore */ }
 }, { deep: true })
 
