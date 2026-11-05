@@ -7,7 +7,7 @@
 //   independent edits on two devices are both kept; same-field clashes go to the newest edit.
 // Without a server (vite dev, static hosting) sync quietly stays off and the app works locally.
 import { reactive, watch, nextTick } from 'vue'
-import { state, normalizeState, toast, hadLocalData, migrateDoc } from './store'
+import { state, normalizeState, toast, hadLocalData, migrateDoc, SCHEMA_VERSION } from './store'
 import { merge3 } from './merge'
 
 const K = { base: 'life-console/sync-base', version: 'life-console/sync-version', dirty: 'life-console/sync-dirty', edited: 'life-console/sync-edited', device: 'life-console/device' }
@@ -18,6 +18,7 @@ const ls = {
 
 export const sync = reactive({
   status: 'starting', // starting | choose | local | syncing | synced | offline | signed-out | error
+  outdated: false, // a newer app version is deployed (or the server holds a newer data schema): reload
   pending: null, // server copy awaiting the user's choice (first sync of a device that has its own data)
   version: Number(ls.get(K.version)) || 0,
   lastSync: null,
@@ -40,6 +41,14 @@ let pushTimer = null
 let busy = false
 
 class AuthError extends Error {}
+/** This tab's build = its hashed entry script (matches the server's `build` when up to date). */
+const MY_BUILD = (document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src') || '').split('/').pop() || 'dev'
+const checkBuild = (h) => { if (h?.build && MY_BUILD !== 'dev' && h.build !== 'dev' && h.build !== MY_BUILD) sync.outdated = true }
+/** Data written by a newer app version must not be applied or overwritten by this (older) code. */
+function tooNew(doc) {
+  if ((Number(doc?.state?.schemaVersion) || 1) > SCHEMA_VERSION) { sync.outdated = true; sync.status = 'outdated'; return true }
+  return false
+}
 /** fetch JSON from our API; detect a Cloudflare Access login redirect as "signed out". */
 async function call(path, opts = {}) {
   const res = await fetch(`/api${path}`, { redirect: 'manual', credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, ...opts })
@@ -99,13 +108,14 @@ function fail(err) {
 
 async function pushNow(force = false) {
   clearTimeout(pushTimer)
-  if (!dirty || busy || sync.status === 'local' || sync.status === 'choose') return
+  if (!dirty || busy || ['local', 'choose', 'outdated'].includes(sync.status)) return
   busy = true
   sync.status = 'syncing'
   try {
     const body = JSON.stringify({ state, baseVersion: sync.version, force, device: deviceName() })
     const r = await call('/state', { method: 'PUT', body })
     if (r.status === 409) {
+      if (tooNew(r.body)) return
       // another device saved meanwhile: merge its changes with ours, then save the result
       await mergeRemote(r.body)
       busy = false
@@ -125,10 +135,11 @@ async function pushNow(force = false) {
 const schedulePush = () => { clearTimeout(pushTimer); pushTimer = setTimeout(() => pushNow(), 1500) }
 
 export async function pull() {
-  if (sync.status === 'local' || sync.status === 'choose' || busy) return
+  if (['local', 'choose', 'outdated'].includes(sync.status) || busy) return
   if (dirty) return pushNow()
   try {
     const r = await call(`/state?since=${sync.version}`)
+    if (r.body.changed && r.body.state && tooNew(r.body)) return
     if (r.body.changed && r.body.version !== sync.version && r.body.state) {
       await applyRemote(r.body)
       toast('Updated with changes from another device')
@@ -145,6 +156,7 @@ export async function pull() {
 async function reconcile() {
   const r = await call('/state')
   const remote = r.body
+  if (remote.state && tooNew(remote)) return
   if (!remote.version || !remote.state) { markDirty(); return pushNow(true) } // empty server: seed it from this device
   if (!ls.get(K.version)) {
     // this device has never synced: a fresh browser just adopts the server copy,
@@ -185,7 +197,7 @@ export async function chooseSync(which) {
 
 export async function startSync() {
   try {
-    await call('/health')
+    checkBuild((await call('/health')).body)
   } catch (err) {
     if (err instanceof AuthError) { fail(err); return }
     sync.status = 'local' // no server: local-only mode (e.g. `npm run dev` without the API)
@@ -201,6 +213,10 @@ export async function startSync() {
   }, { deep: true })
 
   setInterval(() => { if (document.visibilityState === 'visible') pull() }, 30000)
+  // notice new deploys while the tab stays open (cheap health check every 2 minutes and on focus)
+  const buildCheck = () => call('/health').then((r) => checkBuild(r.body)).catch(() => {})
+  setInterval(() => { if (document.visibilityState === 'visible') buildCheck() }, 120000)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') buildCheck() })
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pull() })
   window.addEventListener('online', () => pull())
   // phones suspend apps without warning: flush unsaved edits when the page is hidden or closed

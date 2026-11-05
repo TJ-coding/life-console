@@ -24,6 +24,10 @@ const push = createPush(store, {
   log,
 })
 
+/** Identifies the deployed front-end build: the content-hashed entry script in dist/index.html. */
+let BUILD = 'dev'
+try { BUILD = (fs.readFileSync(path.join(DIST, 'index.html'), 'utf8').match(/assets\/(index-[\w-]+\.js)/) || [])[1] || 'dev' } catch { /* no dist yet */ }
+
 /* ── planner document ── */
 const EMPTY = { version: 0, updatedAt: null, device: null, state: null }
 let doc = store.read('state.json', EMPTY)
@@ -79,7 +83,7 @@ async function api(req, res, url) {
   const route = `${req.method} ${url.pathname}`
   switch (route) {
     case 'GET /api/health':
-      return send(res, 200, { ok: true, version: doc.version, time: new Date().toISOString() })
+      return send(res, 200, { ok: true, version: doc.version, build: BUILD, time: new Date().toISOString() })
 
     case 'GET /api/state': {
       const since = Number(url.searchParams.get('since'))

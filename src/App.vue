@@ -10,8 +10,8 @@ import DeadlineDialog from './components/DeadlineDialog.vue'
 import { useNow } from './now'
 import { sync, chooseSync } from './sync'
 
-const SYNC_TEXT = { choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', error: 'ERROR' }
-const SYNC_ICON = { choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', error: 'error' }
+const SYNC_TEXT = { outdated: 'RELOAD', choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', error: 'ERROR' }
+const SYNC_ICON = { outdated: 'system_update', choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', error: 'error' }
 const TABS = [
   { to: '/', icon: 'radar', label: 'Today', key: 'today' },
   { to: '/week', icon: 'calendar_month', label: 'Plan', key: 'week' },
@@ -194,6 +194,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </header>
 
       <main class="content">
+        <div v-if="sync.outdated" class="banner update">
+          <span class="icon sm">system_update</span>
+          {{ sync.status === 'outdated' ? 'Your data was saved by a newer version of Life Console. Reload to continue syncing.' : 'Life Console was updated.' }}
+          <button class="btn sm primary" @click="reload">Reload</button>
+        </div>
         <div v-if="sync.status === 'signed-out'" class="banner">
           <span class="icon sm">lock</span>Your sign-in expired, so changes aren't syncing.
           <button class="btn sm" @click="reload">Reload to sign in</button>
@@ -299,6 +304,7 @@ nav { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
 .btn.big small { font: 400 11px/14px Inter, sans-serif; opacity: 0.85; }
 .synclink { color: inherit; }
 .synclink:hover .muted { color: var(--text); }
+.banner.update { background: color-mix(in srgb, var(--info) 12%, var(--surface)); border-bottom-color: var(--info); }
 .banner { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: color-mix(in srgb, var(--danger) 12%, var(--surface)); border-bottom: 1px solid var(--danger); color: var(--text); font-size: 12px; }
 .tabbar { display: none; }
 /* phone: bottom tab bar instead of the sidebar; respect the notch / home indicator */

@@ -47,7 +47,7 @@ const KINDS = [
   { key: 'daily', label: 'Daily briefing & sign-off', desc: 'Morning summary of the day; evening reminder to stamp sign-off and plan tomorrow.' },
   { key: 'wellbeing', label: 'Wellbeing', desc: 'Caffeine cutoff warning and a wind-down reminder before bedtime.' },
 ]
-const SYNC_LABEL = { starting: 'Connecting…', local: 'Local only', syncing: 'Saving…', synced: 'Synced', offline: 'Offline', 'signed-out': 'Signed out', error: 'Error' }
+const SYNC_LABEL = { outdated: 'Update needed', choose: 'Choose copy', starting: 'Connecting…', local: 'Local only', syncing: 'Saving…', synced: 'Synced', offline: 'Offline', 'signed-out': 'Signed out', error: 'Error' }
 const fmtTime = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—')
 const isThis = (d) => d.endpoint === push.endpoint
 const reload = () => window.location.reload()
