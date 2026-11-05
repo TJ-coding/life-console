@@ -121,6 +121,10 @@ const reload = () => window.location.reload()
           <input v-model="n.notify[k.key]" type="checkbox" />
           <div><b>{{ k.label }}</b><div class="small muted">{{ k.desc }}</div></div>
         </label>
+        <label class="kind">
+          <input v-model="n.notify.vibrate" type="checkbox" />
+          <div><b>Vibration</b><div class="small muted">Let the phone vibrate when a notification arrives. Turn off to keep it silent (the banner still shows).</div></div>
+        </label>
         <div class="grid">
           <label class="field"><span>Block reminder (min before)</span><input v-model.number="n.blockLeadMin" type="number" min="0" max="120" class="input mono" /></label>
           <label class="field"><span>Morning briefing</span><input v-model="n.briefingTime" type="time" class="input mono" /></label>

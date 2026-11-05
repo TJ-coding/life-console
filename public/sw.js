@@ -54,6 +54,8 @@ self.addEventListener('push', (e) => {
     badge: '/icons/badge-72.png',
     data: { url: p.url || '/', ...(p.data || {}) },
     actions: p.actions || [],
+    // p.vibrate === false → stay silent: the owner turns vibration off in Settings (ISS-13)
+    vibrate: p.vibrate === false ? [] : undefined,
     timestamp: Date.now(),
   }))
 })

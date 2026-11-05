@@ -217,7 +217,7 @@ export function ensureOrder() {
 }
 /** Notification preferences live in the synced document so the server scheduler can read them. */
 export const NOTIFY_DEFAULTS = {
-  notify: { blocks: true, deadlines: true, daily: true, wellbeing: true },
+  notify: { blocks: true, deadlines: true, daily: true, wellbeing: true, vibrate: true },
   blockLeadMin: 5, briefingTime: '07:30', eveningTime: '21:00', bedTime: '23:00', windDownMin: 60, caffeineWarnMin: 30,
 }
 export function ensureSettings() {

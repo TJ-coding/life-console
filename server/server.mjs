@@ -8,7 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createStore } from './store.mjs'
 import { createPush } from './push.mjs'
-import { computeEvents } from './schedule.mjs'
+import { computeEvents, settingsOf } from './schedule.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT) || 80
@@ -205,7 +205,7 @@ async function api(req, res, url) {
     }
     case 'POST /api/push/test': {
       const b = await readBody(req)
-      const payload = { title: 'Life Console · test', body: 'Notifications are working on this device ✓', url: '/#/settings', tag: 'test' }
+      const payload = { title: 'Life Console · test', body: 'Notifications are working on this device ✓', url: '/#/settings', tag: 'test', vibrate: settingsOf(doc.state)?.notify?.vibrate !== false }
       const n = b.endpoint ? Number(await push.sendTo(b.endpoint, payload)) : await push.sendAll(payload)
       return send(res, 200, { sent: n })
     }
@@ -245,7 +245,7 @@ async function tick() {
   lastTick = now
   for (const e of events) {
     sent.set(e.key, now)
-    const n = await push.sendAll({ title: e.title, body: e.body, url: e.url, tag: e.tag, data: e.data, actions: e.actions })
+    const n = await push.sendAll({ title: e.title, body: e.body, url: e.url, tag: e.tag, data: e.data, actions: e.actions, vibrate: settingsOf(doc.state).notify.vibrate !== false })
     log(`[notify] ${e.key} → ${n} device(s)`)
   }
   if (events.length) {
