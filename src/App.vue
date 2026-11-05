@@ -6,6 +6,7 @@ import { NAV } from './nav'
 import CommandPalette from './components/CommandPalette.vue'
 import TodoDrawer from './components/TodoDrawer.vue'
 import SplitDialog from './components/SplitDialog.vue'
+import BlockDialog from './components/BlockDialog.vue'
 import DeadlineDialog from './components/DeadlineDialog.vue'
 import IssueDialog from './components/IssueDialog.vue'
 import { issues, openIssueDialog, openCount as openIssueCount } from './issues'
@@ -58,6 +59,7 @@ function onKey(e) {
   if (e.key === 'Escape') {
     if (issues.dialog) issues.dialog = null
     else if (ui.deadlineId) ui.deadlineId = null
+    else if (ui.blockId) ui.blockId = null
     else if (ui.splitId) ui.splitId = null
     else if (ui.palette) ui.palette = false
     else if (ui.drawerId) ui.drawerId = null
@@ -66,7 +68,7 @@ function onKey(e) {
     return
   }
   const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]')
-  if (typing || ui.palette || ui.splitId || ui.deadlineId || issues.dialog) return
+  if (typing || ui.palette || ui.splitId || ui.deadlineId || ui.blockId || issues.dialog) return
   if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && ui.selectedId) {
     e.preventDefault()
     const t = moveSelected(e.key === 'ArrowUp' ? -1 : 1)
@@ -255,6 +257,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </div>
     </div>
     <DeadlineDialog />
+    <BlockDialog />
     <IssueDialog />
     <transition name="fade">
       <div v-if="ui.toast" class="toast mono">

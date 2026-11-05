@@ -69,7 +69,7 @@ function auto() {
         </button>
         <span v-else-if="!untimed.length && todos.length" class="ok" title="Every task has a time">✓</span>
       </div>
-      <DayTimeline :date="date" :blocks="blocks" :pxh="timelinePx" :dim-fn="filter ? dimBlock : null" @drop-todo="schedule" @open="(id) => (ui.drawerId = id)" />
+      <DayTimeline :date="date" :blocks="blocks" :pxh="timelinePx" :dim-fn="filter ? dimBlock : null" @drop-todo="schedule" @open="(id) => (ui.drawerId = id)" @edit="(b) => (ui.blockId = b.id)" />
     </div>
 
     <div class="sec">

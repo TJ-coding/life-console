@@ -3,7 +3,7 @@
 //   ① Backlog → ② Assign day (workload) → ③ Assign time (schedule)
 // Steps don't navigate away — they switch the column layout to emphasise that step.
 import { computed } from 'vue'
-import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD } from '../store'
+import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, setScheduleLock, toast } from '../store'
 
 const weekEnd = computed(() => addDays(ui.weekStart, 6))
 const isThisWeek = computed(() => ui.weekStart === mondayOf(todayISO()))
@@ -52,6 +52,7 @@ const setMode = (m) => {
       </button>
     </div>
 
+    <button class="btn icon-only" :class="{ lockon: ui.scheduleLock }" :title="ui.scheduleLock ? 'Schedule locked — blocks cannot be dragged, resized or deleted. Click to unlock.' : 'Lock the schedule to stop accidental drags (plan week) (ISS-14)'" @click="setScheduleLock(!ui.scheduleLock); toast(ui.scheduleLock ? 'Schedule locked' : 'Schedule unlocked')"><span class="icon sm">{{ ui.scheduleLock ? 'lock' : 'lock_open' }}</span></button>
     <span class="spacer"></span>
     <slot />
   </div>
@@ -76,6 +77,8 @@ button.step:hover { border-color: var(--muted); color: var(--text); }
 .prog { display: block; height: 3px; margin-top: 2px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
 .prog i { display: block; height: 100%; background: var(--accent); }
 .arrow { color: var(--muted); }
+.lockbtn, .lockon { flex: none; }
+.lockon { color: var(--accent); border-color: var(--accent); }
 @media (max-width: 1100px) { .lbl small, .prog { display: none; } }
 /* phone: the flow wraps instead of running off the right edge (ISS-12) */
 @media (max-width: 640px) {

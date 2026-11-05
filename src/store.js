@@ -304,6 +304,14 @@ export const ui = reactive({
   dragId: null, // todo being dragged
   splitId: null, // todo open in the Split dialog
   deadlineId: null, // deadline open in the edit dialog
+  blockId: null, // fixed timeBlock open in the block dialog (ISS-8: detail + delete for timeline blocks)
+  scheduleLock: (() => { // ISS-14: locks moving/resizing/deleting schedule blocks, default on for touch
+    try {
+      const s = localStorage.getItem('life-console/schedule-lock')
+      if (s !== null) return s === '1'
+    } catch { /* ignore */ }
+    return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+  })(),
   backlogOnly: false, // Plan week: hide the day columns, show deadlines & goals beside the backlog only (ISS-16)
   hoverId: null, // todo under the pointer — highlighted in backlog, bucket and timeline at once
   planMode: (() => { try { return localStorage.getItem('life-console/plan-mode') || 'both' } catch { return 'both' } })(), // 'days' | 'both' | 'times'
@@ -472,6 +480,32 @@ export function resizeBlock(kind, id, endMin) {
   }
   const b = state.timeBlocks.find((x) => x.id === id)
   if (b) b.end = fromMin(clamp(endMin, toMin(b.start) + SNAP, 1440))
+}
+/** Remove a fixed time block (ISS-8). Returns a copy so the caller can offer an undo. */
+export function deleteBlock(id) {
+  const i = state.timeBlocks.findIndex((b) => b.id === id)
+  if (i < 0) return null
+  const [copy] = state.timeBlocks.splice(i, 1)
+  return copy
+}
+/** Remove any item shown on the timeline: a scheduled todo or a fixed block (ISS-8), with an undo toast. */
+export function removeTimelineBlock(b) {
+  if (b.todoId) {
+    const full = state.todos.find((t) => t.id === b.todoId)
+    if (!full) return
+    const copy = JSON.parse(JSON.stringify(full))
+    deleteTodo(full.id)
+    toast(`Deleted ${full.id}`, { label: 'Undo', run: () => state.todos.push(copy) })
+  } else {
+    const copy = deleteBlock(b.id)
+    if (copy) toast(`Deleted ${copy.title || 'block'}`, { label: 'Undo', run: () => state.timeBlocks.push(copy) })
+  }
+}
+
+/** Remove any timeline item shown on the timeline: a scheduled todo or a fixed block (ISS-8), with an undo toast. */
+export function setScheduleLock(v) {
+  ui.scheduleLock = v
+  try { localStorage.setItem('life-console/schedule-lock', v ? '1' : '0') } catch { /* ignore */ }
 }
 
 export function layoutLanes(blocks) {

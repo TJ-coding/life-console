@@ -8,7 +8,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, CAPACITY_H,
   diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, nextCheckDate, activePlans,
-  updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash,
+  updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash, setScheduleLock,
 } from '../store'
 import Timeline24 from '../components/Timeline24.vue'
 import TodoRow from '../components/TodoRow.vue'
@@ -164,6 +164,7 @@ function quickAdd() {
             <button class="btn sm icon-only" :class="{ active: !vert }" title="Horizontal timeline" @click="setVert(false)"><span class="icon sm">view_column</span></button>
             <button class="btn sm icon-only" :class="{ active: vert }" title="Vertical timeline" @click="setVert(true)"><span class="icon sm">view_agenda</span></button>
           </div>
+          <button class="btn sm icon-only lockbtn" :class="{ active: ui.scheduleLock }" :title="ui.scheduleLock ? 'Schedule locked — blocks cannot be dragged, resized or deleted. Click to unlock.' : 'Lock the schedule to stop accidental drags (tap still opens detail)'" @click="setScheduleLock(!ui.scheduleLock)"><span class="icon sm">{{ ui.scheduleLock ? 'lock' : 'lock_open' }}</span></button>
         </div>
         <template v-if="vert">
           <div class="vctrl">
@@ -173,11 +174,11 @@ function quickAdd() {
             <button v-if="isToday" class="btn sm" title="Scroll to now" @click="scrollVert(true)"><span class="icon sm">my_location</span>Now</button>
           </div>
           <div ref="vscroll" class="vscroll" :class="'z-' + vzoom">
-            <DayTimeline :date="T" :blocks="blocks" :from="0" :to="24" :pxh="vpxh" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
+            <DayTimeline :date="T" :blocks="blocks" :from="0" :to="24" :pxh="vpxh" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" @edit="(b) => (ui.blockId = b.id)" />
           </div>
         </template>
         <div v-else class="panel-b tl-b">
-          <Timeline24 :date="T" :blocks="blocks" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
+          <Timeline24 :date="T" :blocks="blocks" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" @edit="(b) => (ui.blockId = b.id)" />
         </div>
       </section>
 
@@ -291,6 +292,7 @@ function quickAdd() {
 .weekchip { cursor: pointer; }
 .weekchip:hover { border-color: var(--accent); }
 .seg { display: flex; gap: 2px; }
+.lockbtn.active { border-color: var(--accent); color: var(--accent); }
 .tl-b { padding: 8px 12px 12px; }
 .vscroll { height: 520px; overflow-y: auto; padding: 6px 10px 6px 6px; }
 .vscroll :deep(.vb) { font-size: 12px; line-height: 15px; padding: 3px 6px; }

@@ -3,11 +3,11 @@
 // Fixed px-per-hour so block text stays readable; scrolls horizontally and
 // auto-centres on "now". Todos can be dropped onto it to get a start time.
 import { computed, ref, onMounted, nextTick, watch } from 'vue'
-import { ui, todayISO, toMin, fromMin, layoutLanes } from '../store'
+import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 0 }, to: { type: Number, default: 24 } })
-const emit = defineEmits(['drop-todo', 'open'])
+const emit = defineEmits(['drop-todo', 'open', 'edit'])
 
 const ZOOMS = { S: 64, M: 110, L: 170 } // px per hour
 const zoomKey = 'life-console/timeline-zoom'
@@ -50,10 +50,14 @@ watch(() => props.date, () => nextTick(() => scrollToNow(false)))
 const ed = useTimelineEdit({
   axis: 'x', pxh: () => pxh.value, from: () => props.from, to: () => props.to, date: () => props.date,
   onDropTodo: (id, start) => emit('drop-todo', id, start),
+  locked: () => ui.scheduleLock, // ISS-14
 })
 const hover = ed.hover
+const removeBlock = removeTimelineBlock
 function openBlock(b) {
-  if (!ed.isResizing() && b.todoId) emit('open', b.todoId)
+  if (ed.isResizing()) return
+  if (b.todoId) emit('open', b.todoId)
+  else emit('edit', b) // a fixed block: detail + delete dialog (ISS-8)
 }
 </script>
 
@@ -71,12 +75,13 @@ function openBlock(b) {
         </div>
         <div
           v-for="b in laid.blocks" :key="b.id" class="block tl-block" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id }]"
-          :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\nDrag to move · drag right edge to change end`" draggable="true"
+          :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked — unlock to move' : 'Drag to move · drag right edge to change end'}`" :draggable="!ui.scheduleLock"
           @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock(b)"
         >
           <span class="mono t">{{ b.start }}–{{ b.end }}</span>
           <span class="nm">{{ b.title }}</span>
-          <span class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
+          <button v-if="!ui.scheduleLock" class="xb icon" title="Delete (undo in the toast)" @click.stop="removeBlock(b)">close</button>
+          <span v-if="!ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
         </div>
         <div v-if="showNow" class="now" :style="{ left: x(nowMin) + 'px' }"><span class="mono">NOW {{ fromMin(nowMin) }}</span></div>
         <div v-if="hover" class="ghost" :style="{ left: x(hover.start) + 'px', width: x(hover.start + hover.dur) - x(hover.start) + 'px' }">
@@ -107,6 +112,9 @@ function openBlock(b) {
 .tl-block.moving { opacity: 0.35; }
 .tl-block.sizing { outline: 1px solid var(--info); z-index: 4; }
 .handle { position: absolute; top: 0; right: -1px; bottom: 0; width: 8px; cursor: ew-resize; touch-action: none; }
+.xb { position: absolute; top: 2px; right: 3px; width: 16px; height: 16px; font-size: 13px; color: var(--muted); background: transparent; border: 0; padding: 0; cursor: pointer; opacity: 0; }
+.tl-block:hover .xb { opacity: 0.7; }
+.xb:hover { opacity: 1; color: var(--danger); }
 .handle::after { content: ''; position: absolute; top: 30%; bottom: 30%; right: 2px; width: 2px; border-radius: 1px; background: var(--c); opacity: 0; }
 .tl-block:hover .handle::after, .tl-block.sizing .handle::after { opacity: 0.9; }
 </style>

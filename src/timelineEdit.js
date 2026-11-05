@@ -2,6 +2,7 @@
 //  • drag a block's body to move it (snaps to 15 min; can land on another day's timeline)
 //  • drag a block's end handle to change its end time / duration
 //  • drop a todo from any list to give it a start time
+//  • locked (ui.scheduleLock): no drag/resize — tap still opens detail (ISS-8, ISS-14)
 import { ref } from 'vue'
 import { ui, toMin, fromMin, snap, SNAP, moveBlock, resizeBlock, toast } from './store'
 import { TODO_MIME } from './dnd'
@@ -16,8 +17,10 @@ const BLOCK_MIME = 'text/x-block'
  * @param {() => number} o.to        last hour shown
  * @param {() => string} o.date      date this timeline represents
  * @param {(id: string, start: string) => void} o.onDropTodo
+ * @param {() => boolean} [o.locked]   true = dragging/resizing locked out (ISS-14)
  */
 export function useTimelineEdit(o) {
+  const locked = () => o.locked?.() ?? false
   const hover = ref(null) // { start, dur } preview while dragging over
   const resize = ref(null) // { id, end } live preview while resizing
   let resizing = false
@@ -30,6 +33,7 @@ export function useTimelineEdit(o) {
 
   /* ── move ── */
   function dragStartBlock(e, b) {
+    if (locked()) { e.preventDefault(); return }
     if (resizing) { e.preventDefault(); return }
     const blockEl = e.currentTarget
     const grab = ((o.axis === 'x' ? e.clientX - blockEl.getBoundingClientRect().left : e.clientY - blockEl.getBoundingClientRect().top) / o.pxh()) * 60
@@ -66,6 +70,7 @@ export function useTimelineEdit(o) {
     hover.value = null
     const d = ui.dragBlock
     if (d && h) {
+      if (locked()) { toast('Schedule locked — unlock to edit'); return } // still cancel the drag (ISS-14)
       moveBlock(d.kind, d.id, o.date(), h.start)
       toast(`${d.kind === 'todo' ? d.id : 'Block'} → ${o.date().slice(5)} ${fromMin(h.start)}`)
       ui.dragBlock = null
@@ -79,6 +84,7 @@ export function useTimelineEdit(o) {
   function startResize(e, b) {
     e.preventDefault()
     e.stopPropagation()
+    if (locked()) return
     resizing = true
     const origin = o.axis === 'x' ? e.clientX : e.clientY
     const startMin = toMin(b.start)
