@@ -10,7 +10,7 @@ const T = computed(() => { void ui.now; return todayISO() })
 const view = ref('list')
 const showDone = ref(false)
 const source = ref('')
-const addDate = ref(null) // default due date for the quick-add (set by clicking a calendar day)
+const addingDay = ref(null) // month view: the day whose cell shows an inline add box
 const sources = computed(() => [...new Set(state.deadlines.map((d) => d.source).filter(Boolean))].sort())
 const visible = computed(() => state.deadlines.filter((d) => !source.value || d.source === source.value))
 
@@ -51,7 +51,11 @@ const cells = computed(() => {
   }
   return out
 })
-const pick = (d) => { addDate.value = d }
+const pick = (d) => { addingDay.value = d }
+/** Close the inline box when focus leaves the cell (but not when moving within it). */
+function onCellFocusOut(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) addingDay.value = null
+}
 const open = (d) => { ui.deadlineId = d.id }
 </script>
 
@@ -73,11 +77,7 @@ const open = (d) => { ui.deadlineId = d.id }
     </div>
 
     <div class="adder">
-      <DeadlineQuickAdd :date="addDate ?? T" class="grow" />
-      <span v-if="addDate" class="chip course for">
-        default {{ wd(addDate) }} {{ fmtSlash(addDate) }}
-        <button class="x" title="Back to today" @click="addDate = null"><span class="icon sm">close</span></button>
-      </span>
+      <DeadlineQuickAdd :date="T" class="grow" />
     </div>
 
     <!-- list -->
@@ -111,21 +111,28 @@ const open = (d) => { ui.deadlineId = d.id }
         <button class="btn icon-only" @click="shiftMonth(1)"><span class="icon sm">chevron_right</span></button>
         <button class="btn sm" @click="month = T.slice(0, 7)">This month</button>
         <span class="spacer"></span>
-        <span class="small muted">Click a day to add a deadline on it · click a deadline to edit</span>
+        <span class="small muted">Click a day (or its +) to add a deadline there · Enter adds, Esc closes · click a deadline to edit</span>
       </div>
       <div class="cal">
         <div v-for="w in ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']" :key="w" class="wh mono tiny muted">{{ w }}</div>
         <div
-          v-for="c in cells" :key="c.d" class="cell" :class="{ out: !c.inMonth, today: c.d === T, picked: c.d === addDate }"
-          :title="`Add a deadline on ${wd(c.d)} ${fmtMD(c.d)}`" @click="pick(c.d)"
+          v-for="c in cells" :key="c.d" class="cell" :class="{ out: !c.inMonth, today: c.d === T, picked: c.d === addingDay }"
+          :title="`Click to add a deadline on ${wd(c.d)} ${fmtMD(c.d)}`" @click="pick(c.d)"
         >
-          <div class="dn mono">{{ parseISO(c.d).getDate() }}</div>
+          <div class="ch">
+            <span class="dn mono">{{ parseISO(c.d).getDate() }}</span>
+            <span class="spacer"></span>
+            <button class="plus" :title="`Add a deadline on ${wd(c.d)} ${fmtMD(c.d)}`" @click.stop="pick(c.d)"><span class="icon">add</span></button>
+          </div>
           <button
             v-for="d in c.items" :key="d.id" class="ev" :class="{ over: isOverdue(d), done: d.done }"
             :title="`${d.title} · ${d.due.slice(11)}${d.vital ? ' · ' + d.vital : ''}`" @click.stop="open(d)"
           >
             <span class="mono">{{ d.due.slice(11) }}</span> {{ d.title }}
           </button>
+          <div v-if="addingDay === c.d" class="inline-add" @click.stop @focusout="onCellFocusOut">
+            <DeadlineQuickAdd :date="c.d" compact autofocus :placeholder="`Title 17:00 p1…`" @cancel="addingDay = null" />
+          </div>
         </div>
       </div>
     </div>
@@ -138,8 +145,6 @@ const open = (d) => { ui.deadlineId = d.id }
 .seg { display: flex; gap: 4px; }
 .select.small { height: 24px; font-size: 11px; }
 .adder { display: flex; align-items: flex-start; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
-.for { gap: 4px; height: 28px; }
-.x { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0; display: flex; }
 .list { padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 14px; max-width: 1100px; }
 .gh { gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
 .item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px 10px; border: 1px solid transparent; border-radius: 2px; cursor: pointer; }
@@ -161,7 +166,13 @@ const open = (d) => { ui.deadlineId = d.id }
 .cell.out { opacity: 0.45; }
 .cell.today { border-color: var(--accent); }
 .cell.picked { box-shadow: inset 0 0 0 1px var(--info); background: color-mix(in srgb, var(--info) 6%, var(--surface)); }
+.ch { display: flex; align-items: center; }
 .dn { font-size: 11px; color: var(--muted); }
+.plus { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 2px; width: 18px; height: 18px; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; }
+.plus .icon { font-size: 14px; }
+.cell:hover .plus, .cell.picked .plus { opacity: 1; }
+.plus:hover { border-color: var(--warn); color: var(--warn); }
+.inline-add { margin-top: 2px; cursor: default; }
 .today .dn { color: var(--accent); font-weight: 700; }
 .ev { text-align: left; border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--border)); border-left: 3px solid var(--warn); background: var(--surface-2); color: var(--text); border-radius: 2px; padding: 1px 4px; font-size: 11px; line-height: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ev .mono { color: var(--muted); font-size: 10px; }
