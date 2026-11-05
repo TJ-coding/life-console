@@ -12,7 +12,6 @@ import TodoRow from '../components/TodoRow.vue'
 import Gauge from '../components/Gauge.vue'
 import Stamps from '../components/Stamps.vue'
 import Chip from '../components/Chip.vue'
-import Prio from '../components/Prio.vue'
 import NowCard from '../components/NowCard.vue'
 import DeadlineQuickAdd from '../components/DeadlineQuickAdd.vue'
 
@@ -158,59 +157,8 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
       <button class="btn" @click="router.push('/')"><span class="icon sm">today</span>Back to today</button>
     </section>
 
-    <!-- row 1 · what today needs: todos, deadlines, goals -->
-    <section class="panel c5 todos">
-      <div class="panel-h">
-        <span class="icon sm ok">checklist</span><h2><router-link to="/todos" class="title-link">{{ dayLabel }} todos</router-link></h2>
-        <span class="spacer"></span><span class="mono small muted">{{ todos.filter((t) => !t.done).length }} pending</span>
-      </div>
-      <div class="list" @dragover.prevent @drop.prevent="dropOnList">
-        <TodoRow v-for="t in todos" :key="t.id" :todo="t" adopt-date />
-        <div v-if="!todos.length" class="empty">Nothing on today's sheet. Drag from the inbox or add below.</div>
-      </div>
-      <form class="qa" @submit.prevent="quickAdd">
-        <span class="mono ok">+</span>
-        <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @SIG-01.1 p2`" />
-      </form>
-      <div class="foot mono small"><span class="muted">Remaining est.</span> {{ Math.floor(totalMin / 60) }}h {{ pad(totalMin % 60) }}m</div>
-    </section>
-
-    <section class="panel c3">
-      <div class="panel-h"><span class="icon sm warn">alarm</span><h2><router-link to="/deadlines" class="title-link">Deadlines · 7d</router-link></h2></div>
-      <div class="dl-list">
-        <div v-for="d in deadlines" :key="d.id" class="dl" :class="{ over: diffDays(T, d.due) < 0 }" title="Click to edit" @click="ui.deadlineId = d.id">
-          <div class="row">
-            <Prio :p="d.priority" />
-            <span class="spacer"></span>
-            <span v-if="d.clickUp" class="small ok" title="Synced with ClickUp">● ClickUp</span>
-          </div>
-          <div class="dl-title">{{ d.title }}</div>
-          <div class="row small">
-            <span class="mono" :class="diffDays(T, d.due) < 0 ? 'danger' : diffDays(T, d.due) <= 1 ? 'warn' : 'muted'">{{ relDay(d.due, T) }} · {{ d.due.slice(11) }}</span>
-            <span class="spacer"></span><Chip :id="d.source" />
-          </div>
-          <label class="row small muted" @click.stop><input v-model="d.done" type="checkbox" /> done</label>
-        </div>
-        <div v-if="!deadlines.length" class="empty">No deadlines in the next 7 days.</div>
-      </div>
-      <DeadlineQuickAdd :date="T" class="dl-add" />
-    </section>
-
-    <section class="panel c4">
-      <div class="panel-h"><span class="icon sm ok">target</span><h2><router-link to="/strategy" class="title-link">Active strategic goals</router-link></h2></div>
-      <div class="col panel-b">
-        <router-link v-for="p in psgs" :key="p.no" :to="`/strategy/${p.plan}`" class="psg">
-          <div class="row"><Chip :id="p.no" /><span class="mono tiny muted">{{ p.planNo }}</span><span class="spacer"></span><span class="mono" :class="pctClass(p.pct) || 'ok'">{{ p.pct }}%</span></div>
-          <div class="psg-name">{{ p.name }}</div>
-          <div class="bar" :class="pctClass(p.pct)"><i :style="{ width: p.pct + '%' }"></i></div>
-          <div class="small muted mono ellipsis">Next: {{ p.next ? `${p.next.no} ${p.next.name}` : 'all SIGs done ✓' }}</div>
-        </router-link>
-        <div v-if="!psgs.length" class="empty">No active strategic plan. <router-link to="/strategy">Create or activate one</router-link>.</div>
-      </div>
-    </section>
-
-    <!-- row 2 · the shape of the day: time -->
-    <section class="panel c8">
+    <!-- row 1 · the shape of the day: time -->
+    <section class="panel c12">
       <div class="panel-h">
         <span class="icon sm ok">timeline</span><h2><a href="#" class="title-link" @click.prevent="openWeek">{{ dayLabel }} timeline</a></h2>
         <span class="spacer"></span>
@@ -226,7 +174,53 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
       </div>
     </section>
 
-    <section class="panel c4">
+    <!-- row 2 · one compact line per item: details live in the drawer / deadlines page -->
+    <section class="panel c6 todos">
+      <div class="panel-h">
+        <span class="icon sm ok">checklist</span><h2><router-link to="/todos" class="title-link">{{ dayLabel }} todos</router-link></h2>
+        <span class="spacer"></span><span class="mono small muted">{{ todos.filter((t) => !t.done).length }} pending</span>
+      </div>
+      <div class="list" @dragover.prevent @drop.prevent="dropOnList">
+        <TodoRow v-for="t in todos" :key="t.id" :todo="t" compact adopt-date />
+        <div v-if="!todos.length" class="empty">Nothing on today's sheet. Drag from the inbox or add below.</div>
+      </div>
+      <form class="qa" @submit.prevent="quickAdd">
+        <span class="mono ok">+</span>
+        <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @SIG-01.1 p2`" />
+      </form>
+      <div class="foot mono small"><span class="muted">Remaining est.</span> {{ Math.floor(totalMin / 60) }}h {{ pad(totalMin % 60) }}m</div>
+    </section>
+
+    <section class="panel c6">
+      <div class="panel-h"><span class="icon sm warn">alarm</span><h2><router-link to="/deadlines" class="title-link">Deadlines · 7d</router-link></h2>
+        <span class="spacer"></span><span class="mono small muted">{{ deadlines.length }} in 7d</span></div>
+      <div class="dlw">
+        <label v-for="d in deadlines" :key="d.id" class="dline" :class="{ over: diffDays(T, d.due) < 0, done: d.done }" title="Click to edit" @click="ui.deadlineId = d.id">
+          <input v-model="d.done" type="checkbox" @click.stop />
+          <span class="grow ellipsis">{{ d.title }}</span>
+          <span class="mono small nowrap" :class="diffDays(T, d.due) < 0 ? 'danger' : diffDays(T, d.due) <= 1 ? 'warn' : 'muted'">{{ relDay(d.due, T) }} · {{ d.due.slice(11) }}</span>
+          <Chip v-if="d.source" :id="d.source" />
+        </label>
+        <div v-if="!deadlines.length" class="empty">No deadlines in the next 7 days.</div>
+      </div>
+      <DeadlineQuickAdd :date="T" class="dl-add" />
+    </section>
+
+    <!-- row 3 · context, not today's business -->
+    <section class="panel c6">
+      <div class="panel-h"><span class="icon sm ok">target</span><h2><router-link to="/strategy" class="title-link">Active strategic goals</router-link></h2></div>
+      <div class="col panel-b psgs-b">
+        <router-link v-for="p in psgs" :key="p.no" :to="`/strategy/${p.plan}`" class="psg">
+          <div class="row"><Chip :id="p.no" /><span class="mono tiny muted">{{ p.planNo }}</span><span class="spacer"></span><span class="mono" :class="pctClass(p.pct) || 'ok'">{{ p.pct }}%</span></div>
+          <div class="psg-name">{{ p.name }}</div>
+          <div class="bar" :class="pctClass(p.pct)"><i :style="{ width: p.pct + '%' }"></i></div>
+          <div class="small muted mono ellipsis">Next: {{ p.next ? `${p.next.no} ${p.next.name}` : 'all SIGs done ✓' }}</div>
+        </router-link>
+        <div v-if="!psgs.length" class="empty">No active strategic plan. <router-link to="/strategy">Create or activate one</router-link>.</div>
+      </div>
+    </section>
+
+    <section class="panel c6">
       <div class="panel-h"><span class="icon sm ok">approval</span><h2>Sign-off ledger</h2><span class="spacer"></span><span class="kbd">S</span><span class="small muted">stamp next</span></div>
       <div class="panel-b ledger">
         <div class="wl">
@@ -311,21 +305,26 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
 .dl-count { display: flex; align-items: baseline; gap: 6px; }
 .dl-count b { font-size: 15px; }
 .dl-title { font-size: 11px; color: var(--muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.c3 { grid-column: span 3; } .c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c8 { grid-column: span 8; } .c12 { grid-column: span 12; }
+.c6 { grid-column: span 6; } .c12 { grid-column: span 12; }
 .hint { margin-top: 8px; }
 .ledger { display: flex; gap: 18px; align-items: flex-start; }
 .wl { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .todos { align-self: stretch; }
-.list { flex: 1; min-height: 120px; }
+.list { flex: 1; min-height: 120px; max-height: 330px; overflow: auto; }
 .qa { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
 .foot { padding: 8px 12px; }
-.dl-list { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
-.dl { border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
-.dl { cursor: pointer; }
-.dl:hover { border-color: var(--muted); }
-.dl-add { padding: 0 10px 10px; }
-.dl.over { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 6%, transparent); }
-.dl-title { font-weight: 600; }
+/* curated deadline list: one line per deadline */
+.dlw { max-height: 330px; overflow: auto; padding: 4px 0; }
+.dline { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 4px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.dline:hover { background: var(--surface-2); }
+.dline .grow { font-weight: 600; font-size: 13px; }
+.dline input { flex: none; }
+.dline .mono { white-space: nowrap; }
+.dline.done .grow { text-decoration: line-through; color: var(--muted); font-weight: 400; }
+.dline.over { border-left: 2px solid var(--danger); }
+.dline.over .grow { color: var(--danger); }
+.dline .chip { flex: none; }
+.psgs-b { gap: 8px; }
 .psg { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: 2px; padding: 10px; color: var(--text); }
 .psg:hover { border-color: var(--accent); }
 .psg-name { font-weight: 600; font-size: 14px; }
@@ -336,10 +335,10 @@ a.tile:hover { border-color: var(--accent); }
 .checks { flex-wrap: wrap; gap: 10px; }
 .checks label { display: flex; align-items: center; gap: 4px; }
 @media (max-width: 1200px) {
-  .c3, .c4, .c5 { grid-column: span 6; } .c8 { grid-column: span 12; }
+  .c6 { grid-column: span 6; }
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
-  .cc { padding: 12px; } .c3, .c4, .c5, .c8 { grid-column: span 12; } .tiles { grid-template-columns: 1fr; }
+  .cc { padding: 12px; } .c6 { grid-column: span 12; } .tiles { grid-template-columns: 1fr; }
 }
 </style>
