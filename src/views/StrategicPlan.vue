@@ -17,6 +17,8 @@ watch(plan, (p) => {
 }, { immediate: true })
 // tabs reuse this component: don't carry selection/filters over to another plan
 watch(() => route.params.planId, () => { selected.value = null; psgFilter.value = '' })
+// opened from the overview with ?goal=PSG-01 / SIG-01.2: select and scroll to that goal
+watch(() => route.query.goal, (no) => { if (no) nextTick(() => { selected.value = null; select(String(no)) }) }, { immediate: true })
 function removePlan() {
   const p = plan.value
   if (!confirm(`Delete ${p.planNo} "${p.title}" with its ${p.psgs.length} PSGs and ${p.sigs.length} SIGs?\n\nTip: set it to Archived to keep it out of the way without deleting.`)) return

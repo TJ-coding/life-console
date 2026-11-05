@@ -74,7 +74,8 @@ Use the global instrument classes instead of one-off sizes: `.inst` (card paddin
 ## 5. Patterns to reuse
 
 - **Instrument card:** `section.panel.inst`, label row at top, hero number or title, one action row. Left border colour = state: category colour while busy, `--warn` or `--danger` for urgency, `--border` otherwise.
-- **Countdown:** `H:MM:SS` within a day (ticks every second off `ui.now`), otherwise `3d 7h`. Overdue shows time since due in `--danger` with "overdue by". Urgency: ≤ 12h or overdue = danger, ≤ 48h = warn. See `bigCountdown()` and `urgency()` in `CommandCenter.vue`.
+- **Countdown:** `H:MM:SS` within a day (ticks every second off `ui.now`), otherwise `3d 7h`. Overdue shows time since due in `--danger` with "overdue by". Urgency: ≤ 12h or overdue = danger, ≤ 48h = warn. Use the helpers in `src/glance.js` (`minsTo`, `countdown`, `bigCountdown`, `urgency`, `dueStatus`) and the `DeadlineHero` component for a one-deadline headline.
+- **Goal status:** `src/glance.js` also has `sigState` (done / late / soon / ok), `nextSigOf`, `psgGlance` (pct, behind, next SIG, linked deadline) and `nextMilestone`. A goal is *behind* when a SIG or the PSG is past its time bound. Never use these state names as bare CSS classes (`.ok`/`.done` are global); prefix them (`st-late`).
 - **Run-sheet list:** `TodoRow` with `compact show-start show-prio removable :show-links="false"`, styled up to 15px by the screen (see `.list :deep(.trow.compact)`). Order = timed items by clock, then untimed by priority. Hide done items behind "Show N done". Quick-add line at the foot of the box.
 - **Small meter:** a secondary quantity (workload) is a `2.7/7h` label plus an 18px vertical bar at the **right end of a header**, muted until it's over the limit.
 - **Status pill:** `OVERDUE / DUE TODAY / TOMORROW / IN n DAYS`, mono 12px, bordered in the urgency colour.
@@ -116,6 +117,7 @@ Starting points for the next reworks. Confirm each screen's questions with the o
 |---|---|---|
 | **S-10 Plan week** | Which days are overloaded? What's still unscheduled? When is this week's next deadline? | Load per day as small meters on day headers; unscheduled count as the headline; let day columns fill the height. |
 | **S-20 Todo inbox** | What should I do next? What's overdue? What has no date yet? | Run-sheet rows at 15px with P badges; overdue first; filters as a small segmented control, not a sidebar. ISS-10: multi-select is noise on phones. |
-| **S-21 Deadlines** | What's due soonest and how long do I have? What's overdue? | The countdown and status pill from S-01 on every row; ISS-11: columns too narrow on phones, so drop secondary columns there instead. |
-| **S-30 Strategic plan** | Which goal is behind? What's the next SIG to work on? When is the next check? | One headline per plan (health and next check); goal tables can stay dense, with colour only for "behind". |
+| **S-21 Deadlines** ✅ | What's due soonest and how long do I have? What's overdue? | Done (Nov 2026): DeadlineHero on top, rows lead with time left, list + month side by side on wide screens. |
+| **S-35 Strategy overview** ✅ | Which goal is behind? What's the next milestone? What's next per goal? When's the next check? | Done (Nov 2026): next-milestone headline, PSG + SIG rows with BEHIND / NEXT tags. |
+| **S-30 Strategic plan** | Which goal is behind? What's the next SIG to work on? When is the next check? | Editing workspace; tables can stay dense. Reuse `sigState` colouring for late SIGs; opened with `?goal=` it selects that goal. |
 | **Focus mode** | What am I doing, and how long is left? | Should show the NOW card's content (task, countdown, Done, next hint) at a larger scale, and nothing else. |

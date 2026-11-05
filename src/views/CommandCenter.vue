@@ -14,6 +14,8 @@ import Timeline24 from '../components/Timeline24.vue'
 import TodoRow from '../components/TodoRow.vue'
 import Stamps from '../components/Stamps.vue'
 import NowCard from '../components/NowCard.vue'
+import DeadlineHero from '../components/DeadlineHero.vue'
+import { openDeadlines, minsTo, countdown, urgency } from '../glance'
 import DayTimeline from '../components/DayTimeline.vue'
 import CommandCenterMore from '../components/CommandCenterMore.vue'
 
@@ -88,32 +90,11 @@ onMounted(() => nextTick(() => scrollVert()))
 watch(T, () => nextTick(() => scrollVert()))
 const firstBlock = computed(() => [...blocks.value].sort((a, b) => toMin(a.start) - toMin(b.start))[0])
 
-/* ── deadlines: a countdown to the nearest, plus the two after it ── */
-const openDeadlines = computed(() => state.deadlines.filter((d) => !d.done).sort((a, b) => a.due.localeCompare(b.due)))
-const nextDl = computed(() => openDeadlines.value[0] ?? null)
-const laterDls = computed(() => openDeadlines.value.slice(1, 5))
-const hiddenDls = computed(() => Math.max(0, openDeadlines.value.length - 1 - laterDls.value.length))
-/** Big ticking readout: H:MM:SS inside a day, otherwise days + hours. */
-function bigCountdown(d) {
-  void ui.now
-  const a = Math.floor(Math.abs(new Date(d.due) - ui.now) / 1000)
-  if (a < 86400) return `${Math.floor(a / 3600)}:${pad(Math.floor((a % 3600) / 60))}:${pad(a % 60)}`
-  return `${Math.floor(a / 86400)}d ${Math.floor((a % 86400) / 3600)}h`
-}
-function dlStatus(d) {
-  const m = minsTo(d)
-  if (m <= 0) return 'OVERDUE'
-  const n = diffDays(today.value, d.due)
-  return n === 0 ? 'DUE TODAY' : n === 1 ? 'TOMORROW' : `IN ${n} DAYS`
-}
-const minsTo = (d) => { void ui.now; return Math.round((new Date(d.due) - ui.now) / 60000) }
-function countdown(d) {
-  const m = minsTo(d)
-  const a = Math.abs(m)
-  const s = a < 60 ? `${a}m` : a < 1440 ? `${Math.floor(a / 60)}h ${pad(a % 60)}m` : `${Math.floor(a / 1440)}d ${Math.floor((a % 1440) / 60)}h`
-  return m < 0 ? `−${s}` : s
-}
-const urgency = (d) => { const m = minsTo(d); return m <= 0 ? 'danger' : m <= 720 ? 'danger' : m <= 2880 ? 'warn' : 'ok' }
+/* ── deadlines: the nearest as a headline (DeadlineHero), plus the next four ── */
+const allOpenDls = computed(() => openDeadlines())
+const nextDl = computed(() => allOpenDls.value[0] ?? null)
+const laterDls = computed(() => allOpenDls.value.slice(1, 5))
+const hiddenDls = computed(() => Math.max(0, allOpenDls.value.length - 1 - laterDls.value.length))
 
 /* ── telemetry: secondary numbers, coloured only when they need attention ── */
 const hours = computed(() => workload(T.value))
@@ -202,23 +183,13 @@ function quickAdd() {
 
       <div class="side">
       <!-- deadline sits above the list: second only to NOW -->
-      <section class="panel inst dl-inst" :class="nextDl ? 'u-' + urgency(nextDl) : ''">
+      <section class="panel inst dl-inst" :class="nextDl ? 'u-' + urgency(nextDl.due) : ''">
         <template v-if="nextDl">
-          <button class="dl-main" title="Open the deadline" @click="ui.deadlineId = nextDl.id">
-            <span class="dl-what">
-              <span class="inst-lbl"><span class="tiny upper muted">Next deadline</span><span class="dl-status mono" :class="urgency(nextDl)">{{ dlStatus(nextDl) }}</span></span>
-              <span class="name clamp2">{{ nextDl.title }}</span>
-              <span class="mono small muted">{{ relDay(nextDl.due.slice(0, 10), today) }} · {{ nextDl.due.slice(11) }}</span>
-            </span>
-            <span class="dl-clock">
-              <span class="inst-big mono" :class="urgency(nextDl)">{{ bigCountdown(nextDl) }}</span>
-              <span class="small muted">{{ minsTo(nextDl) <= 0 ? 'overdue by' : 'remaining' }}</span>
-            </span>
-          </button>
+          <DeadlineHero :d="nextDl" />
           <!-- then the next four -->
           <div class="dl-list">
             <button v-for="d in laterDls" :key="d.id" class="dl-row" @click="ui.deadlineId = d.id">
-              <span class="mono cd" :class="urgency(d)">{{ minsTo(d) <= 0 ? 'overdue' : countdown(d) }}</span>
+              <span class="mono cd" :class="urgency(d.due)">{{ minsTo(d.due) <= 0 ? 'overdue' : countdown(d.due) }}</span>
               <span class="ellipsis grow">{{ d.title }}</span>
               <span class="mono small muted when">{{ relDay(d.due.slice(0, 10), today) }} · {{ d.due.slice(11) }}</span>
             </button>
@@ -297,15 +268,7 @@ function quickAdd() {
 .dl-inst { border-left: 3px solid var(--border); }
 .dl-inst.u-warn { border-left-color: var(--warn); }
 .dl-inst.u-danger { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 5%, var(--surface)); }
-.dl-main, .dl-row { border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; padding: 0; }
-/* headline: what's due on the left, a big ticking countdown on the right */
-.dl-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; }
-.dl-main:hover .name { text-decoration: underline dotted; }
-.dl-what { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.dl-status { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; padding: 1px 6px; border: 1px solid currentColor; border-radius: 2px; }
-.dl-inst .name { font-weight: 600; font-size: 22px; line-height: 28px; }
-.dl-clock { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.dl-inst .inst-big { font-size: 48px; line-height: 50px; }
+.dl-row { border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; padding: 0; }
 .dl-list { display: flex; flex-direction: column; }
 .dl-row { display: flex; align-items: center; gap: 12px; height: 38px; flex: none; border-top: 1px solid var(--border); font-size: 15px; min-width: 0; }
 .dl-row .cd { flex: none; min-width: 72px; font-size: 15px; font-weight: 600; }
@@ -376,9 +339,6 @@ a.tm:hover { color: var(--accent); }
   .day, .day.vert { display: flex; flex-direction: column; align-items: stretch; }
   .side, .day:not(.vert) .side { display: contents; }
   .dl-inst { order: 1; } .todo-panel { order: 2; } .tl-panel { order: 3; }
-  .dl-main { gap: 10px; }
-  .dl-inst .inst-big { font-size: 30px; line-height: 34px; }
-  .dl-inst .name { font-size: 18px; line-height: 24px; }
   .dl-row .when { display: none; }
   .vscroll, .vert .vscroll { flex: none; height: 420px; }
 }
