@@ -6,6 +6,9 @@ import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, p
 import PlanTabs from '../components/PlanTabs.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
+import TimeBound from '../components/TimeBound.vue'
+import GoalFlow from '../components/GoalFlow.vue'
+import { boundIssues } from '../glance'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,6 +142,28 @@ const linked = computed(() => {
   return state.todos.filter((t) => t.links.some((l) => ids.has(l))).sort(byPriority)
 })
 
+/* Tasks shown in the cascade diagram under the goal they move. A todo linked to a SIG shows under that SIG
+   only (not again under its PSG); one linked to the PSG alone shows under the PSG. Done ones become a count. */
+const tasksByGoal = computed(() => {
+  const sigNosHere = new Set(plan.value.sigs.map((s) => s.no))
+  const psgOfSig = Object.fromEntries(plan.value.sigs.map((s) => [s.no, s.psg]))
+  const m = {}
+  const put = (no, t) => { (m[no] ??= { open: [], done: 0 }); t.done ? m[no].done++ : m[no].open.push(t) }
+  for (const t of linked.value) {
+    const sigLinks = t.links.filter((l) => sigNosHere.has(l))
+    for (const no of sigLinks) put(no, t)
+    const covered = new Set(sigLinks.map((no) => psgOfSig[no]))
+    for (const l of t.links) if (l.startsWith('PSG-') && !covered.has(l) && plan.value.psgs.some((p) => p.no === l)) put(l, t)
+  }
+  return m
+})
+const tasksOf = (no) => tasksByGoal.value[no] ?? { open: [], done: 0 }
+let showTasksInit = true
+try { showTasksInit = localStorage.getItem('life-console/strategy-tasks') !== '0' } catch { /* ignore */ }
+const showTasks = ref(showTasksInit)
+watch(showTasks, (v) => { try { localStorage.setItem('life-console/strategy-tasks', v ? '1' : '0') } catch { /* ignore */ } })
+const fmtMin = (m) => (!m ? '' : m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` : `${m}m`)
+
 /* check schedule */
 const recentChecks = computed(() => plan.value.checkLog.slice(-4))
 function logCheck() {
@@ -158,6 +183,10 @@ function addEvent() {
 function removeEvent(e) {
   plan.value.events.splice(plan.value.events.indexOf(e), 1)
 }
+/* time-bound problems across the plan, summarised in the flow header */
+const flowIssueList = computed(() => [...plan.value.psgs, ...plan.value.sigs].flatMap((g) => boundIssues(g).map((x) => `${g.no}: ${x}`)))
+const flowIssues = computed(() => flowIssueList.value.length)
+const flowIssueText = computed(() => flowIssueList.value.join('\n'))
 const pctClass = (n) => (n >= 100 ? 'ok' : n >= 40 ? 'info' : n > 0 ? 'warn' : 'muted')
 const print = () => window.print()
 </script>
@@ -191,6 +220,7 @@ const print = () => window.print()
         <div class="panel-h">
           <span class="icon sm ok">account_tree</span><h2>Cascading goal diagram</h2>
           <span class="spacer"></span>
+          <button class="btn sm" :class="{ on: showTasks }" title="Show the tasks linked to each goal" @click="showTasks = !showTasks"><span class="icon sm">checklist</span>Tasks</button>
           <button class="btn sm" @click="addPsg">+ PSG</button>
         </div>
         <div class="canvas">
@@ -207,8 +237,17 @@ const print = () => window.print()
               <input v-model="p.name" class="input ghost nm-in" placeholder="PSG name" title="Edit PSG name" @click.stop />
               <div class="bar" :class="psgPct(p.no) < 40 ? 'warn' : ''"><i :style="{ width: psgPct(p.no) + '%' }"></i></div>
             </div>
+            <div v-if="showTasks && (tasksOf(p.no).open.length || tasksOf(p.no).done)" class="tasks psg-tasks">
+              <div v-for="t in tasksOf(p.no).open" :key="t.id" class="task" @click="ui.drawerId = t.id">
+                <input type="checkbox" :checked="t.done" title="Mark done" @click.stop @change="toggleTodo(t.id)" />
+                <span class="grow ellipsis" :title="t.title">{{ t.title }}</span>
+                <span class="mono tiny muted">{{ fmtMin(t.timeMin) }}</span>
+              </div>
+              <div v-if="tasksOf(p.no).done" class="tiny muted mono task-done">✓ {{ tasksOf(p.no).done }} done</div>
+            </div>
             <div class="kids">
-              <div v-for="s in sigsOf(p.no)" :key="s.no" class="node sig" :class="[s.status, { sel: selected === s.no }]" @click="select(s.no)">
+              <template v-for="s in sigsOf(p.no)" :key="s.no">
+              <div class="node sig" :class="[s.status, { sel: selected === s.no }]" @click="select(s.no)">
                 <div class="grow">
                   <div class="row sig-nm"><span class="mono small" :class="s.status === 'done' ? 'ok' : 'info'">{{ s.no }}</span><input v-model="s.name" class="input ghost sig-in" placeholder="SIG name" title="Edit SIG name" @click.stop /></div>
                   <div class="small muted ellipsis">{{ s.criteria || '—' }}</div>
@@ -216,6 +255,20 @@ const print = () => window.print()
                 </div>
                 <span class="status" :class="s.status">{{ s.pct }}% {{ s.status === 'done' ? '✓' : s.status === 'doing' ? '!' : '◯' }}</span>
               </div>
+              <div v-if="showTasks" class="tasks">
+                <div v-for="t in tasksOf(s.no).open" :key="t.id" class="task" @click="ui.drawerId = t.id">
+                  <input type="checkbox" :checked="t.done" title="Mark done" @click.stop @change="toggleTodo(t.id)" />
+                  <span class="grow ellipsis" :title="t.title">{{ t.title }}</span>
+                  <span class="mono tiny muted">{{ fmtMin(t.timeMin) }}</span>
+                </div>
+                <div class="row task-foot">
+                  <span v-if="tasksOf(s.no).done" class="tiny muted mono">✓ {{ tasksOf(s.no).done }} done</span>
+                  <span v-else-if="!tasksOf(s.no).open.length && s.status !== 'done'" class="tiny muted">No tasks yet</span>
+                  <span class="spacer"></span>
+                  <button v-if="s.status !== 'done'" class="add-task" :title="`Create a todo for ${s.no}`" @click.stop="todoFor(s)">+ task</button>
+                </div>
+              </div>
+              </template>
               <button class="btn sm add-sig" @click="addSig(p.no)">+ SIG</button>
             </div>
           </div>
@@ -228,7 +281,7 @@ const print = () => window.print()
           <div class="panel-h"><span class="icon sm ok">flag</span><h2>Prioritised strategic goals (PSG)</h2><span class="spacer"></span><span class="mono small muted">PSG % = mean of SIGs</span></div>
           <div class="tw">
             <table class="tbl">
-              <colgroup><col style="width: 58px" /><col style="width: 84px" /><col /><col style="width: 30%" /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 44px" /></colgroup>
+              <colgroup><col style="width: 58px" /><col style="width: 84px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 44px" /></colgroup>
               <thead><tr><th>Prio</th><th>PSG No.</th><th>PSG name</th><th>Indicators of success</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="{ selected: selected === p.no }" @click="selected = p.no">
@@ -236,7 +289,7 @@ const print = () => window.print()
                   <td class="mono ok">{{ p.no }}</td>
                   <td><input v-model="p.name" class="input ghost w" /></td>
                   <td><input v-model="p.indicators" class="input ghost w small" /></td>
-                  <td><input v-model="p.timeBound" class="input ghost w mono small" /></td>
+                  <td><TimeBound v-model="p.timeBound" :issues="boundIssues(p)" /></td>
                   <td><button class="status" :class="p.status" @click.stop="cycle(p)">{{ LABEL[p.status] }}</button></td>
                   <td class="mono" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</td>
                   <td><button class="btn sm icon-only" title="Add a deadline for this PSG" @click.stop="goalDeadline(p)"><span class="icon sm">alarm_add</span></button>
@@ -260,7 +313,7 @@ const print = () => window.print()
           </div>
           <div class="tw">
             <table class="tbl wide">
-              <colgroup><col style="width: 58px" /><col style="width: 88px" /><col style="width: 70px" /><col style="width: 24%" /><col /><col style="width: 140px" /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 72px" /></colgroup>
+              <colgroup><col style="width: 58px" /><col style="width: 88px" /><col style="width: 70px" /><col style="width: 24%" /><col /><col style="width: 140px" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 72px" /></colgroup>
               <thead><tr><th>Prio</th><th>SIG No.</th><th>PSG</th><th>SIG name</th><th>Specific &amp; measurable criteria</th><th>Depends on</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="{ selected: selected === s.no }" @click="selected = s.no">
@@ -278,7 +331,7 @@ const print = () => window.print()
                       </select>
                     </div>
                   </td>
-                  <td><input v-model="s.timeBound" class="input ghost w mono small" /></td>
+                  <td><TimeBound v-model="s.timeBound" :issues="boundIssues(s)" /></td>
                   <td><button class="status" :class="s.status" @click.stop="cycle(s)">{{ LABEL[s.status] }}</button></td>
                   <td><input :value="s.pct" type="number" min="0" max="100" step="5" class="input ghost w mono" :class="pctClass(s.pct)" @change="setPct(s, $event.target.value)" /></td>
                   <td>
@@ -365,6 +418,17 @@ const print = () => window.print()
         </div>
       </div>
     </div>
+
+    <!-- goal flow: dependencies left → right, merging into PSGs and the vision -->
+    <section class="panel flow-panel">
+      <div class="panel-h">
+        <span class="icon sm info">schema</span><h2>Goal flow</h2>
+        <span class="mono small muted flow-hint">from SIG dependencies · click a goal to trace its path</span>
+        <span class="spacer"></span>
+        <span v-if="flowIssues" class="mono small warn" :title="flowIssueText">{{ flowIssues }} time-bound issue{{ flowIssues > 1 ? 's' : '' }}</span>
+      </div>
+      <GoalFlow :plan="plan" :selected="selected" @select="select" />
+    </section>
   </div>
 </template>
 
@@ -408,11 +472,23 @@ h1 { margin: 0; font-size: 18px; font-weight: 600; }
 tfoot .td-add { padding: 0; border-bottom: 0; }
 .add-row { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 0; border: 0; border-top: 1px dashed var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
 .add-row:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
-.kids { margin: 6px 0 0 14px; padding-left: 12px; border-left: 1px dashed var(--border); display: flex; flex-direction: column; gap: 6px; }
+.kids { margin: 6px 0 0 14px; padding-left: 12px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+/* tasks linked to a goal, hanging under its node */
+.tasks { margin: -3px 0 2px 10px; padding-left: 8px; border-left: 2px solid var(--surface-2); display: flex; flex-direction: column; }
+.psg-tasks { margin: 4px 0 0 24px; }
+.task { display: flex; align-items: center; gap: 6px; min-height: 24px; font-size: 12.5px; cursor: pointer; border-radius: 2px; padding: 0 4px; }
+.task:hover { background: var(--surface-2); }
+.task input { margin: 0; }
+.task-foot { gap: 6px; min-height: 20px; padding: 0 4px; }
+.task-done { padding: 2px 4px; }
+.add-task { border: 0; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; padding: 0 2px; }
+.add-task:hover { color: var(--accent); }
+.btn.on { color: var(--accent); border-color: var(--accent); }
 .sig { flex-direction: row; align-items: center; gap: 8px; }
 .sig.doing { border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
 .sig.done { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .add-sig { align-self: flex-start; }
+.flow-panel { margin: 0 12px 12px; }
 .right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .tw { overflow-x: auto; }
 .tw .tbl { min-width: 760px; }
@@ -434,5 +510,5 @@ details summary { list-style: none; cursor: pointer; }
 details summary::-webkit-details-marker { display: none; }
 .legend-b { display: flex; flex-direction: column; gap: 6px; }
 @media (max-width: 1200px) { .sp-body { grid-template-columns: 1fr; } .tree { position: static; max-height: none; } }
-@media (max-width: 800px) { .widgets { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .widgets { grid-template-columns: 1fr; } .flow-hint { display: none; } }
 </style>

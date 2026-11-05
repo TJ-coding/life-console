@@ -1,6 +1,6 @@
 // "At a glance" helpers shared by S-01, S-21 and S-35: countdowns, urgency and goal status.
 // Reads `ui.now` so computed values tick with the 1 s clock.
-import { state, ui, todayISO, diffDays, pad, sigsOf, psgPct, activePlans } from './store'
+import { state, ui, todayISO, diffDays, pad, sigsOf, psgPct, activePlans, allPsgs, allSigs } from './store'
 
 /* ───────────── time to a moment ───────────── */
 /** Minutes from now until an ISO date-time ('YYYY-MM-DDTHH:MM'); negative when past. */
@@ -88,4 +88,24 @@ export function psgGlance(p) {
 export function nextMilestone() {
   return activePlans().flatMap((plan) => plan.sigs.filter((s) => sigState(s) !== 'done' && daysTo(s.timeBound) !== null).map((sig) => ({ sig, plan, days: daysTo(sig.timeBound) })))
     .sort((a, b) => a.days - b.days)[0] ?? null
+}
+
+/* ───────────── time bounds ───────────── */
+/* A goal's `timeBound` is one of: 'YYYY-MM-DD' (end date) · 'Continuous' (no end) · '' (not set).
+   Anything else is free text left over from before the date picker; it's flagged so it gets fixed. */
+export const CONTINUOUS = 'Continuous'
+export const isLegacyBound = (v) => !!v && !isDate(v) && v !== CONTINUOUS
+/** Plain-language problems with a goal's time bound: not a date, ends after its PSG, ends before a SIG it depends on. */
+export function boundIssues(g) {
+  const out = []
+  const tb = g.timeBound ?? ''
+  if (isLegacyBound(tb)) out.push(`"${tb}" isn't a date: pick one or set Continuous`)
+  if (!g.psg || !isDate(tb)) return out
+  const p = allPsgs().find((x) => x.no === g.psg)
+  if (p && isDate(p.timeBound) && tb > p.timeBound) out.push(`Ends after ${p.no} (${p.timeBound})`)
+  for (const d of g.deps ?? []) {
+    const s = allSigs().find((x) => x.no === d)
+    if (s && isDate(s.timeBound) && tb < s.timeBound) out.push(`Ends before ${d} (${s.timeBound}), which it depends on`)
+  }
+  return out
 }
