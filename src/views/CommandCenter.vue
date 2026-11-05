@@ -3,12 +3,12 @@
 // Order = priority: what to do NOW (with what's next as a hint) on top; then the day's schedule beside the
 // next DEADLINES and the rest of TODAY.
 // Everything else is one quiet telemetry strip at the bottom, and only exceptions get colour.
-import { computed, ref, watch, watchEffect, nextTick, onMounted } from 'vue'
+import { computed, ref, watch, watchEffect, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, CAPACITY_H,
   diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, nextCheckDate, activePlans,
-  updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash,
+  updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash, psgPct, nextSig,
 } from '../store'
 import Timeline24 from '../components/Timeline24.vue'
 import TodoRow from '../components/TodoRow.vue'
@@ -91,7 +91,40 @@ const firstBlock = computed(() => [...blocks.value].sort((a, b) => toMin(a.start
 /* ── deadlines: a countdown to the nearest, plus the two after it ── */
 const openDeadlines = computed(() => state.deadlines.filter((d) => !d.done).sort((a, b) => a.due.localeCompare(b.due)))
 const nextDl = computed(() => openDeadlines.value[0] ?? null)
-const laterDls = computed(() => openDeadlines.value.slice(1, 4))
+const laterDls = computed(() => openDeadlines.value.slice(1, 5))
+/* active goals, filling whatever height the right column has left */
+const psgs = computed(() =>
+  activePlans().flatMap((pl) => pl.psgs.map((p) => ({ ...p, plan: pl.id })))
+    .sort((a, b) => a.priority - b.priority).map((p) => ({ ...p, pct: psgPct(p.no), next: nextSig(p.no) })))
+const GOAL_H = 48 // one goal row
+const GOAL_HEAD = 41
+/** Whole rows only; the header is dropped first when space is tight. */
+const goalFit = ref({ head: false, rows: 0 })
+const goalsBox = ref(null)
+let goalObs = null
+onMounted(() => {
+  goalObs = new ResizeObserver(([e]) => {
+    const h = e.contentRect.height
+    const withHead = Math.floor((h - GOAL_HEAD) / GOAL_H)
+    goalFit.value = withHead >= 1 ? { head: true, rows: withHead } : { head: false, rows: Math.max(0, Math.floor(h / GOAL_H)) }
+  })
+  watch(goalsBox, (el, old) => { if (old) goalObs.unobserve(old); if (el) goalObs.observe(el) }, { immediate: true })
+})
+onBeforeUnmount(() => goalObs?.disconnect())
+const hiddenDls = computed(() => Math.max(0, openDeadlines.value.length - 1 - laterDls.value.length))
+/** Big ticking readout: H:MM:SS inside a day, otherwise days + hours. */
+function bigCountdown(d) {
+  void ui.now
+  const a = Math.floor(Math.abs(new Date(d.due) - ui.now) / 1000)
+  if (a < 86400) return `${Math.floor(a / 3600)}:${pad(Math.floor((a % 3600) / 60))}:${pad(a % 60)}`
+  return `${Math.floor(a / 86400)}d ${Math.floor((a % 86400) / 3600)}h`
+}
+function dlStatus(d) {
+  const m = minsTo(d)
+  if (m <= 0) return 'OVERDUE'
+  const n = diffDays(today.value, d.due)
+  return n === 0 ? 'DUE TODAY' : n === 1 ? 'TOMORROW' : `IN ${n} DAYS`
+}
 const minsTo = (d) => { void ui.now; return Math.round((new Date(d.due) - ui.now) / 60000) }
 function countdown(d) {
   const m = minsTo(d)
@@ -189,19 +222,32 @@ function quickAdd() {
       <div class="side">
       <!-- deadline sits above the list: second only to NOW -->
       <section class="panel inst dl-inst" :class="nextDl ? 'u-' + urgency(nextDl) : ''">
-        <div class="inst-lbl"><router-link to="/deadlines" class="tiny upper muted">Next deadline</router-link></div>
         <template v-if="nextDl">
           <button class="dl-main" title="Open the deadline" @click="ui.deadlineId = nextDl.id">
-            <span class="inst-big mono" :class="urgency(nextDl)">{{ minsTo(nextDl) <= 0 ? 'OVERDUE' : countdown(nextDl) }}</span>
-            <span class="name clamp2">{{ nextDl.title }}</span>
-            <span class="mono small muted">{{ relDay(nextDl.due.slice(0, 10), today) }} · {{ nextDl.due.slice(11) }}<template v-if="minsTo(nextDl) <= 0"> · {{ countdown(nextDl).slice(1) }} ago</template></span>
+            <span class="dl-what">
+              <span class="inst-lbl"><span class="tiny upper muted">Next deadline</span><span class="dl-status mono" :class="urgency(nextDl)">{{ dlStatus(nextDl) }}</span></span>
+              <span class="name clamp2">{{ nextDl.title }}</span>
+              <span class="mono small muted">{{ relDay(nextDl.due.slice(0, 10), today) }} · {{ nextDl.due.slice(11) }}</span>
+            </span>
+            <span class="dl-clock">
+              <span class="inst-big mono" :class="urgency(nextDl)">{{ bigCountdown(nextDl) }}</span>
+              <span class="small muted">{{ minsTo(nextDl) <= 0 ? 'overdue by' : 'remaining' }}</span>
+            </span>
           </button>
-          <button v-for="d in laterDls" :key="d.id" class="dl-row" @click="ui.deadlineId = d.id">
-            <span class="mono small" :class="urgency(d)">{{ minsTo(d) <= 0 ? 'overdue' : countdown(d) }}</span>
-            <span class="ellipsis grow">{{ d.title }}</span>
-          </button>
+          <!-- then the next four -->
+          <div class="dl-list">
+            <button v-for="d in laterDls" :key="d.id" class="dl-row" @click="ui.deadlineId = d.id">
+              <span class="mono cd" :class="urgency(d)">{{ minsTo(d) <= 0 ? 'overdue' : countdown(d) }}</span>
+              <span class="ellipsis grow">{{ d.title }}</span>
+              <span class="mono small muted when">{{ relDay(d.due.slice(0, 10), today) }} · {{ d.due.slice(11) }}</span>
+            </button>
+          </div>
+          <router-link v-if="hiddenDls" to="/deadlines" class="mono small muted more-dl">+{{ hiddenDls }} more on Deadlines →</router-link>
         </template>
-        <div v-else class="inst-big mono muted">—</div>
+        <template v-else>
+          <div class="inst-lbl"><router-link to="/deadlines" class="tiny upper muted">Next deadline</router-link></div>
+          <div class="inst-big mono muted">—</div>
+        </template>
       </section>
 
       <section class="panel todo-panel">
@@ -230,6 +276,20 @@ function quickAdd() {
           <span class="mono ok">+</span>
           <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @SIG-01.1 p2`" />
         </form>
+      </section>
+
+      <!-- spare height in the column goes to the active goals (as many as fit; hidden when none fit) -->
+      <section v-if="vert && psgs.length" ref="goalsBox" class="panel goals" :class="{ none: !goalFit.rows }">
+        <div v-if="goalFit.head" class="panel-h"><span class="icon sm ok">target</span><h2><router-link to="/strategy" class="title-link">Active goals</router-link></h2></div>
+        <div v-for="p in psgs.slice(0, goalFit.rows)" :key="p.no" class="goal" role="link" tabindex="0" :title="`Open plan ${p.plan}`" @click="router.push(`/strategy/${p.plan}`)" @keydown.enter="router.push(`/strategy/${p.plan}`)">
+          <span class="goal-top">
+            <span class="mono goal-no">{{ p.no }}</span>
+            <span class="goal-name">{{ p.name }}</span>
+            <span class="mono small muted ellipsis grow goal-next">{{ p.next ? `next ${p.next.no} ${p.next.name}` : 'all SIGs done ✓' }}</span>
+            <span class="mono goal-pct">{{ p.pct }}%</span>
+          </span>
+          <span class="bar goal-bar"><i :style="{ width: p.pct + '%' }"></i></span>
+        </div>
       </section>
 
       </div>
@@ -262,7 +322,7 @@ function quickAdd() {
 </template>
 
 <style scoped>
-.cc { display: flex; flex-direction: column; gap: 12px; padding: 16px; max-width: 1600px; min-height: 100%; box-sizing: border-box; }
+.cc { display: flex; flex-direction: column; gap: 12px; padding: 16px; min-height: 100%; box-sizing: border-box; }
 .telemetry { margin-top: auto; }
 .preview { border-left: 3px solid var(--info); }
 .pv-title { font: 600 24px/30px Inter, sans-serif; }
@@ -271,15 +331,36 @@ function quickAdd() {
 .dl-inst.u-warn { border-left-color: var(--warn); }
 .dl-inst.u-danger { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 5%, var(--surface)); }
 .dl-main, .dl-row { border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; padding: 0; }
-.dl-main { display: flex; flex-direction: column; gap: 4px; }
+/* headline: what's due on the left, a big ticking countdown on the right */
+.dl-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; }
 .dl-main:hover .name { text-decoration: underline dotted; }
-.dl-inst .inst-big { font-size: 38px; line-height: 42px; }
-.dl-inst .name { font-weight: 600; font-size: 18px; line-height: 24px; }
-.dl-row { display: flex; align-items: baseline; gap: 10px; border-top: 1px solid var(--border); padding-top: 7px; font-size: 14px; min-width: 0; }
-.dl-row .mono { flex: none; min-width: 64px; font-size: 14px; font-weight: 600; }
+.dl-what { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dl-status { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; padding: 1px 6px; border: 1px solid currentColor; border-radius: 2px; }
+.dl-inst .name { font-weight: 600; font-size: 22px; line-height: 28px; }
+.dl-clock { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.dl-inst .inst-big { font-size: 48px; line-height: 50px; }
+.dl-list { display: flex; flex-direction: column; }
+.dl-row { display: flex; align-items: center; gap: 12px; height: 38px; flex: none; border-top: 1px solid var(--border); font-size: 15px; min-width: 0; }
+.dl-row .cd { flex: none; min-width: 72px; font-size: 15px; font-weight: 600; }
+.dl-row .when { flex: none; }
 .dl-row:hover .grow { color: var(--accent); }
+.more-dl { align-self: flex-end; }
+/* goals filler: takes the column's spare height; shows only whole rows */
+.goals { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.goals.none { visibility: hidden; }
+.goal { display: flex; flex-direction: column; justify-content: center; gap: 6px; height: 48px; flex: none; box-sizing: border-box; padding: 0 14px; border-bottom: 1px solid var(--border); color: var(--text); cursor: pointer; }
+.goal:last-child { border-bottom: 0; }
+.goal:hover { background: var(--surface-2); }
+.goal-top { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.goal-no { flex: none; font-size: 12px; color: var(--accent); }
+.goal-name { flex: none; font-weight: 600; font-size: 15px; white-space: nowrap; }
+.goal-pct { flex: none; font-size: 14px; font-weight: 600; }
+.goal-bar { height: 3px; }
+.more-dl:hover { color: var(--accent); }
 /* timeline + list */
 .day { display: flex; flex-direction: column; gap: 12px; }
+/* the day row takes all spare height, so nothing leaves a gap above the footer */
+.day.vert { flex: 1 0 auto; }
 .day.vert { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); align-items: stretch; }
 /* the schedule takes the right column's height (deadline + list), never less than ~8 hours at M zoom */
 .vert .vscroll { flex: 1 1 0; height: auto; min-height: 340px; }
@@ -336,6 +417,11 @@ a.tm:hover { color: var(--accent); }
   .day, .day.vert { display: flex; flex-direction: column; align-items: stretch; }
   .side, .day:not(.vert) .side { display: contents; }
   .dl-inst { order: 1; } .todo-panel { order: 2; } .tl-panel { order: 3; }
+  .dl-main { gap: 10px; }
+  .dl-inst .inst-big { font-size: 30px; line-height: 34px; }
+  .dl-inst .name { font-size: 18px; line-height: 24px; }
+  .dl-row .when { display: none; }
+  .goals { display: none; }
   .vscroll, .vert .vscroll { flex: none; height: 420px; }
 }
 </style>
