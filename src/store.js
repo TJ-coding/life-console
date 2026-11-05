@@ -861,7 +861,8 @@ export function psgPct(psgNo) {
 }
 export const nextSig = (psgNo) => sigsOf(psgNo).find((s) => s.status !== 'done')
 /** True if making a goal (PSG or SIG) `fromNo` depend on `toNo` would create a dependency cycle.
- *  A SIG blocks its own PSG and whatever it needs; a PSG completes only with all its child SIGs. */
+ *  Walks "needs" edges from `toNo`: a SIG needs its deps (SIGs or PSGs); a PSG needs all its child SIGs.
+ *  A SIG does NOT need its own PSG (the PSG needs it), so sibling SIGs may depend on each other. */
 export function sigWouldCycle(fromNo, toNo) {
   if (fromNo === toNo) return true
   const bySig = new Map(allSigs().map((s) => [s.no, s]))
@@ -874,7 +875,7 @@ export function sigWouldCycle(fromNo, toNo) {
     seen.add(n)
     const s = bySig.get(n)
     if (s) {
-      stack.push(s.psg, ...(s.deps ?? []))
+      stack.push(...(s.deps ?? []))
       continue
     }
     // not a SIG: a PSG — its child SIGs must complete before it does
