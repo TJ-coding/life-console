@@ -57,6 +57,5 @@ Each part is an ordinary task labelled `1/3`, `2/3`… in date order, sharing th
 
 ## Deployment
 Live at **http://dokpoly.netbird.cloud**, which is only reachable on the NetBird network. Dokploy (project *Life Console*, app `life-console`) builds the `Dockerfile` (Vite build → nginx) from `main` via its GitHub App integration.
-- Pushing to `main` runs `.github/workflows/deploy.yml`. It builds the app and the Docker image, joins NetBird as a temporary peer, calls Dokploy's `application.deploy`, and waits until Dokploy reports `done`.
-- Needs: secrets `DOKPLOY_API_KEY` and `NETBIRD_SETUP_KEY` (reusable and ephemeral, in a group allowed to reach the Dokploy peer), plus variables `DOKPLOY_URL` and `DOKPLOY_APPLICATION_ID`.
-- Dokploy's own auto-deploy is off, so every deploy comes from Actions (or a manual deploy in Dokploy).
+- **Pushing to `main` deploys automatically.** Dokploy's GitHub App webhook starts a build (auto-deploy on).
+- `.github/workflows/deploy.yml` builds the app and the Docker image on every push and PR as a check. Its deploy job is a manual fallback (Actions → *Run workflow*): it joins NetBird as a temporary peer and calls Dokploy's `application.deploy`. It needs secrets `DOKPLOY_API_KEY` and `NETBIRD_SETUP_KEY`, plus variables `DOKPLOY_URL` and `DOKPLOY_APPLICATION_ID`.

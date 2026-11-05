@@ -1,4 +1,7 @@
-# Build on every push; on main, deploy to Dokploy (only reachable over NetBird).
+# CI: build the app and its Docker image on every push / PR.
+# Deploys normally happen in Dokploy itself (auto-deploy on push to main via its GitHub App).
+# The deploy job here is a manual fallback (Actions → Run workflow): it joins NetBird
+# (Dokploy is only reachable on the mesh) and calls Dokploy's deploy API.
 #
 # Required repository secrets:
 #   NETBIRD_SETUP_KEY        ephemeral, reusable NetBird setup key (group must be allowed to reach the Dokploy peer)
@@ -34,7 +37,8 @@ jobs:
 
   deploy:
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # manual fallback only — Dokploy auto-deploys on push, so running this on every push would deploy twice
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
