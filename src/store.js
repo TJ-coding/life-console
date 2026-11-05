@@ -1,5 +1,5 @@
 // Central reactive store for the prototype. Persisted to localStorage.
-import { reactive, watch } from 'vue'
+import { reactive, watch, computed } from 'vue'
 
 /* ───────────── date / time helpers ───────────── */
 export const pad = (n) => String(n).padStart(2, '0')
@@ -142,7 +142,7 @@ function seed() {
     ],
     timeBlocks,
     deadlines: [
-      { id: 'DL-1', title: 'ST2001 Report 2 (Processes & Memory)', vital: 'Upload PDF to LMS', due: `${addDays(T, 1)}T23:59`, source: 'ST2001spA', clickUp: true, done: false, priority: 1 },
+      { id: 'DL-1', title: 'ST2001 Report 2 (Processes & Memory)', vital: 'Upload PDF to LMS', due: `${addDays(T, 1)}T23:59`, internal: T, source: 'ST2001spA', clickUp: true, done: false, priority: 1 },
       { id: 'DL-2', title: 'SIG-01.2 milestone: code freeze', vital: 'Tag release in repo', due: `${addDays(T, 3)}T18:00`, source: 'SIG-01.2', clickUp: true, done: false, priority: 2 },
       { id: 'DL-3', title: 'Weekly review aggregation', vital: 'KPI + Kaizen table', due: `${D(6)}T18:00`, source: 'KZ-04', clickUp: false, done: false, priority: 3 },
       { id: 'DL-4', title: 'PS-04 problem set', vital: '', due: `${D(0)}T18:00`, source: 'ST1010', clickUp: true, done: diffDays(D(0), T) > 0, priority: 2 },
@@ -725,6 +725,16 @@ export function suggestRebalance(days, withBlocks = false, cap = CAPACITY_H) {
 
 /* ───────────── splitting a task across days ───────────── */
 /** Parts of the same original task, in chronological order (unscheduled last). */
+// Hover highlight: the hovered todo plus every other part of the same split task, so hovering a
+// sitting on the timeline lights up its merged workload card (and the other way round).
+const hoverGroup = computed(() => (ui.hoverId ? state.todos.find((t) => t.id === ui.hoverId)?.split?.group ?? null : null))
+/** Is todo `id` (or a split part in its group) the one under the pointer? */
+export function isHoverLinked(id) {
+  if (!id || !ui.hoverId) return false
+  if (id === ui.hoverId) return true
+  const g = hoverGroup.value
+  return !!g && state.todos.some((t) => t.id === id && t.split?.group === g)
+}
 export function splitSiblings(t) {
   if (!t?.split) return []
   return state.todos

@@ -3,7 +3,7 @@
 // Tasks stack from the bottom, each sized by its estimate; past capacity spills into a red zone.
 // Lives inside DayColumn directly above that day's timeline — drag a block down onto a time.
 import { computed, ref } from 'vue'
-import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast } from '../store'
+import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 
 const props = defineProps({
@@ -82,7 +82,7 @@ function toggleParts(t) {
         v-for="t in todos" :key="t.id" class="card block"
         :draggable="!t.grouped"
         :class="['cat-' + categoryOf(t), dropClass(t, true), {
-          'is-done': t.grouped ? t.grouped.parts.every((p) => p.done) : t.done, sel: ui.selectedId === t.id, linked: ui.hoverId === t.id, short: cardH(t) < 28,
+          'is-done': t.grouped ? t.grouped.parts.every((p) => p.done) : t.done, sel: ui.selectedId === t.id, linked: isHoverLinked(t.id), short: cardH(t) < 28,
           untimed: t.grouped ? t.grouped.parts.some((p) => !p.done && !p.scheduled.start) : !t.done && !t.scheduled.start, dim: dimFn && dimFn(t), grouped: t.grouped,
         }]"
         :style="{ height: cardH(t) + 'px' }"

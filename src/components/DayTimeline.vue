@@ -1,7 +1,7 @@
 <script setup>
 // Vertical hourly schedule used in each Weekly Planner day column.
 import { computed, ref } from 'vue'
-import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock } from '../store'
+import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 6 }, to: { type: Number, default: 23 }, pxh: { type: Number, default: 22 }, dimFn: Function })
 const emit = defineEmits(['drop-todo', 'open', 'edit'])
@@ -38,7 +38,7 @@ const removeBlock = removeTimelineBlock
       <span class="mono">{{ String(from + h - 1).padStart(2, '0') }}</span>
     </div>
     <div
-      v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b), moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, linked: b.todoId && ui.hoverId === b.todoId }]"
+      v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b), moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, linked: isHoverLinked(b.todoId) }]"
       :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!ui.scheduleLock"
       @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock(b)"
       @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null"
