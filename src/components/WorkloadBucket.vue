@@ -3,7 +3,7 @@
 // Tasks stack from the bottom, each sized by its estimate; past capacity spills into a red zone.
 // Lives inside DayColumn directly above that day's timeline — drag a block down onto a time.
 import { computed, ref } from 'vue'
-import { state, ui, todosForDay, categoryOf, toMin, CAPACITY_H, partLabel, assignToDay, toggleTodo } from '../store'
+import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 
 const props = defineProps({
@@ -13,15 +13,34 @@ const props = defineProps({
   hourPx: { type: Number, default: 30 },
   dimFn: Function,
 })
-const todos = computed(() => todosForDay(props.date))
+const todos = computed(() => {
+  const ts = todosForDay(props.date)
+  // ISS-21 feedback: when a split's parts are spread through ONE day (all timed), the workload
+  // bucket shows them as a single card again — the schedule keeps them as separate blocks.
+  const byGroup = new Map()
+  ts.forEach((t) => { if (t.split) { const l = byGroup.get(t.split.group) ?? []; l.push(t); byGroup.set(t.split.group, l) } })
+  const out = []
+  const merged = new Set()
+  for (const t of ts) {
+    if (merged.has(t.id)) continue
+    const parts = t.split ? [...(byGroup.get(t.split.group) ?? [])] : null
+    if (parts && parts.length > 1 && parts.every((p) => p.scheduled?.start)) {
+      parts.sort((a, b) => (a.scheduled?.start ?? '').localeCompare(b.scheduled?.start ?? ''))
+      parts.forEach((p) => merged.add(p.id))
+      out.push({ ...parts[0], grouped: { n: parts.length, timeMin: parts.reduce((s, p) => s + p.timeMin, 0), parts } })
+    } else out.push(t)
+  }
+  return out
+})
 const fixedH = computed(() => (props.withBlocks
   ? state.timeBlocks.filter((b) => b.date === props.date).reduce((s, b) => s + (toMin(b.end) - toMin(b.start)) / 60, 0)
   : 0))
-const total = computed(() => fixedH.value + todos.value.reduce((s, t) => s + (t.timeMin || 0) / 60, 0))
+const total = computed(() => fixedH.value + todos.value.reduce((s, t) => s + (t.grouped ? t.grouped.timeMin : t.timeMin || 0) / 60, 0))
 const rows = computed(() => Math.max(props.cap, Math.ceil(total.value)))
 const blockH = (min) => Math.max(16, (min / 60) * props.hourPx - 2)
+const cardH = (t) => blockH(t.grouped ? t.grouped.timeMin : t.timeMin)
 // small blocks have a minimum height; let the bucket grow so they never spill over the header
-const stackPx = computed(() => todos.value.reduce((s, t) => s + blockH(t.timeMin) + 2, fixedH.value ? blockH(fixedH.value * 60) + 2 : 0))
+const stackPx = computed(() => todos.value.reduce((s, t) => s + cardH(t) + 2, fixedH.value ? blockH(fixedH.value * 60) + 2 : 0))
 const height = computed(() => Math.max(rows.value * props.hourPx, stackPx.value + 2) + 2)
 const showLabels = computed(() => props.hourPx >= 14)
 
@@ -30,6 +49,12 @@ function onDrop(e) {
   hot.value = false
   const id = e.dataTransfer.getData(TODO_MIME)
   if (id) assignToDay(id, props.date, props.cap)
+}
+/** On a merged card, done applies to every part of the split on this day. */
+function toggleParts(t) {
+  const to = !t.grouped.parts.every((x) => x.done)
+  t.grouped.parts.forEach((x) => { if (x.done !== to) toggleTodo(x.id) })
+  toast(to ? `Marked ${t.grouped.n} parts done ✓` : `Reopened ${t.grouped.n} parts`)
 }
 </script>
 
@@ -47,26 +72,31 @@ function onDrop(e) {
         <span class="mono">fixed {{ fixedH.toFixed(1) }}h</span>
       </div>
       <div
-        v-for="t in todos" :key="t.id" class="card block" draggable="true"
+        v-for="t in todos" :key="t.id" class="card block"
+        :draggable="!t.grouped"
         :class="['cat-' + categoryOf(t), dropClass(t, true), {
-          'is-done': t.done, sel: ui.selectedId === t.id, linked: ui.hoverId === t.id, short: blockH(t.timeMin) < 28,
-          untimed: !t.done && !t.scheduled.start, dim: dimFn && dimFn(t),
+          'is-done': t.grouped ? t.grouped.parts.every((p) => p.done) : t.done, sel: ui.selectedId === t.id, linked: ui.hoverId === t.id, short: cardH(t) < 28,
+          untimed: !t.done && !t.scheduled.start, dim: dimFn && dimFn(t), grouped: t.grouped,
         }]"
-        :style="{ height: blockH(t.timeMin) + 'px' }"
-        :title="`${t.title} · ${t.timeMin}m · P${t.priority} · ${t.scheduled.start ? 'at ' + t.scheduled.start : 'no time yet — drag onto the timeline'}`"
+        :style="{ height: cardH(t) + 'px' }"
+        :title="t.grouped
+          ? `${t.title} · ${t.grouped.n} parts (${t.grouped.parts.map((p) => p.scheduled.start).join(', ')}) · ${t.grouped.timeMin}m
+In the schedule below, one block per part. Dragging disabled — use Split to rearrange.`
+          : `${t.title} · ${t.timeMin}m · P${t.priority} · ${t.scheduled.start ? 'at ' + t.scheduled.start : 'no time yet — drag onto the timeline'}`"
         @dragstart="startDrag($event, t)" @dragend="endDrag"
         @dragover="overRow($event, t, { reverse: true })" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t, { adoptDate: true })"
         @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
         @click="ui.selectedId = t.id" @dblclick="ui.drawerId = t.id"
       >
-        <input type="checkbox" class="ck" :checked="t.done" title="Done" @click.stop @change="toggleTodo(t.id)" />
+        <input type="checkbox" class="ck" :checked="t.grouped ? t.grouped.parts.every((p) => p.done) : t.done" :title="t.grouped ? 'Done: all parts of this task today' : 'Done'" @click.stop @change="t.grouped ? toggleParts(t) : toggleTodo(t.id)" />
         <span class="ttl"><b v-if="partLabel(t)" class="part mono">{{ partLabel(t) }}</b>{{ t.title }}</span>
         <span class="meta mono">
-          <template v-if="t.scheduled.start">{{ t.scheduled.start }}</template>
+          <template v-if="t.grouped">{{ t.grouped.n }}× · {{ t.grouped.parts.map((p) => p.scheduled.start).slice(0, 2).join(',') }}<template v-if="t.grouped.n > 2">…</template></template>
+          <template v-else-if="t.scheduled.start">{{ t.scheduled.start }}</template>
           <span v-else-if="!t.done" class="icon tiny-i warn" title="No time yet">more_time</span>
-          {{ t.timeMin }}m
+          {{ t.grouped ? t.grouped.timeMin : t.timeMin }}m
         </span>
-        <button v-if="!t.done && t.timeMin >= 30" class="splitbtn" title="Split across days" @click.stop="ui.splitId = t.id"><span class="icon">call_split</span></button>
+        <button v-if="!t.done && !t.grouped && t.timeMin >= 30" class="splitbtn" title="Split across days / spread through the day" @click.stop="ui.splitId = t.id"><span class="icon">call_split</span></button>
       </div>
     </div>
     <div v-if="!todos.length && !fixedH" class="empty-hint small muted">drop tasks here</div>
@@ -87,6 +117,8 @@ function onDrop(e) {
 }
 .card { flex: none; padding: 2px 4px; display: flex; gap: 4px; align-items: flex-start; cursor: grab; position: relative; }
 .card.untimed { border-style: dashed; border-left-style: solid; }
+.card.grouped { border-style: double; border-width: 3px; border-radius: 3px; }
+.card.grouped .is-done .ttl { text-decoration: line-through; }
 .ck { width: 11px; height: 11px; margin-top: 1px; flex: none; }
 .card .ttl { flex: 1; min-width: 0; font-size: 11px; line-height: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; }
 .card.short .ttl { -webkit-line-clamp: 1; white-space: nowrap; display: block; text-overflow: ellipsis; }
