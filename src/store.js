@@ -826,6 +826,35 @@ export function unlinkGoal(no) {
   }
   return n
 }
+/** Renumber a goal everywhere it is referenced (todo links, deadline sources, block links, SIG deps). Returns the edit count. */
+export function renameGoal(from, to) {
+  let n = 0
+  for (const t of state.todos) {
+    const i = t.links.indexOf(from)
+    if (i < 0) continue
+    if (t.links.includes(to)) t.links.splice(i, 1)
+    else t.links.splice(i, 1, to)
+    n++
+  }
+  for (const d of state.deadlines) if (d.source === from) { d.source = to; n++ }
+  for (const b of state.timeBlocks) if (b.link === from) { b.link = to; n++ }
+  for (const s of allSigs()) {
+    const i = (s.deps ?? []).indexOf(from)
+    if (i >= 0) { s.deps.splice(i, 1, to); n++ }
+  }
+  return n
+}
+/** Move a SIG under another PSG of the same plan; it gets the next free number there (SIG-02.n) and all references follow. */
+export function moveSig(sig, psgNo) {
+  if (!sig || sig.psg === psgNo) return null
+  const n = Math.max(0, ...sigsOf(psgNo).map((s) => Number(s.no.split('.')[1]) || 0)) + 1
+  const from = sig.no
+  const to = `SIG-${psgNo.slice(4)}.${n}`
+  const edits = renameGoal(from, to)
+  sig.psg = psgNo
+  sig.no = to
+  return { from, to, edits }
+}
 export function psgPct(psgNo) {
   const s = sigsOf(psgNo)
   return s.length ? Math.round(s.reduce((a, x) => a + Number(x.pct || 0), 0) / s.length) : 0

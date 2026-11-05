@@ -1,15 +1,15 @@
 <script setup>
 // S-30 · Strategic Plan (Goals Planner) — Vision → PSG → SIG cascade with tables and review widgets.
-import { computed, ref, nextTick, reactive, watch } from 'vue'
+import { computed, ref, nextTick, reactive, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel } from '../store'
+import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel, moveSig } from '../store'
 import PlanTabs from '../components/PlanTabs.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
 import TimeBound from '../components/TimeBound.vue'
 import GoalFlow from '../components/GoalFlow.vue'
 import TaskNode from '../components/TaskNode.vue'
-import { boundIssues } from '../glance'
+import { boundIssues, countdown, urgency, effDue, minsTo } from '../glance'
 
 const route = useRoute()
 const router = useRouter()
@@ -55,6 +55,51 @@ function setPct(s, v) {
   s.pct = Math.max(0, Math.min(100, Number(v) || 0))
   s.status = s.pct >= 100 ? 'done' : s.pct > 0 ? 'doing' : 'open'
 }
+/* Focus: selecting a goal lights up what belongs to it and dims the rest of the page.
+   PSG → its SIGs; SIG → its PSG plus the SIGs it depends on / that depend on it. Tasks (with their subtasks)
+   and deadlines count when linked to the selected goal itself or, for a PSG, to one of its SIGs. */
+const focus = computed(() => {
+  const sel = selected.value
+  if (!sel) return null
+  const p = plan.value
+  const goals = new Set([sel])
+  const own = new Set([sel])
+  if (sel.startsWith('PSG-')) {
+    if (!p.psgs.some((x) => x.no === sel)) return null
+    for (const s of p.sigs) if (s.psg === sel) { goals.add(s.no); own.add(s.no) }
+  } else {
+    const s = p.sigs.find((x) => x.no === sel)
+    if (!s) return null
+    goals.add(s.psg)
+    for (const d of s.deps ?? []) goals.add(d)
+    for (const o of p.sigs) if ((o.deps ?? []).includes(sel)) goals.add(o.no)
+  }
+  const todos = new Set(state.todos.filter((t) => t.links.some((l) => own.has(l))).map((t) => t.id))
+  for (let grew = true; grew;) {
+    grew = false
+    for (const t of state.todos) if (t.parent && todos.has(t.parent) && !todos.has(t.id)) { todos.add(t.id); grew = true }
+  }
+  const deadlines = new Set(state.deadlines.filter((d) => own.has(d.source)).map((d) => d.id))
+  return { sel, goals, todos, deadlines }
+})
+/** '' with nothing selected (or for the selected goal itself), else fx-rel / fx-dim. */
+const fx = (kind, id) => (!focus.value || id === focus.value.sel ? '' : focus.value[kind].has(id) ? 'fx-rel' : 'fx-dim')
+const focusSummary = computed(() => {
+  const f = focus.value
+  if (!f) return ''
+  const n = (k, word) => `${k} ${word}${k === 1 ? '' : 's'}`
+  const openTodos = state.todos.filter((t) => f.todos.has(t.id) && !t.done).length
+  const openDl = state.deadlines.filter((d) => f.deadlines.has(d.id) && !d.done).length
+  return `${n(f.goals.size - 1, 'goal')} · ${n(openTodos, 'task')} · ${n(openDl, 'deadline')}`
+})
+// Esc clears the focus when nothing else (dialog, drawer, palette) is open; runs before App's window handler
+function onEsc(e) {
+  if (e.key !== 'Escape' || !selected.value) return
+  if (ui.deadlineId || ui.drawerId || ui.blockId || ui.splitId || ui.palette || document.querySelector('dialog[open], .modal')) return
+  selected.value = null
+}
+onMounted(() => document.addEventListener('keydown', onEsc))
+onBeforeUnmount(() => document.removeEventListener('keydown', onEsc))
 async function select(no) {
   selected.value = selected.value === no ? null : no
   await nextTick()
@@ -74,6 +119,13 @@ function addSig(psgNo) {
   const no = `SIG-${psgNo.slice(4)}.${n}`
   plan.value.sigs.push({ no, psg: psgNo, name: 'New indicator goal', priority: 3, criteria: '', timeBound: '', status: 'open', pct: 0 })
   selected.value = no
+}
+/* move a SIG to another PSG after creation: renumbered under the new PSG, links/deps/selection follow */
+function changePsg(sig, psgNo) {
+  const r = moveSig(sig, psgNo)
+  if (!r) return
+  if (selected.value === r.from) selected.value = r.to
+  toast(`${r.from} → ${r.to}${r.edits ? ` · ${r.edits} link${r.edits > 1 ? 's' : ''} updated` : ''}`)
 }
 function todoFor(sig) {
   const t = addTodo({ title: `Advance ${sig.no}: ${sig.name}`, links: [sig.no], priority: sig.priority, lsd: 'L', timeMin: 60 })
@@ -163,6 +215,18 @@ const tasksByGoal = computed(() => {
   }
   return m
 })
+/* deadlines tied to this plan, its PSGs or SIGs (source = goal / plan number): open soonest first, then done */
+const planDeadlines = computed(() => {
+  const ids = new Set(planIds(plan.value))
+  return state.deadlines.filter((d) => ids.has(d.source))
+    .sort((a, b) => Number(a.done) - Number(b.done) || effDue(a).localeCompare(effDue(b)))
+})
+const openPlanDeadlines = computed(() => planDeadlines.value.filter((d) => !d.done))
+const dlOf = (no) => openPlanDeadlines.value.filter((d) => d.source === no)
+const dlLeft = (d) => (minsTo(effDue(d)) <= 0 ? 'overdue' : countdown(effDue(d)))
+function planDeadline() {
+  goalDeadline({ no: plan.value.planNo, name: plan.value.title, priority: 3, timeBound: '' })
+}
 const tasksOf = (no) => tasksByGoal.value[no] ?? { open: [], done: 0 }
 let showTasksInit = true
 try { showTasksInit = localStorage.getItem('life-console/strategy-tasks') !== '0' } catch { /* ignore */ }
@@ -229,6 +293,11 @@ const print = () => window.print()
           <button class="btn sm" :class="{ on: showTasks }" title="Show the tasks linked to each goal" @click="showTasks = !showTasks"><span class="icon sm">checklist</span>Tasks</button>
           <button class="btn sm" @click="addPsg">+ PSG</button>
         </div>
+        <div v-if="focus" class="fx-bar small">
+          <span class="icon sm info">filter_center_focus</span><b class="mono info fx-id">{{ focus.sel }}</b>
+          <span class="muted ellipsis">{{ focusSummary }}</span><span class="spacer"></span>
+          <button class="btn sm icon-only" title="Show everything again (Esc)" @click="selected = null"><span class="icon sm">close</span></button>
+        </div>
         <div class="canvas">
           <div class="node vision">
             <div class="row tiny upper"><span class="chip goal">Vision</span><span class="spacer"></span><span class="muted mono">{{ plan.planNo }}</span></div>
@@ -238,18 +307,23 @@ const print = () => window.print()
           </div>
           <div class="trunk"></div>
           <div v-for="p in psgs" :key="p.no" class="branch">
-            <div class="node psg" :class="{ sel: selected === p.no }" @click="select(p.no)">
+            <div class="node psg" :class="[fx('goals', p.no), { sel: selected === p.no }]" @click="select(p.no)">
               <div class="row"><Prio :p="p.priority" /><span class="mono ok">{{ p.no }}</span><span class="spacer"></span><span class="mono small" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</span></div>
               <input v-model="p.name" class="input ghost nm-in" placeholder="PSG name" title="Edit PSG name" @click.stop />
               <div class="bar" :class="psgPct(p.no) < 40 ? 'warn' : ''"><i :style="{ width: psgPct(p.no) + '%' }"></i></div>
             </div>
+            <div v-if="dlOf(p.no).length" class="gdl psg-dl">
+              <button v-for="d in dlOf(p.no)" :key="d.id" class="gdl-row" :class="fx('deadlines', d.id)" :title="`${d.title} · due ${d.due.replace('T', ' ')} — click to edit`" @click.stop="ui.deadlineId = d.id">
+                <span class="icon sm" :class="urgency(effDue(d))">alarm</span><span class="mono gdl-cd" :class="urgency(effDue(d))">{{ dlLeft(d) }}</span><span class="ellipsis">{{ d.title }}</span>
+              </button>
+            </div>
             <div v-if="showTasks && (tasksOf(p.no).open.length || tasksOf(p.no).done)" class="tasks psg-tasks">
-              <TaskNode v-for="t in tasksOf(p.no).open" :key="t.id" :todo="t" />
+              <TaskNode v-for="t in tasksOf(p.no).open" :key="t.id" :todo="t" :focus="focus?.todos" />
               <div v-if="tasksOf(p.no).done" class="tiny muted mono task-done">✓ {{ tasksOf(p.no).done }} done</div>
             </div>
             <div class="kids">
               <template v-for="s in sigsOf(p.no)" :key="s.no">
-              <div class="node sig" :class="[s.status, { sel: selected === s.no }]" @click="select(s.no)">
+              <div class="node sig" :class="[s.status, fx('goals', s.no), { sel: selected === s.no }]" @click="select(s.no)">
                 <div class="grow">
                   <div class="row sig-nm"><span class="mono small" :class="s.status === 'done' ? 'ok' : 'info'">{{ s.no }}</span><input v-model="s.name" class="input ghost sig-in" placeholder="SIG name" title="Edit SIG name" @click.stop /></div>
                   <div class="small muted ellipsis">{{ s.criteria || '—' }}</div>
@@ -257,8 +331,13 @@ const print = () => window.print()
                 </div>
                 <span class="status" :class="s.status">{{ s.pct }}% {{ s.status === 'done' ? '✓' : s.status === 'doing' ? '!' : '◯' }}</span>
               </div>
+              <div v-if="dlOf(s.no).length" class="gdl">
+                <button v-for="d in dlOf(s.no)" :key="d.id" class="gdl-row" :class="fx('deadlines', d.id)" :title="`${d.title} · due ${d.due.replace('T', ' ')} — click to edit`" @click.stop="ui.deadlineId = d.id">
+                  <span class="icon sm" :class="urgency(effDue(d))">alarm</span><span class="mono gdl-cd" :class="urgency(effDue(d))">{{ dlLeft(d) }}</span><span class="ellipsis">{{ d.title }}</span>
+                </button>
+              </div>
               <div v-if="showTasks" class="tasks">
-                <TaskNode v-for="t in tasksOf(s.no).open" :key="t.id" :todo="t" />
+                <TaskNode v-for="t in tasksOf(s.no).open" :key="t.id" :todo="t" :focus="focus?.todos" />
                 <div class="row task-foot">
                   <span v-if="tasksOf(s.no).done" class="tiny muted mono">✓ {{ tasksOf(s.no).done }} done</span>
                   <span v-else-if="!tasksOf(s.no).open.length && s.status !== 'done'" class="tiny muted">No tasks yet</span>
@@ -282,7 +361,7 @@ const print = () => window.print()
               <colgroup><col style="width: 58px" /><col style="width: 84px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 44px" /></colgroup>
               <thead><tr><th>Prio</th><th>PSG No.</th><th>PSG name</th><th>Indicators of success</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="{ selected: selected === p.no }" @click="selected = p.no">
+                <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="[fx('goals', p.no), { selected: selected === p.no }]" @click="selected = p.no">
                   <td><select v-model.number="p.priority" class="input ghost mono"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
                   <td class="mono ok">{{ p.no }}</td>
                   <td><input v-model="p.name" class="input ghost w" /></td>
@@ -314,10 +393,10 @@ const print = () => window.print()
               <colgroup><col style="width: 58px" /><col style="width: 88px" /><col style="width: 70px" /><col style="width: 24%" /><col /><col style="width: 140px" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 72px" /></colgroup>
               <thead><tr><th>Prio</th><th>SIG No.</th><th>PSG</th><th>SIG name</th><th>Specific &amp; measurable criteria</th><th>Depends on</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="{ selected: selected === s.no }" @click="selected = s.no">
+                <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="[fx('goals', s.no), { selected: selected === s.no }]" @click="selected = s.no">
                   <td><select v-model.number="s.priority" class="input ghost mono"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
                   <td class="mono info">{{ s.no }}</td>
-                  <td class="mono small muted">{{ s.psg }}</td>
+                  <td><select :value="s.psg" class="input ghost mono small" title="Move this SIG under another PSG (it is renumbered; links follow)" @click.stop @change="changePsg(s, $event.target.value)"><option v-for="p in psgs" :key="p.no" :value="p.no">{{ p.no }}</option></select></td>
                   <td><input v-model="s.name" class="input ghost w" /></td>
                   <td><input v-model="s.criteria" class="input ghost w small" /></td>
                   <td @click="selected = s.no">
@@ -349,6 +428,23 @@ const print = () => window.print()
         </section>
 
         <div class="widgets">
+          <!-- deadlines tied to this plan and its goals -->
+          <section class="panel">
+            <div class="panel-h"><span class="icon sm danger">alarm</span><h3>Deadlines</h3><span class="spacer"></span>
+              <span class="mono small muted">{{ openPlanDeadlines.length }} open</span>
+              <button class="btn sm icon-only" title="Add a deadline for this plan" @click="planDeadline"><span class="icon sm">alarm_add</span></button>
+            </div>
+            <div class="lt">
+              <div v-for="d in planDeadlines" :key="d.id" class="lt-row" :class="[fx('deadlines', d.id), { done: d.done }]" :title="`${d.title}${d.vital ? ' · ' + d.vital : ''} — click to edit`" @click="ui.deadlineId = d.id">
+                <span class="mono small dl-cd" :class="d.done ? 'muted' : urgency(effDue(d))">{{ d.done ? 'done' : dlLeft(d) }}</span>
+                <span class="grow ellipsis">{{ d.title }}</span>
+                <span class="mono small muted">{{ d.due.slice(5, 10) }}</span>
+                <Chip :id="d.source" />
+              </div>
+              <div v-if="!planDeadlines.length" class="empty">No deadlines for this plan yet. Use <span class="icon sm">alarm_add</span> on a goal.</div>
+            </div>
+          </section>
+
           <!-- check schedule -->
           <section class="panel">
             <div class="panel-h"><span class="icon sm warn">event_repeat</span><h3>Check schedule</h3><span class="spacer"></span><button class="btn sm" @click="logCheck">Log check today</button></div>
@@ -375,7 +471,7 @@ const print = () => window.print()
           <section class="panel">
             <div class="panel-h"><span class="icon sm ok">checklist</span><h3>Linked todos</h3><span class="spacer"></span><span class="mono small muted">{{ linked.filter((t) => !t.done).length }} pending</span></div>
             <div class="lt">
-              <div v-for="t in linked" :key="t.id" class="lt-row" :class="{ done: t.done }" @click="ui.drawerId = t.id">
+              <div v-for="t in linked" :key="t.id" class="lt-row" :class="[fx('todos', t.id), { done: t.done }]" @click="ui.drawerId = t.id">
                 <input type="checkbox" :checked="t.done" @click.stop @change="toggleTodo(t.id)" />
                 <span class="grow ellipsis">{{ t.title }}</span>
                 <Chip :id="t.links.find((l) => planIds(plan).includes(l))" />
@@ -481,6 +577,23 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 .task-done { padding: 2px 4px; }
 .add-task { border: 0; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; padding: 0 2px; }
 .add-task:hover { color: var(--accent); }
+/* deadlines hanging under a goal node */
+.gdl { margin: -3px 0 2px 10px; padding-left: 8px; border-left: 2px solid var(--surface-2); display: flex; flex-direction: column; }
+.psg-dl { margin: 4px 0 0 24px; }
+.gdl-row { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 4px; border: 0; border-radius: 2px; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; min-width: 0; }
+.gdl-row:hover { background: var(--surface-2); }
+.gdl-row .icon { font-size: 14px; }
+.gdl-cd { flex: none; min-width: 52px; font-size: 11.5px; }
+.dl-cd { flex: none; width: 62px; }
+/* focus: related items lit, the rest dimmed (names avoid the global .dim / .rel) */
+.fx-dim { opacity: 0.32; transition: opacity 0.15s; }
+.fx-dim:hover { opacity: 0.7; }
+.node.fx-rel { border-color: color-mix(in srgb, var(--info) 60%, var(--border)); }
+.gdl-row.fx-rel, .lt-row.fx-rel { background: color-mix(in srgb, var(--info) 8%, transparent); }
+.tbl tr.fx-rel { background: color-mix(in srgb, var(--info) 5%, transparent); }
+.lt-row.fx-rel { box-shadow: inset 2px 0 0 var(--info); }
+.fx-id { white-space: nowrap; flex: none; }
+.fx-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--info) 6%, transparent); min-width: 0; }
 .btn.on { color: var(--accent); border-color: var(--accent); }
 .sig { flex-direction: row; align-items: center; gap: 8px; }
 .sig.doing { border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
