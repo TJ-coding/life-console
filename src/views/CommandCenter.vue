@@ -3,7 +3,7 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, getStamps, STAMPS, CAPACITY_H,
+  state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, CAPACITY_H,
   psgPct, nextSig, diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, monthGroup,
   nextCheckDate, nextPlanCheck, activePlans, updateTodo, addTodo, parseQuick, toast, addDays, fmtSlash,
 } from '../store'
@@ -35,12 +35,33 @@ const todos = computed(() => todosForDay(T.value))
 watchEffect(() => { ui.visibleIds = todos.value.map((t) => t.id) })
 const blocks = computed(() => blocksForDay(T.value))
 const hours = computed(() => workload(T.value))
-const stage = computed(() => getStamps(T.value).filter(Boolean).length)
 const totalMin = computed(() => todos.value.filter((t) => !t.done).reduce((s, t) => s + t.timeMin, 0))
 const nowMin = computed(() => ui.now.getHours() * 60 + ui.now.getMinutes())
 
 const deadlines = computed(() =>
   state.deadlines.filter((d) => !d.done && diffDays(T.value, d.due) <= 7).sort((a, b) => a.due.localeCompare(b.due)))
+
+/* driver-console priority (ISS-6): the nearest open deadline, counting down */
+const nextDl = computed(() => {
+  void ui.now // minutes tick even while this screen is open
+  return state.deadlines.filter((d) => !d.done).sort((a, b) => a.due.localeCompare(b.due))[0] ?? null
+})
+const dlCountdown = computed(() => {
+  void ui.now
+  const d = nextDl.value
+  if (!d) return ''
+  const m = Math.round((new Date(d.due) - ui.now) / 60000)
+  if (m <= 0) return 'overdue'
+  if (m < 60) return `${m} min`
+  if (m < 1440) return `${Math.floor(m / 60)}h ${pad(m % 60)}m`
+  return `${Math.round(m / 1440)} d`
+})
+const dlUrgency = computed(() => {
+  const d = nextDl.value
+  if (!d) return ''
+  const m = (new Date(d.due) - ui.now) / 60000
+  return m <= 720 ? 'danger' : m <= 2880 ? 'warn' : ''
+})
 const psgs = computed(() =>
   activePlans().flatMap((pl) => pl.psgs.map((p) => ({ ...p, plan: pl.id, planNo: pl.planNo })))
     .sort((a, b) => a.priority - b.priority).slice(0, 3).map((p) => ({ ...p, pct: psgPct(p.no), next: nextSig(p.no) })))
@@ -110,9 +131,9 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
         <div class="tiny upper muted">Workload</div>
         <div class="mono">{{ hours.toFixed(1) }}h / {{ CAPACITY_H }}.0h <span :class="hours > CAPACITY_H ? 'warn' : 'ok'">{{ Math.round((hours / CAPACITY_H) * 100) }}%</span></div>
       </div>
-      <div class="kv">
-        <div class="tiny upper muted">Sign-off</div>
-        <div class="mono"><span class="stampc">{{ stage ? STAMPS[stage - 1] : '—' }}</span> stage {{ stage }}/4</div>
+      <div v-if="nextDl" class="kv clickable" title="Open the deadline" @click="ui.deadlineId = nextDl.id">
+        <div class="tiny upper muted">Next deadline</div>
+        <div class="mono dl-count" :class="dlUrgency"><b>{{ dlCountdown }}</b><span class="dl-title">until {{ nextDl.title }}</span></div>
       </div>
       <div class="kv">
         <div class="tiny upper muted">Next plan check</div>
@@ -137,40 +158,7 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
       <button class="btn" @click="router.push('/')"><span class="icon sm">today</span>Back to today</button>
     </section>
 
-    <!-- row 1 -->
-    <section class="panel c8">
-      <div class="panel-h">
-        <span class="icon sm ok">timeline</span><h2><a href="#" class="title-link" @click.prevent="openWeek">{{ dayLabel }} timeline</a></h2>
-        <span class="spacer"></span>
-        <div class="legend">
-          <span class="cat-research"><i></i>Research</span><span class="cat-academic"><i></i>Academic</span>
-          <span class="cat-experiment"><i></i>Experiment</span><span class="cat-kaizen"><i></i>Kaizen</span>
-        </div>
-      </div>
-      <div class="panel-b">
-        <Timeline24 :date="T" :blocks="blocks" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
-        <div v-if="!blocks.length" class="empty">No blocks scheduled. Press <span class="kbd">N</span> to add a todo or drag one onto the timeline.</div>
-        <div v-else class="small muted hint">Drag a todo from the list below onto the strip to give it a start time. Dashed blocks are todos.</div>
-      </div>
-    </section>
-
-    <section class="panel c4">
-      <div class="panel-h"><span class="icon sm ok">approval</span><h2>Sign-off ledger</h2><span class="spacer"></span><span class="kbd">S</span><span class="small muted">stamp next</span></div>
-      <div class="panel-b ledger">
-        <div class="wl">
-          <div class="tiny upper muted">Workload</div>
-          <Gauge :hours="hours" :height="88" :width="18" />
-          <div class="mono small">{{ hours.toFixed(1) }}h / {{ CAPACITY_H }}h</div>
-        </div>
-        <div class="col grow">
-          <div class="tiny upper muted">Daily seals · 印 → 印 → 確認 → 完</div>
-          <Stamps :date="T" :size="40" show-times />
-          <div class="small muted">Click the next seal to stamp; click the last one to undo.</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- row 2 -->
+    <!-- row 1 · what today needs: todos, deadlines, goals -->
     <section class="panel c5 todos">
       <div class="panel-h">
         <span class="icon sm ok">checklist</span><h2><router-link to="/todos" class="title-link">{{ dayLabel }} todos</router-link></h2>
@@ -221,7 +209,40 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
       </div>
     </section>
 
-    <!-- row 3 -->
+    <!-- row 2 · the shape of the day: time -->
+    <section class="panel c8">
+      <div class="panel-h">
+        <span class="icon sm ok">timeline</span><h2><a href="#" class="title-link" @click.prevent="openWeek">{{ dayLabel }} timeline</a></h2>
+        <span class="spacer"></span>
+        <div class="legend">
+          <span class="cat-research"><i></i>Research</span><span class="cat-academic"><i></i>Academic</span>
+          <span class="cat-experiment"><i></i>Experiment</span><span class="cat-kaizen"><i></i>Kaizen</span>
+        </div>
+      </div>
+      <div class="panel-b">
+        <Timeline24 :date="T" :blocks="blocks" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
+        <div v-if="!blocks.length" class="empty">No blocks scheduled. Press <span class="kbd">N</span> to add a todo or drag one onto the timeline.</div>
+        <div v-else class="small muted hint">Drag a todo from the list below onto the strip to give it a start time. Dashed blocks are todos.</div>
+      </div>
+    </section>
+
+    <section class="panel c4">
+      <div class="panel-h"><span class="icon sm ok">approval</span><h2>Sign-off ledger</h2><span class="spacer"></span><span class="kbd">S</span><span class="small muted">stamp next</span></div>
+      <div class="panel-b ledger">
+        <div class="wl">
+          <div class="tiny upper muted">Workload</div>
+          <Gauge :hours="hours" :height="88" :width="18" />
+          <div class="mono small">{{ hours.toFixed(1) }}h / {{ CAPACITY_H }}h</div>
+        </div>
+        <div class="col grow">
+          <div class="tiny upper muted">Daily seals · 印 → 印 → 確認 → 完</div>
+          <Stamps :date="T" :size="40" show-times />
+          <div class="small muted">Click the next seal to stamp; click the last one to undo.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- row 3 · wellbeing, routines, reviews -->
     <div class="tiles c12">
       <router-link to="/week" class="panel tile">
         <div class="tiny upper muted row">Routines due<span class="spacer"></span><span class="icon sm">cleaning_services</span></div>
@@ -285,7 +306,11 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
 .date { font-size: 30px; line-height: 36px; font-weight: 700; letter-spacing: -0.02em; }
 .sep { width: 1px; align-self: stretch; background: var(--border); }
 .kv { display: flex; flex-direction: column; gap: 3px; }
-.stampc { color: var(--stamp); font-family: 'Noto Sans JP'; font-weight: 700; }
+.kv.clickable { cursor: pointer; }
+.kv.clickable:hover .dl-title { color: var(--text); border-bottom: 1px dotted var(--muted); }
+.dl-count { display: flex; align-items: baseline; gap: 6px; }
+.dl-count b { font-size: 15px; }
+.dl-title { font-size: 11px; color: var(--muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .c3 { grid-column: span 3; } .c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c8 { grid-column: span 8; } .c12 { grid-column: span 12; }
 .hint { margin-top: 8px; }
 .ledger { display: flex; gap: 18px; align-items: flex-start; }

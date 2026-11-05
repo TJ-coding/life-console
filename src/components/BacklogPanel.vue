@@ -8,6 +8,7 @@ import Prio from './Prio.vue'
 import Chip from './Chip.vue'
 
 const prio = ref(0)
+const open = ref(true) // collapses the backlog to header + quick-add (handy on phones)
 const list = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && (!prio.value || t.priority === prio.value)).sort(byPriority))
 const total = computed(() => list.value.reduce((s, t) => s + t.timeMin / 60, 0))
 const T = computed(() => todayISO())
@@ -41,13 +42,16 @@ function onDrop(e) {
 <template>
   <section class="backlog" :class="{ 'drop-hot': hot }" @dragover.prevent="hot = true" @dragleave="hot = false" @drop.prevent="onDrop">
     <header class="bh">
+      <button class="btn sm icon-only tog" :title="open ? 'Collapse backlog' : 'Expand backlog'" @click="open = !open">
+        <span class="icon sm">{{ open ? 'keyboard_arrow_up' : 'keyboard_arrow_down' }}</span>
+      </button>
       <span class="stepn mono">1</span>
       <div class="grow">
         <div class="ttl">Backlog</div>
         <div class="mono tiny muted">{{ list.length }} tasks · {{ total.toFixed(1) }}h</div>
       </div>
     </header>
-    <form class="qa" @submit.prevent="add">
+    <form v-if="open" class="qa" @submit.prevent="add">
       <span class="icon sm plus">add</span>
       <input
         ref="input" v-model="draft" class="mono" placeholder="New task… 45m p2 due:fri #tag"
@@ -56,7 +60,7 @@ function onDrop(e) {
       />
       <span class="kbd">N</span>
     </form>
-    <div v-if="draft" class="preview">
+    <div v-if="draft && open" class="preview">
       <span class="pc"><b>{{ parsed.title || '—' }}</b></span>
       <span class="pc mono">{{ parsed.timeMin ?? 30 }}m</span>
       <span class="pc mono">P{{ parsed.priority ?? 3 }}</span>
@@ -64,12 +68,12 @@ function onDrop(e) {
       <Chip v-for="l in parsed.links" :key="l" :id="l" />
       <span class="small muted enter">↵ add</span>
     </div>
-    <div class="pf">
+    <div v-if="open" class="pf">
       <button class="btn sm" :class="{ active: !prio }" @click="prio = 0">All</button>
       <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: prio === p }" @click="prio = p">P{{ p }}</button>
     </div>
 
-    <div class="list">
+    <div v-if="open" class="list">
       <div
         v-for="t in list" :key="t.id" class="card" :class="[dropClass(t), { linked: ui.hoverId === t.id, sel: ui.selectedId === t.id }]" draggable="true"
         @dragstart="startDrag($event, t)" @dragend="endDrag" @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)"
@@ -100,13 +104,14 @@ function onDrop(e) {
       </div>
       <div v-if="!list.length" class="empty">Backlog clear ✓<br />Type above to capture a task.</div>
     </div>
-    <div class="foot small muted">Hover a task → click a day, or drag it onto a day. Drop here to unassign.</div>
+    <div v-if="open" class="foot small muted">Hover a task → click a day, or drag it onto a day. Drop here to unassign.</div>
   </section>
 </template>
 
 <style scoped>
 .backlog { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-right: 1px solid var(--border); }
 .bh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.tog { padding: 0 2px; color: var(--muted); }
 .stepn { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--muted); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--muted); }
 .ttl { font-weight: 600; }
 .qa { display: flex; align-items: center; gap: 6px; margin: 8px 8px 0; padding: 0 6px; height: 32px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface-2); }

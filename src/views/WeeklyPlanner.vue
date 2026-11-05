@@ -190,4 +190,16 @@ function copyLastWeek() {
 .slide-enter-active, .slide-leave-active { transition: transform 0.15s ease, opacity 0.15s; }
 .slide-enter-from, .slide-leave-to { transform: translateX(20px); opacity: 0; }
 @media (max-width: 1100px) { .body { grid-template-columns: 200px minmax(0, 1fr) 44px; } }
+/* phone (ISS-3): backlog becomes a capped section on top, day columns swipe horizontally,
+   the panel rail becomes a bottom strip and the side panel a bottom sheet */
+@media (max-width: 640px) {
+  .body { display: flex; flex-direction: column; }
+  .body > .backlog { flex: none; max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  .days { flex: 1; min-height: 0; display: flex; overflow-x: auto; scroll-snap-type: x proximity; padding: 10px; }
+  .days :deep(.day) { flex: 0 0 82vw; width: 82vw; scroll-snap-align: start; }
+  .weekend { display: contents; }
+  .rail { order: 3; flex-direction: row; justify-content: flex-end; gap: 8px; padding: 6px 10px; border-left: 0; border-top: 1px solid var(--border); }
+  .overlay { top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: 62vh; border-left: 0; border-top: 1px solid var(--border); border-radius: 6px 6px 0 0; }
+  .slide-enter-from, .slide-leave-to { transform: translateY(40px); }
+}
 </style>

@@ -2,7 +2,7 @@
 // S-30 · Strategic Plan (Goals Planner) — Vision → PSG → SIG cascade with tables and review widgets.
 import { computed, ref, nextTick, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan } from '../store'
+import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle } from '../store'
 import PlanTabs from '../components/PlanTabs.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -76,6 +76,27 @@ function todoFor(sig) {
   toast(`Created ${t.id} for ${sig.no}`)
 }
 
+/* deadlines tied to PSG / SIG (ISS-4): create one pre-linked to the goal, then open the edit dialog */
+function goalDeadline(g) {
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(g.timeBound ?? '') ? g.timeBound : addDays(T.value, 7)
+  const d = addDeadline({ title: `${g.no} · ${g.name}`, due: `${day}T18:00`, source: g.no, priority: Number(g.priority) || 3 })
+  ui.deadlineId = d.id
+  toast(`Deadline added for ${g.no}`)
+}
+
+/* SIG dependencies (ISS-5): optional `deps` array of SIG numbers, defaulted in normalizeState */
+const sigNos = computed(() => allSigs().map((s) => s.no).sort())
+function addDep(s, dep) {
+  if (!dep) return
+  if (!Array.isArray(s.deps)) s.deps = []
+  if (s.deps.includes(dep)) { toast(`${dep} is already a dependency`); return }
+  if (sigWouldCycle(s.no, dep)) { toast(`Depending on ${dep} would be circular`); return }
+  s.deps.push(dep)
+}
+function removeDep(s, dep) {
+  s.deps = (s.deps ?? []).filter((x) => x !== dep)
+}
+
 const linked = computed(() => {
   const ids = new Set(planIds(plan.value))
   return state.todos.filter((t) => t.links.some((l) => ids.has(l))).sort(byPriority)
@@ -146,14 +167,15 @@ const print = () => window.print()
           <div v-for="p in psgs" :key="p.no" class="branch">
             <div class="node psg" :class="{ sel: selected === p.no }" @click="select(p.no)">
               <div class="row"><Prio :p="p.priority" /><span class="mono ok">{{ p.no }}</span><span class="spacer"></span><span class="mono small" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</span></div>
-              <div class="nm">{{ p.name }}</div>
+              <input v-model="p.name" class="input ghost nm-in" placeholder="PSG name" title="Edit PSG name" @click.stop />
               <div class="bar" :class="psgPct(p.no) < 40 ? 'warn' : ''"><i :style="{ width: psgPct(p.no) + '%' }"></i></div>
             </div>
             <div class="kids">
               <div v-for="s in sigsOf(p.no)" :key="s.no" class="node sig" :class="[s.status, { sel: selected === s.no }]" @click="select(s.no)">
                 <div class="grow">
-                  <div class="mono small" :class="s.status === 'done' ? 'ok' : 'info'">{{ s.no }} {{ s.name }}</div>
+                  <div class="row sig-nm"><span class="mono small" :class="s.status === 'done' ? 'ok' : 'info'">{{ s.no }}</span><input v-model="s.name" class="input ghost sig-in" placeholder="SIG name" title="Edit SIG name" @click.stop /></div>
                   <div class="small muted ellipsis">{{ s.criteria || '—' }}</div>
+                  <div v-if="(s.deps ?? []).length" class="tiny muted mono ellipsis" title="Depends on">⛓ {{ (s.deps ?? []).join(', ') }}</div>
                 </div>
                 <span class="status" :class="s.status">{{ s.pct }}% {{ s.status === 'done' ? '✓' : s.status === 'doing' ? '!' : '◯' }}</span>
               </div>
@@ -169,8 +191,8 @@ const print = () => window.print()
           <div class="panel-h"><span class="icon sm ok">flag</span><h2>Prioritised strategic goals (PSG)</h2><span class="spacer"></span><span class="mono small muted">PSG % = mean of SIGs</span></div>
           <div class="tw">
             <table class="tbl">
-              <colgroup><col style="width: 58px" /><col style="width: 84px" /><col /><col style="width: 30%" /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 64px" /></colgroup>
-              <thead><tr><th>Prio</th><th>PSG No.</th><th>PSG name</th><th>Indicators of success</th><th>Time bound</th><th>Status</th><th>Done %</th></tr></thead>
+              <colgroup><col style="width: 58px" /><col style="width: 84px" /><col /><col style="width: 30%" /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 44px" /></colgroup>
+              <thead><tr><th>Prio</th><th>PSG No.</th><th>PSG name</th><th>Indicators of success</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="{ selected: selected === p.no }" @click="selected = p.no">
                   <td><select v-model.number="p.priority" class="input ghost mono"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
@@ -180,8 +202,12 @@ const print = () => window.print()
                   <td><input v-model="p.timeBound" class="input ghost w mono small" /></td>
                   <td><button class="status" :class="p.status" @click.stop="cycle(p)">{{ LABEL[p.status] }}</button></td>
                   <td class="mono" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</td>
+                  <td><button class="btn sm icon-only" title="Add a deadline for this PSG" @click.stop="goalDeadline(p)"><span class="icon sm">alarm_add</span></button></td>
                 </tr>
               </tbody>
+              <tfoot>
+                <tr><td colspan="8" class="td-add"><button class="add-row" @click="addPsg"><span class="icon sm">add</span>Add a new PSG…</button></td></tr>
+              </tfoot>
             </table>
           </div>
         </section>
@@ -196,8 +222,8 @@ const print = () => window.print()
           </div>
           <div class="tw">
             <table class="tbl wide">
-              <colgroup><col style="width: 58px" /><col style="width: 88px" /><col style="width: 70px" /><col style="width: 26%" /><col /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 40px" /></colgroup>
-              <thead><tr><th>Prio</th><th>SIG No.</th><th>PSG</th><th>SIG name</th><th>Specific &amp; measurable criteria</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
+              <colgroup><col style="width: 58px" /><col style="width: 88px" /><col style="width: 70px" /><col style="width: 24%" /><col /><col style="width: 140px" /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 72px" /></colgroup>
+              <thead><tr><th>Prio</th><th>SIG No.</th><th>PSG</th><th>SIG name</th><th>Specific &amp; measurable criteria</th><th>Depends on</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="{ selected: selected === s.no }" @click="selected = s.no">
                   <td><select v-model.number="s.priority" class="input ghost mono"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
@@ -205,12 +231,29 @@ const print = () => window.print()
                   <td class="mono small muted">{{ s.psg }}</td>
                   <td><input v-model="s.name" class="input ghost w" /></td>
                   <td><input v-model="s.criteria" class="input ghost w small" /></td>
+                  <td @click="selected = s.no">
+                    <div class="deps">
+                      <span v-for="dp in s.deps ?? []" :key="dp" class="dep"><Chip :id="dp" /><button class="dep-x" :title="`Remove dependency on ${dp}`" @click.stop="removeDep(s, dp)"><span class="icon sm">close</span></button></span>
+                      <select class="dep-add mono" title="Add a dependency (another SIG this one needs)" @click.stop @change="addDep(s, $event.target.value); $event.target.value = ''">
+                        <option value="">＋ dep</option>
+                        <option v-for="no in sigNos.filter((n) => n !== s.no)" :key="no" :value="no" :disabled="sigWouldCycle(s.no, no)">{{ no }}</option>
+                      </select>
+                    </div>
+                  </td>
                   <td><input v-model="s.timeBound" class="input ghost w mono small" /></td>
                   <td><button class="status" :class="s.status" @click.stop="cycle(s)">{{ LABEL[s.status] }}</button></td>
                   <td><input :value="s.pct" type="number" min="0" max="100" step="5" class="input ghost w mono" :class="pctClass(s.pct)" @change="setPct(s, $event.target.value)" /></td>
-                  <td><button class="btn sm icon-only" title="Create todo for this SIG" @click.stop="todoFor(s)"><span class="icon sm">add_task</span></button></td>
+                  <td>
+                    <div class="row acts">
+                      <button class="btn sm icon-only" title="Add a deadline for this SIG" @click.stop="goalDeadline(s)"><span class="icon sm">alarm_add</span></button>
+                      <button class="btn sm icon-only" title="Create todo for this SIG" @click.stop="todoFor(s)"><span class="icon sm">add_task</span></button>
+                    </div>
+                  </td>
                 </tr>
               </tbody>
+              <tfoot>
+                <tr><td colspan="10" class="td-add"><button class="add-row" @click="addSig(psgFilter)"><span class="icon sm">add</span>Add a new SIG{{ psgFilter ? ` under ${psgFilter}` : '…' }}</button></td></tr>
+              </tfoot>
             </table>
           </div>
         </section>
@@ -311,7 +354,21 @@ h1 { margin: 0; font-size: 18px; font-weight: 600; }
 .trunk { width: 1px; height: 18px; background: var(--border); margin-left: 20px; }
 .branch { position: relative; margin-left: 20px; padding-left: 16px; border-left: 1px solid var(--border); padding-bottom: 14px; }
 .branch::before { content: ''; position: absolute; left: 0; top: 18px; width: 16px; border-top: 1px solid var(--border); }
-.psg .nm { font-weight: 600; }
+.nm-in { height: 24px; font-size: 13px; font-weight: 600; padding: 0 2px; }
+.sig-nm { gap: 6px; align-items: baseline; }
+.sig-in { height: 20px; font-size: 11px; flex: 1; min-width: 60px; padding: 0 2px; }
+.deps { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.dep { display: inline-flex; align-items: center; gap: 1px; border: 1px solid var(--border); border-radius: 2px; padding: 0 2px 0 4px; }
+.dep-x { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0; height: 16px; display: inline-flex; align-items: center; }
+.dep-x:hover { color: var(--danger); }
+.dep-x .icon { font-size: 12px; }
+.dep-add { height: 20px; font-size: 10px; background: transparent; }
+.acts { gap: 2px; flex-wrap: nowrap; }
+.acts .btn { padding: 0 2px; }
+/* add-new buttons at the bottom of each table (ISS-1) */
+tfoot .td-add { padding: 0; border-bottom: 0; }
+.add-row { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 0; border: 0; border-top: 1px dashed var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.add-row:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .kids { margin: 6px 0 0 14px; padding-left: 12px; border-left: 1px dashed var(--border); display: flex; flex-direction: column; gap: 6px; }
 .sig { flex-direction: row; align-items: center; gap: 8px; }
 .sig.doing { border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
@@ -320,7 +377,7 @@ h1 { margin: 0; font-size: 18px; font-weight: 600; }
 .right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .tw { overflow-x: auto; }
 .tw .tbl { min-width: 760px; }
-.tw .tbl.wide { min-width: 820px; }
+.tw .tbl.wide { min-width: 900px; }
 .input.w { width: 100%; }
 .select.small, .input.small { height: 24px; font-size: 11px; }
 .widgets { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

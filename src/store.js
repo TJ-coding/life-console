@@ -272,6 +272,8 @@ export function normalizeState() {
   migrateDoc(state)
   ensureOrder()
   ensureSettings()
+  // SIGs may depend on other SIGs (ISS-5); the field is optional, so default it instead of a migration
+  for (const p of state.plans ?? []) for (const s of p.sigs ?? []) if (!Array.isArray(s.deps)) s.deps = []
 }
 normalizeState()
 watch(state, (v) => {
@@ -530,6 +532,20 @@ export function psgPct(psgNo) {
   return s.length ? Math.round(s.reduce((a, x) => a + Number(x.pct || 0), 0) / s.length) : 0
 }
 export const nextSig = (psgNo) => sigsOf(psgNo).find((s) => s.status !== 'done')
+/** True if making SIG `fromNo` depend on `toNo` would create a dependency cycle. */
+export function sigWouldCycle(fromNo, toNo) {
+  if (fromNo === toNo) return true
+  const seen = new Set()
+  const stack = [toNo]
+  while (stack.length) {
+    const n = stack.pop()
+    if (n === fromNo) return true // `fromNo` depends (directly or not) on `toNo`
+    if (seen.has(n)) continue
+    seen.add(n)
+    allSigs().filter((s) => s.no === n).forEach((s) => stack.push(...(s.deps ?? [])))
+  }
+  return false
+}
 export function nextCheckDate(plan) {
   if (!plan) return nextPlanCheck()?.date ?? todayISO()
   const log = plan.checkLog ?? []
