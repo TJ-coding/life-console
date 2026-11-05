@@ -2,7 +2,7 @@
 // Split one task into parts spread over several days, with a live load preview per day.
 import { computed, ref, watch } from 'vue'
 import {
-  ui, findTodo, todayISO, addDays, wd, fmtSlash, dayLoad, CAPACITY_H, evenParts, autoSpread, splitTodo, toast, partLabel,
+  ui, findTodo, todayISO, addDays, wd, fmtSlash, dayLoad, CAPACITY_H, evenParts, autoSpread, splitTodo, planDaySpread, toast, partLabel, WORK_FROM, WORK_TO,
 } from '../store'
 
 const t = computed(() => (ui.splitId ? findTodo(ui.splitId) : null))
@@ -13,7 +13,7 @@ const usable = (d) => d >= T.value && (!t.value?.due || d <= t.value.due)
 
 function reset(n = 2) {
   if (!t.value) return
-  parts.value = evenParts(t.value.timeMin, n).map((min) => ({ min, date: null }))
+  parts.value = evenParts(t.value.timeMin, n).map((min) => ({ min, date: null, start: null }))
   autoAssign()
 }
 watch(() => ui.splitId, (id) => { if (id) reset(t.value?.timeMin >= 90 ? 3 : 2) })
@@ -22,7 +22,7 @@ function byChunk(size) {
   const n = Math.max(2, Math.ceil(t.value.timeMin / size))
   const mins = Array(n).fill(size)
   mins[n - 1] = t.value.timeMin - size * (n - 1)
-  parts.value = mins.map((min) => ({ min, date: null }))
+  parts.value = mins.map((min) => ({ min, date: null, start: null }))
   autoAssign()
 }
 function autoAssign() {
@@ -32,8 +32,26 @@ function autoAssign() {
   const picks = autoSpread(t.value, parts.value.map((p) => p.min), pool)
   parts.value.forEach((p, i) => { p.date = picks[i] })
 }
-const addPart = () => parts.value.push({ min: 30, date: null })
+const addPart = () => parts.value.push({ min: 30, date: null, start: null })
 const removePart = (i) => parts.value.splice(i, 1)
+
+/** ISS-21: a split can also stay on one day and spread through it, instead of filling whole days. */
+const thisDay = computed(() => t.value?.scheduled?.date ?? T.value)
+const oneDate = computed(() => parts.value.length > 1 && parts.value.every((p) => p.date && p.date === parts.value[0].date))
+function assignSameDay() {
+  const d = thisDay.value
+  parts.value.forEach((p) => { p.date = d; if (p.start == null) p.start = '' })
+  spreadDay()
+}
+/** Fill the part start times with the earliest free gaps (own block excluded — parts replace it). */
+function spreadDay() {
+  if (!oneDate.value) { toast('Put every part on the same day first'); return }
+  const starts = planDaySpread(parts.value[0].date, parts.value.map((p) => Number(p.min) || 30), t.value.id)
+  parts.value.forEach((p, i) => { p.start = starts[i] ?? '' })
+  const placed = starts.filter((s) => s !== null).length
+  if (placed < starts.length) toast(`Not all parts fit into ${WORK_FROM}–${WORK_TO} — clear times and drag blocks in the timeline instead`)
+  else toast(`Spread into ${placed} timed part${placed > 1 ? 's' : ''}`)
+}
 
 const sum = computed(() => parts.value.reduce((s, p) => s + (Number(p.min) || 0), 0))
 /** Day loads without this task, and with the planned parts added. */
@@ -47,7 +65,11 @@ const valid = computed(() => parts.value.length >= 2 && parts.value.every((p) =>
 
 function apply() {
   if (!valid.value) return
-  const made = splitTodo(t.value.id, parts.value.map((p) => ({ min: Number(p.min), date: p.date || null })))
+  const made = splitTodo(t.value.id, parts.value.map((p) => ({
+    min: Number(p.min), date: p.date || null,
+    // same-day parts carry their start time; times cleared mean "untimed, drag them on the timeline"
+    start: oneDate.value && p.date ? (p.start || null) : undefined,
+  })))
   toast(`Split ${made[0].id} into ${made.length} parts`)
   ui.splitId = null
 }
@@ -77,6 +99,11 @@ function onKey(e) {
           <span class="tiny upper muted lbl gap">or chunks of</span>
           <button v-for="c in [30, 45, 60, 90]" :key="c" class="btn sm" :disabled="c >= t.timeMin" @click="byChunk(c)">{{ c }}m</button>
         </div>
+        <div class="row wrap">
+          <button class="btn sm" :title="`All parts on ${wd(thisDay)} ${fmtSlash(thisDay)}, spread through the day's free gaps (ISS-21)`" @click="assignSameDay"><span class="icon sm">timer</span>All on {{ wd(thisDay) }} · spread</button>
+          <button v-if="oneDate" class="btn sm" title="Re-pick start times from the day's free gaps (own block excluded)" @click="spreadDay"><span class="icon sm">schedule</span>Re-spread times</button>
+          <span v-if="oneDate" class="tiny upper muted self">starts</span>
+        </div>
 
         <div class="parts">
           <div v-for="(p, i) in parts" :key="i" class="prow">
@@ -89,6 +116,8 @@ function onKey(e) {
                 {{ wd(d) }} {{ fmtSlash(d) }}{{ d < T ? ' · past' : t.due && d > t.due ? ' · after due!' : '' }}
               </option>
             </select>
+            <input v-if="oneDate" v-model="p.start" type="time" step="900" class="input mono start"
+              title="Start time on that day — blank = untimed, drop it in the timeline later (ISS-21)" />
             <button class="btn sm icon-only" :disabled="parts.length <= 2" title="Remove part" @click="removePart(i)"><span class="icon sm">close</span></button>
           </div>
           <div class="row">
@@ -139,6 +168,7 @@ function onKey(e) {
 .parts { display: flex; flex-direction: column; gap: 6px; }
 .prow { display: flex; align-items: center; gap: 8px; }
 .mins { width: 70px; }
+.start { width: 104px; flex: none; font-size: 12px; }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .pv { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid var(--border); padding-top: 12px; }
 .pvrow { display: grid; grid-template-columns: 82px 1fr 56px; align-items: center; gap: 8px; }

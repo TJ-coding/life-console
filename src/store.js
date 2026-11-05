@@ -746,12 +746,12 @@ export function splitTodo(id, parts) {
   const [first, ...rest] = parts
   updateTodo(id, {
     timeMin: first.min,
-    scheduled: first.date ? { date: first.date, start: t.scheduled?.date === first.date ? t.scheduled.start : null } : null,
+    scheduled: first.date ? { date: first.date, start: first.start === undefined ? (t.scheduled?.date === first.date ? t.scheduled.start : null) : (first.start || null) } : null,
     split: { group },
   })
   return [t, ...rest.map((p, k) => addTodo({
     title: t.title, vital: t.vital, lsd: t.lsd, priority: t.priority, due: t.due, links: [...t.links],
-    timeMin: p.min, scheduled: p.date ? { date: p.date, start: null } : null,
+    timeMin: p.min, scheduled: p.date ? { date: p.date, start: p.start === undefined ? null : (p.start || null) } : null,
     split: { group }, order: t.order + (k + 1) * 0.001,
   }))]
 }
@@ -820,6 +820,34 @@ export function autoTimebox(date, from = WORK_FROM, to = WORK_TO) {
     placed.push(t.id)
   }
   return { placed, unplaced }
+}
+/**
+ * ISS-21: give each of a same-day split's parts a start time — the earliest free gaps after fixed
+ * blocks, skipping the original task's own block (its parts replace it). Returns 'HH:MM' or null per part.
+ */
+export function planDaySpread(date, mins, skipTodoId = null, from = WORK_FROM, to = WORK_TO) {
+  const busy = blocksForDay(date)
+    .filter((b) => b.todoId !== skipTodoId)
+    .map((b) => [toMin(b.start), toMin(b.end)])
+  let earliest = toMin(from)
+  if (date === todayISO()) {
+    const n = new Date()
+    earliest = Math.max(earliest, Math.ceil((n.getHours() * 60 + n.getMinutes()) / 15) * 15)
+  }
+  const end = toMin(to)
+  return mins.map((m) => {
+    const dur = m || 30
+    let s = earliest
+    let found = null
+    while (s + dur <= end) {
+      const clash = busy.find(([a, b]) => s < b && s + dur > a)
+      if (!clash) { found = s; break }
+      s = Math.ceil(clash[1] / 15) * 15
+    }
+    if (found === null) return null
+    busy.push([found, found + dur])
+    return fromMin(found)
+  })
 }
 
 /* ───────────── deadlines ───────────── */
