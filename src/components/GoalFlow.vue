@@ -4,13 +4,14 @@
 // depend on it; a SIG that no other SIG of its PSG depends on flows into its PSG, and every PSG into the Vision.
 // Cards share a row unless they'd overlap; each is placed near the rows of what feeds it.
 // Continuous / undated goals sit in a "∞" column after the axis; the Vision comes last.
-// Dated PSG/SIG cards can be dragged sideways (mouse/pen) to move their time bound, snapping to days.
+// PSG/SIG cards can be dragged sideways (mouse/pen) to move their time bound, snapping to days; a continuous/undated card
+// dragged out of the ∞ column onto the axis gets that date. A lock on the card (boundLocked, also in the tables) stops it.
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { allSigs, psgPct, todayISO, addDays, diffDays, state, toast } from '../store'
 import { sigState, inDays, boundIssues, CONTINUOUS } from '../glance'
 
 const props = defineProps({ plan: { type: Object, required: true }, selected: { type: String, default: null } })
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'open'])
 
 const NW = 184, NH = 58, GY = 12, GX = 14, AX = 40, GAP = 56, MIN_PX = 2
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? '')
@@ -100,10 +101,10 @@ const graph = computed(() => {
   ]
   const H = AX + used.length * (NH + GY)
   const W = (nodes.has('VISION') ? nodes.get('VISION').R : undated.length ? infX : axisEnd) + 8
-  return { nodes, edges, ticks, marks, W, H, ppd, todayX: x(T), infX: undated.length ? infX - NW : null }
+  return { nodes, edges, ticks, marks, W, H, ppd, from, axisEnd, todayX: x(T), infX: undated.length ? infX - NW : null }
 })
 
-/** Everything upstream and downstream of the selected goal, to light up its path. */
+/** The selected goal and everything that feeds it (upstream only, never what it flows into), to light up its path. */
 const path = computed(() => {
   const sel = props.selected
   const { nodes } = graph.value
@@ -111,7 +112,6 @@ const path = computed(() => {
   const set = new Set([sel])
   const walk = (id, side) => { for (const n of nodes.get(id)[side]) if (!set.has(n)) { set.add(n); walk(n, side) } }
   walk(sel, 'ins')
-  walk(sel, 'outs')
   return set
 })
 
@@ -154,14 +154,20 @@ function nodeView(n) {
   return { label: n.id, name: n.ref.name, pct: Number(n.ref.pct) || 0, meta: when(n.ref.timeBound), st: sigState(n.ref), issues: boundIssues(n.ref) }
 }
 const nodeList = computed(() => [...graph.value.nodes.values()])
-/* drag a dated card sideways to change its time bound. The layout stays put while dragging (only the
-   dragged card shifts by whole days); the new date is written on release, then the flow re-lays itself. */
-const drag = ref(null) // { id, end, x0, days, moved }
+/* drag a card sideways to change its time bound. The layout stays put while dragging (only the dragged card
+   shifts, by whole days); the new date is written on release, then the flow re-lays itself.
+   A dated card moves by whole days. A continuous/undated card follows the pointer and gets a date once its ◆
+   is over the axis; let go back in the ∞ column and it stays as it was. */
+const drag = ref(null) // { id, end, R, x0, px, to, moved, locked }
 let swallowClick = false
-const canDrag = (n) => !!n.end && !n.ext && n.kind !== 'vision'
+const isLocked = (n) => n.kind !== 'vision' && !!n.ref.boundLocked
+const draggable = (n) => !n.ext && n.kind !== 'vision'
+const canDrag = (n) => draggable(n) && !isLocked(n)
+const dateAt = (px) => { const g = graph.value; return addDays(g.from, Math.round((px - NW) / g.ppd)) }
 function onDown(e, n) {
-  if (e.button !== 0 || e.pointerType === 'touch' || !canDrag(n)) return
-  drag.value = { id: n.id, end: n.end, x0: e.clientX, days: 0, moved: false }
+  if (e.button !== 0 || e.pointerType === 'touch' || !draggable(n)) return
+  // a locked card is "held" but never moves; trying to drag it explains why
+  drag.value = { id: n.id, end: n.end, R: n.R, x0: e.clientX, px: 0, to: null, moved: false, locked: isLocked(n) }
   e.currentTarget.setPointerCapture?.(e.pointerId)
   window.addEventListener('keydown', onDragKey, true)
 }
@@ -171,7 +177,19 @@ function onMove(e) {
   const dx = e.clientX - d.x0
   if (!d.moved && Math.abs(dx) < 4) return
   d.moved = true
-  d.days = Math.round(dx / graph.value.ppd)
+  if (d.locked) return
+  const g = graph.value
+  if (d.end) {
+    const days = Math.round(dx / g.ppd)
+    d.to = addDays(d.end, days)
+    d.px = days * g.ppd
+  } else if (d.R + dx <= g.axisEnd) {
+    d.to = dateAt(d.R + dx)
+    d.px = NW + diffDays(g.from, d.to) * g.ppd - d.R // snap the ◆ onto that day
+  } else {
+    d.to = null
+    d.px = dx
+  }
 }
 function onUp() {
   const d = drag.value
@@ -180,12 +198,13 @@ function onUp() {
   if (!d.moved) return
   swallowClick = true
   setTimeout(() => { swallowClick = false }, 0)
-  if (!d.days) return
+  if (d.locked) { toast(`${d.id}'s time bound is locked: click its lock to unlock`); return }
+  if (!d.to || d.to === d.end) return
   const n = graph.value.nodes.get(d.id)
   if (!n) return
-  const to = addDays(d.end, d.days)
-  n.ref.timeBound = to
-  toast(`${d.id} time bound ${d.end} → ${to}`)
+  const was = n.ref.timeBound || 'no end date'
+  n.ref.timeBound = d.to
+  toast(`${d.id} time bound ${was} → ${d.to}`)
 }
 function onDragKey(e) {
   if (e.key !== 'Escape' || !drag.value) return
@@ -201,9 +220,14 @@ function endDrag() {
   window.removeEventListener('keydown', onDragKey, true)
 }
 onBeforeUnmount(endDrag)
-const shift = (n) => (drag.value?.id === n.id ? drag.value.days * graph.value.ppd : 0)
-const dragTo = computed(() => (drag.value?.moved ? addDays(drag.value.end, drag.value.days) : null))
-const metaOf = (n) => (drag.value?.id === n.id && drag.value.moved ? when(dragTo.value) : nodeView(n).meta)
+function toggleLock(n) {
+  n.ref.boundLocked = !n.ref.boundLocked
+  toast(`${n.id} time bound ${n.ref.boundLocked ? 'locked' : 'unlocked'}`)
+}
+const live = computed(() => (drag.value?.moved && !drag.value.locked ? drag.value : null))
+const shift = (n) => (live.value?.id === n.id ? live.value.px : 0)
+const metaOf = (n) => (live.value?.id === n.id ? (live.value.to ? when(live.value.to) : nodeView(n).meta) : nodeView(n).meta)
+const open = (n) => { if (n.kind !== 'vision' && !n.ext) emit('open', n.id) }
 const pick = (n) => { if (swallowClick) return; if (n.kind !== 'vision' && !n.ext) emit('select', n.id) }
 </script>
 
@@ -225,16 +249,17 @@ const pick = (n) => { if (swallowClick) return; if (n.kind !== 'vision' && !n.ex
           :marker-end="`url(#fl-arr-${edgeView(e).on ? 'on' : edgeView(e).cls || 'n'})`" />
       </svg>
 
-      <div v-if="drag?.moved" class="drag-guide" :style="{ left: graph.nodes.get(drag.id).R + shift(graph.nodes.get(drag.id)) + 'px' }"><span class="mono">{{ dragTo }}</span></div>
+      <div v-if="live?.to" class="drag-guide" :style="{ left: live.R + live.px + 'px' }"><span class="mono">{{ live.to }}</span></div>
 
-      <div v-for="n in nodeList" :key="n.id" class="fn" :class="[`k-${n.kind}`, `st-${nodeView(n).st}`, { ext: n.ext, sel: selected === n.id, dim: path && !path.has(n.id), movable: canDrag(n), dragging: drag?.id === n.id && drag.moved }]"
+      <div v-for="n in nodeList" :key="n.id" class="fn" :class="[`k-${n.kind}`, `st-${nodeView(n).st}`, { ext: n.ext, sel: selected === n.id, dim: path && !path.has(n.id), movable: canDrag(n), locked: isLocked(n), dragging: live?.id === n.id }]"
         :style="{ left: n.L + shift(n) + 'px', top: n.y + 'px', width: NW + 'px', height: NH + 'px' }"
-        :title="[n.ext ? 'From another plan' : canDrag(n) ? 'Drag sideways to change the time bound' : '', ...nodeView(n).issues].filter(Boolean).join('\n')"
+        :title="[n.ext ? 'From another plan' : isLocked(n) ? 'Time bound locked' : canDrag(n) ? (n.end ? 'Drag sideways to change the time bound' : 'Drag onto the time axis to give it an end date') : '', n.kind !== 'vision' && !n.ext ? 'Double-click to open it in the table' : '', ...nodeView(n).issues].filter(Boolean).join('\n')"
         @pointerdown="onDown($event, n)" @pointermove="onMove" @pointerup="onUp" @pointercancel="endDrag"
-        @click="pick(n)">
+        @click="pick(n)" @dblclick="open(n)">
         <div class="row fn-top">
           <span class="mono fn-id">{{ nodeView(n).label }}</span>
           <span v-if="nodeView(n).issues.length" class="icon sm warn fn-warn">error</span>
+          <button v-if="draggable(n)" type="button" class="fn-lock" :title="isLocked(n) ? 'Time bound locked: click to unlock' : 'Lock the time bound'" @pointerdown.stop @click.stop="toggleLock(n)"><span class="icon sm">{{ isLocked(n) ? 'lock' : 'lock_open' }}</span></button>
           <span class="spacer"></span>
           <span class="mono fn-when">{{ metaOf(n) }}</span>
         </div>
@@ -291,6 +316,11 @@ marker path { fill: var(--muted); }
 .st-soon .fn-when { color: var(--warn); }
 .st-late .fn-when { color: var(--danger); }
 .fn-warn { font-size: 14px; flex-shrink: 0; }
+.fn-lock { flex-shrink: 0; border: 0; padding: 0; height: 14px; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; }
+.fn-lock .icon { font-size: 12px; }
+.fn-lock:hover { color: var(--accent); }
+/* unlocked: the lock takes no room until the card is hovered, so the date isn't squeezed (phones lock in the tables) */
+.fn:not(.locked):not(:hover) .fn-lock:not(:focus-visible), .fn.dragging .fn-lock { display: none; }
 .fn-nm { font-size: 13px; font-weight: 500; }
 .k-psg .fn-nm, .k-vision .fn-nm { font-weight: 600; }
 .bar { margin-top: auto; }

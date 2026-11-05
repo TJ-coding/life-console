@@ -55,8 +55,8 @@ function setPct(s, v) {
   s.pct = Math.max(0, Math.min(100, Number(v) || 0))
   s.status = s.pct >= 100 ? 'done' : s.pct > 0 ? 'doing' : 'open'
 }
-/* Focus: selecting a goal lights up what belongs to it and dims the rest of the page.
-   PSG → its SIGs; SIG → its PSG plus the SIGs it depends on / that depend on it. Tasks (with their subtasks)
+/* Focus: selecting a goal lights up what's below it and dims the rest of the page (never its parents).
+   PSG → its SIGs; then every SIG those depend on, all the way down the chain. Tasks (with their subtasks)
    and deadlines count when linked to the selected goal itself or, for a PSG, to one of its SIGs. */
 const focus = computed(() => {
   const sel = selected.value
@@ -70,10 +70,11 @@ const focus = computed(() => {
   } else {
     const s = p.sigs.find((x) => x.no === sel)
     if (!s) return null
-    goals.add(s.psg)
-    for (const d of s.deps ?? []) goals.add(d)
-    for (const o of p.sigs) if ((o.deps ?? []).includes(sel)) goals.add(o.no)
   }
+  // dependencies, transitively (SIGs only; a dependency may live in another plan)
+  const sigs = new Map(allSigs().map((s) => [s.no, s]))
+  const stack = [...goals]
+  while (stack.length) for (const d of sigs.get(stack.pop())?.deps ?? []) if (!goals.has(d)) { goals.add(d); stack.push(d) }
   const todos = new Set(state.todos.filter((t) => t.links.some((l) => own.has(l))).map((t) => t.id))
   for (let grew = true; grew;) {
     grew = false
@@ -104,6 +105,12 @@ async function select(no) {
   selected.value = selected.value === no ? null : no
   await nextTick()
   document.querySelector(`[data-row="${no}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+}
+/* goal flow: a click highlights in place (no scrolling away from the flow); a double-click jumps to the table row */
+const selectInFlow = (no) => { selected.value = selected.value === no ? null : no }
+function showInTable(no) {
+  selected.value = no
+  nextTick(() => document.querySelector(`[data-row="${no}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
 }
 
 function addPsg() {
@@ -366,7 +373,7 @@ const print = () => window.print()
                   <td class="mono ok">{{ p.no }}</td>
                   <td><input v-model="p.name" class="input ghost w" /></td>
                   <td><input v-model="p.indicators" class="input ghost w small" /></td>
-                  <td><TimeBound v-model="p.timeBound" :issues="boundIssues(p)" /></td>
+                  <td><TimeBound v-model="p.timeBound" v-model:locked="p.boundLocked" :issues="boundIssues(p)" /></td>
                   <td><button class="status" :class="p.status" @click.stop="cycle(p)">{{ LABEL[p.status] }}</button></td>
                   <td class="mono" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</td>
                   <td><button class="btn sm icon-only" title="Add a deadline for this PSG" @click.stop="goalDeadline(p)"><span class="icon sm">alarm_add</span></button>
@@ -409,7 +416,7 @@ const print = () => window.print()
                       </select>
                     </div>
                   </td>
-                  <td><TimeBound v-model="s.timeBound" :issues="boundIssues(s)" /></td>
+                  <td><TimeBound v-model="s.timeBound" v-model:locked="s.boundLocked" :issues="boundIssues(s)" /></td>
                   <td><button class="status" :class="s.status" @click.stop="cycle(s)">{{ LABEL[s.status] }}</button></td>
                   <td><input :value="s.pct" type="number" min="0" max="100" step="5" class="input ghost w mono" :class="pctClass(s.pct)" @change="setPct(s, $event.target.value)" /></td>
                   <td>
@@ -518,11 +525,11 @@ const print = () => window.print()
     <section class="panel flow-panel">
       <div class="panel-h">
         <span class="icon sm info">schema</span><h2>Goal flow</h2>
-        <span class="mono small muted flow-hint">from SIG dependencies · click a goal to trace its path</span>
+        <span class="mono small muted flow-hint">click: trace what a goal needs · double-click: open it in the table</span>
         <span class="spacer"></span>
         <span v-if="flowIssues" class="mono small warn" :title="flowIssueText">{{ flowIssues }} time-bound issue{{ flowIssues > 1 ? 's' : '' }}</span>
       </div>
-      <GoalFlow :plan="plan" :selected="selected" @select="select" />
+      <GoalFlow :plan="plan" :selected="selected" @select="selectInFlow" @open="showInTable" />
     </section>
   </div>
 </template>
