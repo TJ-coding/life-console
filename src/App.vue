@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ui, state, todayISO, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel } from './store'
 import { NAV } from './nav'
@@ -45,6 +45,14 @@ const reload = () => window.location.reload()
 const openCount = computed(() => state.todos.filter((t) => !t.done).length)
 const overdueCount = computed(() => { void ui.now.getMinutes(); return state.deadlines.filter(isOverdue).length })
 const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name === 'day' ? 'today' : route.name === 'plans' ? 'strategy' : route.name))
+
+// the left menu is hideable on desktop; the choice is remembered per device
+const sideOpen = ref((() => { try { return localStorage.getItem('life-console/sidebar') !== 'hidden' } catch { return true } })())
+function toggleSide() {
+  sideOpen.value = !sideOpen.value
+  try { localStorage.setItem('life-console/sidebar', sideOpen.value ? 'open' : 'hidden') } catch { /* ignore */ }
+}
+const sideIcon = computed(() => (sideOpen.value ? 'menu' : 'menu_open'))
 
 function openPalette(mode) {
   ui.paletteMode = mode
@@ -160,7 +168,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="app" :class="{ bare: route.meta.bare }">
+  <div class="app" :class="{ bare: route.meta.bare, 'side-hidden': !sideOpen }">
     <aside v-if="!route.meta.bare" class="sidebar">
       <div class="brand">
         <span class="logo"><span class="icon">radar</span></span>
@@ -194,6 +202,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
     <div class="main">
       <header class="topbar">
+        <button class="btn icon-only side-toggle" :title="sideOpen ? 'Hide the left menu' : 'Show the left menu'" @click="toggleSide"><span class="icon sm">{{ sideIcon }}</span></button>
         <div class="crumb mono">
           <span class="muted">{{ route.meta.screen ?? 'S-??' }}</span>
           <span class="muted">/</span>
@@ -281,7 +290,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <style scoped>
 .app { display: grid; grid-template-columns: 232px 1fr; height: 100vh; }
-.app.bare { grid-template-columns: 1fr; }
+.app.bare, .app.side-hidden { grid-template-columns: 1fr; }
+.app.side-hidden .sidebar { display: none; }
 .nowpill { display: inline-flex; align-items: center; gap: 8px; height: 30px; max-width: 460px; min-width: 0; padding: 0 10px 0 4px; border: 1px solid var(--border); border-radius: 2px; color: var(--text); background: var(--surface-2); }
 .nowpill:hover { border-color: var(--accent); }
 .nowpill.busy { border-color: color-mix(in srgb, var(--stamp) 60%, var(--border)); }
@@ -304,6 +314,9 @@ nav { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .topbar { height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .crumb { display: flex; gap: 8px; text-transform: uppercase; font-size: 12px; letter-spacing: 0.04em; }
+/* the left menu is already replaced by the bottom tab bar on phones: toggle only makes sense on desktop */
+.side-toggle { display: none; }
+@media (min-width: 641px) { .side-toggle { display: inline-flex; } }
 .pill { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface-2); }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .content { flex: 1; overflow: auto; min-height: 0; }
