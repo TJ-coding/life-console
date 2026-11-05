@@ -2,7 +2,7 @@
 // S-01 · Command Center — a driver's console for today, and (S-11) a day view for any date via /day/:date.
 // Order = priority: what to do NOW · what's NEXT · time to the next DEADLINES · the rest of TODAY.
 // Everything else is one quiet telemetry strip at the bottom, and only exceptions get colour.
-import { computed, ref, watchEffect } from 'vue'
+import { computed, ref, watch, watchEffect, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, CAPACITY_H,
@@ -13,6 +13,12 @@ import Timeline24 from '../components/Timeline24.vue'
 import TodoRow from '../components/TodoRow.vue'
 import Stamps from '../components/Stamps.vue'
 import NowCard from '../components/NowCard.vue'
+import DayTimeline from '../components/DayTimeline.vue'
+import CommandCenterMore from '../components/CommandCenterMore.vue'
+
+/* per-device view preferences (not synced): timeline direction and the "More" section */
+const pref = (k, d) => { try { return localStorage.getItem(k) ?? d } catch { return d } }
+const save = (k, v) => { try { localStorage.setItem(k, v) } catch { /* ignore */ } }
 
 const route = useRoute()
 const router = useRouter()
@@ -39,6 +45,9 @@ const done = computed(() => todos.value.filter((t) => t.done))
 const showDone = ref(false)
 watchEffect(() => { ui.visibleIds = [...pending.value, ...(showDone.value ? done.value : [])].map((t) => t.id) })
 const remainingMin = computed(() => pending.value.reduce((s, t) => s + (t.timeMin || 0), 0))
+const doneMin = computed(() => done.value.reduce((s, t) => s + (t.timeMin || 0), 0))
+const pctOf = (m) => Math.min(100, (m / 60 / CAPACITY_H) * 100)
+const loadLevel = computed(() => (hours.value > CAPACITY_H + 1 ? 'danger' : hours.value > CAPACITY_H ? 'warn' : 'ok'))
 const fmtH = (m) => `${Math.floor(m / 60)}h ${pad(m % 60)}m`
 
 /** One click to delete (ISS-7), with an undo in the toast instead of a confirm step. */
@@ -49,6 +58,26 @@ function removeTodo(t) {
 }
 
 const blocks = computed(() => blocksForDay(T.value))
+
+const more = ref(pref('life-console/cc-more', '0') === '1')
+const setMore = (v) => { more.value = v; save('life-console/cc-more', v ? '1' : '0') }
+const vert = ref(pref('life-console/cc-timeline', 'h') === 'v')
+const VPXH = 40
+const vscroll = ref(null)
+/** Vertical timeline: open scrolled so "now" (or 08:00 on other days) sits a third of the way down. */
+function scrollVert() {
+  const el = vscroll.value
+  if (!el) return
+  const m = isToday.value ? nowMin.value : 8 * 60
+  el.scrollTop = Math.max(0, (m / 60) * VPXH - el.clientHeight / 3)
+}
+function setVert(v) {
+  vert.value = v
+  save('life-console/cc-timeline', v ? 'v' : 'h')
+  nextTick(scrollVert)
+}
+onMounted(() => nextTick(scrollVert))
+watch(T, () => nextTick(scrollVert))
 const firstBlock = computed(() => [...blocks.value].sort((a, b) => toMin(a.start) - toMin(b.start))[0])
 
 /* ── deadlines: a countdown to the nearest, plus the two after it ── */
@@ -137,45 +166,57 @@ function quickAdd() {
       </section>
     </div>
 
-    <!-- 2 · the shape of the day -->
-    <section class="panel tl-panel">
-      <div class="panel-h">
-        <button class="btn icon-only sm" title="Previous day ( [ )" @click="goDay(-1)"><span class="icon sm">chevron_left</span></button>
-        <h2 class="mono">{{ isToday ? 'Today' : wd(T) }} {{ fmtSlash(T) }}</h2>
-        <button class="btn icon-only sm" title="Next day ( ] )" @click="goDay(1)"><span class="icon sm">chevron_right</span></button>
-        <button class="chip weekchip" title="Open this week in Plan week" @click="openWeek">W{{ isoWeek(T) }}</button>
-        <span class="spacer"></span>
-      </div>
-      <div class="panel-b tl-b">
-        <Timeline24 :date="T" :blocks="blocks" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
-      </div>
-    </section>
+    <!-- 2 + 3 · the shape of the day and what's left: stacked (horizontal strip) or side by side (vertical) -->
+    <div class="day" :class="{ vert }">
+      <section class="panel tl-panel">
+        <div class="panel-h">
+          <button class="btn icon-only sm" title="Previous day ( [ )" @click="goDay(-1)"><span class="icon sm">chevron_left</span></button>
+          <h2 class="mono dayname">{{ isToday ? 'Today' : wd(T) }} {{ fmtSlash(T) }}</h2>
+          <button class="btn icon-only sm" title="Next day ( ] )" @click="goDay(1)"><span class="icon sm">chevron_right</span></button>
+          <button class="chip weekchip" title="Open this week in Plan week" @click="openWeek">W{{ isoWeek(T) }}</button>
+          <span class="spacer"></span>
+          <div class="seg" title="Timeline direction">
+            <button class="btn sm icon-only" :class="{ active: !vert }" title="Horizontal timeline" @click="setVert(false)"><span class="icon sm">view_column</span></button>
+            <button class="btn sm icon-only" :class="{ active: vert }" title="Vertical timeline" @click="setVert(true)"><span class="icon sm">view_agenda</span></button>
+          </div>
+        </div>
+        <div v-if="vert" ref="vscroll" class="vscroll">
+          <DayTimeline :date="T" :blocks="blocks" :from="0" :to="24" :pxh="VPXH" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
+        </div>
+        <div v-else class="panel-b tl-b">
+          <Timeline24 :date="T" :blocks="blocks" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
+        </div>
+      </section>
 
-    <!-- 3 · what's left today -->
-    <section class="panel todo-panel">
-      <div class="panel-h">
-        <span class="icon sm ok">checklist</span>
-        <h2><router-link to="/todos" class="title-link">{{ isToday ? 'Left today' : `Todos · ${wd(T)}` }}</router-link></h2>
-        <span class="mono small" :class="hours > CAPACITY_H ? 'warn' : 'muted'">{{ pending.length }} · {{ fmtH(remainingMin) }}</span>
-        <span class="spacer"></span>
-        <button v-if="done.length" class="btn sm ghost-btn" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }} {{ done.length }} done</button>
-      </div>
-      <div class="list" @dragover.prevent @drop.prevent="dropOnList">
-        <TodoRow v-for="t in pending" :key="t.id" :todo="t" compact adopt-date show-start removable :show-links="false" @remove="removeTodo" />
-        <template v-if="showDone">
-          <TodoRow v-for="t in done" :key="t.id" :todo="t" compact adopt-date show-start removable :show-links="false" @remove="removeTodo" />
-        </template>
-        <div v-if="!pending.length" class="empty">{{ todos.length ? 'All done for the day.' : 'Nothing planned. Add one below or drag from the inbox.' }}</div>
-      </div>
-      <form class="qa" @submit.prevent="quickAdd">
-        <span class="mono ok">+</span>
-        <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @SIG-01.1 p2`" />
-      </form>
-    </section>
+      <section class="panel todo-panel">
+        <div class="panel-h">
+          <span class="icon sm ok">checklist</span>
+          <h2><router-link to="/todos" class="title-link">{{ isToday ? 'Left today' : `Todos · ${wd(T)}` }}</router-link></h2>
+          <span class="mono small muted">{{ pending.length }} open · {{ fmtH(remainingMin) }} left</span>
+          <span class="spacer"></span>
+          <button v-if="done.length" class="btn sm ghost-btn" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }} {{ done.length }} done</button>
+        </div>
+        <div class="load" :title="`${hours.toFixed(1)}h planned of ${CAPACITY_H}h capacity`">
+          <span class="tiny upper muted">Workload</span>
+          <div class="load-bar" :class="loadLevel"><i class="done-part" :style="{ width: pctOf(doneMin) + '%' }"></i><i :style="{ width: pctOf(remainingMin) + '%' }"></i></div>
+          <span class="mono small"><b :class="loadLevel">{{ hours.toFixed(1) }}h</b><span class="muted"> / {{ CAPACITY_H }}h · {{ Math.round((hours / CAPACITY_H) * 100) }}%</span></span>
+        </div>
+        <div class="list" @dragover.prevent @drop.prevent="dropOnList">
+          <TodoRow v-for="t in pending" :key="t.id" :todo="t" compact adopt-date show-start show-prio removable :show-links="false" @remove="removeTodo" />
+          <template v-if="showDone">
+            <TodoRow v-for="t in done" :key="t.id" :todo="t" compact adopt-date show-start show-prio removable :show-links="false" @remove="removeTodo" />
+          </template>
+          <div v-if="!pending.length" class="empty">{{ todos.length ? 'All done for the day.' : 'Nothing planned. Add one below or drag from the inbox.' }}</div>
+        </div>
+        <form class="qa" @submit.prevent="quickAdd">
+          <span class="mono ok">+</span>
+          <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @SIG-01.1 p2`" />
+        </form>
+      </section>
+    </div>
 
     <!-- 4 · telemetry: one quiet line -->
     <footer class="panel telemetry mono small">
-      <span class="tm" title="Planned hours vs capacity"><span class="muted">LOAD</span> <b :class="{ warn: hours > CAPACITY_H }">{{ hours.toFixed(1) }}</b><span class="muted">/{{ CAPACITY_H }}h</span></span>
       <span class="tm seals" title="Daily seals 印 → 印 → 確認 → 完 (S stamps the next)"><span class="muted">SEALS</span> <Stamps :date="T" :size="22" /></span>
       <span class="tm" title="Sleep the night before"><span class="muted">SLEEP</span>
         <b v-if="sleep" :class="{ warn: sleptMin < sleep.targetMin }">{{ Math.floor(sleptMin / 60) }}h{{ pad(sleptMin % 60) }}</b><span v-else class="muted">—</span>
@@ -191,7 +232,11 @@ function quickAdd() {
         <span v-else class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</span>
       </template>
       <span v-for="l in lectures" :key="l.id" class="tm alert info" :title="`#${l.no} ${l.title}`">{{ l.time }} {{ l.course }}<template v-if="!l.readAhead"> · read ahead</template></span>
+      <button class="btn sm more-btn" :aria-expanded="more" @click="setMore(!more)">{{ more ? 'Less' : 'More' }}<span class="icon sm">{{ more ? 'expand_less' : 'expand_more' }}</span></button>
     </footer>
+
+    <!-- 5 · the full briefing, on demand -->
+    <CommandCenterMore v-if="more" :date="T" :is-today="isToday" />
   </div>
 </template>
 
@@ -208,19 +253,40 @@ function quickAdd() {
 .dl-main { display: flex; flex-direction: column; gap: 4px; }
 .dl-main:hover .name { text-decoration: underline dotted; }
 .dl-inst .name { font-weight: 600; font-size: 15px; line-height: 20px; }
-.dl-row { display: flex; align-items: baseline; gap: 8px; border-top: 1px solid var(--border); padding-top: 6px; font-size: 12px; min-width: 0; }
+.dl-row { display: flex; align-items: baseline; gap: 8px; border-top: 1px solid var(--border); padding-top: 6px; font-size: 13px; min-width: 0; }
 .dl-row .mono { flex: none; min-width: 52px; }
 .dl-row:hover .grow { color: var(--accent); }
 /* timeline + list */
-.panel-h h2.mono { min-width: 92px; text-align: center; }
+.day { display: flex; flex-direction: column; gap: 12px; }
+.day.vert { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); align-items: stretch; }
+.dayname { min-width: 92px; text-align: center; }
 .weekchip { cursor: pointer; }
 .weekchip:hover { border-color: var(--accent); }
+.seg { display: flex; gap: 2px; }
 .tl-b { padding: 8px 12px 12px; }
-.list { min-height: 60px; max-height: 360px; overflow: auto; }
-.qa { display: flex; align-items: center; gap: 6px; padding: 4px 8px; }
+.vscroll { height: 520px; overflow-y: auto; padding: 6px 10px 6px 6px; }
+.vscroll :deep(.vb) { font-size: 12px; line-height: 15px; padding: 3px 6px; }
+.vscroll :deep(.vb .t) { font-size: 11px; }
+.vscroll :deep(.hr span) { font-size: 11px; }
+.todo-panel { min-width: 0; }
+.load { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.load-bar { flex: 1; display: flex; height: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
+.load-bar i { display: block; height: 100%; background: var(--accent); }
+.load-bar i.done-part { opacity: 0.4; }
+.load-bar.warn i { background: var(--warn); }
+.load-bar.danger i { background: var(--danger); }
+.list { min-height: 60px; max-height: 420px; overflow: auto; }
+.vert .list { max-height: 460px; }
+/* readable rows: the shared compact row is 11px, too small for the main list */
+.list :deep(.trow.compact) { font-size: 13px; min-height: 36px; gap: 8px; padding: 4px 10px; }
+.list :deep(.trow.compact .time) { font-size: 12px; }
+.list :deep(.trow .start) { font-size: 12px; width: 42px; }
+.qa { display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
+.qa input { font-size: 13px; }
 .ghost-btn { color: var(--muted); }
 /* telemetry strip */
-.telemetry { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px 18px; padding: 8px 14px; color: var(--text); }
+.telemetry { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px 18px; padding: 8px 14px; color: var(--text); font-size: 12px; }
+.more-btn { gap: 2px; }
 .tm { display: inline-flex; align-items: center; gap: 4px; color: inherit; white-space: nowrap; }
 a.tm:hover { color: var(--accent); }
 .tm b { font-weight: 700; }
@@ -229,12 +295,15 @@ a.tm:hover { color: var(--accent); }
 @media (max-width: 1100px) {
   .cockpit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .cockpit > :first-child { grid-column: span 2; }
+  .day.vert { grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); }
 }
 @media (max-width: 700px) {
   .cc { padding: 12px; }
   .cockpit { gap: 8px; }
   .inst-big { font-size: 24px; line-height: 28px; }
   /* on a phone the list of what's left beats the horizontal strip */
-  .todo-panel { order: 1; } .tl-panel { order: 2; } .telemetry { order: 3; }
+  .day, .day.vert { display: flex; flex-direction: column; }
+  .todo-panel { order: 1; } .tl-panel { order: 2; }
+  .vscroll { height: 420px; }
 }
 </style>

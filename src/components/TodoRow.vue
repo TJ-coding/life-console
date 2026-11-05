@@ -4,7 +4,8 @@ import { ui, toggleTodo, updateTodo, partLabel } from '../store'
 import { startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import LsdToggle from './LsdToggle.vue'
 import Chip from './Chip.vue'
-defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean, default: true }, compact: Boolean, dim: Boolean, adoptDate: Boolean, flagUntimed: Boolean, removable: Boolean, showStart: Boolean })
+import Prio from './Prio.vue'
+defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean, default: true }, compact: Boolean, dim: Boolean, adoptDate: Boolean, flagUntimed: Boolean, removable: Boolean, showStart: Boolean, showPrio: Boolean })
 defineEmits(['remove'])
 </script>
 <template>
@@ -15,6 +16,7 @@ defineEmits(['remove'])
   >
     <input type="checkbox" :checked="todo.done" @click.stop @change="toggleTodo(todo.id)" />
     <span v-if="showStart" class="mono small start" :class="{ muted: !todo.scheduled?.start }">{{ todo.scheduled?.start ?? '--:--' }}</span>
+    <Prio v-if="showPrio" :p="todo.priority" />
     <div class="grow">
       <div class="title ellipsis"><span v-if="partLabel(todo)" class="part mono">{{ partLabel(todo) }}</span>{{ todo.title }}</div>
       <div v-if="todo.vital && !compact" class="small muted ellipsis">{{ todo.vital }}</div>
