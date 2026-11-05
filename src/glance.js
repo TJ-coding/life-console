@@ -104,6 +104,11 @@ export function boundIssues(g) {
   const p = allPsgs().find((x) => x.no === g.psg)
   if (p && isDate(p.timeBound) && tb > p.timeBound) out.push(`Ends after ${p.no} (${p.timeBound})`)
   for (const d of g.deps ?? []) {
+    const p = allPsgs().find((x) => x.no === d)
+    if (p) {
+      if (isDate(p.timeBound) && tb > p.timeBound) out.push(`Ends after ${d} (${p.timeBound}), which it depends on`)
+      continue
+    }
     const s = allSigs().find((x) => x.no === d)
     if (s && isDate(s.timeBound) && tb < s.timeBound) out.push(`Ends before ${d} (${s.timeBound}), which it depends on`)
   }

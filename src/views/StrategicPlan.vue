@@ -402,8 +402,9 @@ const print = () => window.print()
                   <td @click="selected = s.no">
                     <div class="deps">
                       <span v-for="dp in s.deps ?? []" :key="dp" class="dep"><Chip :id="dp" /><button class="dep-x" :title="`Remove dependency on ${dp}`" @click.stop="removeDep(s, dp)"><span class="icon sm">close</span></button></span>
-                      <select class="dep-add mono" title="Add a dependency (another SIG this one needs)" @click.stop @change="addDep(s, $event.target.value); $event.target.value = ''">
+                      <select class="dep-add mono" title="Add a dependency — a PSG or another SIG this one needs" @click.stop @change="addDep(s, $event.target.value); $event.target.value = ''">
                         <option value="">＋ dep</option>
+                        <option v-for="p in psgs.filter((x) => x.no !== s.psg)" :key="p.no" :value="p.no" :disabled="sigWouldCycle(s.no, p.no)">✦ {{ p.no }}</option>
                         <option v-for="no in sigNos.filter((n) => n !== s.no)" :key="no" :value="no" :disabled="sigWouldCycle(s.no, no)">{{ no }}</option>
                       </select>
                     </div>

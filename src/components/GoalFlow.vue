@@ -40,9 +40,9 @@ const graph = computed(() => {
   const edges = []
   const link = (a, b) => { edges.push({ from: a, to: b }); nodes.get(a).outs.push(b); nodes.get(b).ins.push(a) }
   for (const s of plan.sigs) add(s.no, 'sig', s)
+  for (const p of psgs) add(p.no, 'psg', p) // PSGs are nodes before dep edges are linked, so a SIG can just as well depend on a PSG
   for (const s of plan.sigs) for (const d of s.deps ?? []) if (!nodes.has(d) && byNo.has(d)) add(d, 'sig', byNo.get(d), true)
   for (const s of plan.sigs) for (const d of s.deps ?? []) if (nodes.has(d)) link(d, s.no)
-  for (const p of psgs) add(p.no, 'psg', p)
   for (const s of plan.sigs) {
     if (!nodes.has(s.psg)) continue
     if (!plan.sigs.some((o) => o.psg === s.psg && (o.deps ?? []).includes(s.no))) link(s.no, s.psg)

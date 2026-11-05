@@ -860,9 +860,11 @@ export function psgPct(psgNo) {
   return s.length ? Math.round(s.reduce((a, x) => a + Number(x.pct || 0), 0) / s.length) : 0
 }
 export const nextSig = (psgNo) => sigsOf(psgNo).find((s) => s.status !== 'done')
-/** True if making SIG `fromNo` depend on `toNo` would create a dependency cycle. */
+/** True if making a goal (PSG or SIG) `fromNo` depend on `toNo` would create a dependency cycle.
+ *  A SIG blocks its own PSG and whatever it needs; a PSG completes only with all its child SIGs. */
 export function sigWouldCycle(fromNo, toNo) {
   if (fromNo === toNo) return true
+  const bySig = new Map(allSigs().map((s) => [s.no, s]))
   const seen = new Set()
   const stack = [toNo]
   while (stack.length) {
@@ -870,7 +872,13 @@ export function sigWouldCycle(fromNo, toNo) {
     if (n === fromNo) return true // `fromNo` depends (directly or not) on `toNo`
     if (seen.has(n)) continue
     seen.add(n)
-    allSigs().filter((s) => s.no === n).forEach((s) => stack.push(...(s.deps ?? [])))
+    const s = bySig.get(n)
+    if (s) {
+      stack.push(s.psg, ...(s.deps ?? []))
+      continue
+    }
+    // not a SIG: a PSG — its child SIGs must complete before it does
+    for (const sig of allSigs()) if (sig.psg === n) stack.push(sig.no)
   }
   return false
 }
