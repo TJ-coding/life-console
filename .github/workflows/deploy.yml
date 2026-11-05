@@ -1,0 +1,92 @@
+# Build on every push; on main, deploy to Dokploy (only reachable over NetBird).
+#
+# Required repository secrets:
+#   NETBIRD_SETUP_KEY        ephemeral, reusable NetBird setup key (group must be allowed to reach the Dokploy peer)
+#   DOKPLOY_API_KEY          Dokploy API key (Settings → Profile → API/CLI)
+# Required repository variables:
+#   DOKPLOY_URL              e.g. http://dokpoly.netbird.cloud:3000
+#   DOKPLOY_APPLICATION_ID   id of the life-console application in Dokploy
+name: build-and-deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Build the Docker image (same Dockerfile Dokploy uses)
+        run: docker build -t life-console:ci .
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DOKPLOY_URL: ${{ vars.DOKPLOY_URL }}
+      APP_ID: ${{ vars.DOKPLOY_APPLICATION_ID }}
+      API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+      NB_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}
+    steps:
+      - name: Check configuration
+        run: |
+          missing=""
+          [ -n "$DOKPLOY_URL" ] || missing="$missing DOKPLOY_URL(variable)"
+          [ -n "$APP_ID" ]      || missing="$missing DOKPLOY_APPLICATION_ID(variable)"
+          [ -n "$API_KEY" ]     || missing="$missing DOKPLOY_API_KEY(secret)"
+          [ -n "$NB_KEY" ]      || missing="$missing NETBIRD_SETUP_KEY(secret)"
+          if [ -n "$missing" ]; then echo "::error::Missing:$missing"; exit 1; fi
+
+      - name: Join NetBird
+        run: |
+          curl -fsSL https://pkgs.netbird.io/install.sh | sh
+          sudo netbird up --setup-key "$NB_KEY" --hostname "gh-actions-${{ github.run_id }}"
+          # wait until the Dokploy API answers over the mesh
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$DOKPLOY_URL/api/settings.health" || true)
+            if [ "$code" != "000" ]; then echo "Dokploy reachable (HTTP $code)"; exit 0; fi
+            sleep 2
+          done
+          sudo netbird status -d || true
+          echo "::error::Dokploy not reachable at $DOKPLOY_URL over NetBird"; exit 1
+
+      - name: Trigger Dokploy deploy
+        run: |
+          curl -fsS -X POST "$DOKPLOY_URL/api/application.deploy" \
+            -H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+            -d "{\"applicationId\":\"$APP_ID\"}"
+          echo
+
+      - name: Wait for the deployment to finish
+        run: |
+          # give Dokploy a moment to queue the build, then poll the application status
+          sleep 10
+          for i in $(seq 1 90); do
+            status=$(curl -fsS "$DOKPLOY_URL/api/application.one?applicationId=$APP_ID" -H "x-api-key: $API_KEY" | jq -r '.applicationStatus')
+            echo "status: $status"
+            case "$status" in
+              done)  echo "Deployed ✓"; exit 0 ;;
+              error) echo "::error::Dokploy reported a failed deployment — check its deployment log"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::Timed out waiting for Dokploy"; exit 1
+
+      - name: Leave NetBird
+        if: always()
+        run: sudo netbird down || true
