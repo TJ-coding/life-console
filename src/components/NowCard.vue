@@ -95,6 +95,10 @@ function start(t) {
 @media (max-width: 700px) {
   .now-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .clock { flex-direction: row; align-items: center; justify-content: space-between; }
+  /* Done/Focus buttons no longer fit beside the readout on a narrow screen: let them drop to a
+     second line, and hide keyboard shortcut hints (useless on touch) so the Focus button fits. */
+  .actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .actions .kbd { display: none; }
   .title { font-size: 24px; line-height: 30px; }
   .now-inst .inst-big { font-size: 34px; line-height: 38px; }
   .next-row { font-size: 15px; }
