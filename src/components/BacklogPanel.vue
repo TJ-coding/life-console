@@ -105,7 +105,7 @@ function onDrop(e) {
           >
             <span>{{ wd(d)[0] }}{{ wd(d)[1].toLowerCase() }}</span><small>{{ Math.max(0, free[d]).toFixed(1) }}</small>
           </button>
-          <button v-if="t.timeMin >= 30" class="qd split" title="Split across days" @click.stop="ui.splitId = t.id"><span class="icon">call_split</span></button>
+          <button v-if="t.timeMin >= 30" class="qd split" title="Plan: spread over days and times" @click.stop="ui.splitId = t.id"><span class="icon">call_split</span></button>
         </div>
       </div>
       <div v-if="!list.length" class="empty">Backlog clear ✓<br />Type above to capture a task.</div>

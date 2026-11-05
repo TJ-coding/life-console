@@ -819,6 +819,54 @@ export function splitWithUndo(id, parts, { whole = false } = {}) {
   return made
 }
 
+/**
+ * The task planner's apply. `pieces` = [{ date|null, start|null, min }] — the whole open budget:
+ * timed sittings, each day's untimed rest, and an unplanned (backlog) piece. Rewrites the task's open
+ * parts to match, reusing existing ids in order (done parts are left alone), and offers Undo.
+ */
+export function replanTodo(id, pieces) {
+  const t = findTodo(id)
+  pieces = pieces.filter((p) => p.min > 0)
+  if (!t || !pieces.length) return []
+  const group = t.split?.group ?? t.id
+  const before = (t.split ? splitSiblings(t) : [t]).map((x) => JSON.parse(JSON.stringify(x)))
+  const open = t.split ? splitSiblings(t).filter((x) => !x.done) : [t]
+  const doneCount = t.split ? splitSiblings(t).length - open.length : 0
+  const multi = pieces.length + doneCount > 1
+  // chronological: dated before backlog, then by start (untimed rest last within its day)
+  pieces.sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999') || (a.start ?? '99:99').localeCompare(b.start ?? '99:99'))
+  // the task the planner was opened on keeps its id; the other open parts follow
+  const reuse = [t, ...open.filter((x) => x !== t)]
+  const out = pieces.map((p, i) => {
+    const sched = p.date ? { date: p.date, start: p.start || null } : null
+    const ex = reuse[i]
+    if (ex) {
+      updateTodo(ex.id, { timeMin: p.min, scheduled: sched })
+      if (multi) ex.split = { group }
+      else delete ex.split
+      return ex
+    }
+    return addTodo({
+      title: t.title, vital: t.vital, lsd: t.lsd, priority: t.priority, due: t.due, links: [...t.links],
+      timeMin: p.min, scheduled: sched, split: { group }, order: t.order + i * 0.001,
+    })
+  })
+  reuse.slice(pieces.length).forEach((x) => deleteTodo(x.id))
+  if (!multi) state.todos.filter((x) => x.split?.group === group).forEach((x) => { delete x.split })
+  if (ui.drawerId && !findTodo(ui.drawerId)) ui.drawerId = out[0].id
+  const ids = new Set(state.todos.filter((x) => out.includes(x) || (x.split && x.split.group === group)).map((x) => x.id))
+  const days = new Set(pieces.filter((p) => p.date).map((p) => p.date)).size
+  const sittings = pieces.filter((p) => p.start).length
+  toast(`Planned ${t.id}: ${days} day${days === 1 ? '' : 's'}${sittings ? ` · ${sittings} timed` : ''}${pieces.some((p) => !p.date) ? ' · rest in backlog' : ''}`, {
+    label: 'Undo',
+    run: () => {
+      for (let i = state.todos.length - 1; i >= 0; i--) if (ids.has(state.todos[i].id)) state.todos.splice(i, 1)
+      before.forEach((c) => { if (!findTodo(c.id)) state.todos.push(c) })
+    },
+  })
+  return out
+}
+
 /* ───────────── planning flow: backlog → day → time ───────────── */
 export const WORK_FROM = '08:00'
 export const WORK_TO = '21:00'
@@ -836,7 +884,7 @@ export function assignToDay(id, date, cap = CAPACITY_H) {
   updateTodo(id, { scheduled: { date, start: t.scheduled?.date === date ? t.scheduled.start : null } })
   const load = dayLoad(date).total
   if (load > cap && t.timeMin >= 30) {
-    toast(`${wd(date)} is now ${load.toFixed(1)}h / ${cap}h`, { label: 'Split it…', run: () => { ui.splitId = id } })
+    toast(`${wd(date)} is now ${load.toFixed(1)}h / ${cap}h`, { label: 'Plan it…', run: () => { ui.splitId = id } })
   } else {
     toast(`${id} → ${wd(date)} ${fmtSlash(date)}`)
   }
@@ -877,11 +925,12 @@ export function autoTimebox(date, from = WORK_FROM, to = WORK_TO) {
  * ISS-21: give each of a same-day split's parts a start time — the earliest free gaps after fixed
  * blocks, skipping the original task's own block (its parts replace it). Returns 'HH:MM' or null per part.
  */
-export function planDaySpread(date, mins, skipTodoId = null, from = WORK_FROM, to = WORK_TO) {
+export function planDaySpread(date, mins, skipTodoId = null, from = WORK_FROM, to = WORK_TO, extraBusy = []) {
   const skip = new Set([].concat(skipTodoId ?? [])) // one id or a list (a re-split skips every open part)
   const busy = blocksForDay(date)
     .filter((b) => !skip.has(b.todoId))
     .map((b) => [toMin(b.start), toMin(b.end)])
+    .concat(extraBusy) // [startMin, endMin] pairs not saved yet (sittings planned in the dialog)
   let earliest = toMin(from)
   if (date === todayISO()) {
     const n = new Date()

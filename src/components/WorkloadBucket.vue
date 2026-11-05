@@ -15,8 +15,8 @@ const props = defineProps({
 })
 const todos = computed(() => {
   const ts = todosForDay(props.date)
-  // ISS-21 feedback: when a split's parts are spread through ONE day (all timed), the workload
-  // bucket shows them as a single card again — the schedule keeps them as separate blocks.
+  // ISS-21 feedback: every part of one task on this day is ONE card (timed sittings and the untimed
+  // rest alike) — the schedule keeps the sittings as separate blocks; the planner edits them.
   const byGroup = new Map()
   ts.forEach((t) => { if (t.split) { const l = byGroup.get(t.split.group) ?? []; l.push(t); byGroup.set(t.split.group, l) } })
   const out = []
@@ -24,8 +24,8 @@ const todos = computed(() => {
   for (const t of ts) {
     if (merged.has(t.id)) continue
     const parts = t.split ? [...(byGroup.get(t.split.group) ?? [])] : null
-    if (parts && parts.length > 1 && parts.every((p) => p.scheduled?.start)) {
-      parts.sort((a, b) => (a.scheduled?.start ?? '').localeCompare(b.scheduled?.start ?? ''))
+    if (parts && parts.length > 1) {
+      parts.sort((a, b) => (a.scheduled?.start || '99').localeCompare(b.scheduled?.start || '99'))
       parts.forEach((p) => merged.add(p.id))
       out.push({ ...parts[0], grouped: { n: parts.length, timeMin: parts.reduce((s, p) => s + p.timeMin, 0), parts } })
     } else out.push(t)
@@ -49,6 +49,13 @@ function onDrop(e) {
   hot.value = false
   const id = e.dataTransfer.getData(TODO_MIME)
   if (id) assignToDay(id, props.date, props.cap)
+}
+const hm = (m) => { const h = Math.floor(m / 60); return h ? `${h}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` : `${m}m` }
+/** Second line of a merged card: "3 sittings · 1h30" (+ untimed rest). */
+function groupMeta(g) {
+  const timed = g.parts.filter((p) => p.scheduled.start).length
+  const rest = g.parts.filter((p) => !p.scheduled.start).reduce((s, p) => s + p.timeMin, 0)
+  return `${hm(g.timeMin)} · ${timed ? `${timed} time${timed > 1 ? 's' : ''}` : ''}${timed && rest ? ' + ' : ''}${rest ? `${hm(rest)} untimed` : ''}`
 }
 /** On a merged card, done applies to every part of the split on this day. */
 function toggleParts(t) {
@@ -76,27 +83,26 @@ function toggleParts(t) {
         :draggable="!t.grouped"
         :class="['cat-' + categoryOf(t), dropClass(t, true), {
           'is-done': t.grouped ? t.grouped.parts.every((p) => p.done) : t.done, sel: ui.selectedId === t.id, linked: ui.hoverId === t.id, short: cardH(t) < 28,
-          untimed: !t.done && !t.scheduled.start, dim: dimFn && dimFn(t), grouped: t.grouped,
+          untimed: t.grouped ? t.grouped.parts.some((p) => !p.done && !p.scheduled.start) : !t.done && !t.scheduled.start, dim: dimFn && dimFn(t), grouped: t.grouped,
         }]"
         :style="{ height: cardH(t) + 'px' }"
         :title="t.grouped
-          ? `${t.title} · ${t.grouped.n} parts (${t.grouped.parts.map((p) => p.scheduled.start).join(', ')}) · ${t.grouped.timeMin}m
-In the schedule below, one block per part. To change parts or times: the split button (re-split).`
+          ? `${t.title} · ${groupMeta(t.grouped)}${t.grouped.parts.some((p) => p.scheduled.start) ? ' (' + t.grouped.parts.filter((p) => p.scheduled.start).map((p) => p.scheduled.start).join(', ') + ')' : ''}\nClick the plan button to change days or times.`
           : `${t.title} · ${t.timeMin}m · P${t.priority} · ${t.scheduled.start ? 'at ' + t.scheduled.start : 'no time yet — drag onto the timeline'}`"
         @dragstart="startDrag($event, t)" @dragend="endDrag"
         @dragover="overRow($event, t, { reverse: true })" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t, { adoptDate: true })"
         @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
-        @click="ui.selectedId = t.id" @dblclick="ui.drawerId = t.id"
+        @click="ui.selectedId = t.id" @dblclick="t.grouped ? (ui.splitId = t.id) : (ui.drawerId = t.id)"
       >
-        <input type="checkbox" class="ck" :checked="t.grouped ? t.grouped.parts.every((p) => p.done) : t.done" :title="t.grouped ? 'Done: all parts of this task today' : 'Done'" @click.stop @change="t.grouped ? toggleParts(t) : toggleTodo(t.id)" />
-        <span class="ttl"><b v-if="partLabel(t)" class="part mono">{{ partLabel(t) }}</b>{{ t.title }}</span>
+        <input type="checkbox" class="ck" :checked="t.grouped ? t.grouped.parts.every((p) => p.done) : t.done" :title="t.grouped ? 'Done: all of this task today' : 'Done'" @click.stop @change="t.grouped ? toggleParts(t) : toggleTodo(t.id)" />
+        <span class="ttl"><b v-if="partLabel(t) && !t.grouped" class="part mono">{{ partLabel(t) }}</b>{{ t.title }}</span>
         <span class="meta mono">
-          <template v-if="t.grouped">{{ t.grouped.n }}× · {{ t.grouped.parts.map((p) => p.scheduled.start).slice(0, 2).join(',') }}<template v-if="t.grouped.n > 2">…</template></template>
+          <template v-if="t.grouped">{{ groupMeta(t.grouped) }}</template>
           <template v-else-if="t.scheduled.start">{{ t.scheduled.start }}</template>
           <span v-else-if="!t.done" class="icon tiny-i warn" title="No time yet">more_time</span>
-          {{ t.grouped ? t.grouped.timeMin : t.timeMin }}m
+          <template v-if="!t.grouped">{{ t.timeMin }}m</template>
         </span>
-        <button v-if="t.grouped ? !t.grouped.parts.every((p) => p.done) : !t.done && t.timeMin >= 30" class="splitbtn" :title="t.grouped ? 'Re-split: change the parts or their times' : 'Split: within the day or across days'" @click.stop="ui.splitId = t.grouped ? (t.grouped.parts.find((p) => !p.done) ?? t).id : t.id"><span class="icon">call_split</span></button>
+        <button v-if="t.grouped ? !t.grouped.parts.every((p) => p.done) : !t.done && t.timeMin >= 30" class="splitbtn" :title="t.grouped ? 'Plan: change days or times' : 'Plan: spread over days / times'" @click.stop="ui.splitId = t.grouped ? (t.grouped.parts.find((p) => !p.done) ?? t).id : t.id"><span class="icon">call_split</span></button>
       </div>
     </div>
     <div v-if="!todos.length && !fixedH" class="empty-hint small muted">drop tasks here</div>
@@ -115,14 +121,16 @@ In the schedule below, one block per part. To change parts or times: the split b
   flex: none; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--muted);
   background: repeating-linear-gradient(45deg, var(--border) 0 2px, transparent 2px 7px); border: 1px solid var(--border);
 }
-.card { flex: none; padding: 2px 4px; display: flex; gap: 4px; align-items: flex-start; cursor: grab; position: relative; }
+.card { flex: none; padding: 2px 4px; display: flex; flex-wrap: wrap; gap: 0 4px; align-items: flex-start; align-content: flex-start; cursor: grab; position: relative; overflow: hidden; }
 .card.untimed { border-style: dashed; border-left-style: solid; }
-.card.grouped { border-style: double; border-width: 3px; border-radius: 3px; }
+.card.grouped { box-shadow: 2px 2px 0 -1px var(--surface-2), 3px 3px 0 -1px var(--border); } /* a quiet 'stack' cue */
 .card.grouped .is-done .ttl { text-decoration: line-through; }
 .ck { width: 11px; height: 11px; margin-top: 1px; flex: none; }
-.card .ttl { flex: 1; min-width: 0; font-size: 11px; line-height: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; }
+.card .ttl { flex: 1 1 5em; min-width: 0; font-size: 11px; line-height: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; }
 .card.short .ttl { -webkit-line-clamp: 1; white-space: nowrap; display: block; text-overflow: ellipsis; }
-.card .meta { font-size: 9px; color: var(--muted); display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+.card .meta { font-size: 9px; color: var(--muted); display: flex; align-items: center; gap: 2px; white-space: nowrap; margin-left: auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.card.grouped .meta { flex-basis: 100%; padding-left: 15px; }
+.card.grouped .ttl { padding-right: 16px; }
 .tiny-i { font-size: 11px; }
 .part { font-weight: 600; font-size: 9px; margin-right: 4px; opacity: 0.8; }
 .card.sel { outline: 1px solid var(--info); }

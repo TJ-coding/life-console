@@ -88,7 +88,7 @@ const dayName = computed(() => {
           </div>
         </div>
         <div class="field">
-          <span class="lbl">Split into parts</span>
+          <span class="lbl">Days &amp; times</span>
           <div v-if="parts.length > 1" class="parts">
             <div v-for="p in parts" :key="p.id" class="prt row small" :class="{ cur: p.id === t.id, done: p.done }" @click="ui.drawerId = p.id">
               <span class="mono">{{ partLabel(p) }}</span>
@@ -99,7 +99,7 @@ const dayName = computed(() => {
             </div>
           </div>
           <div class="row">
-            <button class="btn sm" :disabled="t.done" @click="ui.splitId = t.id"><span class="icon sm">call_split</span>{{ parts.length > 1 ? 'Re-split…' : 'Split…' }}</button>
+            <button class="btn sm" :disabled="t.done" @click="ui.splitId = t.id"><span class="icon sm">call_split</span>{{ parts.length > 1 ? 'Edit plan…' : 'Plan over days / times…' }}</button>
             <button v-if="parts.filter((p) => !p.done).length > 1" class="btn sm" @click="merge"><span class="icon sm">merge</span>Merge open parts</button>
           </div>
         </div>

@@ -37,12 +37,12 @@ Everything happens on **Plan week** (`#/week`). Each day column is stacked like 
 
 The step bar shows progress (`4 to place → 12 on this week → 4/12 time-boxed`), and its buttons switch the layout to emphasise days, times or both. A guide line names the next thing to do. Hovering a task highlights it in the backlog, its bucket and its timeline at once. `/workload` and `G L` open the planner with the day-focused layout.
 
-### Splitting a task
-Click a task's split button (backlog cards and workload blocks, or **Split…** in the task drawer). The dialog has two modes:
-- **Within a day**: the parts stay on one day and each gets a start time in that day's free gaps (08:00–21:00, not in the past). A mini timeline shows the day now (the task's current block dashed) and after the split (numbered parts). Edit the minutes or start times, or clear a time so the part waits untimed in the bucket. If some parts don't fit, **All fit <day>** moves them to the first day where every part fits. The workload bucket shows these parts as one card.
-- **Across days**: one part per day (**Auto-assign days** picks the days with the most free capacity), with a load bar for every day of the week.
+### Planning a task over days and times
+Click a task's plan button (backlog cards and workload blocks; **Plan over days / times…** in the task drawer; double-click a merged workload card). The task's estimate is a budget:
+1. **Days**: each day of the week has a − / + stepper (30 min steps, or **+ all** for the rest). The big **To plan** number goes down as you give days time, and each day shows its workload after the plan (`6.2/7h`, red only when over). **Spread evenly** and **Fill free time** fill the week in one click. Use ‹ › to plan into other weeks.
+2. **Times within a day**: a day with time shows a strip of its schedule (grey = booked, blue = this task). **Add a time** takes a sitting (up to 1h) out of that day's amount and puts it in the next free gap; **Auto times** cuts the whole day amount into ≤ 1h sittings. Edit any start time or length; whatever has no time waits untimed in that day's bucket.
 
-`Enter` splits and `Esc` cancels. Splitting can be undone from the toast. Re-splitting a part re-splits the whole task (all its open parts) unless you pick **Only this part**. Each part is an ordinary task labelled `1/3`, `2/3`…, sharing the title, links, priority and due date. **Merge open parts** in the drawer puts them back together. If dropping a task overfills a day, a message offers to split it.
+Anything not given to a day stays in the backlog. **Estimate − / +** changes the budget. `Enter` applies and `Esc` cancels; Apply can be undone from the toast. Opening it again on a planned task shows the current plan to edit (done parts are kept). Under the hood each sitting, each day's untimed rest and the backlog rest is an ordinary task part (`1/3`, `2/3`…, same title, links, priority, due date; existing ids are reused). The workload bucket shows all of a task's parts on one day as **one card** ("4h · 4 times"); the timeline shows each sitting as its own block. If dropping a task overfills a day, a message offers to plan it.
 
 ### Removing things from the schedule
 - **Timeline ✕**: on a task it only clears the start time (the task stays on that day's list). On a fixed block it removes the block. On a phone the ✕ is always shown while the schedule is unlocked.
