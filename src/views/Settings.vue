@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { state, ui, toggleTheme, resetDemo, toast, normalizeState } from '../store'
 import { sync, pull, deviceName, setDeviceName } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
+import { rhythm, wallMin } from '../../server/pomodoro.mjs'
 
 /* ── data ── */
 function exportJson() {
@@ -41,11 +42,17 @@ async function test() {
   try { const r = await testPush(); toast(r.sent ? 'Test sent — check this device' : 'Not delivered: re-enable notifications here') } catch (e) { toast(e.message) }
 }
 const n = computed(() => state.settings)
+const setWall = computed(() => {
+  const r = rhythm(state.settings)
+  const m = wallMin(r.work * r.every, r)
+  return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}m`
+})
 const KINDS = [
   { key: 'blocks', label: 'Blocks & tasks', desc: 'Before each scheduled block or time-boxed task starts, and “Time’s up” when a task ends (with Mark done).' },
   { key: 'deadlines', label: 'Deadlines', desc: '1 day and 1 hour before each deadline, and when it becomes overdue.' },
   { key: 'daily', label: 'Daily briefing & sign-off', desc: 'Morning summary of the day; evening reminder to stamp sign-off and plan tomorrow.' },
   { key: 'wellbeing', label: 'Wellbeing', desc: 'Caffeine cutoff warning and a wind-down reminder before bedtime.' },
+  { key: 'pomodoro', label: 'Pomodoro switches', desc: 'In a pomodoro sitting: “Break” when each pomodoro ends and “Back to work” when the break is over.' },
 ]
 const SYNC_LABEL = { outdated: 'Update needed', choose: 'Choose copy', starting: 'Connecting…', local: 'Local only', syncing: 'Saving…', synced: 'Synced', offline: 'Offline', 'signed-out': 'Signed out', error: 'Error' }
 const fmtTime = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—')
@@ -154,6 +161,24 @@ const reload = () => window.location.reload()
           <label class="field"><span>Caffeine cutoff</span><input v-model="state.caffeineCutoff" type="time" class="input mono" /></label>
         </div>
         <p class="tiny muted">Times are in <b class="mono">{{ n.timezone }}</b> (taken from the device you last used).</p>
+      </div>
+    </section>
+
+    <!-- pomodoro rhythm (synced) -->
+    <section class="panel">
+      <div class="panel-h"><span class="icon sm">timer</span><h2>Pomodoro</h2><span class="spacer"></span><span class="tiny muted">applies to all your devices</span></div>
+      <div class="panel-b col">
+        <label class="kind">
+          <input v-model="n.pomodoro.on" type="checkbox" />
+          <div><b>Plan in pomodoros</b><div class="small muted">Plan this task moves time in whole pomodoros, and <b>Auto times</b> / <b>Auto schedule</b> lay sittings out as work + breaks, with a long break between sets. Sittings already on the schedule keep their layout.</div></div>
+        </label>
+        <div class="grid">
+          <label class="field"><span>Work (min)</span><input v-model.number="n.pomodoro.work" type="number" min="5" max="120" step="5" class="input mono" /></label>
+          <label class="field"><span>Short break (min)</span><input v-model.number="n.pomodoro.short" type="number" min="0" max="60" class="input mono" /></label>
+          <label class="field"><span>Long break (min)</span><input v-model.number="n.pomodoro.long" type="number" min="0" max="90" step="5" class="input mono" /></label>
+          <label class="field"><span>Long break after (pomodoros)</span><input v-model.number="n.pomodoro.every" type="number" min="1" max="12" class="input mono" /></label>
+        </div>
+        <p class="tiny muted mono">One set: {{ n.pomodoro.every }} × {{ n.pomodoro.work }}m work = {{ setWall }} on the clock, then {{ n.pomodoro.long }}m off.</p>
       </div>
     </section>
 

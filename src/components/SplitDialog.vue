@@ -6,11 +6,18 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import {
   ui, findTodo, todayISO, addDays, mondayOf, wd, fmtSlash, dayLoad, CAPACITY_H, evenParts, planDaySpread,
-  replanTodo, splitSiblings, blocksForDay, toMin, fromMin, WORK_FROM, WORK_TO,
+  replanTodo, splitSiblings, blocksForDay, toMin, fromMin, WORK_FROM, WORK_TO, pomo, planPomodoroDay,
 } from '../store'
+import { wallMin, count as pomoCount } from '../../server/pomodoro.mjs'
 
-const STEP = 30 // − / + step for a day's amount
-const SITTING = 60 // longest sitting "Auto times" makes
+const SITTING = 60 // longest sitting "Auto times" makes when the pomodoro rhythm is off
+// Pomodoro (Settings): amounts move in whole pomodoros, and a sitting is laid out as work + breaks
+const P = computed(() => pomo())
+const STEP = computed(() => (P.value.on ? P.value.work : 30)) // − / + step for amounts
+/** Clock minutes a sitting takes (its breaks included when it's a pomodoro sitting). */
+const wall = (s) => (s.pomo ? wallMin(Number(s.min) || 0, P.value) : Number(s.min) || 0)
+const up = (m) => Math.floor(m / STEP.value) * STEP.value + STEP.value
+const down = (m) => Math.ceil(m / STEP.value) * STEP.value - STEP.value
 
 const t = computed(() => (ui.splitId ? findTodo(ui.splitId) : null))
 const T = computed(() => todayISO())
@@ -31,7 +38,7 @@ function open() {
     if (!d) continue
     p[d] ??= { min: 0, sittings: [] }
     p[d].min += x.timeMin
-    if (x.scheduled.start) p[d].sittings.push({ start: x.scheduled.start, min: x.timeMin })
+    if (x.scheduled.start) p[d].sittings.push({ start: x.scheduled.start, min: x.timeMin, pomo: !!x.pomo })
   }
   Object.values(p).forEach((d) => d.sittings.sort((a, b) => a.start.localeCompare(b.start)))
   plan.value = p
@@ -72,24 +79,37 @@ function setAmt(d, min) {
   }
   if (!min) delete plan.value[d]
 }
-const plus = (d) => setAmt(d, amt(d) + Math.min(STEP, left.value))
-const minus = (d) => setAmt(d, amt(d) % STEP ? amt(d) - (amt(d) % STEP) : amt(d) - STEP)
+const plus = (d) => setAmt(d, Math.min(up(amt(d)), amt(d) + left.value))
+const minus = (d) => setAmt(d, down(amt(d)))
 const restHere = (d) => setAmt(d, amt(d) + left.value)
 
 /* ── sittings within a day ── */
 const busyOf = (d) => (plan.value[d]?.sittings ?? [])
   .filter((s) => s.start)
-  .map((s) => [toMin(s.start), toMin(s.start) + (Number(s.min) || 0)])
+  .map((s) => [toMin(s.start), toMin(s.start) + wall(s) + (s.pomo ? P.value.long : 0)])
 function addSitting(d) {
   const rest = untimed(d)
   if (rest <= 0) return
-  const min = rest <= 90 ? rest : SITTING
-  const [start] = planDaySpread(d, [min], ownIds.value, WORK_FROM, WORK_TO, busyOf(d))
-  plan.value[d].sittings.push({ start: start ?? '', min })
+  if (P.value.on) {
+    // the next free gap that holds at least one pomodoro, filled up to one set
+    const [first] = planPomodoroDay(d, rest, ownIds.value, busyOf(d))
+    plan.value[d].sittings.push(first ? { ...first, pomo: true } : { start: '', min: Math.min(rest, P.value.work * P.value.every), pomo: true })
+  } else {
+    const min = rest <= 90 ? rest : SITTING
+    const [start] = planDaySpread(d, [min], ownIds.value, WORK_FROM, WORK_TO, busyOf(d))
+    plan.value[d].sittings.push({ start: start ?? '', min })
+  }
   plan.value[d].sittings.sort((a, b) => (a.start || '99').localeCompare(b.start || '99'))
 }
-/** Cut the whole day amount into sittings of ≤ 1h, placed in the earliest free gaps. */
+/**
+ * Cut the whole day amount into sittings in the earliest free gaps. Pomodoro on: each gap gets as
+ * many whole pomodoros as fit (≤ one set), a long break after each sitting. Off: sittings of ≤ 1h.
+ */
 function autoTimes(d) {
+  if (P.value.on) {
+    plan.value[d].sittings = planPomodoroDay(d, amt(d), ownIds.value).map((s) => ({ ...s, pomo: true }))
+    return
+  }
   const mins = evenParts(amt(d), Math.max(1, Math.ceil(amt(d) / SITTING)))
   const starts = planDaySpread(d, mins, ownIds.value)
   plan.value[d].sittings = mins.map((min, i) => ({ start: starts[i] ?? '', min })).filter((s) => s.start)
@@ -104,20 +124,30 @@ function clampSitting(d, i) {
 
 /* ── whole-plan shortcuts ── */
 const weekDays = computed(() => days.value.filter((d) => d >= week0.value && d <= addDays(week0.value, 6) && (!t.value?.due || d <= t.value.due)))
+/** `total` minutes over `n` days in whole `unit`s, e.g. 175 over 3 at 25 → [75, 50, 50]. */
+function evenUnits(total, n, unit) {
+  const k = Math.floor(total / unit)
+  const out = Array.from({ length: n }, (_, i) => (Math.floor(k / n) + (i < k % n ? 1 : 0)) * unit)
+  out[n - 1] += total - k * unit
+  return out
+}
 function spreadEvenly() {
   const wk = weekDays.value.filter((d) => [1, 2, 3, 4, 5].includes(new Date(d + 'T12:00').getDay()))
   const pool = wk.length ? wk : weekDays.value
   if (!pool.length) return
   plan.value = {}
-  const n = Math.min(pool.length, Math.max(1, Math.floor(est.value / 30)))
-  evenParts(est.value, n).forEach((min, i) => { if (min) plan.value[pool[i]] = { min, sittings: [] } })
+  const n = Math.min(pool.length, Math.max(1, Math.floor(est.value / STEP.value)))
+  // pomodoro on: hand out whole pomodoros (any odd remainder goes on the last day)
+  const parts = P.value.on ? evenUnits(est.value, n, P.value.work) : evenParts(est.value, n)
+  parts.forEach((min, i) => { if (min) plan.value[pool[i]] = { min, sittings: [] } })
 }
 function fillFree() {
   plan.value = {}
   let rest = est.value
   for (const d of weekDays.value) {
     if (rest <= 0) break
-    const free = Math.floor(((CAPACITY_H - base(d)) * 60) / 15) * 15
+    const unit = P.value.on ? P.value.work : 15
+    const free = Math.floor(((CAPACITY_H - base(d)) * 60) / unit) * unit
     const take = Math.min(rest, Math.max(0, free))
     if (take > 0) { plan.value[d] = { min: take, sittings: [] }; rest -= take }
   }
@@ -128,7 +158,7 @@ const base = (d) => dayLoad(d).total - openParts.value.filter((x) => x.scheduled
 const after = (d) => base(d) + amt(d) / 60
 function strip(d) {
   const others = blocksForDay(d).filter((b) => !ownIds.value.includes(b.todoId)).map((b) => [toMin(b.start), toMin(b.end), b.title])
-  const mine = (plan.value[d]?.sittings ?? []).filter((s) => s.start).map((s) => [toMin(s.start), toMin(s.start) + (Number(s.min) || 0)])
+  const mine = (plan.value[d]?.sittings ?? []).filter((s) => s.start).map((s) => [toMin(s.start), toMin(s.start) + wall(s)])
   const lo = Math.min(toMin(WORK_FROM), ...others.map((b) => b[0]), ...mine.map((b) => b[0]))
   const hi = Math.max(toMin(WORK_TO), ...others.map((b) => b[1]), ...mine.map((b) => b[1]))
   const a = Math.floor(lo / 60) * 60
@@ -141,7 +171,7 @@ function strip(d) {
 function apply() {
   const pieces = []
   for (const [date, d] of Object.entries(plan.value)) {
-    d.sittings.forEach((s) => { if (s.min > 0) pieces.push({ date, start: s.start || null, min: Number(s.min) }) })
+    d.sittings.forEach((s) => { if (s.min > 0) pieces.push({ date, start: s.start || null, min: Number(s.min), pomo: !!s.pomo }) })
     const rest = d.min - d.sittings.reduce((s, x) => s + (Number(x.min) || 0), 0)
     if (rest > 0) pieces.push({ date, start: null, min: rest })
   }
@@ -159,7 +189,14 @@ function onKey(e) {
 
 const hm = (m) => { m = Math.round(m); const h = Math.floor(m / 60); return h ? `${h}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` : `${m}m` }
 const dayName = (d) => (d === T.value ? 'Today' : d === addDays(T.value, 1) ? 'Tomorrow' : wd(d))
-const end = (s) => (s.start ? fromMin(Math.min(1440, toMin(s.start) + (Number(s.min) || 0))) : '')
+const end = (s) => (s.start ? fromMin(Math.min(1440, toMin(s.start) + wall(s))) : '')
+/** "2 × 25m" / "3 × 25m, last 10m" for a pomodoro sitting. */
+function pomoNote(s) {
+  const m = Number(s.min) || 0
+  const n = pomoCount(m, P.value)
+  const last = m - (n - 1) * P.value.work
+  return `${n} pomodoro${n === 1 ? '' : 's'}${last < P.value.work ? `, last ${last}m` : ''}`
+}
 </script>
 
 <template>
@@ -182,9 +219,10 @@ const end = (s) => (s.start ? fromMin(Math.min(1440, toMin(s.start) + (Number(s.
         <div class="meter" :title="`${hm(planned)} of ${hm(est)} planned`"><i :style="{ width: est ? (planned / est) * 100 + '%' : 0 }"></i></div>
         <div class="estline small muted">
           Estimate
-          <button class="btn sm icon-only" title="30 min less" :disabled="est - 30 < planned || est <= 30" @click="est -= 30"><span class="icon sm">remove</span></button>
+          <button class="btn sm icon-only" :title="`${STEP} min less`" :disabled="down(est) < planned || down(est) <= 0" @click="est = down(est)"><span class="icon sm">remove</span></button>
           <b class="mono">{{ hm(est) }}</b>
-          <button class="btn sm icon-only" title="30 min more" @click="est += 30"><span class="icon sm">add</span></button>
+          <button class="btn sm icon-only" :title="`${STEP} min more`" @click="est = up(est)"><span class="icon sm">add</span></button>
+          <span v-if="P.on" class="mono" :title="`Pomodoro ${P.work}/${P.short}, long ${P.long} after ${P.every} (Settings)`">· {{ pomoCount(est, P) }} × {{ P.work }}m</span>
           <span v-if="doneMin" class="mono">· {{ hm(doneMin) }} already done</span>
         </div>
       </section>
@@ -222,9 +260,9 @@ const end = (s) => (s.start ? fromMin(Math.min(1440, toMin(s.start) + (Number(s.
             </div>
             <div v-for="(s, i) in plan[d].sittings" :key="i" class="sit">
               <input v-model="s.start" type="time" step="900" class="input mono tm" :aria-label="`Sitting ${i + 1} start`" />
-              <input v-model.number="s.min" type="number" min="5" step="15" class="input mono mn" :aria-label="`Sitting ${i + 1} minutes`" @change="clampSitting(d, i)" />
+              <input v-model.number="s.min" type="number" min="5" :step="s.pomo ? P.work : 15" class="input mono mn" :aria-label="`Sitting ${i + 1} minutes`" @change="clampSitting(d, i)" />
               <span class="small muted">min</span>
-              <span class="mono small muted grow">{{ s.start ? '→ ' + end(s) : 'no time' }}</span>
+              <span class="mono small muted grow">{{ s.start ? '→ ' + end(s) : 'no time' }}<template v-if="s.pomo"> · {{ pomoNote(s) }}</template></span>
               <button class="btn sm icon-only" title="Remove this time (its minutes become untimed)" @click="dropSitting(d, i)"><span class="icon sm">close</span></button>
             </div>
             <div class="sitfoot small">
@@ -232,7 +270,7 @@ const end = (s) => (s.start ? fromMin(Math.min(1440, toMin(s.start) + (Number(s.
               <span v-else class="muted">every minute has a time</span>
               <span class="spacer"></span>
               <button v-if="untimed(d) > 0" class="btn sm" @click="addSitting(d)"><span class="icon sm">more_time</span>Add a time</button>
-              <button class="btn sm" title="Cut this day's time into sittings of up to 1h in the free gaps" @click="autoTimes(d)"><span class="icon sm">auto_fix_high</span>Auto times</button>
+              <button class="btn sm" :title="P.on ? `Cut this day's time into sets of up to ${P.every} pomodoros (${P.work}m work, ${P.short}m breaks), ${P.long}m apart, in the free gaps` : 'Cut this day\'s time into sittings of up to 1h in the free gaps'" @click="autoTimes(d)"><span class="icon sm">auto_fix_high</span>Auto times</button>
             </div>
           </div>
         </div>

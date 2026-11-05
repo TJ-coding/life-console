@@ -51,12 +51,12 @@ There is **no test suite and no linter** (see *Verifying changes*). The stack is
 
 `state` is one JSON document; every device holds a copy and syncs it with `/data/state.json` on the server.
 
-- `todos[]`: `id` (`T-123`), `title`, `vital`, `timeMin`, `done`, `lsd` (`L|S|D`), `priority` (1–5), `order` (rank within a priority), `due` (`YYYY-MM-DD`|null), `scheduled` (`{date, start: 'HH:MM'|null}` | null = backlog), `links[]` (IDs: `SIG-01.2`, `PSG-01`, `SP-03`, course codes, `KZ-04`…), `notes`, `createdAt`, `updatedAt`, optional `split: {group}`.
+- `todos[]`: `id` (`T-123`), `title`, `vital`, `timeMin`, `done`, `lsd` (`L|S|D`), `priority` (1–5), `order` (rank within a priority), `due` (`YYYY-MM-DD`|null), `scheduled` (`{date, start: 'HH:MM'|null}` | null = backlog), `links[]` (IDs: `SIG-01.2`, `PSG-01`, `SP-03`, course codes, `KZ-04`…), `notes`, `createdAt`, `updatedAt`, optional `split: {group}`, optional `pomo: true` (a timed sitting laid out as pomodoros: `timeMin` is work, its block also spans the breaks; maths in `server/pomodoro.mjs`, shared by app and server).
 - `timeBlocks[]`: fixed calendar blocks `{id, date, start, end, title, category: research|academic|experiment|kaizen, link}`.
 - `deadlines[]`: `{id 'DL-n', title, vital, due 'YYYY-MM-DDTHH:MM', source, clickUp, done, priority}`.
 - `plans[]`: `{id (= planNo, e.g. 'SP-03'), planNo, title, status: active|paused|archived, health, intent, vision, psgs[{no,…}], sigs[{no, psg, pct, status}], checkEveryDays, checkLog[], events[]}`.
 - Keyed by date: `signOffs{date: [ts|null ×4]}`, `notes{date}`, `sleep{date}`, `caffeine{date: []}`, `routineLog{mondayISO: [idx]}`, `monthlyLog{'YYYY-MM': []}`.
-- `settings`: notification preferences and `timezone`, read by the server scheduler.
+- `settings`: notification preferences, `pomodoro {on, work, short, long, every}` and `timezone`, read by the server scheduler.
 - `schemaVersion`.
 
 **ID rules:** goal numbers `PSG-nn` / `SIG-nn.m` are **unique across all plans** (use `nextPsgNo()`), so a link names exactly one goal. Records that sync must have a stable `id` (or `no` for goals) so `merge.js` can merge per record.

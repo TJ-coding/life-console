@@ -2,10 +2,11 @@
 // notifications that fall inside it. No I/O, so it is easy to test with fake clocks.
 //
 // All planner times are wall-clock times in the user's timezone (state.settings.timezone).
+import { rhythm, segments } from './pomodoro.mjs'
 
 export const DEFAULT_SETTINGS = {
   timezone: 'UTC',
-  notify: { blocks: true, deadlines: true, daily: true, wellbeing: true },
+  notify: { blocks: true, deadlines: true, daily: true, wellbeing: true, pomodoro: true },
   blockLeadMin: 5,
   briefingTime: '07:30',
   eveningTime: '21:00',
@@ -56,10 +57,16 @@ const clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
 const todosOn = (state, date) => (state.todos ?? []).filter((t) => t.scheduled?.date === date)
 function blocksOn(state, date) {
   const fixed = (state.timeBlocks ?? []).filter((b) => b.date === date).map((b) => ({ ...b, kind: 'block' }))
-  const timed = todosOn(state, date).filter((t) => t.scheduled.start && !t.done).map((t) => ({
-    id: t.id, kind: 'todo', title: t.title, link: t.links?.[0] ?? null, start: t.scheduled.start,
-    end: fromMin(Math.min(1440, toMin(t.scheduled.start) + (t.timeMin || 30))),
-  }))
+  const r = rhythm(state.settings)
+  const timed = todosOn(state, date).filter((t) => t.scheduled.start && !t.done).map((t) => {
+    // a pomodoro sitting spans its breaks too (server/pomodoro.mjs, same maths as the app)
+    const pomo = t.pomo ? segments(t.timeMin || 30, r) : null
+    const span = pomo ? pomo[pomo.length - 1].end : t.timeMin || 30
+    return {
+      id: t.id, kind: 'todo', title: t.title, link: t.links?.[0] ?? null, start: t.scheduled.start,
+      end: fromMin(Math.min(1440, toMin(t.scheduled.start) + span)), pomo,
+    }
+  })
   return [...fixed, ...timed].sort((a, b) => toMin(a.start) - toMin(b.start))
 }
 const byPriority = (a, b) => Number(a.done) - Number(b.done) || a.priority - b.priority || (a.order ?? 0) - (b.order ?? 0)
@@ -96,6 +103,34 @@ export function computeEvents(state, fromMs, toMs) {
             url: '/#/', tag: `end-${b.id}`, data: { todoId: b.id }, actions: [{ action: 'done', title: 'Mark done' }, { action: 'open', title: 'Open' }],
           })
         }
+      }
+    }
+
+    // pomodoro sittings: a push at every switch between work and break
+    if (s.notify.pomodoro) {
+      for (const b of blocks) {
+        if (!b.pomo || b.pomo.length < 2) continue
+        const t0 = toMin(b.start)
+        const n = b.pomo.length
+        const name = clip(b.title, 50)
+        b.pomo.forEach((g, i) => {
+          if (!g.brk) return
+          const breakAt = t0 + g.end
+          const backAt = breakAt + g.brk
+          if (backAt > 1440) return
+          const long = (i + 1) % rhythm(state.settings).every === 0
+          add({
+            key: `pomo:break:${b.id}:${D}:${b.start}:${i}`, at: zoned(D, fromMin(breakAt), tz),
+            title: `${long ? 'Long break' : 'Break'} · ${g.brk} min`, body: `${name} · pomodoro ${i + 1}/${n} done · back at ${fromMin(backAt)}`,
+            url: '/#/focus', tag: `pomo-${b.id}`,
+          })
+          const next = b.pomo[i + 1]
+          add({
+            key: `pomo:work:${b.id}:${D}:${b.start}:${i + 1}`, at: zoned(D, fromMin(backAt), tz),
+            title: `Back to work · pomodoro ${i + 2}/${n}`, body: `${name} · until ${fromMin(Math.min(1440, t0 + next.end))}`,
+            url: '/#/focus', tag: `pomo-${b.id}`,
+          })
+        })
       }
     }
 

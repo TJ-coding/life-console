@@ -31,6 +31,13 @@ function openBlock(b) {
   else emit('edit', b) // a fixed block: detail + delete dialog (ISS-8)
 }
 const removeBlock = removeTimelineBlock
+/** Breaks inside a pomodoro sitting, as bands placed in % of the block's height. */
+function breaks(b) {
+  if (!b.pomo || ed.resize.value?.id === b.id) return []
+  const span = toMin(b.end) - toMin(b.start)
+  if (span <= 0) return []
+  return b.pomo.filter((g) => g.brk).map((g) => ({ top: (g.end / span) * 100 + '%', height: (g.brk / span) * 100 + '%' }))
+}
 </script>
 <template>
   <div class="vt" :style="{ height: (to - from) * pxh + 'px' }" @dragover="ed.onOver" @dragleave="ed.onLeave" @drop.stop="ed.onDrop">
@@ -43,6 +50,7 @@ const removeBlock = removeTimelineBlock
       @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock(b)"
       @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null"
     >
+      <i v-for="(g, k) in breaks(b)" :key="'brk' + k" class="brk" :style="g"></i>
       <span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> {{ b.title }}
       <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
       <span v-if="!ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
@@ -64,6 +72,8 @@ const removeBlock = removeTimelineBlock
 .ghost { position: absolute; left: 28px; right: 0; border: 1px dashed var(--info); background: color-mix(in srgb, var(--info) 10%, transparent); z-index: 3; pointer-events: none; }
 .ghost span { position: absolute; right: 2px; top: 1px; font-size: 10px; color: var(--info); background: var(--surface); padding: 0 2px; }
 .vb { cursor: grab; }
+/* a pomodoro sitting's breaks: hatched bands across the block */
+.brk { position: absolute; left: 0; right: 0; pointer-events: none; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bg) 70%, transparent) 0 3px, transparent 3px 6px); border-top: 1px dashed color-mix(in srgb, var(--text) 18%, transparent); }
 .vb.linked { outline: 2px solid var(--info); z-index: 4; }
 .vb.moving { opacity: 0.35; }
 .vb.sizing { outline: 1px solid var(--info); z-index: 4; overflow: visible; }

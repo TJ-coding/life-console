@@ -71,6 +71,11 @@ Anything not given to a day stays in the backlog. **Estimate − / +** changes t
 The planner document carries `schemaVersion`. `migrateDoc()` in `src/store.js` upgrades any document (from the server, a browser or an import) one numbered step at a time. It runs on load, on sync (before merging) and on import, and it is idempotent. To change the data shape, bump `SCHEMA_VERSION` and add the next step; never edit an old one.
 - **v2:** `plan` (one strategic plan) became `plans: [{ id, planNo, title, status: active|paused|archived, health, … }]`. Goal numbers (`PSG-nn`, `SIG-nn.m`) are unique across all plans, so task links stay unambiguous.
 
+## Pomodoro planning
+- **Settings → Pomodoro** sets the rhythm (default 25m work, 5m short break, 15m long break after 4) and turns it on or off for all devices.
+- While it's on, **Plan this task** moves estimates and day amounts in whole pomodoros, and **Auto times** walks the day's free gaps, filling each with as many whole pomodoros as fit (up to one set) with a long break after each sitting. Auto schedule and dragging a task onto the timeline also lay it out as pomodoros.
+- A pomodoro sitting's block spans its breaks (50m of work = 09:00–09:55), drawn as dashed lines inside the block. Sittings keep their layout if the rhythm is turned off later.
+
 ## Phone app, sync and notifications
 - **Install** (needs HTTPS): on iPhone use Safari → Share → *Add to Home Screen*; on Android use Chrome → *Install app*. Then go to Settings → Notifications → *Turn on for this device*. iOS needs 16.4+ and only delivers push to Home Screen apps.
 - **Sync:** the planner is one document on the server (`/api/state`, versioned). Devices push edits after about 1.5s and pull every 30s, on focus and when back online. Conflicts are three-way merged per record and field (`src/merge.js`); only clashes on the same field go to the newest edit, and the server keeps backups of overwritten versions. A device with its own data asks once whether to use the server's copy or its own.
@@ -79,6 +84,7 @@ The planner document carries `schemaVersion`. `migrateDoc()` in `src/store.js` u
   - **Deadlines:** 1 day and 1 hour before, and at the due time.
   - **Daily:** a morning briefing, and an evening sign-off reminder.
   - **Wellbeing:** a caffeine cutoff warning and a wind-down reminder.
+  - **Pomodoro switches:** in a pomodoro sitting, *Break · 5 min* when each pomodoro ends and *Back to work* when the break is over.
 
   Each kind can be toggled, and its times set, in Settings.
 - **No sound or vibration?** The phone decides that, not the app, and Android often files a new site's notifications as *Silent*. Long-press a Life Console notification and choose *Alerting*, or go to Android Settings → Notifications → App notifications → Life Console (or Chrome) → the site's category → turn on Sound, Vibration and Pop on screen. Also check the site is *Allowed* in Chrome → Site settings → Notifications, the phone isn't on Mute/Do Not Disturb, and battery use is *Unrestricted*. On iPhone: Settings → Notifications → Life Console → Sounds and Banners on. The same steps are in Settings → Notifications → *Test arrives silently, or not at all?*

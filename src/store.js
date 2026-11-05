@@ -982,6 +982,45 @@ export function planDaySpread(date, mins, skipTodoId = null, from = WORK_FROM, t
   })
 }
 
+/**
+ * Pomodoro auto-times for one day: walk the free gaps from the earliest start and fill each with as
+ * many whole pomodoros as fit (at most one set), a long break after every sitting, until `workMin`
+ * is placed or the day runs out. Returns [{ start: 'HH:MM', min }] (work minutes); what doesn't
+ * fit stays unplaced, so the caller keeps it untimed.
+ */
+export function planPomodoroDay(date, workMin, skipTodoId = null, extraBusy = [], from = WORK_FROM, to = WORK_TO) {
+  const P = pomo()
+  const skip = new Set([].concat(skipTodoId ?? []))
+  const busy = blocksForDay(date)
+    .filter((b) => !skip.has(b.todoId))
+    .map((b) => [toMin(b.start), toMin(b.end)])
+    .concat(extraBusy)
+    .sort((a, b) => a[0] - b[0])
+  let t = toMin(from)
+  if (date === todayISO()) { const n = new Date(); t = Math.max(t, Math.ceil((n.getHours() * 60 + n.getMinutes()) / 5) * 5) }
+  const end = toMin(to)
+  const up5 = (m) => Math.ceil(m / 5) * 5
+  const out = []
+  let left = Math.max(0, Math.round(workMin || 0))
+  while (left > 0 && t < end) {
+    const inside = busy.find(([a, b]) => a <= t && t < b)
+    if (inside) { t = up5(inside[1]); continue }
+    const next = busy.find(([a]) => a > t)
+    const gapEnd = Math.min(end, next ? next[0] : end)
+    // the biggest whole-pomodoro sitting (≤ one set, ≤ what's left) that fits this gap
+    let w = 0
+    for (let k = P.every; k >= 1; k--) {
+      const cand = Math.min(k * P.work, left)
+      if (t + wallMin(cand, P) <= gapEnd) { w = cand; break }
+    }
+    if (!w) { t = up5(gapEnd); continue }
+    out.push({ start: fromMin(t), min: w })
+    left -= w
+    t = up5(t + wallMin(w, P) + P.long)
+  }
+  return out
+}
+
 /* ───────────── deadlines ───────────── */
 /** `YYYY-MM-DDTHH:MM` for "now", comparable with deadline.due strings. */
 export const nowKey = () => `${todayISO()}T${fromMin(new Date().getHours() * 60 + new Date().getMinutes())}`
