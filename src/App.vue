@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ui, state, todayISO, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue } from './store'
+import { ui, state, todayISO, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel } from './store'
 import { NAV } from './nav'
 import CommandPalette from './components/CommandPalette.vue'
 import TodoDrawer from './components/TodoDrawer.vue'
@@ -9,6 +9,7 @@ import SplitDialog from './components/SplitDialog.vue'
 import BlockDialog from './components/BlockDialog.vue'
 import DeadlineDialog from './components/DeadlineDialog.vue'
 import IssueDialog from './components/IssueDialog.vue'
+import SelectionBar from './components/SelectionBar.vue'
 import { issues, openIssueDialog, openCount as openIssueCount } from './issues'
 import { useNow } from './now'
 import { sync, chooseSync } from './sync'
@@ -32,6 +33,8 @@ watch(() => `${headline.value.state === 'busy' ? '▶ ' : ''}${headline.value.te
 
 const route = useRoute()
 const router = useRouter()
+// a schedule selection belongs to the screen it was made on
+watch(() => route.path, () => clearBlockSel())
 
 const clock = computed(() => {
   const n = ui.now
@@ -63,12 +66,19 @@ function onKey(e) {
     else if (ui.splitId) ui.splitId = null
     else if (ui.palette) ui.palette = false
     else if (ui.drawerId) ui.drawerId = null
+    else if (ui.selBlocks.length) clearBlockSel()
     else if (route.name === 'focus') router.push('/')
     else ui.selectedId = null
     return
   }
   const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]')
   if (typing || ui.palette || ui.splitId || ui.deadlineId || ui.blockId || issues.dialog) return
+  // schedule multi-select: arrows move the selected blocks, Delete takes them off the schedule
+  if (ui.selBlocks.length && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    const step = e.shiftKey ? 60 : 15
+    const act = { ArrowUp: () => shiftSelected(-step), ArrowDown: () => shiftSelected(step), ArrowLeft: () => shiftSelected(0, -1), ArrowRight: () => shiftSelected(0, 1), Delete: removeSelected, Backspace: removeSelected }[e.key]
+    if (act) { e.preventDefault(); act(); return }
+  }
   if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && ui.selectedId) {
     e.preventDefault()
     const t = moveSelected(e.key === 'ArrowUp' ? -1 : 1)
@@ -259,6 +269,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <DeadlineDialog />
     <BlockDialog />
     <IssueDialog />
+    <SelectionBar />
     <transition name="fade">
       <div v-if="ui.toast" class="toast mono" role="status">
         <span class="toast-msg">{{ ui.toast }}</span>

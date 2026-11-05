@@ -71,6 +71,10 @@ Anything not given to a day stays in the backlog. **Estimate − / +** changes t
 The planner document carries `schemaVersion`. `migrateDoc()` in `src/store.js` upgrades any document (from the server, a browser or an import) one numbered step at a time. It runs on load, on sync (before merging) and on import, and it is idempotent. To change the data shape, bump `SCHEMA_VERSION` and add the next step; never edit an old one.
 - **v2:** `plan` (one strategic plan) became `plans: [{ id, planNo, title, status: active|paused|archived, health, … }]`. Goal numbers (`PSG-nn`, `SIG-nn.m`) are unique across all plans, so task links stay unambiguous.
 
+## Moving several schedule items at once
+- **Select:** Shift-, ⌘- or Ctrl-click blocks on any schedule (long-press on phones). While a selection is open, plain clicks/taps add or remove blocks. Esc clears it, and so does changing screen.
+- **Move:** drag any selected block and they all move by the same amount (to another day too), or use ↑/↓ (15 min, Shift = 1 h) and ←/→ (a day). **Delete** takes them off the schedule (tasks stay on their day). The bar at the bottom has the same actions, and every action has one Undo.
+
 ## Pomodoro planning
 - **Settings → Pomodoro** sets the rhythm (default 25m work, 5m short break, 15m long break after 4) and turns it on or off for all devices.
 - While it's on, **Plan this task** moves estimates and day amounts in whole pomodoros, and **Auto times** walks the day's free gaps, filling each with as many whole pomodoros as fit (up to one set) with a long break after each sitting. Auto schedule and dragging a task onto the timeline also lay it out as pomodoros.

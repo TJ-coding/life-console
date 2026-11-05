@@ -338,7 +338,8 @@ export const ui = reactive({
   backlogFocus: 0, // bump to focus the Plan-week backlog quick-add
   sidePanel: null, // planner side panel: null | 'balance' | 'routines'
   focusIds: [], // top-3 todos shown in focus mode (keys 1–3)
-  dragBlock: null, // timeline block being moved: { kind, id, offset, dur }
+  dragBlock: null, // timeline block being moved: { kind, id, offset, dur, group? }
+  selBlocks: [], // multi-selected schedule items ('todo:T-1' / 'block:B-3'): moved, shifted or removed together
   dropOver: null, // todo row under the cursor
   dropPos: null, // 'before' | 'after'
   toast: '',
@@ -556,6 +557,83 @@ export function removeTimelineBlock(b) {
     const copy = deleteBlock(b.id)
     if (copy) toast(`Removed ${copy.title || 'block'} ${copy.start}–${copy.end}`, { label: 'Undo', run: () => state.timeBlocks.push(copy) })
   }
+}
+
+/* ───────────── multi-select on the schedule ─────────────
+ * Shift/⌘/Ctrl-click (long-press on phones) collects blocks in ui.selBlocks; dragging one of them,
+ * the arrow keys or the selection bar then move them all by the same amount, with one undo.
+ */
+export const blockKey = (b) => (b.todoId ? `todo:${b.todoId}` : `block:${b.id}`)
+export const isBlockSel = (b) => ui.selBlocks.includes(blockKey(b))
+export function toggleBlockSel(b) {
+  const k = blockKey(b)
+  const i = ui.selBlocks.indexOf(k)
+  if (i >= 0) ui.selBlocks.splice(i, 1)
+  else ui.selBlocks.push(k)
+}
+export const clearBlockSel = () => { ui.selBlocks.splice(0) }
+/** Live items behind the selection keys: [{ key, kind, id, date, start, dur }] (gone ones dropped). */
+function selItems() {
+  const out = []
+  for (const key of ui.selBlocks) {
+    const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)]
+    if (kind === 'todo') {
+      const t = findTodo(id)
+      if (t?.scheduled?.start) out.push({ key, kind, id, date: t.scheduled.date, start: toMin(t.scheduled.start), dur: blockMin(t) })
+    } else {
+      const b = state.timeBlocks.find((x) => x.id === id)
+      if (b) out.push({ key, kind, id, date: b.date, start: toMin(b.start), dur: toMin(b.end) - toMin(b.start) })
+    }
+  }
+  return out
+}
+function snapshotSel(items) {
+  return items.map((x) => (x.kind === 'todo'
+    ? { kind: 'todo', id: x.id, scheduled: { ...findTodo(x.id).scheduled } }
+    : { kind: 'block', copy: { ...state.timeBlocks.find((b) => b.id === x.id) } }))
+}
+function restoreSel(snap) {
+  for (const s of snap) {
+    if (s.kind === 'todo') updateTodo(s.id, { scheduled: s.scheduled })
+    else {
+      const b = state.timeBlocks.find((x) => x.id === s.copy.id)
+      if (b) Object.assign(b, s.copy)
+      else state.timeBlocks.push(s.copy)
+    }
+  }
+}
+/** Move every selected item by `dMin` minutes and `dDays` days (one undo). Refuses if any would leave its day. */
+export function shiftSelected(dMin, dDays = 0) {
+  const items = selItems()
+  if (!items.length) { clearBlockSel(); return false }
+  if (items.some((x) => x.start + dMin < 0 || x.start + dMin + x.dur > 1440)) {
+    toast(`Can't move ${items.length > 1 ? 'them' : 'it'}: something would run past midnight`)
+    return false
+  }
+  const snap = snapshotSel(items)
+  for (const x of items) {
+    const date = addDays(x.date, dDays)
+    const s = x.start + dMin
+    if (x.kind === 'todo') updateTodo(x.id, { scheduled: { date, start: fromMin(s) } })
+    else Object.assign(state.timeBlocks.find((b) => b.id === x.id), { date, start: fromMin(s), end: fromMin(s + x.dur) })
+  }
+  const parts = []
+  if (dDays) parts.push(`${dDays > 0 ? '+' : '−'}${Math.abs(dDays)} day${Math.abs(dDays) === 1 ? '' : 's'}`)
+  if (dMin) parts.push(`${dMin > 0 ? 'later' : 'earlier'} ${Math.abs(dMin) >= 60 && Math.abs(dMin) % 60 === 0 ? Math.abs(dMin) / 60 + 'h' : Math.abs(dMin) + 'm'}`)
+  toast(`Moved ${items.length} · ${parts.join(' · ') || 'no change'}`, { label: 'Undo', run: () => restoreSel(snap) })
+  return true
+}
+/** Take every selected item off the schedule: tasks stay on their day untimed, fixed blocks are removed (one undo). */
+export function removeSelected() {
+  const items = selItems()
+  if (!items.length) return
+  const snap = snapshotSel(items)
+  for (const x of items) {
+    if (x.kind === 'todo') updateTodo(x.id, { scheduled: { date: x.date, start: null } })
+    else deleteBlock(x.id)
+  }
+  clearBlockSel()
+  toast(`Took ${items.length} off the schedule`, { label: 'Undo', run: () => restoreSel(snap) })
 }
 
 /** What the schedule lock does — shared by the padlock buttons' tooltips and toasts. */

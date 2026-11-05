@@ -3,7 +3,7 @@
 // Fixed px-per-hour so block text stays readable; scrolls horizontally and
 // auto-centres on "now". Todos can be dropped onto it to get a start time.
 import { computed, ref, onMounted, nextTick, watch } from 'vue'
-import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock } from '../store'
+import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isBlockSel, toggleBlockSel } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 0 }, to: { type: Number, default: 24 } })
@@ -54,8 +54,10 @@ const ed = useTimelineEdit({
 })
 const hover = ed.hover
 const removeBlock = removeTimelineBlock
-function openBlock(b) {
+function openBlock(e, b) {
   if (ed.isResizing()) return
+  // Shift/⌘/Ctrl-click — or any click while a selection is open — adds/removes it from the selection
+  if (e.shiftKey || e.metaKey || e.ctrlKey || ui.selBlocks.length) { toggleBlockSel(b); return }
   if (b.todoId) emit('open', b.todoId)
   else emit('edit', b) // a fixed block: detail + delete dialog (ISS-8)
 }
@@ -74,9 +76,9 @@ function openBlock(b) {
           <span class="mono">{{ String(from + h - 1).padStart(2, '0') }}:00</span>
         </div>
         <div
-          v-for="b in laid.blocks" :key="b.id" class="block tl-block" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id }]"
+          v-for="b in laid.blocks" :key="b.id" class="block tl-block" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b) }]"
           :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag right edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!ui.scheduleLock"
-          @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock(b)"
+          @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock($event, b)" @contextmenu.prevent="toggleBlockSel(b)"
         >
           <span class="mono t">{{ b.start }}–{{ b.end }}</span>
           <span class="nm">{{ b.title }}</span>
@@ -118,4 +120,6 @@ function openBlock(b) {
 @media (hover: none) { .xb { opacity: 0.85; width: 22px; height: 22px; font-size: 16px; top: 1px; right: 1px; color: var(--text); } }
 .handle::after { content: ''; position: absolute; top: 30%; bottom: 30%; right: 2px; width: 2px; border-radius: 1px; background: var(--c); opacity: 0; }
 .tl-block:hover .handle::after, .tl-block.sizing .handle::after { opacity: 0.9; }
+/* multi-selected (Shift/⌘-click or long-press): moved together */
+.block.bsel { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 5; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
 </style>

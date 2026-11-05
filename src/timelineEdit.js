@@ -4,7 +4,7 @@
 //  • drop a todo from any list to give it a start time
 //  • locked (ui.scheduleLock): no drag/resize — tap still opens detail (ISS-8, ISS-14)
 import { ref } from 'vue'
-import { ui, toMin, fromMin, snap, SNAP, moveBlock, resizeBlock, toast } from './store'
+import { ui, toMin, fromMin, snap, SNAP, moveBlock, resizeBlock, toast, isBlockSel, shiftSelected, diffDays } from './store'
 import { TODO_MIME } from './dnd'
 
 const BLOCK_MIME = 'text/x-block'
@@ -38,6 +38,8 @@ export function useTimelineEdit(o) {
     const blockEl = e.currentTarget
     const grab = ((o.axis === 'x' ? e.clientX - blockEl.getBoundingClientRect().left : e.clientY - blockEl.getBoundingClientRect().top) / o.pxh()) * 60
     ui.dragBlock = { kind: b.kind, id: b.kind === 'todo' ? b.todoId : b.id, offset: grab, dur: toMin(b.end) - toMin(b.start) }
+    // dragging one of several selected blocks moves the whole selection by the same offset
+    if (ui.selBlocks.length > 1 && isBlockSel(b)) ui.dragBlock.group = { date: o.date(), start: toMin(b.start) }
     e.dataTransfer.setData(BLOCK_MIME, ui.dragBlock.id)
     if (b.kind === 'todo') e.dataTransfer.setData(TODO_MIME, b.todoId) // lets it drop onto todo lists too
     e.dataTransfer.effectAllowed = 'move'
@@ -71,6 +73,11 @@ export function useTimelineEdit(o) {
     const d = ui.dragBlock
     if (d && h) {
       if (locked()) { toast('Schedule locked · unlock (padlock) to drag — tap a block to edit or remove it'); return } // still cancel the drag (ISS-14)
+      if (d.group) {
+        shiftSelected(h.start - d.group.start, diffDays(d.group.date, o.date()))
+        ui.dragBlock = null
+        return
+      }
       moveBlock(d.kind, d.id, o.date(), h.start)
       toast(`${d.kind === 'todo' ? d.id : 'Block'} → ${o.date().slice(5)} ${fromMin(h.start)}`)
       ui.dragBlock = null
