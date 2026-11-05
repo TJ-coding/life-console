@@ -74,6 +74,9 @@ The planner document carries `schemaVersion`. `migrateDoc()` in `src/store.js` u
   Each kind can be toggled, and its times set, in Settings.
 - **Server** (`server/`): plain Node `http` plus `web-push`. Data, subscriptions and VAPID keys live in `DATA_DIR` (`/data`, a Docker volume).
 
+## Working on the code
+New to the codebase (human or AI agent)? Start with **[CLAUDE.md](CLAUDE.md)**: project map, data model, rules for changing the data shape, conventions, how to verify changes, and known gotchas.
+
 ## Hosting and deployment
 **Full guide: [docs/OPERATIONS.md](docs/OPERATIONS.md)** covers where it's hosted, how to deploy (automatic and manual), CI secrets, Dokploy, Cloudflare and NetBird setup, data backup and restore, migrations, a release checklist and troubleshooting.
 
