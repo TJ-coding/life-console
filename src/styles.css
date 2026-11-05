@@ -172,6 +172,7 @@ label.field > span { font: 600 10px/12px 'JetBrains Mono', monospace; letter-spa
 .chip.goal { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .chip.course { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
 .chip.plan { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+.chip.deadline { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); background: color-mix(in srgb, var(--warn) 7%, transparent); font-weight: 600; }
 .chip.risk, .chip.ipb { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
 .chip.kaizen { color: var(--muted); }
 .prio {

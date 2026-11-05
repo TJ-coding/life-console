@@ -7,6 +7,9 @@ import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass 
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
 
+defineProps({ focus: Boolean }) // ISS-16: backlog-only mode is on (header shows the way back)
+defineEmits(['focus'])
+
 const prio = ref(0)
 const open = ref(true) // collapses the backlog to header + quick-add (handy on phones)
 const list = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && (!prio.value || t.priority === prio.value)).sort(byPriority))
@@ -40,16 +43,19 @@ function onDrop(e) {
 </script>
 
 <template>
-  <section class="backlog" :class="{ 'drop-hot': hot }" @dragover.prevent="hot = true" @dragleave="hot = false" @drop.prevent="onDrop">
+  <section class="backlog" :class="{ 'drop-hot': hot, only: focus }" @dragover.prevent="hot = true" @dragleave="hot = false" @drop.prevent="onDrop">
     <header class="bh">
       <button class="btn sm icon-only tog" :title="open ? 'Collapse backlog' : 'Expand backlog'" @click="open = !open">
         <span class="icon sm">{{ open ? 'keyboard_arrow_up' : 'keyboard_arrow_down' }}</span>
       </button>
-      <span class="stepn mono">1</span>
-      <div class="grow">
-        <div class="ttl">Backlog</div>
-        <div class="mono tiny muted">{{ list.length }} tasks · {{ total.toFixed(1) }}h</div>
-      </div>
+      <button class="hbtn grow" :title="focus ? 'Back to the week view' : 'Backlog only: hide the day columns and show the deadlines & goals this backlog serves (ISS-16)'" @click="$emit('focus')">
+        <span class="stepn mono">1</span>
+        <span class="tl">
+          <span class="ttl">Backlog<template v-if="focus"> only</template></span>
+          <span class="mono tiny muted">{{ list.length }} tasks · {{ total.toFixed(1) }}h</span>
+        </span>
+        <span class="icon sm" :class="{ info: focus }">{{ focus ? 'first_page' : 'crop_din' }}</span>
+      </button>
     </header>
     <form v-if="open" class="qa" @submit.prevent="add">
       <span class="icon sm plus">add</span>
@@ -109,8 +115,14 @@ function onDrop(e) {
 </template>
 
 <style scoped>
+.backlog.only { border-right: 0; }
 .backlog { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-right: 1px solid var(--border); }
 .bh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.hbtn { display: flex; align-items: center; gap: 10px; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; padding: 0; cursor: pointer; }
+.hbtn:hover .ttl { color: var(--accent); }
+.tl { display: flex; flex-direction: column; min-width: 0; }
+.hbtn .icon { color: var(--muted); flex: none; }
+.hbtn .icon.info { color: var(--info); }
 .tog { padding: 0 2px; color: var(--muted); }
 .stepn { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--muted); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--muted); }
 .ttl { font-weight: 600; }

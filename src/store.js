@@ -60,6 +60,7 @@ export const CAPACITY_H = 7
 
 export function linkType(id) {
   if (/^(PSG|SIG)-/.test(id)) return 'goal'
+  if (/^DL-/.test(id)) return 'deadline'
   if (/^SP-/.test(id)) return 'plan'
   if (/^R-/.test(id)) return 'risk'
   if (/^IPB-/.test(id)) return 'ipb'
@@ -301,6 +302,7 @@ export const ui = reactive({
   dragId: null, // todo being dragged
   splitId: null, // todo open in the Split dialog
   deadlineId: null, // deadline open in the edit dialog
+  backlogOnly: false, // Plan week: hide the day columns, show deadlines & goals beside the backlog only (ISS-16)
   hoverId: null, // todo under the pointer — highlighted in backlog, bucket and timeline at once
   planMode: (() => { try { return localStorage.getItem('life-console/plan-mode') || 'both' } catch { return 'both' } })(), // 'days' | 'both' | 'times'
   backlogFocus: 0, // bump to focus the Plan-week backlog quick-add

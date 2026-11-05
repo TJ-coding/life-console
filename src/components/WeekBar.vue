@@ -77,4 +77,12 @@ button.step:hover { border-color: var(--muted); color: var(--text); }
 .prog i { display: block; height: 100%; background: var(--accent); }
 .arrow { color: var(--muted); }
 @media (max-width: 1100px) { .lbl small, .prog { display: none; } }
+/* phone: the flow wraps instead of running off the right edge (ISS-12) */
+@media (max-width: 640px) {
+  .weekbar { gap: 8px; padding: 6px 10px; }
+  .wk { min-width: 0; flex: 1; }
+  .flow { width: 100%; flex-wrap: wrap; row-gap: 4px; }
+  .arrow { display: none; }
+  .step, .step.both { padding: 4px 8px; }
+}
 </style>

@@ -19,6 +19,7 @@ const schedStart = computed({
   set: (v) => { if (t.value.scheduled) t.value.scheduled.start = v || null },
 })
 const goalOptions = computed(() => state.plans.filter((p) => p.status !== 'archived').flatMap((p) => [...p.psgs.map((g) => g.no), ...p.sigs.map((s) => s.no)]))
+const deadlineOptions = computed(() => state.deadlines.filter((d) => !d.done && !t.value?.links.includes(d.id)).sort((a, b) => a.due.localeCompare(b.due)))
 function addLink(id) {
   if (id && !t.value.links.includes(id)) t.value.links.push(id)
 }
@@ -92,6 +93,10 @@ function remove() {
           <select class="select sm" @change="addLink($event.target.value); $event.target.value = ''">
             <option value="">+ link goal…</option>
             <option v-for="g in goalOptions" :key="g" :value="g">{{ g }}</option>
+          </select>
+          <select class="select sm" @change="addLink($event.target.value); $event.target.value = ''">
+            <option value="">+ link deadline…</option>
+            <option v-for="d in deadlineOptions" :key="d.id" :value="d.id">{{ d.id }} {{ d.title.slice(0, 32) }}</option>
           </select>
         </div>
         <label class="field"><span>Notes (markdown)</span><textarea v-model="t.notes" rows="7" class="textarea mono"></textarea></label>

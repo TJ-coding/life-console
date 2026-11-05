@@ -6,6 +6,8 @@ import { ui, state, deleteDeadline, isOverdue, relDay, todayISO } from '../store
 const d = computed(() => (ui.deadlineId ? state.deadlines.find((x) => x.id === ui.deadlineId) : null))
 const date = computed({ get: () => d.value.due.slice(0, 10), set: (v) => { if (v) d.value.due = `${v}T${d.value.due.slice(11)}` } })
 const time = computed({ get: () => d.value.due.slice(11), set: (v) => { if (v) d.value.due = `${d.value.due.slice(0, 10)}T${v}` } })
+/** Tasks linked to this deadline (links contain the DL id), or heading to it via source. */
+const linked = computed(() => state.todos.filter((t) => t.links.includes(d.value.id)).sort((a, b) => a.done - b.done))
 const close = () => { ui.deadlineId = null }
 function remove() {
   if (confirm(`Delete ${d.value.id} "${d.value.title}"?`)) deleteDeadline(d.value.id)
@@ -39,6 +41,17 @@ function remove() {
           <label class="row"><input v-model="d.done" type="checkbox" /> Done</label>
           <label class="row"><input v-model="d.clickUp" type="checkbox" /> Synced with ClickUp</label>
         </div>
+        <!-- ISS-15: tasks linked to this deadline (link them from a task's drawer: + link deadline…) -->
+        <div class="field">
+          <span class="lbl">Tasks</span>
+          <button v-for="t in linked" :key="t.id" class="lt row" :class="{ done: t.done }" :title="t.scheduled?.date ? `${t.scheduled.date}${t.scheduled.start ? ' ' + t.scheduled.start : ''}` : 'Backlog'" @click="ui.drawerId = t.id">
+            <span class="mono tiny muted">{{ t.id }}</span>
+            <span class="ellipsis">{{ t.title }}</span>
+            <span class="mono tiny muted">{{ t.timeMin }}m</span>
+            <span v-if="!t.scheduled" class="tiny muted">backlog</span>
+          </button>
+          <div v-if="!linked.length" class="small muted">None. Open a task (double-click it) and add <b class="mono">{{ d.id }}</b> under Linked records.</div>
+        </div>
       </div>
       <footer class="ft">
         <button class="btn danger-ghost" @click="remove"><span class="icon sm">delete</span>Delete</button>
@@ -56,6 +69,10 @@ function remove() {
 .bd { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 .input.big { height: 34px; font-size: 15px; font-weight: 600; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field .lbl { font: 600 10px/12px 'JetBrains Mono', monospace; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 4px; }
+.lt { width: 100%; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 2px; padding: 4px 8px; gap: 8px; cursor: pointer; font: inherit; font-size: 12px; margin-bottom: 4px; }
+.lt:hover { border-color: var(--info); }
+.lt.done .ellipsis { text-decoration: line-through; color: var(--muted); }
 .checks { gap: 18px; }
 .checks label { gap: 6px; cursor: pointer; }
 .ft { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }

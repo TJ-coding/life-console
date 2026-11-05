@@ -12,6 +12,7 @@ import WeekBar from '../components/WeekBar.vue'
 import DayColumn from '../components/DayColumn.vue'
 import BacklogPanel from '../components/BacklogPanel.vue'
 import BalancePanel from '../components/BalancePanel.vue'
+import WeekContext from '../components/WeekContext.vue'
 
 const route = useRoute()
 const T = computed(() => todayISO())
@@ -108,9 +109,10 @@ function copyLastWeek() {
       <button class="btn sm icon-only" title="Print A4" @click="print"><span class="icon sm">print</span></button>
     </div>
 
-    <div class="body">
-      <BacklogPanel />
+    <div class="body" :class="{ only: ui.backlogOnly }">
+      <BacklogPanel :focus="ui.backlogOnly" @focus="ui.backlogOnly = !ui.backlogOnly" />
 
+      <template v-if="!ui.backlogOnly">
       <div class="days" :class="'mode-' + ui.planMode">
         <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" />
         <div class="weekend">
@@ -118,6 +120,9 @@ function copyLastWeek() {
           <DayColumn :date="sun" :filter="filter" :mode="ui.planMode" />
         </div>
       </div>
+      </template>
+
+      <WeekContext v-if="ui.backlogOnly" />
 
       <nav class="rail" aria-label="Side panels">
         <button class="rb" :class="{ on: ui.sidePanel === 'balance' }" title="Balance & rebalance" @click="togglePanel('balance')">
@@ -169,8 +174,22 @@ function copyLastWeek() {
 .next { font-weight: 600; gap: 6px; }
 .select.small { height: 24px; font-size: 11px; }
 .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 236px minmax(0, 1fr) 44px; position: relative; }
+/* backlog-only focus (ISS-16): backlog beside the deadlines & goals this backlog serves */
+.body.only { grid-template-columns: minmax(0, 1fr) 340px; }
+.body.only .rail { display: none; }
+.body.only > .ctx { grid-column: 2; grid-row: 1; }
+@media (max-width: 900px) {
+  .body.only { grid-template-columns: minmax(0, 1fr); }
+  .body.only > .ctx { grid-column: 1; grid-row: 2; border-top: 1px solid var(--border); }
+}
 .days { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)) minmax(130px, 0.8fr); gap: 8px; padding: 12px; overflow: auto; align-items: start; }
 .weekend { display: flex; flex-direction: column; gap: 8px; }
+/* ISS-17: all seven days on one row so the workload buckets compare side by side (after the base
+   rules above so the 5+1 split loses); below 1150px the weekend stays stacked to keep columns wide */
+@media (min-width: 1150px) {
+  .days { grid-template-columns: repeat(5, minmax(118px, 1fr)) minmax(112px, 0.72fr) minmax(112px, 0.72fr); }
+  .weekend { display: contents; }
+}
 .rail { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
 .rb { position: relative; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 2px; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .rb:hover, .rb.on { color: var(--text); border-color: var(--accent); }
@@ -195,7 +214,7 @@ function copyLastWeek() {
 @media (max-width: 640px) {
   .body { display: flex; flex-direction: column; }
   .body > .backlog { flex: none; max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--border); }
-  .days { flex: 1; min-height: 0; display: flex; overflow-x: auto; scroll-snap-type: x proximity; padding: 10px; }
+  .days { flex: 1; min-height: 0; display: flex; overflow: auto; scroll-snap-type: x proximity; padding: 10px; }
   .days :deep(.day) { flex: 0 0 82vw; width: 82vw; scroll-snap-align: start; }
   .weekend { display: contents; }
   .rail { order: 3; flex-direction: row; justify-content: flex-end; gap: 8px; padding: 6px 10px; border-left: 0; border-top: 1px solid var(--border); }
