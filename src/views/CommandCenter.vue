@@ -210,19 +210,14 @@ function quickAdd() {
           <span class="mono small muted">{{ pending.length }} open · {{ fmtH(remainingMin) }} left</span>
           <span class="spacer"></span>
           <button v-if="done.length" class="btn sm ghost-btn" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }} {{ done.length }} done</button>
+          <span class="load" :title="`Workload: ${hours.toFixed(1)}h planned of ${CAPACITY_H}h (${fmtH(doneMin)} done)`">
+            <span class="mono tiny" :class="loadLevel === 'ok' ? 'muted' : loadLevel">{{ hours.toFixed(1) }}/{{ CAPACITY_H }}h</span>
+            <span class="load-bar" :class="loadLevel">
+              <i class="fill done-part" :style="{ height: pctOf(doneMin) + '%' }"></i>
+              <i class="fill" :style="{ bottom: pctOf(doneMin) + '%', height: Math.max(0, Math.min(pctOf(doneMin + remainingMin), 100) - pctOf(doneMin)) + '%' }"></i>
+            </span>
+          </span>
         </div>
-        <div class="todo-body">
-        <div class="load" :title="`${hours.toFixed(1)}h planned of ${CAPACITY_H}h capacity (${fmtH(doneMin)} done)`">
-          <span class="tiny upper muted">Load</span>
-          <div class="load-bar" :class="loadLevel">
-            <i v-for="n in CAPACITY_H - 1" :key="'t' + n" class="tick" :style="{ bottom: (n / CAPACITY_H) * 100 + '%' }"></i>
-            <i class="fill done-part" :style="{ height: pctOf(doneMin) + '%' }"></i>
-            <i class="fill" :style="{ bottom: pctOf(doneMin) + '%', height: Math.max(0, Math.min(pctOf(doneMin + remainingMin), 100) - pctOf(doneMin)) + '%' }"></i>
-          </div>
-          <b class="mono small" :class="loadLevel">{{ hours.toFixed(1) }}h</b>
-          <span class="mono tiny muted">/{{ CAPACITY_H }}h</span>
-        </div>
-        <div class="todo-main">
         <div class="list" @dragover.prevent @drop.prevent="dropOnList">
           <TodoRow v-for="t in pending" :key="t.id" :todo="t" compact adopt-date show-start show-prio removable :show-links="false" @remove="removeTodo" />
           <template v-if="showDone">
@@ -234,8 +229,6 @@ function quickAdd() {
           <span class="mono ok">+</span>
           <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @SIG-01.1 p2`" />
         </form>
-        </div>
-        </div>
       </section>
     </div>
 
@@ -296,16 +289,13 @@ function quickAdd() {
 .vctrl { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
 .vscroll.z-S :deep(.vb) { font-size: 11px; line-height: 13px; padding: 1px 6px; }
 .vscroll.z-S :deep(.vb .t) { font-size: 10px; }
-.todo-body { display: flex; align-items: stretch; flex: 1; min-height: 0; }
-.todo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-/* vertical workload gauge: done (dim) + remaining stacked bottom-up against capacity, hour ticks */
-.load { flex: none; width: 58px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-right: 1px solid var(--border); }
-.load-bar { position: relative; flex: 1; width: 16px; min-height: 120px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
-.load-bar .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); }
-.load-bar .fill.done-part { opacity: 0.4; }
+/* workload: a small vertical meter tucked into the right end of the "Left today" header */
+.load { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
+.load-bar { position: relative; width: 6px; height: 18px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 1px; overflow: hidden; }
+.load-bar .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--muted); }
+.load-bar .fill.done-part { opacity: 0.45; }
 .load-bar.warn .fill { background: var(--warn); }
 .load-bar.danger .fill { background: var(--danger); }
-.load-bar .tick { position: absolute; left: 0; right: 0; height: 1px; background: var(--bg); opacity: 0.6; z-index: 1; }
 .list { min-height: 60px; max-height: 420px; overflow: auto; }
 .vert .list { max-height: 460px; }
 /* readable rows: the shared compact row is 11px, too small for the main list */
@@ -336,7 +326,5 @@ a.tm:hover { color: var(--accent); }
   .day, .day.vert { display: flex; flex-direction: column; }
   .todo-panel { order: 1; } .tl-panel { order: 2; }
   .vscroll { height: 420px; }
-  .load { width: 40px; }
-  .load-bar { width: 12px; }
 }
 </style>
