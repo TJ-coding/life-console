@@ -101,7 +101,6 @@ function auto() {
       <div v-for="d in deadlines" :key="d.id" class="dl small" :class="{ done: d.done, over: isOverdue(d) }" :title="`${d.title}${d.vital ? ' · ' + d.vital : ''} — click to edit`" @click="ui.deadlineId = d.id">
         <input v-model="d.done" type="checkbox" @click.stop />
         <span class="ellipsis grow">{{ d.title }}</span>
-        <span v-if="d.clickUp" class="ok" title="ClickUp">●</span>
         <span class="mono muted">{{ d.due.slice(11) }}</span>
       </div>
       <DeadlineQuickAdd v-if="adding" :date="date" compact autofocus @cancel="adding = false" />

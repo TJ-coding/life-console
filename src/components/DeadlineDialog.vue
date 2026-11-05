@@ -40,7 +40,6 @@ function remove() {
         </div>
         <div class="row checks">
           <label class="row"><input v-model="d.done" type="checkbox" /> Done</label>
-          <label class="row"><input v-model="d.clickUp" type="checkbox" /> Synced with ClickUp</label>
         </div>
         <!-- ISS-15: tasks linked to this deadline (link them from a task's drawer: + link deadline…) -->
         <div class="field">

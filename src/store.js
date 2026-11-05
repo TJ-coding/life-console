@@ -143,12 +143,12 @@ function seed() {
     ],
     timeBlocks,
     deadlines: [
-      { id: 'DL-1', title: 'ST2001 Report 2 (Processes & Memory)', vital: 'Upload PDF to LMS', due: `${addDays(T, 1)}T23:59`, internal: T, source: 'ST2001spA', clickUp: true, done: false, priority: 1 },
-      { id: 'DL-2', title: 'SIG-01.2 milestone: code freeze', vital: 'Tag release in repo', due: `${addDays(T, 3)}T18:00`, source: 'SIG-01.2', clickUp: true, done: false, priority: 2 },
-      { id: 'DL-3', title: 'Weekly review aggregation', vital: 'KPI + Kaizen table', due: `${D(6)}T18:00`, source: 'KZ-04', clickUp: false, done: false, priority: 3 },
-      { id: 'DL-4', title: 'PS-04 problem set', vital: '', due: `${D(0)}T18:00`, source: 'ST1010', clickUp: true, done: diffDays(D(0), T) > 0, priority: 2 },
-      { id: 'DL-5', title: 'Hardware order form', vital: 'Needs supervisor sign', due: `${addDays(T, -1)}T17:00`, source: 'SP-03', clickUp: true, done: false, priority: 2 },
-      { id: 'DL-6', title: 'Conference abstract', vital: '250 words', due: `${addDays(T, 12)}T23:59`, source: 'PSG-01', clickUp: true, done: false, priority: 1 },
+      { id: 'DL-1', title: 'ST2001 Report 2 (Processes & Memory)', vital: 'Upload PDF to LMS', due: `${addDays(T, 1)}T23:59`, internal: T, source: 'ST2001spA', done: false, priority: 1 },
+      { id: 'DL-2', title: 'SIG-01.2 milestone: code freeze', vital: 'Tag release in repo', due: `${addDays(T, 3)}T18:00`, source: 'SIG-01.2', done: false, priority: 2 },
+      { id: 'DL-3', title: 'Weekly review aggregation', vital: 'KPI + Kaizen table', due: `${D(6)}T18:00`, source: 'KZ-04', done: false, priority: 3 },
+      { id: 'DL-4', title: 'PS-04 problem set', vital: '', due: `${D(0)}T18:00`, source: 'ST1010', done: diffDays(D(0), T) > 0, priority: 2 },
+      { id: 'DL-5', title: 'Hardware order form', vital: 'Needs supervisor sign', due: `${addDays(T, -1)}T17:00`, source: 'SP-03', done: false, priority: 2 },
+      { id: 'DL-6', title: 'Conference abstract', vital: '250 words', due: `${addDays(T, 12)}T23:59`, source: 'PSG-01', done: false, priority: 1 },
     ],
     plan: {
       planNo: 'SP-03',
@@ -294,7 +294,10 @@ export function normalizeState() {
   // SIGs may depend on other SIGs (ISS-5); the field is optional, so default it instead of a migration
   for (const p of state.plans ?? []) for (const s of p.sigs ?? []) if (!Array.isArray(s.deps)) s.deps = []
   // an internal (earlier, personal) deadline beside the hard due date (ISS-9); also optional
-  for (const d of state.deadlines ?? []) if (d.internal === undefined) d.internal = ''
+  for (const d of state.deadlines ?? []) {
+    if (d.internal === undefined) d.internal = ''
+    delete d.clickUp // the mock ClickUp sync was removed; the field was never used for anything else
+  }
   backfillLinkedDues()
   syncContainers()
 }
@@ -1236,7 +1239,7 @@ export function parseDeadline(text, baseDate = todayISO()) {
 }
 export function addDeadline(d) {
   const max = Math.max(0, ...state.deadlines.map((x) => Number(x.id.split('-')[1]) || 0))
-  const dl = { id: `DL-${max + 1}`, title: 'Untitled', vital: '', due: `${todayISO()}T23:59`, source: '', clickUp: false, done: false, priority: 2, ...d }
+  const dl = { id: `DL-${max + 1}`, title: 'Untitled', vital: '', due: `${todayISO()}T23:59`, source: '', done: false, priority: 2, ...d }
   state.deadlines.push(dl)
   return state.deadlines[state.deadlines.length - 1]
 }

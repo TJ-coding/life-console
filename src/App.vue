@@ -192,7 +192,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </nav>
       <div class="spacer"></div>
       <div class="side-foot mono small">
-        <div class="row"><span class="icon sm muted">cloud_sync</span><span class="muted grow">ClickUp sync</span><span class="ok">MOCK</span></div>
         <router-link to="/settings" class="row synclink" :title="sync.message || 'Sync status'">
           <span class="icon sm muted">{{ SYNC_ICON[sync.status] }}</span><span class="muted grow">Sync</span>
           <span :class="sync.status === 'synced' ? 'ok' : ['signed-out', 'error'].includes(sync.status) ? 'danger' : 'warn'">{{ SYNC_TEXT[sync.status] }}</span>

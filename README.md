@@ -62,7 +62,6 @@ Anything not given to a day stays in the backlog. **Estimate − / +** changes t
 ## Notes
 - Data lives in `localStorage`. The demo data is generated relative to the current week. Use Settings to reset, export or import it.
 - Workload is the sum of the todo estimates scheduled on that day. Fixed time blocks are calendar items and don't count.
-- ClickUp sync is mocked.
 - Code layout: `src/store.js` (state, seed data, helpers), `src/components/*`, `src/views/*`.
 
 - Category colours (`--cat-*` in `styles.css`) come from the validated categorical palette. They're separate from the status colours (green = done, amber = warning, red = overdue).
