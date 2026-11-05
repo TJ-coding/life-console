@@ -4,7 +4,8 @@ import { ui, toggleTodo, updateTodo, partLabel } from '../store'
 import { startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import LsdToggle from './LsdToggle.vue'
 import Chip from './Chip.vue'
-defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean, default: true }, compact: Boolean, dim: Boolean, adoptDate: Boolean, flagUntimed: Boolean })
+defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean, default: true }, compact: Boolean, dim: Boolean, adoptDate: Boolean, flagUntimed: Boolean, removable: Boolean, showStart: Boolean })
+defineEmits(['remove'])
 </script>
 <template>
   <div
@@ -13,6 +14,7 @@ defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean
     @dragover="overRow($event, todo)" @dragleave="leaveRow($event, todo)" @drop="dropOnRow($event, todo, { adoptDate })" @click="ui.selectedId = todo.id" @dblclick="ui.drawerId = todo.id"
   >
     <input type="checkbox" :checked="todo.done" @click.stop @change="toggleTodo(todo.id)" />
+    <span v-if="showStart" class="mono small start" :class="{ muted: !todo.scheduled?.start }">{{ todo.scheduled?.start ?? '--:--' }}</span>
     <div class="grow">
       <div class="title ellipsis"><span v-if="partLabel(todo)" class="part mono">{{ partLabel(todo) }}</span>{{ todo.title }}</div>
       <div v-if="todo.vital && !compact" class="small muted ellipsis">{{ todo.vital }}</div>
@@ -22,6 +24,7 @@ defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean
     <span v-else class="mono tiny muted">{{ todo.lsd }}</span>
     <span v-if="flagUntimed && !todo.done && !todo.scheduled?.start" class="icon untimed" title="No time yet — drag onto the schedule">more_time</span>
     <span v-if="showLinks && todo.links.length" class="links"><Chip :id="todo.links[todo.links.length - 1]" /></span>
+    <button v-if="removable" class="rm" title="Delete this todo" @click.stop="$emit('remove', todo)"><span class="icon sm">close</span></button>
     <button class="open" title="Open (Enter)" @click.stop="ui.drawerId = todo.id"><span class="icon sm">chevron_right</span></button>
   </div>
 </template>
@@ -39,5 +42,9 @@ defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean
 .trow:hover .open, .trow.sel .open { opacity: 1; }
 .compact .open { display: none; }
 .part { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 2px; padding: 0 3px; margin-right: 5px; }
+.start { flex: none; width: 38px; }
+.rm { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0; display: flex; opacity: 0.35; }
+.rm:hover { color: var(--danger); opacity: 1; }
+.trow:hover .rm, .trow.sel .rm { opacity: 1; }
 .untimed { font-size: 13px; color: var(--warn); }
 </style>

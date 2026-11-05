@@ -1,19 +1,18 @@
 <script setup>
-// S-01 · Command Center — the morning briefing for today, and (S-11) a day view for any date via /day/:date.
+// S-01 · Command Center — a driver's console for today, and (S-11) a day view for any date via /day/:date.
+// Order = priority: what to do NOW · what's NEXT · time to the next DEADLINES · the rest of TODAY.
+// Everything else is one quiet telemetry strip at the bottom, and only exceptions get colour.
 import { computed, ref, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, CAPACITY_H,
-  psgPct, nextSig, diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, monthGroup,
-  nextCheckDate, nextPlanCheck, activePlans, updateTodo, addTodo, parseQuick, toast, addDays, fmtSlash,
+  diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, nextCheckDate, activePlans,
+  updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash,
 } from '../store'
 import Timeline24 from '../components/Timeline24.vue'
 import TodoRow from '../components/TodoRow.vue'
-import Gauge from '../components/Gauge.vue'
 import Stamps from '../components/Stamps.vue'
-import Chip from '../components/Chip.vue'
 import NowCard from '../components/NowCard.vue'
-import DeadlineQuickAdd from '../components/DeadlineQuickAdd.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,73 +26,64 @@ function openWeek() {
   ui.weekStart = mondayOf(T.value)
   router.push('/week')
 }
-const untimed = computed(() => todos.value.filter((t) => !t.done && !t.scheduled.start))
-const firstBlock = computed(() => [...blocks.value].sort((a, b) => toMin(a.start) - toMin(b.start))[0])
-const dayLabel = computed(() => (isToday.value ? "Today's" : `${wd(T.value)}`))
-const todos = computed(() => todosForDay(T.value))
-watchEffect(() => { ui.visibleIds = todos.value.map((t) => t.id) })
-const blocks = computed(() => blocksForDay(T.value))
-const hours = computed(() => workload(T.value))
-const totalMin = computed(() => todos.value.filter((t) => !t.done).reduce((s, t) => s + t.timeMin, 0))
 const nowMin = computed(() => ui.now.getHours() * 60 + ui.now.getMinutes())
 
-const deadlines = computed(() =>
-  state.deadlines.filter((d) => !d.done && diffDays(T.value, d.due) <= 7).sort((a, b) => a.due.localeCompare(b.due)))
-
-/* driver-console priority (ISS-6): the nearest open deadline, counting down */
-const nextDl = computed(() => {
-  void ui.now // minutes tick even while this screen is open
-  return state.deadlines.filter((d) => !d.done).sort((a, b) => a.due.localeCompare(b.due))[0] ?? null
+/* ── today's run sheet: timed todos in clock order, then untimed by priority ── */
+const todos = computed(() => todosForDay(T.value))
+const pending = computed(() => {
+  const open = todos.value.filter((t) => !t.done)
+  const timed = open.filter((t) => t.scheduled.start).sort((a, b) => toMin(a.scheduled.start) - toMin(b.scheduled.start))
+  return [...timed, ...open.filter((t) => !t.scheduled.start)]
 })
-const dlCountdown = computed(() => {
-  void ui.now
-  const d = nextDl.value
-  if (!d) return ''
-  const m = Math.round((new Date(d.due) - ui.now) / 60000)
-  if (m <= 0) return 'overdue'
-  if (m < 60) return `${m} min`
-  if (m < 1440) return `${Math.floor(m / 60)}h ${pad(m % 60)}m`
-  return `${Math.round(m / 1440)} d`
-})
-const dlUrgency = computed(() => {
-  const d = nextDl.value
-  if (!d) return ''
-  const m = (new Date(d.due) - ui.now) / 60000
-  return m <= 720 ? 'danger' : m <= 2880 ? 'warn' : ''
-})
-const psgs = computed(() =>
-  activePlans().flatMap((pl) => pl.psgs.map((p) => ({ ...p, plan: pl.id, planNo: pl.planNo })))
-    .sort((a, b) => a.priority - b.priority).slice(0, 3).map((p) => ({ ...p, pct: psgPct(p.no), next: nextSig(p.no) })))
+const done = computed(() => todos.value.filter((t) => t.done))
+const showDone = ref(false)
+watchEffect(() => { ui.visibleIds = [...pending.value, ...(showDone.value ? done.value : [])].map((t) => t.id) })
+const remainingMin = computed(() => pending.value.reduce((s, t) => s + (t.timeMin || 0), 0))
+const fmtH = (m) => `${Math.floor(m / 60)}h ${pad(m % 60)}m`
 
-const week = computed(() => mondayOf(T.value))
-const routineCount = computed(() => routineDone(week.value).length)
-const group = computed(() => monthGroup(T.value))
+/** One click to delete (ISS-7), with an undo in the toast instead of a confirm step. */
+function removeTodo(t) {
+  const copy = JSON.parse(JSON.stringify(t))
+  deleteTodo(t.id)
+  toast(`Deleted ${t.id}`, { label: 'Undo', run: () => state.todos.push(copy) })
+}
 
+const blocks = computed(() => blocksForDay(T.value))
+const firstBlock = computed(() => [...blocks.value].sort((a, b) => toMin(a.start) - toMin(b.start))[0])
+
+/* ── deadlines: a countdown to the nearest, plus the two after it ── */
+const openDeadlines = computed(() => state.deadlines.filter((d) => !d.done).sort((a, b) => a.due.localeCompare(b.due)))
+const nextDl = computed(() => openDeadlines.value[0] ?? null)
+const laterDls = computed(() => openDeadlines.value.slice(1, 3))
+const minsTo = (d) => { void ui.now; return Math.round((new Date(d.due) - ui.now) / 60000) }
+function countdown(d) {
+  const m = minsTo(d)
+  const a = Math.abs(m)
+  const s = a < 60 ? `${a}m` : a < 1440 ? `${Math.floor(a / 60)}h ${pad(a % 60)}m` : `${Math.floor(a / 1440)}d ${Math.floor((a % 1440) / 60)}h`
+  return m < 0 ? `−${s}` : s
+}
+const urgency = (d) => { const m = minsTo(d); return m <= 0 ? 'danger' : m <= 720 ? 'danger' : m <= 2880 ? 'warn' : 'ok' }
+
+/* ── telemetry: secondary numbers, coloured only when they need attention ── */
+const hours = computed(() => workload(T.value))
+const routineCount = computed(() => routineDone(mondayOf(T.value)).length)
 const sleep = computed(() => state.sleep[T.value])
-const sleptMin = computed(() => {
-  const s = sleep.value
-  if (!s) return 0
-  return (toMin(s.wake) - toMin(s.bed) + 1440) % 1440
-})
-const delta = (actual, target) => {
-  const d = toMin(actual) - toMin(target)
-  return `${d >= 0 ? '+' : '−'}${Math.abs(d)}m`
-}
-
-const caffeine = computed(() => state.caffeine[T.value] ?? [])
-const mg = computed(() => caffeine.value.reduce((s, c) => s + c.mg, 0))
+const sleptMin = computed(() => { const s = sleep.value; return s ? (toMin(s.wake) - toMin(s.bed) + 1440) % 1440 : 0 })
+const mg = computed(() => (state.caffeine[T.value] ?? []).reduce((s, c) => s + c.mg, 0))
 const cutoffLeft = computed(() => toMin(state.caffeineCutoff) - nowMin.value)
-function addCaffeine(what, amount) {
+function addCoffee() {
   if (!state.caffeine[T.value]) state.caffeine[T.value] = []
-  state.caffeine[T.value].push({ t: fromMin(nowMin.value), what, mg: amount })
-  if (cutoffLeft.value < 0) toast('Past caffeine cutoff')
+  state.caffeine[T.value].push({ t: fromMin(nowMin.value), what: 'Coffee', mg: 95 })
+  toast(cutoffLeft.value < 0 ? 'Past caffeine cutoff' : `+95mg · ${mg.value}mg today`)
 }
-
-const reviews = computed(() =>
-  [...activePlans().map((p) => ({ id: p.id, title: `Plan ${p.planNo} check`, date: nextCheckDate(p), to: `/strategy/${p.id}` })), ...state.reviews]
-    .sort((a, b) => a.date.localeCompare(b.date)))
+/** Reviews / plan checks / lectures only surface when they're due now-ish. */
+const alerts = computed(() => [
+  ...activePlans().map((p) => ({ id: p.id, text: `Plan ${p.planNo} check`, date: nextCheckDate(p), to: `/strategy/${p.id}` })),
+  ...state.reviews.map((r) => ({ id: r.id, text: r.title, date: r.date, to: null })),
+].filter((a) => diffDays(T.value, a.date) <= 1).sort((a, b) => a.date.localeCompare(b.date)))
 const lectures = computed(() => state.lectures.filter((l) => l.date === T.value))
 
+/* ── adding / scheduling ── */
 function dropOnTimeline(id, start) {
   updateTodo(id, { scheduled: { date: T.value, start } })
   toast(`${id} → ${start}`)
@@ -110,235 +100,141 @@ function quickAdd() {
   ui.selectedId = t.id
   quick.value = ''
 }
-const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
 </script>
 
 <template>
   <div class="cc">
-    <!-- header strip -->
-    <section class="panel head">
-      <div class="daynav">
-        <button class="btn icon-only" title="Previous day ( [ )" @click="goDay(-1)"><span class="icon">chevron_left</span></button>
-        <div class="date mono">{{ T }} <span :class="isToday ? 'ok' : 'info'">{{ wd(T) }}</span></div>
-        <button class="btn icon-only" title="Next day ( ] )" @click="goDay(1)"><span class="icon">chevron_right</span></button>
-      </div>
-      <span v-if="!isToday" class="chip course">{{ relDay(T, today) }}</span>
-      <button v-if="!isToday" class="btn sm" @click="router.push('/')"><span class="icon sm">today</span>Today <span class="kbd">T</span></button>
-      <button class="chip weekchip" title="Open this week in Plan week" @click="openWeek">WEEK {{ isoWeek(T) }}</button>
-      <div class="sep"></div>
-      <div class="kv">
-        <div class="tiny upper muted">Workload</div>
-        <div class="mono">{{ hours.toFixed(1) }}h / {{ CAPACITY_H }}.0h <span :class="hours > CAPACITY_H ? 'warn' : 'ok'">{{ Math.round((hours / CAPACITY_H) * 100) }}%</span></div>
-      </div>
-      <div v-if="nextDl" class="kv clickable" title="Open the deadline" @click="ui.deadlineId = nextDl.id">
-        <div class="tiny upper muted">Next deadline</div>
-        <div class="mono dl-count" :class="dlUrgency"><b>{{ dlCountdown }}</b><span class="dl-title">until {{ nextDl.title }}</span></div>
-      </div>
-      <div class="kv">
-        <div class="tiny upper muted">Next plan check</div>
-        <div v-if="nextPlanCheck()" class="mono">{{ nextPlanCheck().date }} <span class="muted">({{ relDay(nextPlanCheck().date, T) }} · {{ nextPlanCheck().plan.planNo }})</span></div>
-        <div v-else class="mono muted">no active plan</div>
-      </div>
-    </section>
-
-    <!-- right now -->
-    <NowCard v-if="isToday" class="c12" />
-    <section v-else class="panel c12 preview">
-      <span class="icon info">event</span>
-      <div class="grow">
-        <div class="tiny upper muted">Day view · {{ relDay(T, today) }}</div>
-        <div class="pv-title">{{ wd(T) }} {{ fmtSlash(T) }} — {{ blocks.length }} blocks, {{ todos.length }} tasks, {{ hours.toFixed(1) }}h planned</div>
+    <!-- 1 · instruments: NOW · NEXT · DEADLINE -->
+    <div class="cockpit">
+      <NowCard v-if="isToday" />
+      <section v-else class="panel inst preview">
+        <div class="inst-lbl"><span class="tiny upper info">Day view · {{ relDay(T, today) }}</span></div>
+        <div class="pv-title">{{ wd(T) }} {{ fmtSlash(T) }}</div>
         <div class="small muted mono">
-          <template v-if="firstBlock">first: {{ firstBlock.start }} {{ firstBlock.title }}</template><template v-else>no blocks yet</template>
-          <template v-if="untimed.length"> · <span class="warn">{{ untimed.length }} without a time</span></template>
+          {{ blocks.length }} blocks · {{ pending.length }} todos · {{ hours.toFixed(1) }}h planned
+          <template v-if="firstBlock"> · first {{ firstBlock.start }} {{ firstBlock.title }}</template>
         </div>
-      </div>
-      <button class="btn" @click="openWeek"><span class="icon sm">calendar_month</span>Plan week</button>
-      <button class="btn" @click="router.push('/')"><span class="icon sm">today</span>Back to today</button>
-    </section>
+        <div class="row">
+          <button class="btn" @click="router.push('/')"><span class="icon sm">today</span>Back to today <span class="kbd">T</span></button>
+          <button class="btn" @click="openWeek"><span class="icon sm">calendar_month</span>Plan week</button>
+        </div>
+      </section>
 
-    <!-- row 1 · the shape of the day: time -->
-    <section class="panel c12">
+      <section class="panel inst dl-inst" :class="nextDl ? 'u-' + urgency(nextDl) : ''">
+        <div class="inst-lbl"><router-link to="/deadlines" class="tiny upper muted">Next deadline</router-link></div>
+        <template v-if="nextDl">
+          <button class="dl-main" title="Open the deadline" @click="ui.deadlineId = nextDl.id">
+            <span class="inst-big mono" :class="urgency(nextDl)">{{ minsTo(nextDl) <= 0 ? 'OVERDUE' : countdown(nextDl) }}</span>
+            <span class="name clamp2">{{ nextDl.title }}</span>
+            <span class="mono small muted">{{ relDay(nextDl.due.slice(0, 10), today) }} · {{ nextDl.due.slice(11) }}<template v-if="minsTo(nextDl) <= 0"> · {{ countdown(nextDl).slice(1) }} ago</template></span>
+          </button>
+          <button v-for="d in laterDls" :key="d.id" class="dl-row" @click="ui.deadlineId = d.id">
+            <span class="mono small" :class="urgency(d)">{{ minsTo(d) <= 0 ? 'overdue' : countdown(d) }}</span>
+            <span class="ellipsis grow">{{ d.title }}</span>
+          </button>
+        </template>
+        <div v-else class="inst-big mono muted">—</div>
+      </section>
+    </div>
+
+    <!-- 2 · the shape of the day -->
+    <section class="panel tl-panel">
       <div class="panel-h">
-        <span class="icon sm ok">timeline</span><h2><a href="#" class="title-link" @click.prevent="openWeek">{{ dayLabel }} timeline</a></h2>
+        <button class="btn icon-only sm" title="Previous day ( [ )" @click="goDay(-1)"><span class="icon sm">chevron_left</span></button>
+        <h2 class="mono">{{ isToday ? 'Today' : wd(T) }} {{ fmtSlash(T) }}</h2>
+        <button class="btn icon-only sm" title="Next day ( ] )" @click="goDay(1)"><span class="icon sm">chevron_right</span></button>
+        <button class="chip weekchip" title="Open this week in Plan week" @click="openWeek">W{{ isoWeek(T) }}</button>
         <span class="spacer"></span>
-        <div class="legend">
-          <span class="cat-research"><i></i>Research</span><span class="cat-academic"><i></i>Academic</span>
-          <span class="cat-experiment"><i></i>Experiment</span><span class="cat-kaizen"><i></i>Kaizen</span>
-        </div>
       </div>
-      <div class="panel-b">
+      <div class="panel-b tl-b">
         <Timeline24 :date="T" :blocks="blocks" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
-        <div v-if="!blocks.length" class="empty">No blocks scheduled. Press <span class="kbd">N</span> to add a todo or drag one onto the timeline.</div>
-        <div v-else class="small muted hint">Drag a todo from the list below onto the strip to give it a start time. Dashed blocks are todos.</div>
       </div>
     </section>
 
-    <!-- row 2 · one compact line per item: details live in the drawer / deadlines page -->
-    <section class="panel c6 todos">
+    <!-- 3 · what's left today -->
+    <section class="panel todo-panel">
       <div class="panel-h">
-        <span class="icon sm ok">checklist</span><h2><router-link to="/todos" class="title-link">{{ dayLabel }} todos</router-link></h2>
-        <span class="spacer"></span><span class="mono small muted">{{ todos.filter((t) => !t.done).length }} pending</span>
+        <span class="icon sm ok">checklist</span>
+        <h2><router-link to="/todos" class="title-link">{{ isToday ? 'Left today' : `Todos · ${wd(T)}` }}</router-link></h2>
+        <span class="mono small" :class="hours > CAPACITY_H ? 'warn' : 'muted'">{{ pending.length }} · {{ fmtH(remainingMin) }}</span>
+        <span class="spacer"></span>
+        <button v-if="done.length" class="btn sm ghost-btn" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }} {{ done.length }} done</button>
       </div>
       <div class="list" @dragover.prevent @drop.prevent="dropOnList">
-        <TodoRow v-for="t in todos" :key="t.id" :todo="t" compact adopt-date />
-        <div v-if="!todos.length" class="empty">Nothing on today's sheet. Drag from the inbox or add below.</div>
+        <TodoRow v-for="t in pending" :key="t.id" :todo="t" compact adopt-date show-start removable :show-links="false" @remove="removeTodo" />
+        <template v-if="showDone">
+          <TodoRow v-for="t in done" :key="t.id" :todo="t" compact adopt-date show-start removable :show-links="false" @remove="removeTodo" />
+        </template>
+        <div v-if="!pending.length" class="empty">{{ todos.length ? 'All done for the day.' : 'Nothing planned. Add one below or drag from the inbox.' }}</div>
       </div>
       <form class="qa" @submit.prevent="quickAdd">
         <span class="mono ok">+</span>
         <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @SIG-01.1 p2`" />
       </form>
-      <div class="foot mono small"><span class="muted">Remaining est.</span> {{ Math.floor(totalMin / 60) }}h {{ pad(totalMin % 60) }}m</div>
     </section>
 
-    <section class="panel c6">
-      <div class="panel-h"><span class="icon sm warn">alarm</span><h2><router-link to="/deadlines" class="title-link">Deadlines · 7d</router-link></h2>
-        <span class="spacer"></span><span class="mono small muted">{{ deadlines.length }} in 7d</span></div>
-      <div class="dlw">
-        <label v-for="d in deadlines" :key="d.id" class="dline" :class="{ over: diffDays(T, d.due) < 0, done: d.done }" title="Click to edit" @click="ui.deadlineId = d.id">
-          <input v-model="d.done" type="checkbox" @click.stop />
-          <span class="grow ellipsis">{{ d.title }}</span>
-          <span class="mono small nowrap" :class="diffDays(T, d.due) < 0 ? 'danger' : diffDays(T, d.due) <= 1 ? 'warn' : 'muted'">{{ relDay(d.due, T) }} · {{ d.due.slice(11) }}</span>
-          <Chip v-if="d.source" :id="d.source" />
-        </label>
-        <div v-if="!deadlines.length" class="empty">No deadlines in the next 7 days.</div>
-      </div>
-      <DeadlineQuickAdd :date="T" class="dl-add" />
-    </section>
-
-    <!-- row 3 · context, not today's business -->
-    <section class="panel c6">
-      <div class="panel-h"><span class="icon sm ok">target</span><h2><router-link to="/strategy" class="title-link">Active strategic goals</router-link></h2></div>
-      <div class="col panel-b psgs-b">
-        <router-link v-for="p in psgs" :key="p.no" :to="`/strategy/${p.plan}`" class="psg">
-          <div class="row"><Chip :id="p.no" /><span class="mono tiny muted">{{ p.planNo }}</span><span class="spacer"></span><span class="mono" :class="pctClass(p.pct) || 'ok'">{{ p.pct }}%</span></div>
-          <div class="psg-name">{{ p.name }}</div>
-          <div class="bar" :class="pctClass(p.pct)"><i :style="{ width: p.pct + '%' }"></i></div>
-          <div class="small muted mono ellipsis">Next: {{ p.next ? `${p.next.no} ${p.next.name}` : 'all SIGs done ✓' }}</div>
-        </router-link>
-        <div v-if="!psgs.length" class="empty">No active strategic plan. <router-link to="/strategy">Create or activate one</router-link>.</div>
-      </div>
-    </section>
-
-    <section class="panel c6">
-      <div class="panel-h"><span class="icon sm ok">approval</span><h2>Sign-off ledger</h2><span class="spacer"></span><span class="kbd">S</span><span class="small muted">stamp next</span></div>
-      <div class="panel-b ledger">
-        <div class="wl">
-          <div class="tiny upper muted">Workload</div>
-          <Gauge :hours="hours" :height="88" :width="18" />
-          <div class="mono small">{{ hours.toFixed(1) }}h / {{ CAPACITY_H }}h</div>
-        </div>
-        <div class="col grow">
-          <div class="tiny upper muted">Daily seals · 印 → 印 → 確認 → 完</div>
-          <Stamps :date="T" :size="40" show-times />
-          <div class="small muted">Click the next seal to stamp; click the last one to undo.</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- row 3 · wellbeing, routines, reviews -->
-    <div class="tiles c12">
-      <router-link to="/week" class="panel tile">
-        <div class="tiny upper muted row">Routines due<span class="spacer"></span><span class="icon sm">cleaning_services</span></div>
-        <div class="big mono">{{ routineCount }}<span class="muted">/{{ state.routines.length }}</span></div>
-        <div class="bar"><i :style="{ width: (routineCount / state.routines.length) * 100 + '%' }"></i></div>
-        <div class="small">Monthly group <b class="ok mono">{{ group }}</b> · {{ state.monthlyGroups[group].join(', ') }}</div>
-      </router-link>
-      <div class="panel tile">
-        <div class="tiny upper muted row">{{ isToday ? 'Sleep last night' : 'Sleep (night before)' }}<span class="spacer"></span><span class="icon sm">bedtime</span></div>
-        <template v-if="sleep">
-          <div class="big mono">{{ Math.floor(sleptMin / 60) }}h {{ pad(sleptMin % 60) }}m <span class="small muted">vs {{ sleep.targetMin / 60 }}h</span></div>
-          <div class="small mono">
-            <span :class="toMin(sleep.bed) > toMin(sleep.bedTarget) ? 'warn' : 'ok'">↓ {{ sleep.bed }} ({{ delta(sleep.bed, sleep.bedTarget) }})</span>
-            &nbsp;<span :class="toMin(sleep.wake) > toMin(sleep.wakeTarget) ? 'warn' : 'ok'">↑ {{ sleep.wake }} ({{ delta(sleep.wake, sleep.wakeTarget) }})</span>
-          </div>
-        </template>
-        <div v-else class="small muted">No entry yet.</div>
-      </div>
-      <div class="panel tile">
-        <div class="tiny upper muted row">Caffeine {{ isToday ? 'today' : wd(T) }}<span class="spacer"></span><span class="icon sm">coffee</span></div>
-        <div class="big mono">{{ mg }}<span class="muted small">/{{ state.caffeineLimit }}mg</span></div>
-        <div class="bar" :class="mg > state.caffeineLimit ? 'danger' : mg > state.caffeineLimit * 0.75 ? 'warn' : ''"><i :style="{ width: Math.min(100, (mg / state.caffeineLimit) * 100) + '%' }"></i></div>
-        <div v-if="isToday" class="row small">
-          <span class="mono" :class="cutoffLeft > 0 ? 'warn' : 'muted'">{{ cutoffLeft > 0 ? `cutoff in ${Math.floor(cutoffLeft / 60)}h${pad(cutoffLeft % 60)}` : `cutoff ${state.caffeineCutoff} passed` }}</span>
-          <span class="spacer"></span>
-          <button class="btn sm" @click="addCaffeine('Coffee', 95)">+☕95</button>
-          <button class="btn sm" @click="addCaffeine('Tea', 50)">+🍵50</button>
-        </div>
-      </div>
-      <div class="panel tile">
-        <div class="tiny upper muted row">Upcoming reviews<span class="spacer"></span><span class="icon sm">fact_check</span></div>
-        <div v-for="r in reviews" :key="r.id" class="row small">
-          <span class="ellipsis grow">{{ r.title }}</span>
-          <span class="mono" :class="diffDays(T, r.date) <= 1 ? 'danger' : 'muted'">{{ relDay(r.date, T) }}</span>
-        </div>
-      </div>
-      <div class="panel tile">
-        <div class="tiny upper muted row">{{ isToday ? "Today's" : wd(T) }} lectures<span class="spacer"></span><span class="icon sm">school</span></div>
-        <div v-for="l in lectures" :key="l.id" class="col" style="gap: 4px">
-          <div class="row"><span class="mono">{{ l.course }}</span><span class="small muted ellipsis grow">#{{ l.no }} {{ l.title }}</span><span class="mono info">{{ l.time }}</span></div>
-          <div class="row small checks">
-            <label><input v-model="l.readAhead" type="checkbox" /> Read ahead</label>
-            <label><input v-model="l.attended" type="checkbox" /> Attended</label>
-            <label><input v-model="l.cheatSheet" type="checkbox" /> Cheat sheet</label>
-          </div>
-        </div>
-        <div v-if="!lectures.length" class="small muted">No lectures {{ isToday ? 'today' : 'this day' }}.</div>
-      </div>
-    </div>
+    <!-- 4 · telemetry: one quiet line -->
+    <footer class="panel telemetry mono small">
+      <span class="tm" title="Planned hours vs capacity"><span class="muted">LOAD</span> <b :class="{ warn: hours > CAPACITY_H }">{{ hours.toFixed(1) }}</b><span class="muted">/{{ CAPACITY_H }}h</span></span>
+      <span class="tm seals" title="Daily seals 印 → 印 → 確認 → 完 (S stamps the next)"><span class="muted">SEALS</span> <Stamps :date="T" :size="22" /></span>
+      <span class="tm" title="Sleep the night before"><span class="muted">SLEEP</span>
+        <b v-if="sleep" :class="{ warn: sleptMin < sleep.targetMin }">{{ Math.floor(sleptMin / 60) }}h{{ pad(sleptMin % 60) }}</b><span v-else class="muted">—</span>
+      </span>
+      <span class="tm" title="Caffeine today"><span class="muted">CAF</span>
+        <b :class="{ danger: mg > state.caffeineLimit, warn: isToday && cutoffLeft < 0 && mg > 0 }">{{ mg }}</b><span class="muted">/{{ state.caffeineLimit }}mg</span>
+        <button v-if="isToday" class="btn sm icon-only" :title="cutoffLeft > 0 ? `Add a coffee (95mg) · cutoff ${state.caffeineCutoff}` : `Cutoff ${state.caffeineCutoff} passed`" @click="addCoffee"><span class="icon sm">coffee</span></button>
+      </span>
+      <router-link to="/week" class="tm" title="Weekly routines done"><span class="muted">ROUTINES</span> <b>{{ routineCount }}</b><span class="muted">/{{ state.routines.length }}</span></router-link>
+      <span class="spacer"></span>
+      <template v-for="a in alerts" :key="a.id">
+        <router-link v-if="a.to" :to="a.to" class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</router-link>
+        <span v-else class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</span>
+      </template>
+      <span v-for="l in lectures" :key="l.id" class="tm alert info" :title="`#${l.no} ${l.title}`">{{ l.time }} {{ l.course }}<template v-if="!l.readAhead"> · read ahead</template></span>
+    </footer>
   </div>
 </template>
 
 <style scoped>
-.cc { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; padding: 16px; align-items: start; }
-.head { grid-column: span 12; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 20px; padding: 14px 18px; }
-.daynav { display: flex; align-items: center; gap: 6px; }
+.cc { display: flex; flex-direction: column; gap: 12px; padding: 16px; max-width: 1600px; }
+.cockpit { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.preview { grid-column: span 2; border-left: 3px solid var(--info); }
+.pv-title { font: 600 24px/30px Inter, sans-serif; }
+/* deadline instrument */
+.dl-inst { border-left: 3px solid var(--border); }
+.dl-inst.u-warn { border-left-color: var(--warn); }
+.dl-inst.u-danger { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 5%, var(--surface)); }
+.dl-main, .dl-row { border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; padding: 0; }
+.dl-main { display: flex; flex-direction: column; gap: 4px; }
+.dl-main:hover .name { text-decoration: underline dotted; }
+.dl-inst .name { font-weight: 600; font-size: 15px; line-height: 20px; }
+.dl-row { display: flex; align-items: baseline; gap: 8px; border-top: 1px solid var(--border); padding-top: 6px; font-size: 12px; min-width: 0; }
+.dl-row .mono { flex: none; min-width: 52px; }
+.dl-row:hover .grow { color: var(--accent); }
+/* timeline + list */
+.panel-h h2.mono { min-width: 92px; text-align: center; }
 .weekchip { cursor: pointer; }
 .weekchip:hover { border-color: var(--accent); }
-.preview { flex-direction: row; align-items: center; gap: 14px; padding: 14px 18px; border-left: 3px solid var(--info); }
-.pv-title { font-size: 18px; font-weight: 600; line-height: 24px; }
-.date { font-size: 30px; line-height: 36px; font-weight: 700; letter-spacing: -0.02em; }
-.sep { width: 1px; align-self: stretch; background: var(--border); }
-.kv { display: flex; flex-direction: column; gap: 3px; }
-.kv.clickable { cursor: pointer; }
-.kv.clickable:hover .dl-title { color: var(--text); border-bottom: 1px dotted var(--muted); }
-.dl-count { display: flex; align-items: baseline; gap: 6px; }
-.dl-count b { font-size: 15px; }
-.dl-title { font-size: 11px; color: var(--muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.c6 { grid-column: span 6; } .c12 { grid-column: span 12; }
-.hint { margin-top: 8px; }
-.ledger { display: flex; gap: 18px; align-items: flex-start; }
-.wl { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.todos { align-self: stretch; }
-.list { flex: 1; min-height: 120px; max-height: 330px; overflow: auto; }
-.qa { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
-.foot { padding: 8px 12px; }
-/* curated deadline list: one line per deadline */
-.dlw { max-height: 330px; overflow: auto; padding: 4px 0; }
-.dline { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 4px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
-.dline:hover { background: var(--surface-2); }
-.dline .grow { font-weight: 600; font-size: 13px; }
-.dline input { flex: none; }
-.dline .mono { white-space: nowrap; }
-.dline.done .grow { text-decoration: line-through; color: var(--muted); font-weight: 400; }
-.dline.over { border-left: 2px solid var(--danger); }
-.dline.over .grow { color: var(--danger); }
-.dline .chip { flex: none; }
-.psgs-b { gap: 8px; }
-.psg { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: 2px; padding: 10px; color: var(--text); }
-.psg:hover { border-color: var(--accent); }
-.psg-name { font-weight: 600; font-size: 14px; }
-.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
-.tile { padding: 12px; gap: 8px; color: var(--text); }
-a.tile:hover { border-color: var(--accent); }
-.big { font-size: 22px; line-height: 28px; font-weight: 700; }
-.checks { flex-wrap: wrap; gap: 10px; }
-.checks label { display: flex; align-items: center; gap: 4px; }
-@media (max-width: 1200px) {
-  .c6 { grid-column: span 6; }
-  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tl-b { padding: 8px 12px 12px; }
+.list { min-height: 60px; max-height: 360px; overflow: auto; }
+.qa { display: flex; align-items: center; gap: 6px; padding: 4px 8px; }
+.ghost-btn { color: var(--muted); }
+/* telemetry strip */
+.telemetry { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px 18px; padding: 8px 14px; color: var(--text); }
+.tm { display: inline-flex; align-items: center; gap: 4px; color: inherit; white-space: nowrap; }
+a.tm:hover { color: var(--accent); }
+.tm b { font-weight: 700; }
+.alert { color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent); border-radius: 2px; padding: 1px 6px; }
+.alert.info { color: var(--info); border-color: color-mix(in srgb, var(--info) 50%, transparent); }
+@media (max-width: 1100px) {
+  .cockpit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .cockpit > :first-child { grid-column: span 2; }
 }
 @media (max-width: 700px) {
-  .cc { padding: 12px; } .c6 { grid-column: span 12; } .tiles { grid-template-columns: 1fr; }
+  .cc { padding: 12px; }
+  .cockpit { gap: 8px; }
+  .inst-big { font-size: 24px; line-height: 28px; }
+  /* on a phone the list of what's left beats the horizontal strip */
+  .todo-panel { order: 1; } .tl-panel { order: 2; } .telemetry { order: 3; }
 }
 </style>
