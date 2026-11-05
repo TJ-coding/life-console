@@ -2,7 +2,7 @@
 // Step ① Backlog — unassigned tasks. Drag onto a day, or hover and click a day button
 // (each shows that day's free hours). Drop a planned task here to send it back.
 import { computed, ref, watch, nextTick } from 'vue'
-import { state, ui, todayISO, addDays, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked } from '../store'
+import { state, ui, todayISO, addDays, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, isLeaf, parentPath } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
@@ -12,7 +12,7 @@ defineEmits(['focus'])
 
 const prio = ref(0)
 const open = ref(true) // collapses the backlog to header + quick-add (handy on phones)
-const list = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && (!prio.value || t.priority === prio.value)).sort(byPriority))
+const list = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t) && (!prio.value || t.priority === prio.value)).sort(byPriority)) // a task with subtasks is planned through them
 const total = computed(() => list.value.reduce((s, t) => s + t.timeMin / 60, 0))
 const T = computed(() => todayISO())
 const days = computed(() => [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(ui.weekStart, i)))
@@ -86,6 +86,7 @@ function onDrop(e) {
         @drop="dropOnRow($event, t, { unschedule: true })" @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
         @click="ui.selectedId = t.id" @dblclick="ui.drawerId = t.id"
       >
+        <div v-if="t.parent && parentPath(t)" class="crumb small muted ellipsis" :title="parentPath(t)">↳ {{ parentPath(t) }}</div>
         <div class="row">
           <Prio :p="t.priority" />
           <span class="grow ellipsis"><span v-if="partLabel(t)" class="part mono">{{ partLabel(t) }}</span>{{ t.title }}</span>
@@ -116,6 +117,7 @@ function onDrop(e) {
 
 <style scoped>
 .backlog.only { border-right: 0; }
+.crumb { font-size: 11px; margin-bottom: 2px; }
 .backlog { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-right: 1px solid var(--border); }
 .bh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .hbtn { display: flex; align-items: center; gap: 10px; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; padding: 0; cursor: pointer; }

@@ -2,7 +2,7 @@
 // S-20 · Todo Inbox — every todo, with filters, smart quick-add and bulk actions.
 import { computed, ref, reactive, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
-import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel } from '../store'
+import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel, isContainer, subCount, parentPath } from '../store'
 import LsdToggle from '../components/LsdToggle.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -28,13 +28,31 @@ watch(() => route.query.view, (v) => { if (VIEWS[v]) f.view = v })
 const toggleIn = (arr, v) => { const i = arr.indexOf(v); i >= 0 ? arr.splice(i, 1) : arr.push(v) }
 function resetFilters() { f.links = []; f.lsd = []; f.prio = [] }
 
-const rows = computed(() =>
-  state.todos
+/* matching todos as a tree: subtasks right under their parent (indented); a subtask whose parent isn't
+   in the view shows at the top level with its parent path as a breadcrumb */
+const tree = computed(() => {
+  const m = state.todos
     .filter(VIEWS[f.view].fn)
     .filter((t) => !f.links.length || t.links.some((l) => f.links.includes(linkType(l))))
     .filter((t) => !f.lsd.length || f.lsd.includes(t.lsd))
     .filter((t) => !f.prio.length || f.prio.includes(t.priority))
-    .sort((a, b) => Number(a.done) - Number(b.done) || a.priority - b.priority || a.order - b.order))
+  const cmp = (a, b) => Number(a.done) - Number(b.done) || a.priority - b.priority || a.order - b.order
+  const ids = new Set(m.map((t) => t.id))
+  const out = []
+  const depth = {}
+  const visit = (t, d) => {
+    if (t.id in depth) return
+    depth[t.id] = d
+    out.push(t)
+    m.filter((c) => c.parent === t.id).sort((a, b) => Number(a.done) - Number(b.done) || a.order - b.order).forEach((c) => visit(c, d + 1))
+  }
+  m.filter((t) => !t.parent || !ids.has(t.parent)).sort(cmp).forEach((t) => visit(t, 0))
+  m.forEach((t) => visit(t, 0)) // anything left (a parent cycle from bad data)
+  return { out, depth }
+})
+const rows = computed(() => tree.value.out)
+const depthOf = (t) => tree.value.depth[t.id] ?? 0
+const crumbOf = (t) => (t.parent && !depthOf(t) ? parentPath(t) : '')
 watchEffect(() => { ui.visibleIds = rows.value.map((t) => t.id) })
 const count = (k) => state.todos.filter(VIEWS[k].fn).length
 const linkCount = (k) => state.todos.filter((t) => !t.done && t.links.some((l) => linkType(l) === k)).length
@@ -151,15 +169,20 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
           </thead>
           <tbody>
             <tr
-              v-for="t in rows" :key="t.id" class="clickable" :class="[{ done: t.done, selected: ui.selectedId === t.id }, dropClass(t)]" draggable="true"
+              v-for="t in rows" :key="t.id" class="clickable" :class="[{ done: t.done, selected: ui.selectedId === t.id }, dropClass(t)]" :draggable="!isContainer(t)"
               @click="open(t)" @dragstart="startDrag($event, t)" @dragend="endDrag" @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t)"
             >
               <td @click.stop><input v-model="picked" type="checkbox" :value="t.id" /></td>
               <td @click.stop><input type="checkbox" :checked="t.done" @change="toggleTodo(t.id)" /></td>
               <td><Prio :p="t.priority" /></td>
               <td class="mono small muted"><span class="icon sm grip">drag_indicator</span>{{ t.id }}</td>
-              <td>
-                <div class="title ellipsis"><span v-if="partLabel(t)" class="part mono">{{ partLabel(t) }}</span>{{ t.title }}</div>
+              <td :style="{ paddingLeft: 8 + depthOf(t) * 18 + 'px' }">
+                <div class="title ellipsis">
+                  <span v-if="depthOf(t)" class="sub-mark muted">↳</span>
+                  <span v-if="crumbOf(t)" class="crumb muted" :title="crumbOf(t)">{{ crumbOf(t) }} › </span>
+                  <span v-if="partLabel(t)" class="part mono">{{ partLabel(t) }}</span>{{ t.title }}
+                  <span v-if="isContainer(t)" class="subc mono" :title="'subtasks done'">{{ subCount(t).done }}/{{ subCount(t).total }}</span>
+                </div>
                 <div v-if="t.vital" class="small muted ellipsis">{{ t.vital }}</div>
               </td>
               <td class="mono small">{{ t.timeMin }}m</td>
@@ -167,7 +190,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
               <td class="mono small" :class="t.due && !t.done && diffDays(T, t.due) < 0 ? 'danger' : t.due === T ? 'warn' : ''">{{ t.due ? relDay(t.due, T) : '—' }}</td>
               <td class="mono small">
                 <template v-if="t.scheduled">{{ wd(t.scheduled.date) }} {{ fmtSlash(t.scheduled.date) }}<span v-if="t.scheduled.start" class="muted">&nbsp;{{ t.scheduled.start }}</span></template>
-                <span v-else class="muted">unscheduled</span>
+                <span v-else class="muted">{{ isContainer(t) ? 'via subtasks' : 'unscheduled' }}</span>
               </td>
               <td><div class="chips"><Chip v-for="l in t.links" :key="l" :id="l" /></div></td>
             </tr>
@@ -182,7 +205,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
             <div class="r1 row">
               <input type="checkbox" :checked="t.done" title="Done" @click.stop @change="toggleTodo(t.id)" />
               <Prio :p="t.priority" />
-              <span class="ttl grow ellipsis"><span v-if="partLabel(t)" class="part mono">{{ partLabel(t) }}</span>{{ t.title }}</span>
+              <span class="ttl grow ellipsis" :style="{ paddingLeft: depthOf(t) * 14 + 'px' }"><span v-if="depthOf(t)" class="sub-mark muted">↳ </span><span v-if="partLabel(t)" class="part mono">{{ partLabel(t) }}</span>{{ t.title }}<span v-if="isContainer(t)" class="subc mono">{{ subCount(t).done }}/{{ subCount(t).total }}</span></span>
               <span class="mono small muted">{{ t.timeMin }}m</span>
             </div>
             <div class="r2 row small">
@@ -208,6 +231,9 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
 </template>
 
 <style scoped>
+.sub-mark { margin-right: 4px; }
+.crumb { font-size: 0.9em; }
+.subc { font-size: 10px; color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 50%, var(--border)); border-radius: 2px; padding: 0 3px; margin-left: 6px; }
 .inbox { display: grid; grid-template-columns: 250px 1fr; height: 100%; }
 .filters { border-right: 1px solid var(--border); overflow: auto; background: var(--surface); }
 .fh { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }

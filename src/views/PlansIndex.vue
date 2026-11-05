@@ -4,7 +4,7 @@
 // what should I work on next for each goal? when is the next plan check?
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { state, ui, todayISO, planPct, nextCheckDate, relDay, diffDays, planIds, deletePlan, toast, activePlans } from '../store'
+import { state, ui, todayISO, planPct, nextCheckDate, relDay, diffDays, planIds, deletePlan, toast, activePlans, isLeaf } from '../store'
 import { psgGlance, nextMilestone, sigState, daysTo, inDays, minsTo, countdown, urgency, openDeadlines } from '../glance'
 import PlanTabs from '../components/PlanTabs.vue'
 import Prio from '../components/Prio.vue'
@@ -34,7 +34,7 @@ const plans = computed(() => [...state.plans].sort((a, b) => ORDER[a.status] - O
 const stats = (p) => {
   const ids = new Set(planIds(p))
   const todos = state.todos.filter((t) => t.links.some((l) => ids.has(l)))
-  return { sigsDone: p.sigs.filter((s) => s.status === 'done').length, openTodos: todos.filter((t) => !t.done).length, linkedTodos: todos.length }
+  return { sigsDone: p.sigs.filter((s) => s.status === 'done').length, openTodos: todos.filter((t) => !t.done && isLeaf(t)).length, linkedTodos: todos.length }
 }
 function remove(p) {
   const s = stats(p)

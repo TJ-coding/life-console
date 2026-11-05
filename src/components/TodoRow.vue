@@ -1,16 +1,20 @@
 <script setup>
 // Compact todo row: checkbox · title + vital points · time · L/S/D · linked chips. Draggable.
-import { ui, toggleTodo, updateTodo, partLabel } from '../store'
+import { computed } from 'vue'
+import { ui, toggleTodo, updateTodo, partLabel, isContainer, subCount, parentPath } from '../store'
 import { startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import LsdToggle from './LsdToggle.vue'
 import Chip from './Chip.vue'
 import Prio from './Prio.vue'
-defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean, default: true }, compact: Boolean, dim: Boolean, adoptDate: Boolean, flagUntimed: Boolean, removable: Boolean, showStart: Boolean, showPrio: Boolean })
+const props = defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean, default: true }, compact: Boolean, dim: Boolean, adoptDate: Boolean, flagUntimed: Boolean, removable: Boolean, showStart: Boolean, showPrio: Boolean })
 defineEmits(['remove'])
+const box = computed(() => isContainer(props.todo))
+const sub = computed(() => (box.value ? subCount(props.todo) : null))
+const crumb = computed(() => (props.todo.parent ? parentPath(props.todo) : ''))
 </script>
 <template>
   <div
-    class="trow" :class="[{ done: todo.done, sel: ui.selectedId === todo.id, compact, dim }, dropClass(todo)]" draggable="true"
+    class="trow" :class="[{ done: todo.done, sel: ui.selectedId === todo.id, compact, dim }, dropClass(todo)]" :draggable="!box"
     @dragstart="startDrag($event, todo)" @dragend="endDrag"
     @dragover="overRow($event, todo)" @dragleave="leaveRow($event, todo)" @drop="dropOnRow($event, todo, { adoptDate })" @click="ui.selectedId = todo.id" @dblclick="ui.drawerId = todo.id"
   >
@@ -18,7 +22,7 @@ defineEmits(['remove'])
     <span v-if="showStart" class="mono small start" :class="{ muted: !todo.scheduled?.start }">{{ todo.scheduled?.start ?? '--:--' }}</span>
     <Prio v-if="showPrio" :p="todo.priority" />
     <div class="grow">
-      <div class="title ellipsis"><span v-if="partLabel(todo)" class="part mono">{{ partLabel(todo) }}</span>{{ todo.title }}</div>
+      <div class="title ellipsis"><span v-if="crumb" class="crumb" :title="crumb">{{ crumb }} › </span><span v-if="partLabel(todo)" class="part mono">{{ partLabel(todo) }}</span>{{ todo.title }}<span v-if="sub" class="subc mono" :title="`${sub.done} of ${sub.total} subtasks done`">{{ sub.done }}/{{ sub.total }}</span></div>
       <div v-if="todo.vital && !compact" class="small muted ellipsis">{{ todo.vital }}</div>
     </div>
     <span class="mono small time" :class="{ warn: todo.timeMin >= 90 }">{{ todo.timeMin }}m</span>
@@ -49,4 +53,6 @@ defineEmits(['remove'])
 .rm:hover { color: var(--danger); opacity: 1; }
 .trow:hover .rm, .trow.sel .rm { opacity: 1; }
 .untimed { font-size: 13px; color: var(--warn); }
+.crumb { color: var(--muted); font-size: 0.9em; }
+.subc { font-size: 10px; color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 50%, var(--border)); border-radius: 2px; padding: 0 3px; margin-left: 6px; }
 </style>

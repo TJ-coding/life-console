@@ -8,6 +8,7 @@ import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
 import TimeBound from '../components/TimeBound.vue'
 import GoalFlow from '../components/GoalFlow.vue'
+import TaskNode from '../components/TaskNode.vue'
 import { boundIssues } from '../glance'
 
 const route = useRoute()
@@ -148,12 +149,17 @@ const tasksByGoal = computed(() => {
   const sigNosHere = new Set(plan.value.sigs.map((s) => s.no))
   const psgOfSig = Object.fromEntries(plan.value.sigs.map((s) => [s.no, s.psg]))
   const m = {}
-  const put = (no, t) => { (m[no] ??= { open: [], done: 0 }); t.done ? m[no].done++ : m[no].open.push(t) }
+  const put = (no, t) => { (m[no] ??= { open: [], done: 0, doneIds: new Set() }); if (t.done) { m[no].done++; m[no].doneIds.add(t.id) } else m[no].open.push(t) }
   for (const t of linked.value) {
     const sigLinks = t.links.filter((l) => sigNosHere.has(l))
     for (const no of sigLinks) put(no, t)
     const covered = new Set(sigLinks.map((no) => psgOfSig[no]))
     for (const l of t.links) if (l.startsWith('PSG-') && !covered.has(l) && plan.value.psgs.some((p) => p.no === l)) put(l, t)
+  }
+  // a subtask shows nested under its parent when the parent is listed under the same goal
+  for (const g of Object.values(m)) {
+    const here = new Set(g.open.map((t) => t.id))
+    g.open = g.open.filter((t) => !t.parent || !here.has(t.parent) && !g.doneIds?.has(t.parent))
   }
   return m
 })
@@ -238,11 +244,7 @@ const print = () => window.print()
               <div class="bar" :class="psgPct(p.no) < 40 ? 'warn' : ''"><i :style="{ width: psgPct(p.no) + '%' }"></i></div>
             </div>
             <div v-if="showTasks && (tasksOf(p.no).open.length || tasksOf(p.no).done)" class="tasks psg-tasks">
-              <div v-for="t in tasksOf(p.no).open" :key="t.id" class="task" @click="ui.drawerId = t.id">
-                <input type="checkbox" :checked="t.done" title="Mark done" @click.stop @change="toggleTodo(t.id)" />
-                <span class="grow ellipsis" :title="t.title">{{ t.title }}</span>
-                <span class="mono tiny muted">{{ fmtMin(t.timeMin) }}</span>
-              </div>
+              <TaskNode v-for="t in tasksOf(p.no).open" :key="t.id" :todo="t" />
               <div v-if="tasksOf(p.no).done" class="tiny muted mono task-done">✓ {{ tasksOf(p.no).done }} done</div>
             </div>
             <div class="kids">
@@ -256,11 +258,7 @@ const print = () => window.print()
                 <span class="status" :class="s.status">{{ s.pct }}% {{ s.status === 'done' ? '✓' : s.status === 'doing' ? '!' : '◯' }}</span>
               </div>
               <div v-if="showTasks" class="tasks">
-                <div v-for="t in tasksOf(s.no).open" :key="t.id" class="task" @click="ui.drawerId = t.id">
-                  <input type="checkbox" :checked="t.done" title="Mark done" @click.stop @change="toggleTodo(t.id)" />
-                  <span class="grow ellipsis" :title="t.title">{{ t.title }}</span>
-                  <span class="mono tiny muted">{{ fmtMin(t.timeMin) }}</span>
-                </div>
+                <TaskNode v-for="t in tasksOf(s.no).open" :key="t.id" :todo="t" />
                 <div class="row task-foot">
                   <span v-if="tasksOf(s.no).done" class="tiny muted mono">✓ {{ tasksOf(s.no).done }} done</span>
                   <span v-else-if="!tasksOf(s.no).open.length && s.status !== 'done'" class="tiny muted">No tasks yet</span>

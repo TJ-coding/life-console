@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ui, state, todayISO, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel } from './store'
+import { ui, state, todayISO, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf } from './store'
 import { NAV } from './nav'
 import CommandPalette from './components/CommandPalette.vue'
 import TodoDrawer from './components/TodoDrawer.vue'
@@ -42,7 +42,7 @@ const clock = computed(() => {
 })
 const T = computed(() => todayISO())
 const reload = () => window.location.reload()
-const openCount = computed(() => state.todos.filter((t) => !t.done).length)
+const openCount = computed(() => state.todos.filter((t) => !t.done && isLeaf(t)).length)
 const overdueCount = computed(() => { void ui.now.getMinutes(); return state.deadlines.filter(isOverdue).length })
 const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name === 'day' ? 'today' : route.name === 'plans' ? 'strategy' : route.name))
 

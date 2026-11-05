@@ -296,10 +296,29 @@ export function normalizeState() {
   // an internal (earlier, personal) deadline beside the hard due date (ISS-9); also optional
   for (const d of state.deadlines ?? []) if (d.internal === undefined) d.internal = ''
   backfillLinkedDues()
+  syncContainers()
+}
+/**
+ * Subtask invariants after load / sync (another device, or the notification "Mark done", may have
+ * ticked a subtask): a container is done exactly when all its subtasks are, and is never scheduled.
+ */
+function syncContainers() {
+  const kids = new Map()
+  for (const t of state.todos ?? []) if (t.parent) (kids.get(t.parent) ?? kids.set(t.parent, []).get(t.parent)).push(t)
+  if (!kids.size) return
+  // deepest first, so a container's state is settled before its own parent looks at it
+  const depth = (t, seen = new Set()) => { let d = 0, p = t; while (p?.parent && !seen.has(p.id)) { seen.add(p.id); p = state.todos.find((x) => x.id === p.parent); d++ } return d }
+  const containers = (state.todos ?? []).filter((t) => kids.has(t.id)).sort((a, b) => depth(b) - depth(a))
+  for (const c of containers) {
+    const done = kids.get(c.id).every((k) => k.done)
+    if (c.done !== done) c.done = done
+    if (c.scheduled) c.scheduled = null
+  }
 }
 normalizeState()
 watch(state, (v) => {
   backfillLinkedDues()
+  syncContainers()
   try { localStorage.setItem(KEY, JSON.stringify(v)) } catch { /* ignore */ }
 }, { deep: true })
 
@@ -384,7 +403,75 @@ export function updateTodo(id, patch) {
 }
 export function toggleTodo(id) {
   const t = findTodo(id)
-  if (t) updateTodo(id, { done: !t.done })
+  if (!t) return
+  const done = !t.done
+  // a task with subtasks is done when they all are: ticking it ticks (or reopens) its whole tree
+  if (isContainer(t)) for (const d of descendantsOf(id)) if (d.done !== done) updateTodo(d.id, { done })
+  updateTodo(id, { done })
+  syncAncestors(t)
+}
+
+/* ───────────── subtasks ─────────────
+   A todo may have `parent` (another todo's id). A todo with subtasks is a *container*: its `timeMin` is
+   a budget the subtasks use up, it is never scheduled itself (its subtasks are), and it counts as done
+   exactly when all its subtasks are done. Any depth. A missing parent (deleted elsewhere) = top level. */
+export const childrenOf = (id) => state.todos.filter((t) => t.parent === id).sort((a, b) => Number(a.done) - Number(b.done) || a.order - b.order)
+export const isContainer = (t) => !!t && state.todos.some((x) => x.parent === t.id)
+/** Everything below `id`, depth-first (cycle-safe). */
+export function descendantsOf(id, seen = new Set([id])) {
+  const out = []
+  for (const c of state.todos.filter((t) => t.parent === id)) {
+    if (seen.has(c.id)) continue
+    seen.add(c.id)
+    out.push(c, ...descendantsOf(c.id, seen))
+  }
+  return out
+}
+/** Parent chain, nearest first (cycle-safe). */
+export function ancestorsOf(t) {
+  const out = []
+  const seen = new Set([t?.id])
+  let p = t?.parent ? findTodo(t.parent) : null
+  while (p && !seen.has(p.id)) { out.push(p); seen.add(p.id); p = p.parent ? findTodo(p.parent) : null }
+  return out
+}
+/** Container done = all of its subtasks done; walk up from `t`. */
+export function syncAncestors(t) {
+  for (const a of ancestorsOf(t)) {
+    const kids = state.todos.filter((x) => x.parent === a.id)
+    if (!kids.length) continue // its last subtask was removed: it's a plain task again, leave it as is
+    const done = kids.every((k) => k.done)
+    if (a.done !== done) updateTodo(a.id, { done })
+  }
+}
+/** Budget left to hand out to subtasks (negative = over budget). */
+export const budgetLeft = (t) => (Number(t.timeMin) || 0) - childrenOf(t.id).reduce((s, c) => s + (Number(c.timeMin) || 0), 0)
+/** { done, total } over direct subtasks. */
+export function subCount(t) {
+  const kids = state.todos.filter((x) => x.parent === t.id)
+  return { done: kids.filter((k) => k.done).length, total: kids.length }
+}
+/** Schedulable / countable work: anything that isn't a container. */
+export const isLeaf = (t) => !isContainer(t)
+/** "Draft related-works › Collect papers" — the chain above a subtask, for breadcrumbs. */
+export const parentPath = (t) => ancestorsOf(t).reverse().map((a) => a.title).join(' › ')
+/**
+ * Add a subtask under `parentId`. It inherits links, priority, scope and due; its estimate defaults to
+ * what's left of the budget (max 30m). The parent becomes a container, so it leaves the schedule.
+ */
+export function addSubtask(parentId, partial = {}) {
+  const p = findTodo(parentId)
+  if (!p) return null
+  const left = budgetLeft(p)
+  const wasScheduled = p.scheduled
+  if (p.scheduled) updateTodo(p.id, { scheduled: null })
+  const t = addTodo({
+    links: [...p.links], priority: p.priority, lsd: p.lsd, due: p.due, timeMin: left > 0 ? Math.min(30, left) : 30,
+    order: Math.max(0, p.order, ...childrenOf(p.id).map((c) => c.order)) + 1, ...partial, parent: p.id,
+  })
+  if (p.done) updateTodo(p.id, { done: false })
+  syncAncestors(t)
+  return { todo: t, unscheduled: wasScheduled }
 }
 export function deleteTodo(id) {
   const i = state.todos.findIndex((t) => t.id === id)
@@ -543,9 +630,14 @@ export function unscheduleTodo(id, how = 'time') {
 export function deleteTodoUndo(id) {
   const t = findTodo(id)
   if (!t) return
-  const copy = JSON.parse(JSON.stringify(t))
-  deleteTodo(id)
-  toast(`Deleted ${id}`, { label: 'Undo', run: () => { if (!findTodo(copy.id)) state.todos.push(copy) } })
+  // a task goes with its subtasks; the undo brings the whole tree back
+  const all = [t, ...descendantsOf(id)]
+  const copies = all.map((x) => JSON.parse(JSON.stringify(x)))
+  const parent = t.parent ? findTodo(t.parent) : null
+  for (const x of all) deleteTodo(x.id)
+  if (parent) syncAncestors(childrenOf(parent.id)[0] ?? { parent: parent.id })
+  const n = all.length - 1
+  toast(`Deleted ${id}${n ? ` and ${n} subtask${n > 1 ? 's' : ''}` : ''}`, { label: 'Undo', run: () => { for (const c of copies) if (!findTodo(c.id)) state.todos.push(c) } })
 }
 /**
  * The ✕ on a timeline item, with undo. A scheduled todo only leaves the timeline (its time is cleared;
@@ -1004,6 +1096,7 @@ export const freeHours = (date, cap = CAPACITY_H) => cap - dayLoad(date).total
 export function assignToDay(id, date, cap = CAPACITY_H) {
   const t = findTodo(id)
   if (!t) return
+  if (isContainer(t)) { toast(`${id} has subtasks: plan those instead`); return }
   updateTodo(id, { scheduled: { date, start: t.scheduled?.date === date ? t.scheduled.start : null } })
   const load = dayLoad(date).total
   if (load > cap && t.timeMin >= 30) {

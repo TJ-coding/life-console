@@ -1,7 +1,7 @@
 <script setup>
 // Right 480px side drawer for editing a todo (spec §2.4 "Side drawer").
-import { computed } from 'vue'
-import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast } from '../store'
+import { computed, ref } from 'vue'
+import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast, childrenOf, isContainer, budgetLeft, subCount, ancestorsOf, addSubtask, parseQuick } from '../store'
 import Chip from './Chip.vue'
 
 const t = computed(() => (ui.drawerId ? findTodo(ui.drawerId) : null))
@@ -36,6 +36,29 @@ function merge() {
   const k = mergeParts(t.value.id)
   if (k) { ui.drawerId = k.id; toast(`Merged into ${k.id} (${k.timeMin}m)`) }
 }
+/* subtasks: the estimate of a task with subtasks is a budget they use up (owner's mental model) */
+const kids = computed(() => (t.value ? childrenOf(t.value.id) : []))
+const box = computed(() => kids.value.length > 0)
+const left = computed(() => (t.value ? budgetLeft(t.value) : 0))
+const counts = computed(() => (t.value ? subCount(t.value) : { done: 0, total: 0 }))
+const crumbs = computed(() => (t.value ? ancestorsOf(t.value).reverse() : []))
+const subDraft = ref('')
+const subParsed = computed(() => parseQuick(subDraft.value))
+function addSub() {
+  const p = subParsed.value
+  if (!p.title) return
+  const extra = { title: p.title }
+  if (p.timeMin) extra.timeMin = p.timeMin
+  if (p.priority) extra.priority = p.priority
+  if (p.due) extra.due = p.due
+  if (p.lsd) extra.lsd = p.lsd
+  if (p.links.length) extra.links = [...new Set([...t.value.links, ...p.links])]
+  const r = addSubtask(t.value.id, extra)
+  subDraft.value = '' // keep focus for the next one
+  if (r?.unscheduled) toast(`${t.value.id} has subtasks now: it left ${wd(r.unscheduled.date)}'s plan; schedule its subtasks instead`)
+}
+const fmtLeft = (m) => (Math.abs(m) >= 60 ? `${Math.floor(Math.abs(m) / 60)}h${Math.abs(m) % 60 ? String(Math.abs(m) % 60).padStart(2, '0') : ''}` : `${Math.abs(m)}m`)
+const whenOf = (k) => (k.scheduled ? `${wd(k.scheduled.date)}${k.scheduled.start ? ' ' + k.scheduled.start : ''}` : isContainer(k) ? `${subCount(k).done}/${subCount(k).total}` : '—')
 /** Delete with an undo toast instead of a confirm() (DESIGN.md §2.8). */
 const remove = () => deleteTodoUndo(t.value.id)
 /** "today" / "Wed 11/5" for the schedule actions. */
@@ -52,20 +75,54 @@ const dayName = computed(() => {
         <span class="mono id">{{ t.id }}</span>
         <span v-if="partLabel(t)" class="chip">part {{ partLabel(t) }}</span>
         <span class="prio" :class="'p' + t.priority">P{{ t.priority }}</span>
-        <span class="status" :class="t.done ? 'done' : t.scheduled ? 'doing' : ''">{{ t.done ? 'DONE ✓' : t.scheduled ? 'SCHEDULED' : 'INBOX' }}</span>
+        <span class="status" :class="t.done ? 'done' : t.scheduled || box ? 'doing' : ''">{{ t.done ? 'DONE ✓' : box ? `${counts.done}/${counts.total} SUBTASKS` : t.scheduled ? 'SCHEDULED' : 'INBOX' }}</span>
         <span class="spacer"></span>
         <button class="btn icon-only" title="Close (Esc)" @click="ui.drawerId = null"><span class="icon">close</span></button>
       </header>
       <div class="db">
+        <nav v-if="crumbs.length" class="crumbs small">
+          <span class="icon sm muted">subdirectory_arrow_right</span>
+          <template v-for="(a, i) in crumbs" :key="a.id"><span v-if="i" class="muted">›</span><button class="crumb" :title="`Open ${a.id}`" @click="ui.drawerId = a.id"><span class="mono muted">{{ a.id }}</span> {{ a.title }}</button></template>
+        </nav>
         <label class="field"><span>Task title</span><input v-model="t.title" class="input big" /></label>
         <label class="field"><span>Vital points</span><input v-model="t.vital" class="input" placeholder="Key notes shown under the title" /></label>
         <div class="grid2">
-          <label class="field"><span>Est. min (takt)</span><input v-model.number="t.timeMin" type="number" min="0" step="5" class="input mono" /></label>
+          <label class="field"><span>{{ box ? 'Budget, min (for its subtasks)' : 'Est. min (takt)' }}</span><input v-model.number="t.timeMin" type="number" min="0" step="5" class="input mono" /></label>
           <label class="field"><span>Due</span><input v-model="t.due" type="date" class="input mono" /></label>
-          <label class="field"><span>Scheduled day</span><input v-model="schedDate" type="date" class="input mono" /></label>
-          <label class="field"><span>Start time</span><input v-model="schedStart" type="time" step="900" class="input mono" :disabled="!t.scheduled" /></label>
+          <template v-if="!box">
+            <label class="field"><span>Scheduled day</span><input v-model="schedDate" type="date" class="input mono" /></label>
+            <label class="field"><span>Start time</span><input v-model="schedStart" type="time" step="900" class="input mono" :disabled="!t.scheduled" /></label>
+          </template>
         </div>
-        <div v-if="t.scheduled" class="unsched">
+
+        <!-- subtasks: break the task into steps; each is a real todo you can schedule -->
+        <div class="field">
+          <div class="row sub-h">
+            <span class="lbl">Subtasks</span>
+            <span v-if="box" class="mono small muted">{{ counts.done }}/{{ counts.total }} done</span>
+            <span class="spacer"></span>
+            <span v-if="box" class="mono small" :class="left < 0 ? 'warn' : left === 0 ? 'ok' : 'muted'">
+              {{ left < 0 ? `over budget by ${fmtLeft(left)}` : left === 0 ? 'budget fully assigned' : `${fmtLeft(left)} left to assign` }}
+            </span>
+          </div>
+          <div v-if="box" class="subs">
+            <div v-for="k in kids" :key="k.id" class="sub row" :class="{ done: k.done }" @click="ui.drawerId = k.id">
+              <input type="checkbox" :checked="k.done" title="Done" @click.stop @change="toggleTodo(k.id)" />
+              <span class="grow ellipsis">{{ k.title }}</span>
+              <input :value="k.timeMin" type="number" min="0" step="5" class="input mono sub-min" title="Estimate (min)" @click.stop @change="updateTodo(k.id, { timeMin: Math.max(0, Number($event.target.value) || 0) })" />
+              <span class="mono small sub-when" :class="k.scheduled ? 'ok' : 'muted'">{{ whenOf(k) }}</span>
+              <span class="icon sm muted">chevron_right</span>
+            </div>
+          </div>
+          <form v-if="!t.done && parts.length < 2" class="row sub-add" @submit.prevent="addSub">
+            <span class="icon sm muted">add</span>
+            <input v-model="subDraft" class="input grow" :placeholder="box ? 'Next subtask… e.g. Write intro 20m' : 'Break into subtasks… e.g. Collect papers 30m'" @input.stop @change.stop />
+            <button class="btn sm" type="submit" :disabled="!subParsed.title">Add</button>
+          </form>
+          <small v-else-if="parts.length > 1" class="tiny muted">Split over days: merge the parts first to break it into subtasks.</small>
+        </div>
+
+        <div v-if="t.scheduled && !box" class="unsched">
           <button v-if="t.scheduled.start" class="btn sm" title="Clear the start time: off the timeline, still on that day's list (undo in the toast)" @click="unscheduleTodo(t.id, 'time')">
             <span class="icon sm">event_busy</span>Remove from schedule
           </button>
@@ -87,7 +144,7 @@ const dayName = computed(() => {
             </button>
           </div>
         </div>
-        <div class="field">
+        <div v-if="!box" class="field">
           <span class="lbl">Days &amp; times</span>
           <div v-if="parts.length > 1" class="parts">
             <div v-for="p in parts" :key="p.id" class="prt row small" :class="{ cur: p.id === t.id, done: p.done }" @click="ui.drawerId = p.id">
@@ -156,6 +213,20 @@ const dayName = computed(() => {
 .prt.cur { box-shadow: inset 2px 0 0 var(--info); }
 .prt.done .grow { text-decoration: line-through; color: var(--muted); }
 .unsched { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -6px; }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: -6px; }
+.crumb { border: 0; background: transparent; color: var(--text); cursor: pointer; padding: 0; font: inherit; }
+.crumb:hover { color: var(--accent); }
+.sub-h { gap: 8px; margin-bottom: 4px; }
+.sub-h .lbl { margin-bottom: 0; }
+.subs { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 2px; margin-bottom: 6px; }
+.sub { gap: 8px; padding: 0 8px; min-height: 34px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 14px; }
+.sub:last-child { border-bottom: 0; }
+.sub:hover { background: var(--surface-2); }
+.sub.done .grow { text-decoration: line-through; color: var(--muted); }
+.sub-min { width: 56px; height: 24px; font-size: 12px; text-align: right; }
+.sub-when { width: 64px; text-align: right; }
+.sub-add { gap: 6px; }
+.sub-add .input { height: 30px; }
 .audit { border: 1px solid var(--border); border-radius: 2px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
 .audit div { display: flex; justify-content: space-between; }
 .df { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }

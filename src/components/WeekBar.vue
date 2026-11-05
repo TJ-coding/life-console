@@ -3,12 +3,12 @@
 //   ① Backlog → ② Assign day (workload) → ③ Assign time (schedule)
 // Steps don't navigate away — they switch the column layout to emphasise that step.
 import { computed } from 'vue'
-import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, setScheduleLock, LOCK_HELP } from '../store'
+import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, setScheduleLock, LOCK_HELP, isLeaf } from '../store'
 
 const weekEnd = computed(() => addDays(ui.weekStart, 6))
 const isThisWeek = computed(() => ui.weekStart === mondayOf(todayISO()))
 const inWeek = (d) => d >= ui.weekStart && d <= weekEnd.value
-const backlog = computed(() => state.todos.filter((t) => !t.done && !t.scheduled).length)
+const backlog = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t)).length)
 const assigned = computed(() => state.todos.filter((t) => !t.done && t.scheduled && inWeek(t.scheduled.date)))
 const timed = computed(() => assigned.value.filter((t) => t.scheduled.start).length)
 const pct = computed(() => (assigned.value.length ? Math.round((timed.value / assigned.value.length) * 100) : 100))

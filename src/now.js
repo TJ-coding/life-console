@@ -1,6 +1,6 @@
 // "What should I be doing right now?" — derived live from today's timeline + todos.
 import { computed } from 'vue'
-import { allSigs, state, ui, todayISO, blocksForDay, todosForDay, toMin, fromMin, pad, updateTodo, byPriority } from './store'
+import { allSigs, state, ui, todayISO, blocksForDay, todosForDay, toMin, fromMin, pad, updateTodo, byPriority, isLeaf } from './store'
 
 export function fmtDur(sec) {
   sec = Math.max(0, Math.round(sec))
@@ -57,7 +57,7 @@ export function useNow() {
     if (c) {
       // inside a fixed block: work linked to it — today's list first, then anything open
       return queue.value.find((t) => relatedTo(t, c))
-        ?? state.todos.filter((t) => !t.done && relatedTo(t, c)).sort(byPriority)[0] ?? null
+        ?? state.todos.filter((t) => !t.done && isLeaf(t) && relatedTo(t, c)).sort(byPriority)[0] ?? null
     }
     const freeMin = gap.value / 60
     return queue.value.find((t) => t.timeMin <= freeMin) ?? queue.value[0] ?? null

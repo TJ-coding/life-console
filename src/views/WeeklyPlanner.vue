@@ -7,6 +7,7 @@ import { useRoute } from 'vue-router'
 import {
   state, ui, todayISO, addDays, wd, todosForDay, workload, CAPACITY_H, toast, autoTimebox,
   routineDone, toggleRoutine, monthGroup, toggleMonthly, suggestRebalance,
+  isLeaf,
 } from '../store'
 import WeekBar from '../components/WeekBar.vue'
 import DayColumn from '../components/DayColumn.vue'
@@ -38,7 +39,7 @@ const weekTodos = computed(() => week.value.flatMap((d) => todosForDay(d)))
 watchEffect(() => { ui.visibleIds = weekTodos.value.map((t) => t.id) })
 
 /* ── what to do next ── */
-const backlogN = computed(() => state.todos.filter((t) => !t.done && !t.scheduled).length)
+const backlogN = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t)).length)
 const untimed = computed(() => weekTodos.value.filter((t) => !t.done && !t.scheduled.start && t.scheduled.date >= T.value))
 const overDays = computed(() => days.value.filter((d) => workload(d) > CAPACITY_H))
 const rebalanceN = computed(() => suggestRebalance(days.value).length)
