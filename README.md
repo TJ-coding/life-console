@@ -11,6 +11,7 @@ npm run dev      # http://localhost:5173
 | Screen | Route | Works |
 |---|---|---|
 | S-01 Command Center | `#/` | 24h timeline (drag todos onto it), workload gauge, 印→印→確認→完 sign-off, todos, 7-day deadlines, top PSGs, routines/sleep/caffeine/reviews/lectures tiles |
+| S-11 Day view | `#/day/YYYY-MM-DD` | the Command Center for any date: ‹ › arrows or `[` `]` step a day, **Today** returns; non-today dates show a day summary instead of the live NOW card; click a day header in Plan week to open it |
 | S-10 Plan week | `#/week` | the whole planning flow on one sheet: ① backlog panel → ② a 7-hour workload bucket per day → ③ that day's timeline directly below; one-click day buttons, Auto time-box, linked hover, balance and routines in a side rail |
 | S-20 Todo Inbox | `#/todos` | views / link / L-S-D / priority filters, smart quick-add parser, bulk schedule / priority / link / done, edit drawer |
 | S-30 Strategic Plan | `#/strategy` | Vision → PSG → SIG tree, editable PSG/SIG tables (PSG % = mean of SIG %), check schedule, events timetable, linked todos, "create todo for SIG" |

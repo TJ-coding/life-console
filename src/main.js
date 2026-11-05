@@ -15,6 +15,7 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/', name: 'today', component: CommandCenter, meta: { title: 'Command Center', screen: 'S-01' } },
+    { path: '/day/:date', name: 'day', component: CommandCenter, meta: { title: 'Day', screen: 'S-11' } },
     { path: '/focus', name: 'focus', component: FocusMode, meta: { title: 'Focus mode', screen: 'S-01F', bare: true } },
     { path: '/week', name: 'week', component: WeeklyPlanner, meta: { title: 'Plan week', screen: 'S-10' } },
     { path: '/workload', redirect: { path: '/week', query: { mode: 'days' } } }, // merged into the planner
@@ -24,6 +25,9 @@ const router = createRouter({
     { path: '/m/:module', name: 'module', component: ModulePlaceholder, meta: { title: 'Module' } },
   ],
 })
+
+// global guard: also runs when only the :date param changes (route-level beforeEnter would not)
+router.beforeEach((to) => (to.name === 'day' && !/^\d{4}-\d{2}-\d{2}$/.test(to.params.date) ? '/' : true))
 
 applyTheme()
 createApp(App).use(router).mount('#app')

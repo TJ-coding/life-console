@@ -24,7 +24,7 @@ const clock = computed(() => {
 })
 const T = computed(() => todayISO())
 const openCount = computed(() => state.todos.filter((t) => !t.done).length)
-const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name))
+const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name === 'day' ? 'today' : route.name))
 
 function openPalette(mode) {
   ui.paletteMode = mode
@@ -99,8 +99,19 @@ function onKey(e) {
       break
     }
     case 'enter': if (ui.selectedId) ui.drawerId = ui.selectedId; break
-    case '[': ui.weekStart = addDays(ui.weekStart, -7); if (route.name !== 'week') router.push('/week'); break
-    case ']': ui.weekStart = addDays(ui.weekStart, 7); if (route.name !== 'week') router.push('/week'); break
+    case '[':
+    case ']': {
+      const dir = k === '[' ? -1 : 1
+      if (route.name === 'today' || route.name === 'day') {
+        // day view: previous / next day
+        const d = addDays(route.params.date || todayISO(), dir)
+        router.push(d === todayISO() ? '/' : `/day/${d}`)
+      } else {
+        ui.weekStart = addDays(ui.weekStart, dir * 7)
+        if (route.name !== 'week') router.push('/week')
+      }
+      break
+    }
     default:
       if (route.name === 'focus' && /^[1-3]$/.test(k)) {
         const id = ui.focusIds[+k - 1]
@@ -174,6 +185,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <span><span class="kbd">F</span> Focus</span>
         <span><span class="kbd">T</span> Today</span>
         <span><span class="kbd">W</span> Week</span>
+        <span><span class="kbd">[</span><span class="kbd">]</span> Prev/next</span>
         <span><span class="kbd">G</span><span class="kbd">S</span> Strategy</span>
         <span><span class="kbd">J</span><span class="kbd">K</span> Move</span>
         <span><span class="kbd">X</span> Done</span>

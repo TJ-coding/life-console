@@ -1,10 +1,11 @@
 <script setup>
-// S-01 · Command Center (Today) — the morning briefing.
+// S-01 · Command Center — the morning briefing for today, and (S-11) a day view for any date via /day/:date.
 import { computed, ref, watchEffect } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, getStamps, STAMPS, CAPACITY_H,
   psgPct, nextSig, diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, monthGroup,
-  nextCheckDate, updateTodo, addTodo, parseQuick, toast,
+  nextCheckDate, updateTodo, addTodo, parseQuick, toast, addDays, fmtSlash,
 } from '../store'
 import Timeline24 from '../components/Timeline24.vue'
 import TodoRow from '../components/TodoRow.vue'
@@ -14,7 +15,21 @@ import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
 import NowCard from '../components/NowCard.vue'
 
-const T = computed(() => todayISO())
+const route = useRoute()
+const router = useRouter()
+const today = computed(() => { void ui.now; return todayISO() }) // follows midnight
+/** The day being viewed: /day/:date, or today on "/". */
+const T = computed(() => route.params.date || today.value)
+const isToday = computed(() => T.value === today.value)
+const dayPath = (d) => (d === today.value ? '/' : `/day/${d}`)
+const goDay = (n) => router.push(dayPath(addDays(T.value, n)))
+function openWeek() {
+  ui.weekStart = mondayOf(T.value)
+  router.push('/week')
+}
+const untimed = computed(() => todos.value.filter((t) => !t.done && !t.scheduled.start))
+const firstBlock = computed(() => [...blocks.value].sort((a, b) => toMin(a.start) - toMin(b.start))[0])
+const dayLabel = computed(() => (isToday.value ? "Today's" : `${wd(T.value)}`))
 const todos = computed(() => todosForDay(T.value))
 watchEffect(() => { ui.visibleIds = todos.value.map((t) => t.id) })
 const blocks = computed(() => blocksForDay(T.value))
@@ -80,8 +95,14 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
   <div class="cc">
     <!-- header strip -->
     <section class="panel head">
-      <div class="date mono">{{ T }} <span class="ok">{{ wd(T) }}</span></div>
-      <span class="chip">WEEK {{ isoWeek(T) }}</span>
+      <div class="daynav">
+        <button class="btn icon-only" title="Previous day ( [ )" @click="goDay(-1)"><span class="icon">chevron_left</span></button>
+        <div class="date mono">{{ T }} <span :class="isToday ? 'ok' : 'info'">{{ wd(T) }}</span></div>
+        <button class="btn icon-only" title="Next day ( ] )" @click="goDay(1)"><span class="icon">chevron_right</span></button>
+      </div>
+      <span v-if="!isToday" class="chip course">{{ relDay(T, today) }}</span>
+      <button v-if="!isToday" class="btn sm" @click="router.push('/')"><span class="icon sm">today</span>Today <span class="kbd">T</span></button>
+      <button class="chip weekchip" title="Open this week in Plan week" @click="openWeek">WEEK {{ isoWeek(T) }}</button>
       <div class="sep"></div>
       <div class="kv">
         <div class="tiny upper muted">Workload</div>
@@ -98,12 +119,25 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
     </section>
 
     <!-- right now -->
-    <NowCard class="c12" />
+    <NowCard v-if="isToday" class="c12" />
+    <section v-else class="panel c12 preview">
+      <span class="icon info">event</span>
+      <div class="grow">
+        <div class="tiny upper muted">Day view · {{ relDay(T, today) }}</div>
+        <div class="pv-title">{{ wd(T) }} {{ fmtSlash(T) }} — {{ blocks.length }} blocks, {{ todos.length }} tasks, {{ hours.toFixed(1) }}h planned</div>
+        <div class="small muted mono">
+          <template v-if="firstBlock">first: {{ firstBlock.start }} {{ firstBlock.title }}</template><template v-else>no blocks yet</template>
+          <template v-if="untimed.length"> · <span class="warn">{{ untimed.length }} without a time</span></template>
+        </div>
+      </div>
+      <button class="btn" @click="openWeek"><span class="icon sm">calendar_month</span>Plan week</button>
+      <button class="btn" @click="router.push('/')"><span class="icon sm">today</span>Back to today</button>
+    </section>
 
     <!-- row 1 -->
     <section class="panel c8">
       <div class="panel-h">
-        <span class="icon sm ok">timeline</span><h2><router-link to="/week" class="title-link">Today's timeline</router-link></h2>
+        <span class="icon sm ok">timeline</span><h2><a href="#" class="title-link" @click.prevent="openWeek">{{ dayLabel }} timeline</a></h2>
         <span class="spacer"></span>
         <div class="legend">
           <span class="cat-research"><i></i>Research</span><span class="cat-academic"><i></i>Academic</span>
@@ -136,7 +170,7 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
     <!-- row 2 -->
     <section class="panel c5 todos">
       <div class="panel-h">
-        <span class="icon sm ok">checklist</span><h2><router-link to="/todos" class="title-link">Today's todos</router-link></h2>
+        <span class="icon sm ok">checklist</span><h2><router-link to="/todos" class="title-link">{{ dayLabel }} todos</router-link></h2>
         <span class="spacer"></span><span class="mono small muted">{{ todos.filter((t) => !t.done).length }} pending</span>
       </div>
       <div class="list" @dragover.prevent @drop.prevent="dropOnList">
@@ -145,7 +179,7 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
       </div>
       <form class="qa" @submit.prevent="quickAdd">
         <span class="mono ok">+</span>
-        <input v-model="quick" class="input ghost mono grow" placeholder="Add to today: Review notes 20m @SIG-01.1 p2" />
+        <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @SIG-01.1 p2`" />
       </form>
       <div class="foot mono small"><span class="muted">Remaining est.</span> {{ Math.floor(totalMin / 60) }}h {{ pad(totalMin % 60) }}m</div>
     </section>
@@ -191,7 +225,7 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
         <div class="small">Monthly group <b class="ok mono">{{ group }}</b> · {{ state.monthlyGroups[group].join(', ') }}</div>
       </router-link>
       <div class="panel tile">
-        <div class="tiny upper muted row">Sleep last night<span class="spacer"></span><span class="icon sm">bedtime</span></div>
+        <div class="tiny upper muted row">{{ isToday ? 'Sleep last night' : 'Sleep (night before)' }}<span class="spacer"></span><span class="icon sm">bedtime</span></div>
         <template v-if="sleep">
           <div class="big mono">{{ Math.floor(sleptMin / 60) }}h {{ pad(sleptMin % 60) }}m <span class="small muted">vs {{ sleep.targetMin / 60 }}h</span></div>
           <div class="small mono">
@@ -202,10 +236,10 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
         <div v-else class="small muted">No entry yet.</div>
       </div>
       <div class="panel tile">
-        <div class="tiny upper muted row">Caffeine today<span class="spacer"></span><span class="icon sm">coffee</span></div>
+        <div class="tiny upper muted row">Caffeine {{ isToday ? 'today' : wd(T) }}<span class="spacer"></span><span class="icon sm">coffee</span></div>
         <div class="big mono">{{ mg }}<span class="muted small">/{{ state.caffeineLimit }}mg</span></div>
         <div class="bar" :class="mg > state.caffeineLimit ? 'danger' : mg > state.caffeineLimit * 0.75 ? 'warn' : ''"><i :style="{ width: Math.min(100, (mg / state.caffeineLimit) * 100) + '%' }"></i></div>
-        <div class="row small">
+        <div v-if="isToday" class="row small">
           <span class="mono" :class="cutoffLeft > 0 ? 'warn' : 'muted'">{{ cutoffLeft > 0 ? `cutoff in ${Math.floor(cutoffLeft / 60)}h${pad(cutoffLeft % 60)}` : `cutoff ${state.caffeineCutoff} passed` }}</span>
           <span class="spacer"></span>
           <button class="btn sm" @click="addCaffeine('Coffee', 95)">+☕95</button>
@@ -220,7 +254,7 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
         </div>
       </div>
       <div class="panel tile">
-        <div class="tiny upper muted row">Today's lectures<span class="spacer"></span><span class="icon sm">school</span></div>
+        <div class="tiny upper muted row">{{ isToday ? "Today's" : wd(T) }} lectures<span class="spacer"></span><span class="icon sm">school</span></div>
         <div v-for="l in lectures" :key="l.id" class="col" style="gap: 4px">
           <div class="row"><span class="mono">{{ l.course }}</span><span class="small muted ellipsis grow">#{{ l.no }} {{ l.title }}</span><span class="mono info">{{ l.time }}</span></div>
           <div class="row small checks">
@@ -229,7 +263,7 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
             <label><input v-model="l.cheatSheet" type="checkbox" /> Cheat sheet</label>
           </div>
         </div>
-        <div v-if="!lectures.length" class="small muted">No lectures today.</div>
+        <div v-if="!lectures.length" class="small muted">No lectures {{ isToday ? 'today' : 'this day' }}.</div>
       </div>
     </div>
   </div>
@@ -238,6 +272,11 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
 <style scoped>
 .cc { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; padding: 16px; align-items: start; }
 .head { grid-column: span 12; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 20px; padding: 14px 18px; }
+.daynav { display: flex; align-items: center; gap: 6px; }
+.weekchip { cursor: pointer; }
+.weekchip:hover { border-color: var(--accent); }
+.preview { flex-direction: row; align-items: center; gap: 14px; padding: 14px 18px; border-left: 3px solid var(--info); }
+.pv-title { font-size: 18px; font-weight: 600; line-height: 24px; }
 .date { font-size: 30px; line-height: 36px; font-weight: 700; letter-spacing: -0.02em; }
 .sep { width: 1px; align-self: stretch; background: var(--border); }
 .kv { display: flex; flex-direction: column; gap: 3px; }

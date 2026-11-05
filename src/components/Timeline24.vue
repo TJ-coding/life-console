@@ -2,7 +2,7 @@
 // Horizontal 24h strip (spec §2.4 "Timeline strip").
 // Fixed px-per-hour so block text stays readable; scrolls horizontally and
 // auto-centres on "now". Todos can be dropped onto it to get a start time.
-import { computed, ref, onMounted, nextTick } from 'vue'
+import { computed, ref, onMounted, nextTick, watch } from 'vue'
 import { ui, todayISO, toMin, fromMin, layoutLanes } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 
@@ -45,6 +45,7 @@ async function setZoom(k) {
   scrollToNow(false)
 }
 onMounted(() => nextTick(() => scrollToNow(false)))
+watch(() => props.date, () => nextTick(() => scrollToNow(false)))
 
 const ed = useTimelineEdit({
   axis: 'x', pxh: () => pxh.value, from: () => props.from, to: () => props.to, date: () => props.date,

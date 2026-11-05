@@ -3,12 +3,15 @@
 //   header · ② Workload bucket (assign day) · ③ Schedule timeline (assign time) · deadlines · notes · sign-off
 // A task dropped in the bucket can be dragged straight down onto a time in the same column.
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, updateTodo, diffDays, CAPACITY_H, autoTimebox, toast } from '../store'
 import DayTimeline from './DayTimeline.vue'
 import WorkloadBucket from './WorkloadBucket.vue'
 import Gauge from './Gauge.vue'
 import Stamps from './Stamps.vue'
 
+const router = useRouter()
+const openDay = () => router.push(props.date === todayISO() ? '/' : `/day/${props.date}`)
 const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' } })
 const isToday = computed(() => props.date === todayISO())
 const past = computed(() => diffDays(props.date, todayISO()) > 0)
@@ -35,13 +38,14 @@ function auto() {
 
 <template>
   <div class="day panel" :class="{ today: isToday, past }">
-    <header class="dh">
+    <header class="dh" role="link" tabindex="0" :title="`Open ${wd(date)} ${fmtSlash(date)} in day view`" @click="openDay" @keydown.enter="openDay">
       <div class="row">
         <span class="ja">{{ wdJa(date) }}</span>
         <span class="mono md">{{ fmtSlash(date) }}</span>
         <span class="mono tiny muted">{{ wd(date) }}</span>
         <span class="spacer"></span>
         <span v-if="isToday" class="mono tiny ok">● NOW</span>
+        <span class="icon sm open">open_in_new</span>
       </div>
       <div class="row">
         <span v-if="hours > CAPACITY_H" class="icon sm danger" title="Over capacity">warning</span>
@@ -91,6 +95,11 @@ function auto() {
 .day { min-width: 140px; overflow: hidden; }
 .day.today { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
 .day.past { opacity: 0.85; }
+.dh { cursor: pointer; }
+.dh:hover { background: var(--surface-2); }
+.dh:hover .ja, .dh:hover .md { color: var(--accent); }
+.open { font-size: 14px; color: var(--muted); opacity: 0; }
+.dh:hover .open { opacity: 1; }
 .dh { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border); }
 .ja { font-family: 'Noto Sans JP'; font-weight: 700; font-size: 16px; }
 .today .ja { color: var(--accent); }
