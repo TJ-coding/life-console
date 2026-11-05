@@ -4,8 +4,9 @@
 // depend on it; a SIG that no other SIG of its PSG depends on flows into its PSG, and every PSG into the Vision.
 // Cards share a row unless they'd overlap; each is placed near the rows of what feeds it.
 // Continuous / undated goals sit in a "∞" column after the axis; the Vision comes last.
+// Dated PSG/SIG cards can be dragged sideways (mouse/pen) to move their time bound, snapping to days.
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
-import { allSigs, psgPct, todayISO, addDays, diffDays, state } from '../store'
+import { allSigs, psgPct, todayISO, addDays, diffDays, state, toast } from '../store'
 import { sigState, inDays, boundIssues, CONTINUOUS } from '../glance'
 
 const props = defineProps({ plan: { type: Object, required: true }, selected: { type: String, default: null } })
@@ -99,7 +100,7 @@ const graph = computed(() => {
   ]
   const H = AX + used.length * (NH + GY)
   const W = (nodes.has('VISION') ? nodes.get('VISION').R : undated.length ? infX : axisEnd) + 8
-  return { nodes, edges, ticks, marks, W, H, todayX: x(T), infX: undated.length ? infX - NW : null }
+  return { nodes, edges, ticks, marks, W, H, ppd, todayX: x(T), infX: undated.length ? infX - NW : null }
 })
 
 /** Everything upstream and downstream of the selected goal, to light up its path. */
@@ -153,7 +154,57 @@ function nodeView(n) {
   return { label: n.id, name: n.ref.name, pct: Number(n.ref.pct) || 0, meta: when(n.ref.timeBound), st: sigState(n.ref), issues: boundIssues(n.ref) }
 }
 const nodeList = computed(() => [...graph.value.nodes.values()])
-const pick = (n) => { if (n.kind !== 'vision' && !n.ext) emit('select', n.id) }
+/* drag a dated card sideways to change its time bound. The layout stays put while dragging (only the
+   dragged card shifts by whole days); the new date is written on release, then the flow re-lays itself. */
+const drag = ref(null) // { id, end, x0, days, moved }
+let swallowClick = false
+const canDrag = (n) => !!n.end && !n.ext && n.kind !== 'vision'
+function onDown(e, n) {
+  if (e.button !== 0 || e.pointerType === 'touch' || !canDrag(n)) return
+  drag.value = { id: n.id, end: n.end, x0: e.clientX, days: 0, moved: false }
+  e.currentTarget.setPointerCapture?.(e.pointerId)
+  window.addEventListener('keydown', onDragKey, true)
+}
+function onMove(e) {
+  const d = drag.value
+  if (!d) return
+  const dx = e.clientX - d.x0
+  if (!d.moved && Math.abs(dx) < 4) return
+  d.moved = true
+  d.days = Math.round(dx / graph.value.ppd)
+}
+function onUp() {
+  const d = drag.value
+  if (!d) return
+  endDrag()
+  if (!d.moved) return
+  swallowClick = true
+  setTimeout(() => { swallowClick = false }, 0)
+  if (!d.days) return
+  const n = graph.value.nodes.get(d.id)
+  if (!n) return
+  const to = addDays(d.end, d.days)
+  n.ref.timeBound = to
+  toast(`${d.id} time bound ${d.end} → ${to}`)
+}
+function onDragKey(e) {
+  if (e.key !== 'Escape' || !drag.value) return
+  e.stopPropagation()
+  e.preventDefault()
+  drag.value = null
+  endDrag()
+  swallowClick = true // the release that follows a cancelled drag is not a click
+  window.addEventListener('pointerup', () => setTimeout(() => { swallowClick = false }, 0), { once: true, capture: true })
+}
+function endDrag() {
+  drag.value = null
+  window.removeEventListener('keydown', onDragKey, true)
+}
+onBeforeUnmount(endDrag)
+const shift = (n) => (drag.value?.id === n.id ? drag.value.days * graph.value.ppd : 0)
+const dragTo = computed(() => (drag.value?.moved ? addDays(drag.value.end, drag.value.days) : null))
+const metaOf = (n) => (drag.value?.id === n.id && drag.value.moved ? when(dragTo.value) : nodeView(n).meta)
+const pick = (n) => { if (swallowClick) return; if (n.kind !== 'vision' && !n.ext) emit('select', n.id) }
 </script>
 
 <template>
@@ -174,15 +225,18 @@ const pick = (n) => { if (n.kind !== 'vision' && !n.ext) emit('select', n.id) }
           :marker-end="`url(#fl-arr-${edgeView(e).on ? 'on' : edgeView(e).cls || 'n'})`" />
       </svg>
 
-      <div v-for="n in nodeList" :key="n.id" class="fn" :class="[`k-${n.kind}`, `st-${nodeView(n).st}`, { ext: n.ext, sel: selected === n.id, dim: path && !path.has(n.id) }]"
-        :style="{ left: n.L + 'px', top: n.y + 'px', width: NW + 'px', height: NH + 'px' }"
-        :title="[n.ext ? 'From another plan' : '', ...nodeView(n).issues].filter(Boolean).join('\n')"
+      <div v-if="drag?.moved" class="drag-guide" :style="{ left: graph.nodes.get(drag.id).R + shift(graph.nodes.get(drag.id)) + 'px' }"><span class="mono">{{ dragTo }}</span></div>
+
+      <div v-for="n in nodeList" :key="n.id" class="fn" :class="[`k-${n.kind}`, `st-${nodeView(n).st}`, { ext: n.ext, sel: selected === n.id, dim: path && !path.has(n.id), movable: canDrag(n), dragging: drag?.id === n.id && drag.moved }]"
+        :style="{ left: n.L + shift(n) + 'px', top: n.y + 'px', width: NW + 'px', height: NH + 'px' }"
+        :title="[n.ext ? 'From another plan' : canDrag(n) ? 'Drag sideways to change the time bound' : '', ...nodeView(n).issues].filter(Boolean).join('\n')"
+        @pointerdown="onDown($event, n)" @pointermove="onMove" @pointerup="onUp" @pointercancel="endDrag"
         @click="pick(n)">
         <div class="row fn-top">
           <span class="mono fn-id">{{ nodeView(n).label }}</span>
           <span v-if="nodeView(n).issues.length" class="icon sm warn fn-warn">error</span>
           <span class="spacer"></span>
-          <span class="mono fn-when">{{ nodeView(n).meta }}</span>
+          <span class="mono fn-when">{{ metaOf(n) }}</span>
         </div>
         <div class="fn-nm ellipsis">{{ nodeView(n).name }}</div>
         <div class="bar"><i :style="{ width: nodeView(n).pct + '%' }"></i></div>
@@ -218,6 +272,11 @@ marker path { fill: var(--muted); }
 .fn:hover { border-color: var(--muted); }
 .fn.sel { box-shadow: 0 0 0 1px var(--info); border-color: var(--info); }
 .fn.dim { opacity: 0.35; }
+.fn.movable { cursor: grab; user-select: none; }
+.fn.dragging { cursor: grabbing; z-index: 6; opacity: 1; box-shadow: 0 4px 14px rgb(0 0 0 / 0.35); border-color: var(--info); transition: none; }
+.fn.dragging .fn-when { color: var(--info); }
+.drag-guide { position: absolute; top: 0; bottom: 0; border-left: 1.5px solid var(--info); pointer-events: none; z-index: 5; }
+.drag-guide span { position: absolute; top: 18px; left: 4px; font-size: 10px; color: var(--info); background: var(--surface); padding: 0 3px; white-space: nowrap; }
 .fn.ext { opacity: 0.55; cursor: default; }
 .fn.k-psg { border-left-color: var(--accent); }
 .fn.k-vision { border-color: var(--accent); cursor: default; }
