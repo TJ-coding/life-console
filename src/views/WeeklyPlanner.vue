@@ -213,9 +213,10 @@ function copyLastWeek() {
    the panel rail becomes a bottom strip and the side panel a bottom sheet */
 @media (max-width: 640px) {
   .body { display: flex; flex-direction: column; }
-  .body > .backlog { flex: none; max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  .body > .backlog { flex: none; max-height: 34vh; border-right: 0; border-bottom: 1px solid var(--border); }
   .days { flex: 1; min-height: 0; display: flex; overflow: auto; scroll-snap-type: x proximity; padding: 10px; }
-  .days :deep(.day) { flex: 0 0 82vw; width: 82vw; scroll-snap-align: start; }
+  /* ISS-22: the day column must fit its content (schedule!) — capped viewport height would clip it */
+  .days :deep(.day) { flex: 0 0 82vw; width: 82vw; scroll-snap-align: start; height: 100%; overflow-y: auto; }
   .weekend { display: contents; }
   .rail { order: 3; flex-direction: row; justify-content: flex-end; gap: 8px; padding: 6px 10px; border-left: 0; border-top: 1px solid var(--border); }
   .overlay { top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: 62vh; border-left: 0; border-top: 1px solid var(--border); border-radius: 6px 6px 0 0; }

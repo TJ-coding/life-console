@@ -28,9 +28,14 @@ const adding = ref(false)
 const notes = computed({ get: () => state.notes[props.date] ?? '', set: (v) => { state.notes[props.date] = v } })
 const schedule = (id, start) => updateTodo(id, { scheduled: { date: props.date, start } })
 
-// sizes per layout mode
+// sizes per layout mode; on phones (= 640px) the schedule gets a few extra px/hour so blocks stay readable (ISS-22)
+const phone = ref(typeof matchMedia === 'function' && matchMedia('(max-width: 640px)').matches)
+if (typeof matchMedia === 'function') matchMedia('(max-width: 640px)').addEventListener?.('change', (e) => (phone.value = e.matches))
 const bucketPx = computed(() => ({ days: 30, both: 18, times: 11 })[props.mode])
-const timelinePx = computed(() => ({ both: 18, times: 26 })[props.mode] ?? 0)
+const timelinePx = computed(() => {
+  const base = ({ both: 18, times: 26 })[props.mode] ?? 0
+  return base ? base + (phone.value ? 8 : 0) : 0
+})
 
 function auto() {
   const r = autoTimebox(props.date)
