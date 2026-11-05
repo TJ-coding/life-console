@@ -19,9 +19,10 @@ Without the server the app still runs: sync stays off and data lives in the brow
 | S-21 Deadlines | `#/deadlines` | list grouped Overdue / Today / This week / Next week / Later (+ Done), or a month calendar (click a day, or its +, to add a deadline right in that cell); quick-add, source filter, edit/delete dialog; overdue badge in the sidebar |
 | S-35 Plans index | `#/strategy` | all strategic plans as cards (progress, goals, open tasks, next check), each Active / Paused / Archived, create and delete; tabs switch between plans |
 | S-30 Strategic Plan | `#/strategy/SP-03` | Vision → PSG → SIG tree, editable PSG/SIG tables (PSG % = mean of SIG %), check schedule, events timetable, linked todos, "create todo for SIG" |
+| S-95 Issues | `#/issues` | the to-fix list for the app itself: press `I` (or the bug button in the top bar) on any screen to report a bug, UX problem or idea about that screen; the screen, route and device are attached; filter by status/screen, change status, see how each was fixed. Agents read the list with `npm run issues` (see CLAUDE.md) |
 | Other modules | `#/m/...` | Placeholder that lists the planned screens |
 
-**Keyboard:** `F` focus mode · `⌘K` palette · `N` new todo · `T` today · `W` week · `G S` strategy · `G I` inbox · `G L` workload · `G D` deadlines · `J/K` move · `Enter` open · `X` done · `1–5` priority · `S` stamp · `[` `]` week.
+**Keyboard:** `F` focus mode · `⌘K` palette · `N` new todo · `T` today · `W` week · `G S` strategy · `G I` inbox · `G L` workload · `G D` deadlines · `J/K` move · `Enter` open · `X` done · `1–5` priority · `S` stamp · `[` `]` week · `I` report an issue · `G B` issues.
 
 **Quick-add syntax:** `Read chapter 3 #ST2001 30m due:fri p2 @SIG-02.1 [L]`
 

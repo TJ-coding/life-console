@@ -10,9 +10,11 @@ import Settings from './views/Settings.vue'
 import FocusMode from './views/FocusMode.vue'
 import Deadlines from './views/Deadlines.vue'
 import ModulePlaceholder from './views/ModulePlaceholder.vue'
+import Issues from './views/Issues.vue'
 import { applyTheme } from './store'
 import { startSync } from './sync'
 import { refreshPush } from './push'
+import { loadIssues } from './issues'
 import './styles.css'
 
 const router = createRouter({
@@ -28,6 +30,7 @@ const router = createRouter({
     { path: '/strategy', name: 'plans', component: PlansIndex, meta: { title: 'Strategic plans', screen: 'S-35' } },
     { path: '/strategy/:planId', name: 'strategy', component: StrategicPlan, meta: { title: 'Strategic plan', screen: 'S-30' } },
     { path: '/settings', name: 'settings', component: Settings, meta: { title: 'Settings', screen: 'S-90' } },
+    { path: '/issues', name: 'issues', component: Issues, meta: { title: 'Issues', screen: 'S-95' } },
     { path: '/m/:module', name: 'module', component: ModulePlaceholder, meta: { title: 'Module' } },
   ],
 })
@@ -40,6 +43,7 @@ createApp(App).use(router).mount('#app')
 
 // sync with the server (no-op without one), then the service worker for offline + push
 startSync()
+loadIssues() // issue counts for the sidebar; also sends reports queued while offline
 if ('serviceWorker' in navigator && window.isSecureContext && import.meta.env.PROD) {
   navigator.serviceWorker.register('/sw.js').then(() => refreshPush()).catch((e) => console.warn('service worker', e))
 }

@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server/server.mjs",
-    "dev:server": "DATA_DIR=.data PORT=8787 node server/server.mjs"
+    "dev:server": "DATA_DIR=.data PORT=8787 node server/server.mjs",
+    "issues": "node scripts/issues.mjs"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",

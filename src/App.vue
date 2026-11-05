@@ -7,6 +7,8 @@ import CommandPalette from './components/CommandPalette.vue'
 import TodoDrawer from './components/TodoDrawer.vue'
 import SplitDialog from './components/SplitDialog.vue'
 import DeadlineDialog from './components/DeadlineDialog.vue'
+import IssueDialog from './components/IssueDialog.vue'
+import { issues, openIssueDialog, openCount as openIssueCount } from './issues'
 import { useNow } from './now'
 import { sync, chooseSync } from './sync'
 
@@ -54,7 +56,8 @@ function onKey(e) {
     return
   }
   if (e.key === 'Escape') {
-    if (ui.deadlineId) ui.deadlineId = null
+    if (issues.dialog) issues.dialog = null
+    else if (ui.deadlineId) ui.deadlineId = null
     else if (ui.splitId) ui.splitId = null
     else if (ui.palette) ui.palette = false
     else if (ui.drawerId) ui.drawerId = null
@@ -63,7 +66,7 @@ function onKey(e) {
     return
   }
   const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]')
-  if (typing || ui.palette || ui.splitId || ui.deadlineId) return
+  if (typing || ui.palette || ui.splitId || ui.deadlineId || issues.dialog) return
   if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && ui.selectedId) {
     e.preventDefault()
     const t = moveSelected(e.key === 'ArrowUp' ? -1 : 1)
@@ -76,7 +79,7 @@ function onKey(e) {
   if (gPending) {
     gPending = false
     clearTimeout(gTimer)
-    const to = { s: '/strategy', i: '/todos', t: '/', w: '/week', c: '/', l: '/week?mode=days', d: '/deadlines' }[k]
+    const to = { s: '/strategy', i: '/todos', t: '/', w: '/week', c: '/', l: '/week?mode=days', d: '/deadlines', b: '/issues' }[k]
     if (to) { router.push(to); e.preventDefault() }
     return
   }
@@ -106,6 +109,7 @@ function onKey(e) {
       toast(i < 0 ? 'Today is fully stamped 完' : `Stamped ${STAMPS[i]} for ${T.value}`)
       break
     }
+    case 'i': e.preventDefault(); openIssueDialog(route); break // report an issue on this screen
     case 'f': router.push(route.name === 'focus' ? '/' : '/focus'); break
     case 'x': {
       // X = done on the selected todo, else on the todo you're currently doing
@@ -162,6 +166,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <span class="grow">{{ n.label }}</span>
           <span v-if="n.key === 'todos'" class="mono tiny count">{{ openCount }}</span>
           <span v-else-if="n.key === 'deadlines' && overdueCount" class="mono tiny count over" title="Overdue">{{ overdueCount }}</span>
+          <span v-else-if="n.key === 'issues' && openIssueCount()" class="mono tiny count" title="Open issues">{{ openIssueCount() }}</span>
           <span v-else-if="n.to.startsWith('/m/')" class="mono tiny muted">soon</span>
         </router-link>
       </nav>
@@ -190,6 +195,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </router-link>
         <span class="mono small pill"><span class="dot"></span>{{ T }} {{ wd(T) }} · W{{ isoWeek(T) }} · {{ clock }}</span>
         <button class="btn" @click="openPalette('add')"><span class="icon sm">add</span>New todo <span class="kbd">N</span></button>
+        <button class="btn icon-only" title="Report an issue on this screen (I)" @click="openIssueDialog(route)"><span class="icon sm">bug_report</span></button>
         <button class="btn icon-only" :title="`Theme: ${ui.theme}`" @click="toggleTheme"><span class="icon sm">{{ ui.theme === 'dark' ? 'light_mode' : 'dark_mode' }}</span></button>
       </header>
 
@@ -225,6 +231,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <span><span class="kbd">J</span><span class="kbd">K</span> Move</span>
         <span><span class="kbd">X</span> Done</span>
         <span><span class="kbd">1–5</span> Priority</span>
+        <span><span class="kbd">I</span> Report issue</span>
         <span><span class="kbd">⌥↑↓</span> Reorder</span>
         <span class="spacer"></span>
         <span v-if="ui.selectedId" class="info">SELECTED {{ ui.selectedId }}</span>
@@ -248,6 +255,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </div>
     </div>
     <DeadlineDialog />
+    <IssueDialog />
     <transition name="fade">
       <div v-if="ui.toast" class="toast mono">
         {{ ui.toast }}

@@ -9,6 +9,7 @@ export const NAV = [
   { key: 'study', label: 'Study', icon: 'menu_book', to: '/m/study' },
   { key: 'wellbeing', label: 'Wellbeing', icon: 'ecg_heart', to: '/m/wellbeing' },
   { key: 'standards', label: 'Standards', icon: 'timer', to: '/m/standards' },
+  { key: 'issues', label: 'Issues', icon: 'bug_report', to: '/issues', key1: 'G B' },
   { key: 'settings', label: 'Settings', icon: 'settings', to: '/settings' },
 ]
 

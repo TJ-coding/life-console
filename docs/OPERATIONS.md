@@ -176,6 +176,7 @@ HTTPS isn't handled by Dokploy or Traefik: Cloudflare terminates it in front of 
 | `subscriptions.json` | Devices registered for push |
 | `vapid.json` | Web Push keys. **Losing this unsubscribes every device**; they have to turn notifications on again. |
 | `sent.json` | Recently sent notification keys (de-duplication) |
+| `issues.json` | The in-app issue log (`ISS-n`, reported with `I` on any screen). Not part of the planner document and not covered by `/api/state` backups: save it with `curl -s http://dokpoly.netbird.cloud/api/issues > issues-$(date +%F).json` |
 
 Every device also keeps a copy in its browser and syncs with the server (see README → *Phone app, sync and notifications*).
 

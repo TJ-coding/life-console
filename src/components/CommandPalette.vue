@@ -5,6 +5,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { allPsgs, allSigs, planOfGoal, ui, state, addTodo, parseQuick, stampNext, todayISO, addDays, toggleTheme, resetDemo, toast, STAMPS } from '../store'
 import { NAV } from '../nav'
 import Chip from './Chip.vue'
+import { openIssueDialog } from '../issues'
 
 const router = useRouter()
 const route = useRoute()
@@ -35,6 +36,7 @@ const commands = computed(() => [
   ...NAV.map((n) => ({ label: `Go to ${n.label}`, icon: n.icon, hint: n.key1, run: () => router.push(n.to) })),
   { label: 'New todo…', icon: 'add', hint: 'N', run: () => { ui.paletteMode = 'add'; q.value = ''; return false } },
   { label: 'Stamp next sign-off (today)', icon: 'approval', hint: 'S', run: () => { const i = stampNext(todayISO()); toast(i < 0 ? 'Today is fully stamped 完' : `Stamped ${STAMPS[i]}`) } },
+  { label: 'Report an issue on this screen…', icon: 'bug_report', hint: 'I', run: () => openIssueDialog(route) },
   { label: 'Toggle light / dark theme', icon: 'contrast', run: toggleTheme },
   { label: 'Print current sheet', icon: 'print', run: () => setTimeout(() => window.print(), 50) },
   { label: 'Reset demo data', icon: 'restart_alt', run: () => { if (confirm('Reset all data to the demo seed?')) resetDemo() } },

@@ -37,6 +37,59 @@ function saveDoc(state, device) {
   return doc
 }
 
+/* ── issue log: things to fix, reported from inside the app (screen-tagged) ── */
+// Kept apart from the planner document: no schema migration, never synced to devices, and agents
+// read it with `npm run issues` (scripts/issues.mjs) to pick up work. See CLAUDE.md "Issues".
+const ISSUE_KINDS = ['bug', 'ux', 'idea']
+const ISSUE_SEVERITY = ['low', 'medium', 'high']
+const ISSUE_STATUS = ['open', 'in-progress', 'fixed', 'wontfix']
+let issues = store.read('issues.json', [])
+const saveIssues = () => store.write('issues.json', issues)
+const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+const pick = (v, allowed, dflt) => (allowed.includes(v) ? v : dflt)
+function createIssue(b) {
+  const title = str(b.title, 200)
+  if (!title) throw Object.assign(new Error('title required'), { status: 400 })
+  const n = Math.max(0, ...issues.map((i) => Number(i.id.split('-')[1]) || 0)) + 1
+  const now = new Date().toISOString()
+  const issue = {
+    id: `ISS-${n}`,
+    title,
+    details: str(b.details, 5000),
+    kind: pick(b.kind, ISSUE_KINDS, 'bug'),
+    severity: pick(b.severity, ISSUE_SEVERITY, 'medium'),
+    status: 'open',
+    screen: str(b.screen, 20), // spec screen ID, e.g. S-10
+    screenTitle: str(b.screenTitle, 80),
+    route: str(b.route, 300), // full hash route, e.g. /week?mode=days
+    context: Object.fromEntries(['device', 'viewport', 'theme', 'build', 'selectedId', 'userAgent'] // what was on screen when reported
+      .map((k) => [k, str(b.context?.[k], 300)]).filter(([, v]) => v)),
+    createdAt: str(b.createdAt, 40) || now, // queued offline reports keep their original time
+    updatedAt: now,
+    resolution: '',
+    commit: '',
+    resolvedAt: null,
+  }
+  issues.push(issue)
+  saveIssues()
+  return issue
+}
+function updateIssue(id, b) {
+  const i = issues.find((x) => x.id === id)
+  if (!i) return null
+  for (const k of ['title', 'details', 'screen', 'screenTitle', 'route', 'resolution', 'commit']) if (typeof b[k] === 'string') i[k] = str(b[k], k === 'details' || k === 'resolution' ? 5000 : 300)
+  if (b.kind) i.kind = pick(b.kind, ISSUE_KINDS, i.kind)
+  if (b.severity) i.severity = pick(b.severity, ISSUE_SEVERITY, i.severity)
+  if (b.status && ISSUE_STATUS.includes(b.status) && b.status !== i.status) {
+    i.status = b.status
+    i.resolvedAt = ['fixed', 'wontfix'].includes(b.status) ? new Date().toISOString() : null
+    if (!i.resolvedAt && typeof b.resolution !== 'string') { i.resolution = ''; i.commit = '' } // reopened: the old fix didn't hold
+  }
+  i.updatedAt = new Date().toISOString()
+  saveIssues()
+  return i
+}
+
 /* ── http helpers ── */
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -81,7 +134,34 @@ function serveStatic(req, res, pathname) {
 /* ── API ── */
 async function api(req, res, url) {
   const route = `${req.method} ${url.pathname}`
+  const issueId = url.pathname.match(/^\/api\/issues\/(ISS-\d+)$/)?.[1]
+  if (issueId && req.method === 'PATCH') {
+    const i = updateIssue(issueId, await readBody(req))
+    return i ? send(res, 200, i) : send(res, 404, { error: 'issue not found' })
+  }
+  if (issueId && req.method === 'DELETE') {
+    const before = issues.length
+    issues = issues.filter((x) => x.id !== issueId)
+    if (issues.length === before) return send(res, 404, { error: 'issue not found' })
+    saveIssues()
+    return send(res, 200, { ok: true })
+  }
+  if (issueId && req.method === 'GET') {
+    const i = issues.find((x) => x.id === issueId)
+    return i ? send(res, 200, i) : send(res, 404, { error: 'issue not found' })
+  }
   switch (route) {
+    case 'GET /api/issues': { // ?status=open|in-progress|fixed|wontfix|active (open + in-progress) · ?screen=S-10
+      const st = url.searchParams.get('status')
+      const sc = url.searchParams.get('screen')
+      return send(res, 200, issues.filter((i) => (!st || (st === 'active' ? ['open', 'in-progress'].includes(i.status) : i.status === st)) && (!sc || i.screen === sc)))
+    }
+    case 'POST /api/issues': {
+      const i = createIssue(await readBody(req, 64 * 1024))
+      log(`[issues] ${i.id} ${i.screen || '-'} ${i.title}`)
+      return send(res, 201, i)
+    }
+
     case 'GET /api/health':
       return send(res, 200, { ok: true, version: doc.version, build: BUILD, time: new Date().toISOString() })
 
