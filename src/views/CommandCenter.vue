@@ -3,12 +3,12 @@
 // Order = priority: what to do NOW (with what's next as a hint) on top; then the day's schedule beside the
 // next DEADLINES and the rest of TODAY.
 // Everything else is one quiet telemetry strip at the bottom, and only exceptions get colour.
-import { computed, ref, watch, watchEffect, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, watchEffect, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, CAPACITY_H,
   diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, nextCheckDate, activePlans,
-  updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash, psgPct, nextSig,
+  updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash,
 } from '../store'
 import Timeline24 from '../components/Timeline24.vue'
 import TodoRow from '../components/TodoRow.vue'
@@ -92,25 +92,6 @@ const firstBlock = computed(() => [...blocks.value].sort((a, b) => toMin(a.start
 const openDeadlines = computed(() => state.deadlines.filter((d) => !d.done).sort((a, b) => a.due.localeCompare(b.due)))
 const nextDl = computed(() => openDeadlines.value[0] ?? null)
 const laterDls = computed(() => openDeadlines.value.slice(1, 5))
-/* active goals, filling whatever height the right column has left */
-const psgs = computed(() =>
-  activePlans().flatMap((pl) => pl.psgs.map((p) => ({ ...p, plan: pl.id })))
-    .sort((a, b) => a.priority - b.priority).map((p) => ({ ...p, pct: psgPct(p.no), next: nextSig(p.no) })))
-const GOAL_H = 48 // one goal row
-const GOAL_HEAD = 41
-/** Whole rows only; the header is dropped first when space is tight. */
-const goalFit = ref({ head: false, rows: 0 })
-const goalsBox = ref(null)
-let goalObs = null
-onMounted(() => {
-  goalObs = new ResizeObserver(([e]) => {
-    const h = e.contentRect.height
-    const withHead = Math.floor((h - GOAL_HEAD) / GOAL_H)
-    goalFit.value = withHead >= 1 ? { head: true, rows: withHead } : { head: false, rows: Math.max(0, Math.floor(h / GOAL_H)) }
-  })
-  watch(goalsBox, (el, old) => { if (old) goalObs.unobserve(old); if (el) goalObs.observe(el) }, { immediate: true })
-})
-onBeforeUnmount(() => goalObs?.disconnect())
 const hiddenDls = computed(() => Math.max(0, openDeadlines.value.length - 1 - laterDls.value.length))
 /** Big ticking readout: H:MM:SS inside a day, otherwise days + hours. */
 function bigCountdown(d) {
@@ -278,20 +259,6 @@ function quickAdd() {
         </form>
       </section>
 
-      <!-- spare height in the column goes to the active goals (as many as fit; hidden when none fit) -->
-      <section v-if="vert && psgs.length" ref="goalsBox" class="panel goals" :class="{ none: !goalFit.rows }">
-        <div v-if="goalFit.head" class="panel-h"><span class="icon sm ok">target</span><h2><router-link to="/strategy" class="title-link">Active goals</router-link></h2></div>
-        <div v-for="p in psgs.slice(0, goalFit.rows)" :key="p.no" class="goal" role="link" tabindex="0" :title="`Open plan ${p.plan}`" @click="router.push(`/strategy/${p.plan}`)" @keydown.enter="router.push(`/strategy/${p.plan}`)">
-          <span class="goal-top">
-            <span class="mono goal-no">{{ p.no }}</span>
-            <span class="goal-name">{{ p.name }}</span>
-            <span class="mono small muted ellipsis grow goal-next">{{ p.next ? `next ${p.next.no} ${p.next.name}` : 'all SIGs done ✓' }}</span>
-            <span class="mono goal-pct">{{ p.pct }}%</span>
-          </span>
-          <span class="bar goal-bar"><i :style="{ width: p.pct + '%' }"></i></span>
-        </div>
-      </section>
-
       </div>
     </div>
 
@@ -345,17 +312,6 @@ function quickAdd() {
 .dl-row .when { flex: none; }
 .dl-row:hover .grow { color: var(--accent); }
 .more-dl { align-self: flex-end; }
-/* goals filler: takes the column's spare height; shows only whole rows */
-.goals { flex: 1 1 0; min-height: 0; overflow: hidden; }
-.goals.none { visibility: hidden; }
-.goal { display: flex; flex-direction: column; justify-content: center; gap: 6px; height: 48px; flex: none; box-sizing: border-box; padding: 0 14px; border-bottom: 1px solid var(--border); color: var(--text); cursor: pointer; }
-.goal:last-child { border-bottom: 0; }
-.goal:hover { background: var(--surface-2); }
-.goal-top { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.goal-no { flex: none; font-size: 12px; color: var(--accent); }
-.goal-name { flex: none; font-weight: 600; font-size: 15px; white-space: nowrap; }
-.goal-pct { flex: none; font-size: 14px; font-weight: 600; }
-.goal-bar { height: 3px; }
 .more-dl:hover { color: var(--accent); }
 /* timeline + list */
 .day { display: flex; flex-direction: column; gap: 12px; }
@@ -378,6 +334,9 @@ function quickAdd() {
 .vscroll :deep(.vb .t) { font-size: 11px; }
 .vscroll :deep(.hr span) { font-size: 11px; }
 .todo-panel { min-width: 0; }
+/* vertical layout: Left today stretches to the bottom of the column; the add line stays at its foot */
+.vert .todo-panel { flex: 1 1 auto; }
+.vert .todo-panel .list { flex: 1 1 0; max-height: none; min-height: 140px; }
 .vctrl { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
 .vscroll.z-S :deep(.vb) { font-size: 11px; line-height: 13px; padding: 1px 6px; }
 .vscroll.z-S :deep(.vb .t) { font-size: 10px; }
@@ -421,7 +380,6 @@ a.tm:hover { color: var(--accent); }
   .dl-inst .inst-big { font-size: 30px; line-height: 34px; }
   .dl-inst .name { font-size: 18px; line-height: 24px; }
   .dl-row .when { display: none; }
-  .goals { display: none; }
   .vscroll, .vert .vscroll { flex: none; height: 420px; }
 }
 </style>
