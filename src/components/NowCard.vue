@@ -18,7 +18,7 @@ function start(t) {
     <div class="inst-lbl">
       <span v-if="current" class="tag mono"><span class="pulse"></span>NOW</span>
       <span v-else class="tag mono free-tag">FREE</span>
-      <span class="mono small muted">{{ current ? `${current.start}–${current.end}` : `${fmtDur(gap)} until ${next ? next.start : 'end of day'}` }}</span>
+      <span class="mono muted range">{{ current ? `${current.start}–${current.end}` : `${fmtDur(gap)} until ${next ? next.start : 'end of day'}` }}</span>
     </div>
 
     <template v-if="current">
@@ -50,9 +50,14 @@ function start(t) {
     <div v-else class="title muted">Nothing queued. Press <span class="kbd">N</span> to add a todo.</div>
 
     <!-- what's next: a hint, not an instrument -->
-    <div class="next-hint mono small muted">
-      <template v-if="next">Next <b>{{ next.start }}</b> {{ next.title }} · in {{ fmtDur(untilNext) }}</template>
-      <template v-else>Nothing else on the timeline today</template>
+    <div class="next-row">
+      <span class="tiny upper muted">Next</span>
+      <template v-if="next">
+        <b class="mono">{{ next.start }}</b>
+        <span class="ellipsis grow">{{ next.title }}</span>
+        <span class="mono muted in">in {{ fmtDur(untilNext) }}</span>
+      </template>
+      <span v-else class="muted grow">Nothing else on the timeline today</span>
     </div>
   </section>
 
@@ -66,14 +71,25 @@ function start(t) {
 .free-tag { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
 .pulse { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: pulse 1.6s infinite; }
 @keyframes pulse { 50% { opacity: 0.2; } }
-.title { font: 600 24px/30px Inter, sans-serif; letter-spacing: -0.01em; }
-.big-bar { height: 6px; }
+.now-inst { gap: 12px; padding: 16px 18px; }
+.range { font-size: 13px; }
+.title { font: 600 30px/36px Inter, sans-serif; letter-spacing: -0.015em; }
+.now-inst .inst-big { font-size: 44px; line-height: 48px; }
+.big-bar { height: 8px; }
 .busy .big-bar > i { background: var(--c); }
 .readout { gap: 8px; flex-wrap: wrap; }
 .readout .btn { color: inherit; }
 .readout .btn.primary { color: var(--on-accent); }
 .do { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 2px; padding: 6px 8px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
 .do:hover { border-color: var(--accent); }
-.next-hint { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.next-hint b { color: var(--text); font-weight: 600; }
+.do { font-size: 15px; padding: 8px 10px; }
+/* what's next: one readable line pinned to the bottom of the card */
+.next-row { margin-top: auto; display: flex; align-items: baseline; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 16px; min-width: 0; }
+.next-row b { font-size: 16px; color: var(--warn); }
+.next-row .in { font-size: 14px; flex: none; }
+@media (max-width: 700px) {
+  .title { font-size: 24px; line-height: 30px; }
+  .now-inst .inst-big { font-size: 34px; line-height: 38px; }
+  .next-row { font-size: 15px; }
+}
 </style>

@@ -232,28 +232,29 @@ function quickAdd() {
         </form>
       </section>
 
-      <!-- 4 · telemetry: one quiet line -->
-      <footer class="panel telemetry mono small">
-        <span class="tm seals" title="Daily seals 印 → 印 → 確認 → 完 (S stamps the next)"><span class="muted">SEALS</span> <Stamps :date="T" :size="22" /></span>
-        <span class="tm" title="Sleep the night before"><span class="muted">SLEEP</span>
-          <b v-if="sleep" :class="{ warn: sleptMin < sleep.targetMin }">{{ Math.floor(sleptMin / 60) }}h{{ pad(sleptMin % 60) }}</b><span v-else class="muted">—</span>
-        </span>
-        <span class="tm" title="Caffeine today"><span class="muted">CAF</span>
-          <b :class="{ danger: mg > state.caffeineLimit, warn: isToday && cutoffLeft < 0 && mg > 0 }">{{ mg }}</b><span class="muted">/{{ state.caffeineLimit }}mg</span>
-          <button v-if="isToday" class="btn sm icon-only" :title="cutoffLeft > 0 ? `Add a coffee (95mg) · cutoff ${state.caffeineCutoff}` : `Cutoff ${state.caffeineCutoff} passed`" @click="addCoffee"><span class="icon sm">coffee</span></button>
-        </span>
-        <router-link to="/week" class="tm" title="Weekly routines done"><span class="muted">ROUTINES</span> <b>{{ routineCount }}</b><span class="muted">/{{ state.routines.length }}</span></router-link>
-        <span class="spacer"></span>
-        <template v-for="a in alerts" :key="a.id">
-          <router-link v-if="a.to" :to="a.to" class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</router-link>
-          <span v-else class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</span>
-        </template>
-        <span v-for="l in lectures" :key="l.id" class="tm alert info" :title="`#${l.no} ${l.title}`">{{ l.time }} {{ l.course }}<template v-if="!l.readAhead"> · read ahead</template></span>
-        <button class="btn sm more-btn" :aria-expanded="more" @click="setMore(!more)">{{ more ? 'Less' : 'More' }}<span class="icon sm">{{ more ? 'expand_less' : 'expand_more' }}</span></button>
-      </footer>
       </div>
     </div>
 
+
+    <!-- 4 · telemetry: one quiet line, pinned to the bottom of the page -->
+    <footer class="panel telemetry mono small">
+      <span class="tm seals" title="Daily seals 印 → 印 → 確認 → 完 (S stamps the next)"><span class="muted">SEALS</span> <Stamps :date="T" :size="22" /></span>
+      <span class="tm" title="Sleep the night before"><span class="muted">SLEEP</span>
+        <b v-if="sleep" :class="{ warn: sleptMin < sleep.targetMin }">{{ Math.floor(sleptMin / 60) }}h{{ pad(sleptMin % 60) }}</b><span v-else class="muted">—</span>
+      </span>
+      <span class="tm" title="Caffeine today"><span class="muted">CAF</span>
+        <b :class="{ danger: mg > state.caffeineLimit, warn: isToday && cutoffLeft < 0 && mg > 0 }">{{ mg }}</b><span class="muted">/{{ state.caffeineLimit }}mg</span>
+        <button v-if="isToday" class="btn sm icon-only" :title="cutoffLeft > 0 ? `Add a coffee (95mg) · cutoff ${state.caffeineCutoff}` : `Cutoff ${state.caffeineCutoff} passed`" @click="addCoffee"><span class="icon sm">coffee</span></button>
+      </span>
+      <router-link to="/week" class="tm" title="Weekly routines done"><span class="muted">ROUTINES</span> <b>{{ routineCount }}</b><span class="muted">/{{ state.routines.length }}</span></router-link>
+      <span class="spacer"></span>
+      <template v-for="a in alerts" :key="a.id">
+        <router-link v-if="a.to" :to="a.to" class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</router-link>
+        <span v-else class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</span>
+      </template>
+      <span v-for="l in lectures" :key="l.id" class="tm alert info" :title="`#${l.no} ${l.title}`">{{ l.time }} {{ l.course }}<template v-if="!l.readAhead"> · read ahead</template></span>
+      <button class="btn sm more-btn" :aria-expanded="more" @click="setMore(!more)">{{ more ? 'Less' : 'More' }}<span class="icon sm">{{ more ? 'expand_less' : 'expand_more' }}</span></button>
+    </footer>
 
     <!-- 5 · the full briefing, on demand -->
     <CommandCenterMore v-if="more" :date="T" :is-today="isToday" />
@@ -261,7 +262,8 @@ function quickAdd() {
 </template>
 
 <style scoped>
-.cc { display: flex; flex-direction: column; gap: 12px; padding: 16px; max-width: 1600px; }
+.cc { display: flex; flex-direction: column; gap: 12px; padding: 16px; max-width: 1600px; min-height: 100%; box-sizing: border-box; }
+.telemetry { margin-top: auto; }
 .cockpit { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
 .preview { border-left: 3px solid var(--info); }
 .pv-title { font: 600 24px/30px Inter, sans-serif; }
@@ -331,7 +333,7 @@ a.tm:hover { color: var(--accent); }
   /* on a phone the list of what's left beats the horizontal strip */
   .day, .day.vert { display: flex; flex-direction: column; align-items: stretch; }
   .side { display: contents; }
-  .todo-panel { order: 1; } .tl-panel { order: 2; } .telemetry { order: 3; }
+  .todo-panel { order: 1; } .tl-panel { order: 2; }
   .vscroll { height: 420px; }
 }
 </style>
