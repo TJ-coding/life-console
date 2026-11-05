@@ -1,11 +1,29 @@
 <script setup>
 // S-30 · Strategic Plan (Goals Planner) — Vision → PSG → SIG cascade with tables and review widgets.
-import { computed, ref, nextTick, reactive } from 'vue'
-import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority } from '../store'
+import { computed, ref, nextTick, reactive, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan } from '../store'
+import PlanTabs from '../components/PlanTabs.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
 
-const plan = computed(() => state.plan)
+const route = useRoute()
+const router = useRouter()
+const plan = computed(() => findPlan(route.params.planId))
+// unknown plan id (deleted, or typo) → back to the plans overview
+watch(plan, (p) => {
+  if (!p) router.replace('/strategy')
+  else try { localStorage.setItem('life-console/last-plan', p.id) } catch { /* ignore */ }
+}, { immediate: true })
+// tabs reuse this component: don't carry selection/filters over to another plan
+watch(() => route.params.planId, () => { selected.value = null; psgFilter.value = '' })
+function removePlan() {
+  const p = plan.value
+  if (!confirm(`Delete ${p.planNo} "${p.title}" with its ${p.psgs.length} PSGs and ${p.sigs.length} SIGs?\n\nTip: set it to Archived to keep it out of the way without deleting.`)) return
+  deletePlan(p.id)
+  toast(`Deleted ${p.planNo}`)
+  router.replace('/strategy')
+}
 const T = computed(() => todayISO())
 const selected = ref(null)
 const psgFilter = ref('')
@@ -38,16 +56,15 @@ async function select(no) {
 }
 
 function addPsg() {
-  const n = plan.value.psgs.length + 1
-  const no = `PSG-${String(n).padStart(2, '0')}`
-  plan.value.psgs.push({ no, name: 'New strategic goal', priority: n, indicators: '', timeBound: '', status: 'open' })
+  const no = nextPsgNo() // unique across all plans
+  plan.value.psgs.push({ no, name: 'New strategic goal', priority: plan.value.psgs.length + 1, indicators: '', timeBound: '', status: 'open' })
   selected.value = no
 }
 function addSig(psgNo) {
   const sel = selected.value
   psgNo = psgNo || (sel?.startsWith('PSG') ? sel : plan.value.sigs.find((s) => s.no === sel)?.psg) || psgs.value[0]?.no
   if (!psgNo) return
-  const n = sigsOf(psgNo).length + 1
+  const n = Math.max(0, ...sigsOf(psgNo).map((s) => Number(s.no.split('.')[1]) || 0)) + 1
   const no = `SIG-${psgNo.slice(4)}.${n}`
   plan.value.sigs.push({ no, psg: psgNo, name: 'New indicator goal', priority: 3, criteria: '', timeBound: '', status: 'open', pct: 0 })
   selected.value = no
@@ -60,7 +77,7 @@ function todoFor(sig) {
 }
 
 const linked = computed(() => {
-  const ids = new Set(planIds())
+  const ids = new Set(planIds(plan.value))
   return state.todos.filter((t) => t.links.some((l) => ids.has(l))).sort(byPriority)
 })
 
@@ -68,7 +85,7 @@ const linked = computed(() => {
 const recentChecks = computed(() => plan.value.checkLog.slice(-4))
 function logCheck() {
   plan.value.checkLog.push({ date: T.value, reminder: true, checked: true, updated: false })
-  toast(`Check logged · next ${nextCheckDate()}`)
+  toast(`Check logged · next ${nextCheckDate(plan)}`)
 }
 
 /* events timetable */
@@ -88,19 +105,24 @@ const print = () => window.print()
 </script>
 
 <template>
-  <div class="sp">
+  <div v-if="plan" class="sp">
+    <PlanTabs />
     <header class="sp-head">
       <div class="row wrap">
         <h1 class="mono">Strategic Plan · <span class="muted">Plan No.</span> {{ plan.planNo }}</h1>
         <input v-model="plan.title" class="input ghost title-in mono" />
-        <span class="status doing">● {{ plan.status }}</span>
+        <select v-model="plan.status" class="select mono status-sel" :class="plan.status" title="Plan status">
+          <option value="active">● Active</option><option value="paused">● Paused</option><option value="archived">● Archived</option>
+        </select>
+        <input v-model="plan.health" class="input ghost health mono" title="Health label" placeholder="On-track" />
         <span class="spacer"></span>
         <button class="btn" @click="print"><span class="icon sm">picture_as_pdf</span>Export A4</button>
+        <button class="btn icon-only danger-ghost" title="Delete this plan" @click="removePlan"><span class="icon sm">delete</span></button>
       </div>
       <div class="row wrap small">
         <span class="icon sm muted">schedule</span>
         <span class="muted mono">Next check date:</span>
-        <b class="mono" :class="diffDays(T, nextCheckDate()) <= 1 ? 'warn' : ''">{{ nextCheckDate() }} ({{ relDay(nextCheckDate(), T) }})</b>
+        <b class="mono" :class="diffDays(T, nextCheckDate(plan)) <= 1 ? 'warn' : ''">{{ nextCheckDate(plan) }} ({{ relDay(nextCheckDate(plan), T) }})</b>
       </div>
       <div class="row intent"><b class="mono">INTENT:</b><input v-model="plan.intent" class="input ghost grow" /></div>
     </header>
@@ -212,7 +234,7 @@ const print = () => window.print()
               <span class="muted">Check frequency: every</span>
               <input v-model.number="plan.checkEveryDays" type="number" min="1" class="input mono num-in" />
               <span class="muted">days</span><span class="spacer"></span>
-              <span class="mono">next <b :class="diffDays(T, nextCheckDate()) <= 1 ? 'warn' : 'ok'">{{ nextCheckDate() }}</b></span>
+              <span class="mono">next <b :class="diffDays(T, nextCheckDate(plan)) <= 1 ? 'warn' : 'ok'">{{ nextCheckDate(plan) }}</b></span>
             </div>
           </section>
 
@@ -241,7 +263,7 @@ const print = () => window.print()
               <div v-for="t in linked" :key="t.id" class="lt-row" :class="{ done: t.done }" @click="ui.drawerId = t.id">
                 <input type="checkbox" :checked="t.done" @click.stop @change="toggleTodo(t.id)" />
                 <span class="grow ellipsis">{{ t.title }}</span>
-                <Chip :id="t.links.find((l) => planIds().includes(l))" />
+                <Chip :id="t.links.find((l) => planIds(plan).includes(l))" />
               </div>
               <div v-if="!linked.length" class="empty">No todos linked to this plan yet.</div>
             </div>
@@ -266,6 +288,10 @@ const print = () => window.print()
 
 <style scoped>
 .sp { display: flex; flex-direction: column; min-height: 100%; }
+.status-sel { height: 26px; font-size: 11px; color: var(--accent); border-color: var(--accent); }
+.status-sel.paused { color: var(--warn); border-color: var(--warn); }
+.status-sel.archived { color: var(--muted); border-color: var(--border); }
+.health { width: 120px; font-size: 12px; color: var(--muted); }
 .sp-head { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .wrap { flex-wrap: wrap; }
 h1 { margin: 0; font-size: 18px; font-weight: 600; }

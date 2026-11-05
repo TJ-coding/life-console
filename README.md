@@ -17,7 +17,8 @@ Without the server the app still runs: sync stays off and data lives in the brow
 | S-10 Plan week | `#/week` | the whole planning flow on one sheet: ① backlog panel → ② a 7-hour workload bucket per day → ③ that day's timeline directly below; one-click day buttons, Auto time-box, linked hover, balance and routines in a side rail |
 | S-20 Todo Inbox | `#/todos` | views / link / L-S-D / priority filters, smart quick-add parser, bulk schedule / priority / link / done, edit drawer |
 | S-21 Deadlines | `#/deadlines` | list grouped Overdue / Today / This week / Next week / Later (+ Done), or a month calendar (click a day, or its +, to add a deadline right in that cell); quick-add, source filter, edit/delete dialog; overdue badge in the sidebar |
-| S-30 Strategic Plan | `#/strategy` | Vision → PSG → SIG tree, editable PSG/SIG tables (PSG % = mean of SIG %), check schedule, events timetable, linked todos, "create todo for SIG" |
+| S-35 Plans index | `#/strategy` | all strategic plans as cards (progress, goals, open tasks, next check), each Active / Paused / Archived, create and delete; tabs switch between plans |
+| S-30 Strategic Plan | `#/strategy/SP-03` | Vision → PSG → SIG tree, editable PSG/SIG tables (PSG % = mean of SIG %), check schedule, events timetable, linked todos, "create todo for SIG" |
 | Other modules | `#/m/...` | Placeholder that lists the planned screens |
 
 **Keyboard:** `F` focus mode · `⌘K` palette · `N` new todo · `T` today · `W` week · `G S` strategy · `G I` inbox · `G L` workload · `G D` deadlines · `J/K` move · `Enter` open · `X` done · `1–5` priority · `S` stamp · `[` `]` week.
@@ -56,6 +57,10 @@ Each part is an ordinary task labelled `1/3`, `2/3`… in date order, sharing th
 - Code layout: `src/store.js` (state, seed data, helpers), `src/components/*`, `src/views/*`.
 
 - Category colours (`--cat-*` in `styles.css`) come from the validated categorical palette. They're separate from the status colours (green = done, amber = warning, red = overdue).
+
+## Data schema and migrations
+The planner document carries `schemaVersion`. `migrateDoc()` in `src/store.js` upgrades any document (from the server, a browser or an import) one numbered step at a time. It runs on load, on sync (before merging) and on import, and it is idempotent. To change the data shape, bump `SCHEMA_VERSION` and add the next step; never edit an old one.
+- **v2:** `plan` (one strategic plan) became `plans: [{ id, planNo, title, status: active|paused|archived, health, … }]`. Goal numbers (`PSG-nn`, `SIG-nn.m`) are unique across all plans, so task links stay unambiguous.
 
 ## Phone app, sync and notifications
 - **Install** (needs HTTPS): on iPhone use Safari → Share → *Add to Home Screen*; on Android use Chrome → *Install app*. Then go to Settings → Notifications → *Turn on for this device*. iOS needs 16.4+ and only delivers push to Home Screen apps.

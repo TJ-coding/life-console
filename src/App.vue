@@ -38,7 +38,7 @@ const T = computed(() => todayISO())
 const reload = () => window.location.reload()
 const openCount = computed(() => state.todos.filter((t) => !t.done).length)
 const overdueCount = computed(() => { void ui.now.getMinutes(); return state.deadlines.filter(isOverdue).length })
-const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name === 'day' ? 'today' : route.name))
+const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name === 'day' ? 'today' : route.name === 'plans' ? 'strategy' : route.name))
 
 function openPalette(mode) {
   ui.paletteMode = mode

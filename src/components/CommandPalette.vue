@@ -2,7 +2,7 @@
 // ⌘K command palette (S-80). Also handles quick-add (`N` or a leading "+").
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ui, state, addTodo, parseQuick, stampNext, todayISO, addDays, toggleTheme, resetDemo, toast, STAMPS } from '../store'
+import { allPsgs, allSigs, planOfGoal, ui, state, addTodo, parseQuick, stampNext, todayISO, addDays, toggleTheme, resetDemo, toast, STAMPS } from '../store'
 import { NAV } from '../nav'
 import Chip from './Chip.vue'
 
@@ -48,8 +48,10 @@ const results = computed(() => {
   if (s) {
     out.push(...state.todos.filter((t) => has(`${t.id} ${t.title} ${t.links.join(' ')}`)).slice(0, 8)
       .map((t) => ({ label: t.title, icon: t.done ? 'check_box' : 'check_box_outline_blank', hint: t.id, group: 'Todos', run: () => { ui.selectedId = t.id; ui.drawerId = t.id } })))
-    out.push(...[...state.plan.psgs, ...state.plan.sigs].filter((g) => has(`${g.no} ${g.name}`))
-      .map((g) => ({ label: `${g.no} · ${g.name}`, icon: 'flag', group: 'Goals', run: () => router.push('/strategy') })))
+    out.push(...state.plans.filter((p) => has(`${p.planNo} ${p.title}`))
+      .map((p) => ({ label: `${p.planNo} · ${p.title}`, icon: 'target', group: 'Plans', run: () => router.push(`/strategy/${p.id}`) })))
+    out.push(...[...allPsgs(), ...allSigs()].filter((g) => has(`${g.no} ${g.name}`))
+      .map((g) => ({ label: `${g.no} · ${g.name}`, icon: 'flag', group: 'Goals', hint: planOfGoal(g.no)?.planNo, run: () => router.push(`/strategy/${planOfGoal(g.no)?.id ?? ''}`) })))
   }
   return out
 })

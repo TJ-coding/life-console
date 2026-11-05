@@ -229,8 +229,47 @@ export function ensureSettings() {
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { /* ignore */ }
   if (s.timezone !== tz) s.timezone = tz
 }
+/* ───────────── schema migrations ─────────────
+ * Each step upgrades a stored document by one version. They run on every load / sync / import,
+ * so data saved by older versions of the app (on the server or in a browser) keeps working.
+ * To change the data shape: bump SCHEMA_VERSION and add the next numbered step. Never edit old steps.
+ */
+export const SCHEMA_VERSION = 2
+const PLAN_STATUSES = ['active', 'paused', 'archived']
+function planV2(p) {
+  const legacyLabel = typeof p.status === 'string' && !PLAN_STATUSES.includes(p.status) ? p.status : null
+  return {
+    ...p,
+    id: p.id ?? p.planNo ?? 'SP-01',
+    status: PLAN_STATUSES.includes(p.status) ? p.status : 'active',
+    health: p.health ?? (legacyLabel ? legacyLabel.replace(/^Active\s*·\s*/i, '') : 'On-track'),
+  }
+}
+const MIGRATIONS = {
+  // v1 → v2: a single strategic plan (`plan`) becomes a list (`plans`), each with an id and status
+  2(doc) {
+    if (!Array.isArray(doc.plans)) doc.plans = []
+    if (doc.plan) {
+      const p = planV2(doc.plan)
+      if (!doc.plans.some((x) => x.id === p.id)) doc.plans.unshift(p)
+      delete doc.plan
+    }
+    doc.plans = doc.plans.map(planV2)
+  },
+}
+/** Upgrade a document in place to SCHEMA_VERSION (idempotent; tolerates stale clients re-adding old fields). */
+export function migrateDoc(doc) {
+  if (!doc || typeof doc !== 'object') return doc
+  let v = Number(doc.schemaVersion) || 1
+  while (v < SCHEMA_VERSION) { MIGRATIONS[v + 1](doc); v += 1 }
+  if (doc.plan) MIGRATIONS[2](doc) // an out-of-date device synced the old field back
+  doc.schemaVersion = SCHEMA_VERSION
+  return doc
+}
+
 /** Bring any loaded / synced / imported document up to the current shape. */
 export function normalizeState() {
+  migrateDoc(state)
   ensureOrder()
   ensureSettings()
 }
@@ -462,20 +501,49 @@ export function toggleStamp(date, i) {
 }
 
 /* ───────────── strategy ───────────── */
-export const sigsOf = (psgNo) => state.plan.sigs.filter((s) => s.psg === psgNo).sort((a, b) => a.priority - b.priority)
+/* Goal numbers (PSG-nn, SIG-nn.m) are unique across ALL plans, so a task link names exactly one goal. */
+export const findPlan = (id) => state.plans.find((p) => p.id === id)
+export const activePlans = () => state.plans.filter((p) => p.status === 'active')
+export const allPsgs = () => state.plans.flatMap((p) => p.psgs)
+export const allSigs = () => state.plans.flatMap((p) => p.sigs)
+export const planOfGoal = (no) => state.plans.find((p) => p.psgs.some((x) => x.no === no) || p.sigs.some((x) => x.no === no))
+export function nextPsgNo() {
+  const n = Math.max(0, ...allPsgs().map((p) => Number(String(p.no).replace(/^PSG-/, '')) || 0))
+  return `PSG-${String(n + 1).padStart(2, '0')}`
+}
+export function createPlan(title = 'New strategic plan') {
+  const n = Math.max(0, ...state.plans.map((p) => Number(String(p.planNo).replace(/^SP-/, '')) || 0)) + 1
+  const planNo = `SP-${String(n).padStart(2, '0')}`
+  state.plans.push({
+    id: planNo, planNo, title, status: 'active', health: 'On-track', intent: '', vision: '',
+    psgs: [], sigs: [], checkEveryDays: 7, checkLog: [], events: [],
+  })
+  return state.plans[state.plans.length - 1]
+}
+export function deletePlan(id) {
+  const i = state.plans.findIndex((p) => p.id === id)
+  if (i >= 0) state.plans.splice(i, 1)
+}
+export const sigsOf = (psgNo) => allSigs().filter((s) => s.psg === psgNo).sort((a, b) => a.priority - b.priority)
 export function psgPct(psgNo) {
   const s = sigsOf(psgNo)
   return s.length ? Math.round(s.reduce((a, x) => a + Number(x.pct || 0), 0) / s.length) : 0
 }
 export const nextSig = (psgNo) => sigsOf(psgNo).find((s) => s.status !== 'done')
-export function nextCheckDate() {
-  const log = state.plan.checkLog
+export function nextCheckDate(plan) {
+  if (!plan) return nextPlanCheck()?.date ?? todayISO()
+  const log = plan.checkLog ?? []
   const last = log.length ? log[log.length - 1].date : todayISO()
-  return addDays(last, Number(state.plan.checkEveryDays) || 7)
+  return addDays(last, Number(plan.checkEveryDays) || 7)
 }
-export function planIds() {
-  return [state.plan.planNo, ...state.plan.psgs.map((p) => p.no), ...state.plan.sigs.map((s) => s.no)]
+/** The soonest check among active plans: { plan, date } or null. */
+export function nextPlanCheck() {
+  return activePlans().map((plan) => ({ plan, date: nextCheckDate(plan) })).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null
 }
+export function planPct(plan) {
+  return plan.psgs.length ? Math.round(plan.psgs.reduce((s, x) => s + psgPct(x.no), 0) / plan.psgs.length) : 0
+}
+export const planIds = (plan) => [plan.planNo, plan.id, ...plan.psgs.map((p) => p.no), ...plan.sigs.map((s) => s.no)]
 
 /* ───────────── routines ───────────── */
 export const monthGroup = (date) => ['A', 'B', 'C'][parseISO(date).getMonth() % 3]

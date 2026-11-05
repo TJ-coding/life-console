@@ -18,7 +18,7 @@ const schedStart = computed({
   get: () => t.value?.scheduled?.start ?? '',
   set: (v) => { if (t.value.scheduled) t.value.scheduled.start = v || null },
 })
-const goalOptions = computed(() => [...state.plan.psgs.map((p) => p.no), ...state.plan.sigs.map((s) => s.no)])
+const goalOptions = computed(() => state.plans.filter((p) => p.status !== 'archived').flatMap((p) => [...p.psgs.map((g) => g.no), ...p.sigs.map((s) => s.no)]))
 function addLink(id) {
   if (id && !t.value.links.includes(id)) t.value.links.push(id)
 }

@@ -1,7 +1,7 @@
 <script setup>
 // Week balance: verdict, rebalance suggestions and hours by goal (side panel of the planner).
 import { computed } from 'vue'
-import { state, ui, addDays, wd, fmtSlash, CAPACITY_H, dayLoad, suggestRebalance, todosForDay, updateTodo, toast } from '../store'
+import { allPsgs, allSigs, state, ui, addDays, wd, fmtSlash, CAPACITY_H, dayLoad, suggestRebalance, todosForDay, updateTodo, toast } from '../store'
 
 const days = computed(() => [0, 1, 2, 3, 4].map((i) => addDays(ui.weekStart, i)))
 const all = computed(() => [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(ui.weekStart, i)))
@@ -35,13 +35,13 @@ const byGoal = computed(() => {
       let psg = 'Unlinked'
       for (const l of t.links) {
         if (l.startsWith('PSG-')) { psg = l; break }
-        const s = state.plan.sigs.find((x) => x.no === l)
+        const s = allSigs().find((x) => x.no === l)
         if (s) { psg = s.psg; break }
       }
       m.set(psg, (m.get(psg) ?? 0) + t.timeMin / 60)
     }
   }
-  return [...m].map(([k, h]) => ({ k, h, name: state.plan.psgs.find((p) => p.no === k)?.name ?? 'Not linked to a goal' }))
+  return [...m].map(([k, h]) => ({ k, h, name: allPsgs().find((p) => p.no === k)?.name ?? 'Not linked to a goal' }))
     .sort((a, b) => (a.k === 'Unlinked') - (b.k === 'Unlinked') || b.h - a.h)
 })
 const goalMax = computed(() => Math.max(1, ...byGoal.value.map((r) => r.h)))

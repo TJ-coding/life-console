@@ -58,7 +58,7 @@ const allPicked = computed({
   set: (v) => { picked.value = v ? rows.value.map((r) => r.id) : [] },
 })
 const bulk = reactive({ date: '', prio: '', link: '' })
-const goalIds = computed(() => [...state.plan.psgs.map((p) => p.no), ...state.plan.sigs.map((s) => s.no)])
+const goalIds = computed(() => state.plans.filter((p) => p.status !== 'archived').flatMap((p) => [...p.psgs.map((g) => g.no), ...p.sigs.map((s) => s.no)]))
 function each(fn) { picked.value.forEach(fn); toast(`Updated ${picked.value.length} todos`) }
 const bulkSchedule = () => { if (bulk.date) each((id) => updateTodo(id, { scheduled: { date: bulk.date, start: null } })); bulk.date = '' }
 const bulkPrio = () => { if (bulk.prio) each((id) => updateTodo(id, { priority: +bulk.prio })); bulk.prio = '' }

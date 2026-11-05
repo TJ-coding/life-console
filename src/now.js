@@ -1,6 +1,6 @@
 // "What should I be doing right now?" — derived live from today's timeline + todos.
 import { computed } from 'vue'
-import { state, ui, todayISO, blocksForDay, todosForDay, toMin, fromMin, pad, updateTodo, byPriority } from './store'
+import { allSigs, state, ui, todayISO, blocksForDay, todosForDay, toMin, fromMin, pad, updateTodo, byPriority } from './store'
 
 export function fmtDur(sec) {
   sec = Math.max(0, Math.round(sec))
@@ -19,7 +19,7 @@ export function fmtClock(sec) {
 /** Does todo `t` belong to block `b` (same link, or a SIG under the block's PSG)? */
 function relatedTo(t, b) {
   if (!b.link) return false
-  return t.links.some((l) => l === b.link || state.plan.sigs.find((s) => s.no === l)?.psg === b.link)
+  return t.links.some((l) => l === b.link || allSigs().find((s) => s.no === l)?.psg === b.link)
 }
 
 export function useNow() {

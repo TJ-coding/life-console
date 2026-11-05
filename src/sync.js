@@ -7,7 +7,7 @@
 //   independent edits on two devices are both kept; same-field clashes go to the newest edit.
 // Without a server (vite dev, static hosting) sync quietly stays off and the app works locally.
 import { reactive, watch, nextTick } from 'vue'
-import { state, normalizeState, toast, hadLocalData } from './store'
+import { state, normalizeState, toast, hadLocalData, migrateDoc } from './store'
 import { merge3 } from './merge'
 
 const K = { base: 'life-console/sync-base', version: 'life-console/sync-version', dirty: 'life-console/sync-dirty', edited: 'life-console/sync-edited', device: 'life-console/device' }
@@ -68,7 +68,8 @@ function markClean(version) {
 }
 /** Merge the server's newer copy into this device's edits; stays dirty so the result gets pushed. */
 async function mergeRemote(remote) {
-  const base = readBase()
+  remote = { ...remote, state: migrateDoc(plain(remote.state)) } // older-schema server copy → current shape first
+  const base = migrateDoc(readBase())
   const merged = base ? merge3(base, plain(state), remote.state) : plain(state) // no base (old client): keep local
   applying = true
   for (const k of Object.keys(state)) delete state[k]

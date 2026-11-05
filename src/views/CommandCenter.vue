@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, getStamps, STAMPS, CAPACITY_H,
   psgPct, nextSig, diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, monthGroup,
-  nextCheckDate, updateTodo, addTodo, parseQuick, toast, addDays, fmtSlash,
+  nextCheckDate, nextPlanCheck, activePlans, updateTodo, addTodo, parseQuick, toast, addDays, fmtSlash,
 } from '../store'
 import Timeline24 from '../components/Timeline24.vue'
 import TodoRow from '../components/TodoRow.vue'
@@ -42,7 +42,8 @@ const nowMin = computed(() => ui.now.getHours() * 60 + ui.now.getMinutes())
 const deadlines = computed(() =>
   state.deadlines.filter((d) => !d.done && diffDays(T.value, d.due) <= 7).sort((a, b) => a.due.localeCompare(b.due)))
 const psgs = computed(() =>
-  [...state.plan.psgs].sort((a, b) => a.priority - b.priority).slice(0, 3).map((p) => ({ ...p, pct: psgPct(p.no), next: nextSig(p.no) })))
+  activePlans().flatMap((pl) => pl.psgs.map((p) => ({ ...p, plan: pl.id, planNo: pl.planNo })))
+    .sort((a, b) => a.priority - b.priority).slice(0, 3).map((p) => ({ ...p, pct: psgPct(p.no), next: nextSig(p.no) })))
 
 const week = computed(() => mondayOf(T.value))
 const routineCount = computed(() => routineDone(week.value).length)
@@ -69,7 +70,7 @@ function addCaffeine(what, amount) {
 }
 
 const reviews = computed(() =>
-  [{ id: state.plan.planNo, title: `Plan ${state.plan.planNo} check`, date: nextCheckDate(), to: '/strategy' }, ...state.reviews]
+  [...activePlans().map((p) => ({ id: p.id, title: `Plan ${p.planNo} check`, date: nextCheckDate(p), to: `/strategy/${p.id}` })), ...state.reviews]
     .sort((a, b) => a.date.localeCompare(b.date)))
 const lectures = computed(() => state.lectures.filter((l) => l.date === T.value))
 
@@ -115,7 +116,8 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
       </div>
       <div class="kv">
         <div class="tiny upper muted">Next plan check</div>
-        <div class="mono">{{ nextCheckDate() }} <span class="muted">({{ relDay(nextCheckDate(), T) }})</span></div>
+        <div v-if="nextPlanCheck()" class="mono">{{ nextPlanCheck().date }} <span class="muted">({{ relDay(nextPlanCheck().date, T) }} · {{ nextPlanCheck().plan.planNo }})</span></div>
+        <div v-else class="mono muted">no active plan</div>
       </div>
     </section>
 
@@ -209,12 +211,13 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
     <section class="panel c4">
       <div class="panel-h"><span class="icon sm ok">target</span><h2><router-link to="/strategy" class="title-link">Active strategic goals</router-link></h2></div>
       <div class="col panel-b">
-        <router-link v-for="p in psgs" :key="p.no" to="/strategy" class="psg">
-          <div class="row"><Chip :id="p.no" /><span class="spacer"></span><span class="mono" :class="pctClass(p.pct) || 'ok'">{{ p.pct }}%</span></div>
+        <router-link v-for="p in psgs" :key="p.no" :to="`/strategy/${p.plan}`" class="psg">
+          <div class="row"><Chip :id="p.no" /><span class="mono tiny muted">{{ p.planNo }}</span><span class="spacer"></span><span class="mono" :class="pctClass(p.pct) || 'ok'">{{ p.pct }}%</span></div>
           <div class="psg-name">{{ p.name }}</div>
           <div class="bar" :class="pctClass(p.pct)"><i :style="{ width: p.pct + '%' }"></i></div>
           <div class="small muted mono ellipsis">Next: {{ p.next ? `${p.next.no} ${p.next.name}` : 'all SIGs done ✓' }}</div>
         </router-link>
+        <div v-if="!psgs.length" class="empty">No active strategic plan. <router-link to="/strategy">Create or activate one</router-link>.</div>
       </div>
     </section>
 
