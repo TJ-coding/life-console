@@ -240,7 +240,8 @@ Production-like run: `npm run build && DATA_DIR=.data PORT=8787 PUSH_DRY_RUN=1 n
 | **Banner "Life Console was updated"** | A newer build is deployed. Reload. |
 | **Sync says RELOAD / "saved by a newer version"** | This tab's code is older than the data's schema. Reload. |
 | **502 right after a deploy** | The container is still starting (health check). Wait a few seconds. |
-| **No notifications** | Settings → Notifications: is it **ON** for this device? Use **Send test**. Check `/api/push/devices` (on NetBird). iPhone: the app must be installed to the Home Screen (iOS 16.4+), with notifications allowed in iOS Settings. Server log: Dokploy → app → Logs, look for `[notify]` and `[push]` lines. |
+| **No notifications** | Settings → Notifications: is it **ON** for this device? Use **Send test**. Check `/api/push/devices` (on NetBird). iPhone: the app must be installed to the Home Screen (iOS 16.4+), with notifications allowed in iOS Settings. Server log: Dokploy → app → Logs, look for `[notify]` and `[push]` lines (`→ 1 device(s)` means the push service accepted it, so a missing alert is on the phone). |
+| **Notification shows but doesn't buzz** | Phone-side: the site's Android notification category is *Silent*. Steps are in Settings → Notifications → *Test arrives silently…* and README → *No sound or vibration?* |
 | **Notifications at the wrong time** | They use the timezone of the device you last used (Settings → *What to notify* shows it). |
 | **GitHub Actions `startup_failure`** | Usually account billing: check https://github.com/settings/billing. |
 | **CI deploy fails at "Check configuration"** | A secret or variable from 4.1 is missing (currently `NETBIRD_SETUP_KEY`). |

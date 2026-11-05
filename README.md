@@ -81,6 +81,7 @@ The planner document carries `schemaVersion`. `migrateDoc()` in `src/store.js` u
   - **Wellbeing:** a caffeine cutoff warning and a wind-down reminder.
 
   Each kind can be toggled, and its times set, in Settings.
+- **No sound or vibration?** The phone decides that, not the app, and Android often files a new site's notifications as *Silent*. Long-press a Life Console notification and choose *Alerting*, or go to Android Settings → Notifications → App notifications → Life Console (or Chrome) → the site's category → turn on Sound, Vibration and Pop on screen. Also check the site is *Allowed* in Chrome → Site settings → Notifications, the phone isn't on Mute/Do Not Disturb, and battery use is *Unrestricted*. On iPhone: Settings → Notifications → Life Console → Sounds and Banners on. The same steps are in Settings → Notifications → *Test arrives silently, or not at all?*
 - **Server** (`server/`): plain Node `http` plus `web-push`. Data, subscriptions and VAPID keys live in `DATA_DIR` (`/data`, a Docker volume).
 
 ## Working on the code

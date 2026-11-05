@@ -100,6 +100,26 @@ const reload = () => window.location.reload()
           </template>
         </div>
         <p v-if="push.error" class="small danger">{{ push.error }}</p>
+        <details v-if="push.supported" class="phone-help small">
+          <summary><b>Test arrives silently, or not at all?</b> Set it up on the phone</summary>
+          <p class="muted">The phone decides sound and vibration, not the app. Android often files a new site's notifications as <b>Silent</b>.</p>
+          <div v-if="!env.ios"><b class="row"><span class="icon sm">android</span>Android</b>
+            <ol>
+              <li>Long-press a Life Console notification → choose <b>Alerting</b> / <b>Default</b> (not Silent).</li>
+              <li>Or: Settings → Notifications → App notifications → <b>Life Console</b> (or <b>Chrome</b> if you use a tab) → the <b>life-console.tj-coding.uk</b> / <b>Sites</b> category → turn on <b>Sound</b>, <b>Vibration</b> and <b>Pop on screen</b>.</li>
+              <li>Chrome → ⋮ → Settings → Site settings → Notifications → this site is <b>Allowed</b> (not in the “quieter” list).</li>
+              <li>Phone not on Mute or Do Not Disturb; notification vibration intensity above zero.</li>
+              <li>Settings → Apps → Life Console / Chrome → Battery → <b>Unrestricted</b> (Samsung: remove from Sleeping apps).</li>
+            </ol>
+          </div>
+          <div v-if="!env.android"><b class="row"><span class="icon sm">phone_iphone</span>iPhone</b>
+            <ol>
+              <li>Settings → Notifications → <b>Life Console</b> → Allow Notifications, <b>Sounds</b>, Lock Screen and Banners on.</li>
+              <li>Ring/Silent switch on ring and no Focus mode blocking it (or allow Life Console in that Focus).</li>
+            </ol>
+          </div>
+          <p class="muted">Then press <b>Send test</b> again.</p>
+        </details>
         <p v-if="sync.status === 'local'" class="tiny muted">Notifications are sent by the server; this copy isn't connected to one.</p>
 
         <div v-if="devices.length" class="devs">
@@ -185,6 +205,11 @@ const reload = () => window.location.reload()
 .kind { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
 .kind input { margin-top: 3px; }
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
+.phone-help { border: 1px solid var(--border); border-radius: 2px; padding: 8px 12px; }
+.phone-help summary { cursor: pointer; }
+.phone-help[open] { display: flex; flex-direction: column; gap: 8px; }
+.phone-help p { margin: 0; }
+.phone-help ol { margin: 4px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .devs { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border); padding-top: 10px; }
 .dev { gap: 8px; padding: 4px 0; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
