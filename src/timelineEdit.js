@@ -46,18 +46,23 @@ export function useTimelineEdit(o) {
     const types = e.dataTransfer.types
     if (!types.includes(BLOCK_MIME) && !types.includes(TODO_MIME)) return
     e.preventDefault()
+    hover.value = slotAt(e)
+  }
+  /** Where a drop at this pointer position would land ({ start, dur } in minutes). */
+  function slotAt(e) {
     const m = minuteAt(e, e.currentTarget)
     const d = ui.dragBlock
     const dur = d ? d.dur : 30
     const start = snap(d ? m - d.offset : m)
-    hover.value = { start: Math.max(0, Math.min(1440 - dur, start)), dur }
+    return { start: Math.max(0, Math.min(1440 - dur, start)), dur }
   }
   function onLeave(e) {
     if (!e.currentTarget.contains(e.relatedTarget)) hover.value = null
   }
   function onDrop(e) {
     e.preventDefault()
-    const h = hover.value
+    // compute from the drop itself: dragleave between child blocks may already have cleared `hover`
+    const h = slotAt(e)
     hover.value = null
     const d = ui.dragBlock
     if (d && h) {

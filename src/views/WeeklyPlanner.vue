@@ -1,23 +1,30 @@
 <script setup>
-// S-10 · Weekly Planner — Mon–Fri columns + Weekend + right sidebar.
-import { computed, ref, watchEffect } from 'vue'
+// S-10 · Plan week — the whole flow on one sheet, like the paper planner:
+//   ① Backlog (left) → ② Workload bucket per day (assign day) → ③ timeline right below it (assign time)
+// Balance and routines live in a side rail that opens on demand so the day columns stay wide.
+import { computed, ref, watch, watchEffect } from 'vue'
+import { useRoute } from 'vue-router'
 import {
-  state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, wdJa, fmtSlash, todosForDay, workload, updateTodo,
-  byPriority, partLabel, routineDone, toggleRoutine, monthGroup, toggleMonthly, parseISO, pad, toast, CAPACITY_H, blocksForDay,
+  state, ui, todayISO, addDays, wd, todosForDay, workload, CAPACITY_H, toast, autoTimebox,
+  routineDone, toggleRoutine, monthGroup, toggleMonthly, suggestRebalance,
 } from '../store'
-import DayColumn from '../components/DayColumn.vue'
 import WeekBar from '../components/WeekBar.vue'
-import { startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
-import TodoRow from '../components/TodoRow.vue'
-import Stamps from '../components/Stamps.vue'
-import Prio from '../components/Prio.vue'
-import Chip from '../components/Chip.vue'
+import DayColumn from '../components/DayColumn.vue'
+import BacklogPanel from '../components/BacklogPanel.vue'
+import BalancePanel from '../components/BalancePanel.vue'
 
+const route = useRoute()
+const T = computed(() => todayISO())
 const days = computed(() => [0, 1, 2, 3, 4].map((i) => addDays(ui.weekStart, i)))
 const sat = computed(() => addDays(ui.weekStart, 5))
 const sun = computed(() => addDays(ui.weekStart, 6))
-const weekEnd = computed(() => sun.value)
-const isThisWeek = computed(() => ui.weekStart === mondayOf(todayISO()))
+const week = computed(() => [...days.value, sat.value, sun.value])
+
+// deep links: /week?mode=days|times|both (the old /workload route redirects here with mode=days)
+watch(() => route.query.mode, (m) => {
+  if (['days', 'times', 'both'].includes(m)) ui.planMode = m
+}, { immediate: true })
+
 const filter = ref('')
 const linkOptions = computed(() => {
   const ids = new Set()
@@ -26,38 +33,48 @@ const linkOptions = computed(() => {
   return [...ids].sort()
 })
 
-// all todos in the visible week (for keyboard navigation + KPI)
-const weekTodos = computed(() => [...days.value, sat.value, sun.value].flatMap((d) => todosForDay(d)))
+const weekTodos = computed(() => week.value.flatMap((d) => todosForDay(d)))
 watchEffect(() => { ui.visibleIds = weekTodos.value.map((t) => t.id) })
 
-const untimed = computed(() => weekTodos.value.filter((t) => !t.done && !t.scheduled.start))
-const weekendTodos = computed(() => [...todosForDay(sat.value), ...todosForDay(sun.value)])
-const weekendBlocks = computed(() => [sat.value, sun.value].map((d) => ({ date: d, blocks: blocksForDay(d).sort((a, b) => a.start.localeCompare(b.start)) })))
-const backlog = computed(() => state.todos.filter((t) => !t.scheduled && !t.done).sort(byPriority))
+/* ── what to do next ── */
+const backlogN = computed(() => state.todos.filter((t) => !t.done && !t.scheduled).length)
+const untimed = computed(() => weekTodos.value.filter((t) => !t.done && !t.scheduled.start && t.scheduled.date >= T.value))
+const overDays = computed(() => days.value.filter((d) => workload(d) > CAPACITY_H))
+const rebalanceN = computed(() => suggestRebalance(days.value).length)
+const next = computed(() => {
+  if (overDays.value.length) return { icon: 'warning', cls: 'danger', text: `${overDays.value.map(wd).join(', ')} over ${CAPACITY_H}h — move or split a task`, action: 'balance' }
+  if (backlogN.value) return { icon: 'inventory_2', cls: 'info', text: `${backlogN.value} backlog tasks to place — hover one and click a day, or drag it into a bucket` }
+  if (untimed.value.length) return { icon: 'more_time', cls: 'warn', text: `${untimed.value.length} tasks need a time — drag them down onto the timeline, or auto time-box`, action: 'auto' }
+  return { icon: 'check_circle', cls: 'ok', text: 'Week planned: every task has a day and a time' }
+})
+function autoWeek() {
+  let placed = 0
+  let left = 0
+  for (const d of week.value.filter((x) => x >= T.value)) {
+    const r = autoTimebox(d)
+    placed += r.placed.length
+    left += r.unplaced.length
+  }
+  toast(left ? `Time-boxed ${placed}; ${left} didn't fit 08:00–21:00` : `Time-boxed ${placed} tasks`)
+}
 
+/* ── side rail ── */
+const togglePanel = (p) => { ui.sidePanel = ui.sidePanel === p ? null : p }
 const routinesDone = computed(() => routineDone(ui.weekStart))
 const monthKey = computed(() => ui.weekStart.slice(0, 7))
 const group = computed(() => monthGroup(ui.weekStart))
 const monthlyDone = computed(() => state.monthlyLog[monthKey.value] ?? [])
-
 const kpi = computed(() => {
   const all = weekTodos.value
   const done = all.filter((t) => t.done).length
-  const planned = [...days.value, sat.value, sun.value].reduce((s, d) => s + workload(d), 0)
-  const stamped = [...days.value, sat.value, sun.value].filter((d) => state.signOffs[d]?.[3]).length
-  return { done, total: all.length, pct: all.length ? Math.round((done / all.length) * 100) : 0, planned, stamped }
+  return {
+    done, total: all.length, pct: all.length ? Math.round((done / all.length) * 100) : 0,
+    planned: week.value.reduce((s, d) => s + workload(d), 0),
+    stamped: week.value.filter((d) => state.signOffs[d]?.[3]).length,
+  }
 })
 
 const print = () => window.print()
-function shift(n) { ui.weekStart = addDays(ui.weekStart, n * 7) }
-function dropWeekend(e) {
-  const id = e.dataTransfer.getData('text/x-todo')
-  if (id) updateTodo(id, { scheduled: { date: sat.value, start: null } })
-}
-function dropBacklog(e) {
-  const id = e.dataTransfer.getData('text/x-todo')
-  if (id) { updateTodo(id, { scheduled: null }); toast(`${id} → backlog`) }
-}
 function copyLastWeek() {
   const prev = addDays(ui.weekStart, -7)
   let n = 0
@@ -74,14 +91,12 @@ function copyLastWeek() {
 <template>
   <div class="wp">
     <WeekBar />
-    <div class="summary">
-      <span class="row" :class="untimed.length ? 'warn' : 'ok'" style="font-weight: 600; gap: 4px">
-        <span class="icon sm">{{ untimed.length ? 'more_time' : 'check_circle' }}</span>
-        {{ untimed.length ? `${untimed.length} tasks have a day but no time` : 'Every assigned task has a time' }}
-      </span>
-      <span class="mono small"><span class="muted">time-boxed</span> {{ weekTodos.filter((t) => t.scheduled.start).length }}/{{ weekTodos.length }}</span>
+
+    <div class="guide">
+      <span class="next row" :class="next.cls"><span class="icon sm">{{ next.icon }}</span>{{ next.text }}</span>
+      <button v-if="next.action === 'auto'" class="btn sm primary" @click="autoWeek"><span class="icon sm">bolt</span>Auto time-box week</button>
+      <button v-if="next.action === 'balance'" class="btn sm" @click="ui.sidePanel = 'balance'"><span class="icon sm">balance</span>Open balance</button>
       <span class="spacer"></span>
-      <span class="small muted">Drag tasks marked <span class="icon sm warn" style="vertical-align: middle">more_time</span> onto their day's timeline.</span>
       <div class="row">
         <span class="tiny upper muted">Link</span>
         <select v-model="filter" class="select mono small">
@@ -89,126 +104,90 @@ function copyLastWeek() {
           <option v-for="l in linkOptions" :key="l" :value="l">{{ l }}</option>
         </select>
       </div>
-      <button class="btn" title="Copy last week's fixed blocks" @click="copyLastWeek"><span class="icon sm">content_copy</span>Copy last week</button>
-      <button class="btn icon-only" title="Print A4" @click="print"><span class="icon sm">print</span></button>
+      <button class="btn sm" title="Copy last week's fixed blocks" @click="copyLastWeek"><span class="icon sm">content_copy</span>Copy last week</button>
+      <button class="btn sm icon-only" title="Print A4" @click="print"><span class="icon sm">print</span></button>
     </div>
 
     <div class="body">
-      <div class="days">
-        <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" />
+      <BacklogPanel />
 
-        <!-- weekend column -->
-        <div class="panel weekend">
-          <header class="dh">
-            <div class="row"><span class="ja">{{ wdJa(sat) }}{{ wdJa(sun) }}</span><span class="mono tiny muted">WEEKEND</span></div>
-            <div class="mono small">{{ fmtSlash(sat) }} – {{ fmtSlash(sun) }}</div>
-            <div class="mono small">{{ (workload(sat) + workload(sun)).toFixed(1) }}h</div>
-          </header>
-          <div v-for="wb in weekendBlocks" :key="wb.date" class="sec">
-            <div class="sh tiny upper muted">{{ wdJa(wb.date) }} {{ fmtSlash(wb.date) }}</div>
-            <div v-for="b in wb.blocks" :key="b.id" class="block wb" :class="['cat-' + b.category, { todo: b.kind === 'todo' }]">
-              <span class="mono muted">{{ b.start }}</span> {{ b.title }}
-            </div>
-            <div v-if="!wb.blocks.length" class="small muted">—</div>
-          </div>
-          <div class="sec drop" @dragover.prevent @drop.prevent="dropWeekend">
-            <div class="sh tiny upper muted">Weekend todos</div>
-            <TodoRow v-for="t in weekendTodos" :key="t.id" :todo="t" adopt-date flag-untimed compact :show-links="false" />
-            <div v-if="!weekendTodos.length" class="drop-empty small muted">drop todos here</div>
-          </div>
-          <div class="sec stamps-sec">
-            <div class="col" style="align-items: center; gap: 6px">
-              <div class="row tiny muted"><span class="mono">SAT</span></div><Stamps :date="sat" :size="20" />
-              <div class="row tiny muted"><span class="mono">SUN</span></div><Stamps :date="sun" :size="20" />
-            </div>
-          </div>
+      <div class="days" :class="'mode-' + ui.planMode">
+        <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" />
+        <div class="weekend">
+          <DayColumn :date="sat" :filter="filter" :mode="ui.planMode" />
+          <DayColumn :date="sun" :filter="filter" :mode="ui.planMode" />
         </div>
       </div>
 
-      <aside class="side">
-        <section class="panel">
-          <div class="panel-h">
-            <span class="icon sm ok">task_alt</span><h3>Weekly routines</h3><span class="spacer"></span>
-            <span class="mono small ok">{{ routinesDone.length }}/{{ state.routines.length }}</span>
-          </div>
-          <div class="routines">
-            <label v-for="(r, i) in state.routines" :key="i" class="rt" :class="{ done: routinesDone.includes(i) }">
-              <input type="checkbox" :checked="routinesDone.includes(i)" @change="toggleRoutine(ui.weekStart, i)" />
-              <span class="ellipsis">{{ r }}</span>
-            </label>
-          </div>
-        </section>
+      <nav class="rail" aria-label="Side panels">
+        <button class="rb" :class="{ on: ui.sidePanel === 'balance' }" title="Balance & rebalance" @click="togglePanel('balance')">
+          <span class="icon">balance</span><span v-if="rebalanceN || overDays.length" class="badge" :class="overDays.length ? 'bad' : ''">{{ rebalanceN || '!' }}</span>
+        </button>
+        <button class="rb" :class="{ on: ui.sidePanel === 'routines' }" title="Routines & week KPI" @click="togglePanel('routines')">
+          <span class="icon">task_alt</span><span class="badge ok-b mono">{{ routinesDone.length }}</span>
+        </button>
+      </nav>
 
-        <section class="panel">
-          <div class="panel-h"><span class="icon sm warn">autorenew</span><h3>Monthly rotation</h3><span class="spacer"></span><span class="chip plan">GROUP {{ group }}</span></div>
-          <div class="routines">
-            <label v-for="task in state.monthlyGroups[group]" :key="task" class="rt" :class="{ done: monthlyDone.includes(task) }">
-              <input type="checkbox" :checked="monthlyDone.includes(task)" @change="toggleMonthly(monthKey, task)" />
-              <span>{{ task }}</span>
-            </label>
+      <transition name="slide">
+        <aside v-if="ui.sidePanel" class="overlay">
+          <header class="oh">
+            <h3 class="mono upper">{{ ui.sidePanel === 'balance' ? 'Balance' : 'Routines & KPI' }}</h3>
+            <span class="spacer"></span>
+            <button class="btn icon-only" title="Close" @click="ui.sidePanel = null"><span class="icon sm">close</span></button>
+          </header>
+          <div class="ob">
+            <BalancePanel v-if="ui.sidePanel === 'balance'" />
+            <template v-else>
+              <div class="sec-h tiny upper muted row">Weekly routines<span class="spacer"></span><span class="mono ok">{{ routinesDone.length }}/{{ state.routines.length }}</span></div>
+              <label v-for="(r, i) in state.routines" :key="i" class="rt" :class="{ done: routinesDone.includes(i) }">
+                <input type="checkbox" :checked="routinesDone.includes(i)" @change="toggleRoutine(ui.weekStart, i)" />
+                <span class="ellipsis">{{ r }}</span>
+              </label>
+              <div class="sec-h tiny upper muted row">Monthly rotation<span class="spacer"></span><span class="chip plan">GROUP {{ group }}</span></div>
+              <label v-for="task in state.monthlyGroups[group]" :key="task" class="rt" :class="{ done: monthlyDone.includes(task) }">
+                <input type="checkbox" :checked="monthlyDone.includes(task)" @change="toggleMonthly(monthKey, task)" />
+                <span>{{ task }}</span>
+              </label>
+              <div class="sec-h tiny upper muted">Week KPI</div>
+              <div class="kpis mono small">
+                <div><span class="muted">Todos done</span><b>{{ kpi.done }}/{{ kpi.total }} · {{ kpi.pct }}%</b></div>
+                <div class="bar"><i :style="{ width: kpi.pct + '%' }"></i></div>
+                <div><span class="muted">Planned hours</span><b>{{ kpi.planned.toFixed(1) }}h / {{ CAPACITY_H * 5 }}h</b></div>
+                <div><span class="muted">Days stamped 完</span><b>{{ kpi.stamped }}/7</b></div>
+              </div>
+            </template>
           </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-h"><span class="icon sm ok">monitoring</span><h3>Week KPI</h3></div>
-          <div class="panel-b kpis mono small">
-            <div><span class="muted">Todos done</span><b>{{ kpi.done }}/{{ kpi.total }} · {{ kpi.pct }}%</b></div>
-            <div class="bar"><i :style="{ width: kpi.pct + '%' }"></i></div>
-            <div><span class="muted">Planned hours</span><b>{{ kpi.planned.toFixed(1) }}h / {{ CAPACITY_H * 5 }}h</b></div>
-            <div><span class="muted">Routines</span><b>{{ Math.round((routinesDone.length / state.routines.length) * 100) }}%</b></div>
-            <div><span class="muted">Days stamped 完</span><b>{{ kpi.stamped }}/7</b></div>
-          </div>
-        </section>
-
-        <section class="panel backlog" @dragover.prevent @drop.prevent="dropBacklog">
-          <div class="panel-h"><span class="icon sm info">inventory_2</span><h3>Backlog</h3><span class="spacer"></span><span class="mono small muted">{{ backlog.length }} items</span></div>
-          <div class="bl-list">
-            <div v-for="t in backlog" :key="t.id" class="bl" :class="dropClass(t)" draggable="true" @dragstart="startDrag($event, t)" @dragend="endDrag"
-              @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t, { unschedule: true })" @click="ui.selectedId = t.id" @dblclick="ui.drawerId = t.id">
-              <div class="row"><Prio :p="t.priority" /><span v-if="partLabel(t)" class="mono small muted">part {{ partLabel(t) }}</span><span class="spacer"></span><span class="mono small muted">{{ t.timeMin }}m</span>
-                <button v-if="t.timeMin >= 30" class="btn sm icon-only" title="Split across days" @click.stop="ui.splitId = t.id"><span class="icon sm">call_split</span></button></div>
-              <div class="ellipsis">{{ t.title }}</div>
-              <div v-if="t.links.length" class="row"><Chip v-for="l in t.links" :key="l" :id="l" /></div>
-            </div>
-            <div v-if="!backlog.length" class="empty">Backlog empty.</div>
-          </div>
-          <div class="small muted pad">Drag onto a day's list or timeline. Drop here to unschedule; drop between cards to reprioritise.</div>
-        </section>
-      </aside>
+        </aside>
+      </transition>
     </div>
   </div>
 </template>
 
 <style scoped>
 .wp { display: flex; flex-direction: column; height: 100%; }
-.summary { display: flex; align-items: center; gap: 18px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.weeksel { display: flex; align-items: center; gap: 6px; }
-.wk { font-weight: 600; min-width: 220px; text-align: center; }
-.select.small { height: 26px; font-size: 11px; }
-.body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 280px; }
-.days { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)) minmax(140px, 0.75fr); gap: 8px; padding: 12px; overflow: auto; align-items: start; }
-.side { border-left: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; gap: 12px; overflow: auto; }
-.routines { padding: 6px 0; }
+.guide { display: flex; align-items: center; gap: 12px; padding: 7px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; min-height: 42px; }
+.next { font-weight: 600; gap: 6px; }
+.select.small { height: 24px; font-size: 11px; }
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 236px minmax(0, 1fr) 44px; position: relative; }
+.days { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)) minmax(130px, 0.8fr); gap: 8px; padding: 12px; overflow: auto; align-items: start; }
+.weekend { display: flex; flex-direction: column; gap: 8px; }
+.rail { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; }
+.rb { position: relative; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 2px; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.rb:hover, .rb.on { color: var(--text); border-color: var(--accent); }
+.badge { position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: var(--warn); color: #0b0b0b; font: 700 9px/16px 'JetBrains Mono', monospace; }
+.badge.bad { background: var(--danger); color: #fff; }
+.badge.ok-b { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); line-height: 14px; }
+.overlay { position: absolute; top: 0; right: 44px; bottom: 0; width: 320px; background: var(--surface); border-left: 1px solid var(--border); box-shadow: -8px 0 24px rgba(0, 0, 0, 0.25); z-index: 20; display: flex; flex-direction: column; }
+.oh { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.oh h3 { margin: 0; font-size: 12px; letter-spacing: 0.06em; }
+.ob { flex: 1; overflow: auto; }
+.sec-h { padding: 12px 12px 6px; }
 .rt { display: flex; align-items: center; gap: 8px; padding: 4px 12px; cursor: pointer; }
 .rt:hover { background: var(--surface-2); }
 .rt.done span { text-decoration: line-through; color: var(--muted); }
-.kpis { display: flex; flex-direction: column; gap: 6px; }
+.kpis { display: flex; flex-direction: column; gap: 6px; padding: 0 12px 12px; }
 .kpis div:not(.bar) { display: flex; justify-content: space-between; }
-.bl-list { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
-.bl { border: 1px solid var(--border); border-radius: 2px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; cursor: grab; }
-.bl:hover { border-color: var(--info); }
-.pad { padding: 0 10px 10px; }
-/* weekend column */
-.weekend { overflow: hidden; }
-.dh { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border); }
-.ja { font-family: 'Noto Sans JP'; font-weight: 700; font-size: 16px; }
-.md { font-size: 15px; font-weight: 700; }
-.sec { border-bottom: 1px solid var(--border); padding: 6px; display: flex; flex-direction: column; gap: 3px; }
-.sh { padding: 2px 2px 2px; }
-.wb { padding: 3px 5px; }
-.drop { min-height: 70px; }
-.drop-empty { border: 1px dashed var(--border); border-radius: 2px; text-align: center; padding: 8px; }
-.stamps-sec { align-items: center; border-bottom: 0; }
-@media (max-width: 1200px) { .body { grid-template-columns: 1fr; } .side { border-left: 0; border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); } }
+.slide-enter-active, .slide-leave-active { transition: transform 0.15s ease, opacity 0.15s; }
+.slide-enter-from, .slide-leave-to { transform: translateX(20px); opacity: 0; }
+@media (max-width: 1100px) { .body { grid-template-columns: 200px minmax(0, 1fr) 44px; } }
 </style>

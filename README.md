@@ -11,8 +11,7 @@ npm run dev      # http://localhost:5173
 | Screen | Route | Works |
 |---|---|---|
 | S-01 Command Center | `#/` | 24h timeline (drag todos onto it), workload gauge, 印→印→確認→完 sign-off, todos, 7-day deadlines, top PSGs, routines/sleep/caffeine/reviews/lectures tiles |
-| S-10 Weekly Planner | `#/week` | Mon–Fri + weekend columns, vertical schedules, drag todos between days / timelines / backlog, notes, stamps, weekly routines, monthly group rotation, week KPI, link filter |
-| S-13 Workload | `#/workload` | step ② of the planning flow: same day columns as the Weekly Planner, each a 7-hour bucket (like the paper "1–7 Hours" gauge) where tasks stack sized by their estimate; drag from the backlog into a day; balance summary, rebalance suggestions, hours by goal |
+| S-10 Plan week | `#/week` | the whole planning flow on one sheet: ① backlog panel → ② a 7-hour workload bucket per day → ③ that day's timeline directly below; one-click day buttons, Auto time-box, linked hover, balance and routines in a side rail |
 | S-20 Todo Inbox | `#/todos` | views / link / L-S-D / priority filters, smart quick-add parser, bulk schedule / priority / link / done, edit drawer |
 | S-30 Strategic Plan | `#/strategy` | Vision → PSG → SIG tree, editable PSG/SIG tables (PSG % = mean of SIG %), check schedule, events timetable, linked todos, "create todo for SIG" |
 | Other modules | `#/m/...` | Placeholder that lists the planned screens |
@@ -22,8 +21,12 @@ npm run dev      # http://localhost:5173
 **Quick-add syntax:** `Read chapter 3 #ST2001 30m due:fri p2 @SIG-02.1 [L]`
 
 ## Planning flow (mirrors the paper planner)
-① **Backlog** (Todo Inbox / Workload sidebar) → ② **Workload**: assign a *day* (`#/workload`) → ③ **Schedule**: assign a *time* (`#/week`).
-Both screens share the step bar, week selector and day-column grid, so a day's workload sits in the same column as its schedule. On the Schedule screen, tasks with a day but no time are marked ⏰.
+Everything happens on **Plan week** (`#/week`). Each day column is stacked like the paper template: **② Workload** (a 7-hour bucket) directly above **③ Schedule** (that day's timeline).
+1. **Backlog** (left panel): hover a task and click a day button (each shows that day's free hours), or drag it into a day's bucket. Drop a task back here to unassign it.
+2. **Assign day:** tasks stack in the bucket, sized by their estimate. Red overflow above the 7h line means too much; the Balance rail suggests moves.
+3. **Assign time:** drag a block from the bucket straight down onto the timeline, or press ⚡ (per day) / **Auto time-box week** to fill free gaps between 08:00 and 21:00 in priority order.
+
+The step bar shows progress (`4 to place → 12 on this week → 4/12 time-boxed`), and its buttons switch the layout to emphasise days, times or both. A guide line names the next thing to do. Hovering a task highlights it in the backlog, its bucket and its timeline at once. `/workload` and `G L` open the planner with the day-focused layout.
 
 ### Splitting a task across days
 Click a task's split button (on backlog cards and workload blocks, or **Split across days…** in the task drawer) to open the Split dialog. Choose a number of parts or a chunk size, edit each part's minutes, and pick a day for each part, or use **Auto-assign days** (most free capacity first, from today on, never past the due date, one part per day). The dialog previews every day's load before and after the split.

@@ -61,7 +61,7 @@ function onKey(e) {
   if (gPending) {
     gPending = false
     clearTimeout(gTimer)
-    const to = { s: '/strategy', i: '/todos', t: '/', w: '/week', c: '/', l: '/workload' }[k]
+    const to = { s: '/strategy', i: '/todos', t: '/', w: '/week', c: '/', l: '/week?mode=days' }[k]
     if (to) { router.push(to); e.preventDefault() }
     return
   }

@@ -236,6 +236,9 @@ export const ui = reactive({
   weekStart: mondayOf(todayISO()),
   dragId: null, // todo being dragged
   splitId: null, // todo open in the Split dialog
+  hoverId: null, // todo under the pointer — highlighted in backlog, bucket and timeline at once
+  planMode: (() => { try { return localStorage.getItem('life-console/plan-mode') || 'both' } catch { return 'both' } })(), // 'days' | 'both' | 'times'
+  sidePanel: null, // planner side panel: null | 'balance' | 'routines'
   focusIds: [], // top-3 todos shown in focus mode (keys 1–3)
   dragBlock: null, // timeline block being moved: { kind, id, offset, dur }
   dropOver: null, // todo row under the cursor
@@ -588,4 +591,59 @@ export function mergeParts(id) {
   drop.forEach((x) => deleteTodo(x.id))
   if (splitSiblings(keep).length < 2) delete keep.split
   return keep
+}
+
+/* ───────────── planning flow: backlog → day → time ───────────── */
+export const WORK_FROM = '08:00'
+export const WORK_TO = '21:00'
+
+/** Free hours left on a day (todo estimates vs capacity). */
+export const freeHours = (date, cap = CAPACITY_H) => cap - dayLoad(date).total
+
+/**
+ * Step ②: put a task on a day (keeps its time only if it stays on the same day).
+ * If that overfills the day, offers to split it instead.
+ */
+export function assignToDay(id, date, cap = CAPACITY_H) {
+  const t = findTodo(id)
+  if (!t) return
+  updateTodo(id, { scheduled: { date, start: t.scheduled?.date === date ? t.scheduled.start : null } })
+  const load = dayLoad(date).total
+  if (load > cap && t.timeMin >= 30) {
+    toast(`${wd(date)} is now ${load.toFixed(1)}h / ${cap}h`, { label: 'Split it…', run: () => { ui.splitId = id } })
+  } else {
+    toast(`${id} → ${wd(date)} ${fmtSlash(date)}`)
+  }
+}
+
+/**
+ * Step ③ shortcut: give every untimed open task on `date` a start time, in priority order,
+ * using the earliest free gap between WORK_FROM and WORK_TO (and not in the past for today).
+ * Returns { placed: [ids], unplaced: [ids] }.
+ */
+export function autoTimebox(date, from = WORK_FROM, to = WORK_TO) {
+  const busy = blocksForDay(date).map((b) => [toMin(b.start), toMin(b.end)])
+  let earliest = toMin(from)
+  if (date === todayISO()) {
+    const n = new Date()
+    earliest = Math.max(earliest, Math.ceil((n.getHours() * 60 + n.getMinutes()) / 15) * 15)
+  }
+  const end = toMin(to)
+  const placed = []
+  const unplaced = []
+  for (const t of todosForDay(date).filter((x) => !x.done && !x.scheduled.start)) {
+    const dur = t.timeMin || 30
+    let s = earliest
+    let found = null
+    while (s + dur <= end) {
+      const clash = busy.find(([a, b]) => s < b && s + dur > a)
+      if (!clash) { found = s; break }
+      s = Math.ceil(clash[1] / 15) * 15
+    }
+    if (found === null) { unplaced.push(t.id); continue }
+    updateTodo(t.id, { scheduled: { date, start: fromMin(found) } })
+    busy.push([found, found + dur])
+    placed.push(t.id)
+  }
+  return { placed, unplaced }
 }

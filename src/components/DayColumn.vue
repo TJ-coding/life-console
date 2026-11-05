@@ -1,32 +1,40 @@
 <script setup>
-// One day column of the Weekly Planner (S-10): header · schedule · todos · deadlines · notes · stamps.
-import { computed, ref } from 'vue'
-import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, updateTodo, diffDays } from '../store'
+// One day of the unified planner, top → bottom like the paper template:
+//   header · ② Workload bucket (assign day) · ③ Schedule timeline (assign time) · deadlines · notes · sign-off
+// A task dropped in the bucket can be dragged straight down onto a time in the same column.
+import { computed } from 'vue'
+import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, updateTodo, diffDays, CAPACITY_H, autoTimebox, toast } from '../store'
 import DayTimeline from './DayTimeline.vue'
-import TodoRow from './TodoRow.vue'
+import WorkloadBucket from './WorkloadBucket.vue'
 import Gauge from './Gauge.vue'
 import Stamps from './Stamps.vue'
 
-const props = defineProps({ date: String, filter: String })
+const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' } })
 const isToday = computed(() => props.date === todayISO())
+const past = computed(() => diffDays(props.date, todayISO()) > 0)
 const todos = computed(() => todosForDay(props.date))
+const untimed = computed(() => todos.value.filter((t) => !t.done && !t.scheduled.start))
 const blocks = computed(() => blocksForDay(props.date))
 const hours = computed(() => workload(props.date))
 const deadlines = computed(() => state.deadlines.filter((d) => d.due.slice(0, 10) === props.date))
 const matches = (links) => !props.filter || links.includes(props.filter)
 const dimBlock = (b) => props.filter && b.link !== props.filter && !(b.todoId && matches(state.todos.find((t) => t.id === b.todoId)?.links ?? []))
+const dimTodo = (t) => !matches(t.links)
 const notes = computed({ get: () => state.notes[props.date] ?? '', set: (v) => { state.notes[props.date] = v } })
-const hot = ref(false)
-function onDrop(e) {
-  hot.value = false
-  const id = e.dataTransfer.getData('text/x-todo')
-  if (id) updateTodo(id, { scheduled: { date: props.date, start: null } })
-}
 const schedule = (id, start) => updateTodo(id, { scheduled: { date: props.date, start } })
+
+// sizes per layout mode
+const bucketPx = computed(() => ({ days: 30, both: 18, times: 11 })[props.mode])
+const timelinePx = computed(() => ({ both: 18, times: 26 })[props.mode] ?? 0)
+
+function auto() {
+  const r = autoTimebox(props.date)
+  toast(r.unplaced.length ? `Time-boxed ${r.placed.length}; ${r.unplaced.length} didn't fit 08:00–21:00` : `Time-boxed ${r.placed.length} tasks on ${wd(props.date)}`)
+}
 </script>
 
 <template>
-  <div class="day panel" :class="{ today: isToday, past: diffDays(date, todayISO()) > 0 }">
+  <div class="day panel" :class="{ today: isToday, past }">
     <header class="dh">
       <div class="row">
         <span class="ja">{{ wdJa(date) }}</span>
@@ -36,17 +44,26 @@ const schedule = (id, start) => updateTodo(id, { scheduled: { date: props.date, 
         <span v-if="isToday" class="mono tiny ok">● NOW</span>
       </div>
       <div class="row">
-        <span class="mono small" :class="hours > 8 ? 'danger' : hours > 7 ? 'warn' : ''">{{ hours.toFixed(1) }}h</span>
+        <span v-if="hours > CAPACITY_H" class="icon sm danger" title="Over capacity">warning</span>
+        <span class="mono small" :class="hours > CAPACITY_H ? 'danger' : ''">{{ hours.toFixed(1) }}<span class="muted">/{{ CAPACITY_H }}h</span></span>
         <div class="grow"><Gauge :hours="hours" horizontal /></div>
       </div>
     </header>
 
-    <div class="sec"><DayTimeline :date="date" :blocks="blocks" :dim-fn="filter ? dimBlock : null" @drop-todo="schedule" @open="(id) => (ui.drawerId = id)" /></div>
+    <div class="sec">
+      <div class="sh tiny upper muted"><span class="n">②</span> Workload<span class="spacer"></span>{{ todos.filter((t) => t.done).length }}/{{ todos.length }} done</div>
+      <WorkloadBucket :date="date" :hour-px="bucketPx" :dim-fn="filter ? dimTodo : null" />
+    </div>
 
-    <div class="sec drop" :class="{ 'drop-hot': hot }" @dragover.prevent="hot = true" @dragleave="hot = false" @drop.prevent="onDrop">
-      <div class="sh tiny upper muted">Todo list <span class="spacer"></span>{{ todos.filter((t) => t.done).length }}/{{ todos.length }}</div>
-      <TodoRow v-for="t in todos" :key="t.id" :todo="t" adopt-date flag-untimed compact :show-links="false" :dim="!matches(t.links)" />
-      <div v-if="!todos.length" class="drop-empty small muted">drop todos here</div>
+    <div v-if="mode !== 'days'" class="sec">
+      <div class="sh tiny upper muted">
+        <span class="n">③</span> Schedule<span class="spacer"></span>
+        <button v-if="untimed.length && !past" class="btn sm auto" :title="`Auto time-box: give ${untimed.length} untimed task(s) a time in free gaps (08:00–21:00), by priority`" @click="auto">
+          <span class="icon sm">bolt</span>{{ untimed.length }}
+        </button>
+        <span v-else-if="!untimed.length && todos.length" class="ok" title="Every task has a time">✓</span>
+      </div>
+      <DayTimeline :date="date" :blocks="blocks" :pxh="timelinePx" :dim-fn="filter ? dimBlock : null" @drop-todo="schedule" @open="(id) => (ui.drawerId = id)" />
     </div>
 
     <div class="sec">
@@ -60,27 +77,28 @@ const schedule = (id, start) => updateTodo(id, { scheduled: { date: props.date, 
       <div v-if="!deadlines.length" class="small muted pad">—</div>
     </div>
 
-    <div class="sec">
-      <div class="sh tiny upper muted">Notes</div>
-      <textarea v-model="notes" class="textarea notes" rows="2" placeholder="…"></textarea>
-    </div>
-
-    <div class="sec stamps-sec"><Stamps :date="date" :size="24" /></div>
+    <template v-if="mode !== 'days'">
+      <div class="sec">
+        <div class="sh tiny upper muted">Notes</div>
+        <textarea v-model="notes" class="textarea notes" rows="2" placeholder="…"></textarea>
+      </div>
+      <div class="sec stamps-sec"><Stamps :date="date" :size="22" /></div>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.day { min-width: 150px; overflow: hidden; }
+.day { min-width: 140px; overflow: hidden; }
 .day.today { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
-.day.past { opacity: 0.88; }
+.day.past { opacity: 0.85; }
 .dh { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border); }
 .ja { font-family: 'Noto Sans JP'; font-weight: 700; font-size: 16px; }
 .today .ja { color: var(--accent); }
 .md { font-size: 15px; font-weight: 700; }
-.sec { border-bottom: 1px solid var(--border); padding: 6px 6px; }
-.sh { display: flex; padding: 2px 2px 4px; }
-.drop { min-height: 70px; }
-.drop-empty { border: 1px dashed var(--border); border-radius: 2px; text-align: center; padding: 8px; }
+.sec { border-bottom: 1px solid var(--border); padding: 6px; }
+.sh { display: flex; align-items: center; gap: 4px; padding: 0 2px 5px; min-height: 22px; }
+.n { font-size: 12px; }
+.auto { height: 20px; padding: 0 5px; font-size: 10px; color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--border)); }
 .dl { display: flex; align-items: center; gap: 5px; padding: 3px 2px; cursor: pointer; }
 .dl.done span.grow { text-decoration: line-through; color: var(--muted); }
 .pad { padding: 2px; }

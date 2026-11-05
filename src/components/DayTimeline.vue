@@ -34,9 +34,10 @@ function openBlock(b) {
       <span class="mono">{{ String(from + h - 1).padStart(2, '0') }}</span>
     </div>
     <div
-      v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b), moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id }]"
+      v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b), moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, linked: b.todoId && ui.hoverId === b.todoId }]"
       :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\nDrag to move (any day) · drag bottom edge to change end`" draggable="true"
       @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock(b)"
+      @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null"
     >
       <span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> {{ b.title }}
       <span class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
@@ -58,6 +59,7 @@ function openBlock(b) {
 .ghost { position: absolute; left: 28px; right: 0; border: 1px dashed var(--info); background: color-mix(in srgb, var(--info) 10%, transparent); z-index: 3; pointer-events: none; }
 .ghost span { position: absolute; right: 2px; top: 1px; font-size: 10px; color: var(--info); background: var(--surface); padding: 0 2px; }
 .vb { cursor: grab; }
+.vb.linked { outline: 2px solid var(--info); z-index: 4; }
 .vb.moving { opacity: 0.35; }
 .vb.sizing { outline: 1px solid var(--info); z-index: 4; overflow: visible; }
 .handle { position: absolute; left: 0; right: 0; bottom: -1px; height: 6px; cursor: ns-resize; touch-action: none; }

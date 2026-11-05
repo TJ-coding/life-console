@@ -1,7 +1,6 @@
 export const NAV = [
   { key: 'today', label: 'Command Center', icon: 'radar', to: '/', key1: 'T' },
-  { key: 'week', label: 'Schedule', icon: 'calendar_month', to: '/week', key1: 'W' },
-  { key: 'workload', label: 'Workload', icon: 'balance', to: '/workload', key1: 'G L' },
+  { key: 'week', label: 'Plan week', icon: 'calendar_month', to: '/week', key1: 'W' },
   { key: 'todos', label: 'Todos', icon: 'checklist', to: '/todos', key1: 'G I' },
   { key: 'strategy', label: 'Strategy', icon: 'target', to: '/strategy', key1: 'G S' },
   { key: 'intelligence', label: 'Intelligence', icon: 'satellite_alt', to: '/m/intelligence' },

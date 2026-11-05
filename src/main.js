@@ -7,7 +7,6 @@ import TodoInbox from './views/TodoInbox.vue'
 import StrategicPlan from './views/StrategicPlan.vue'
 import Settings from './views/Settings.vue'
 import FocusMode from './views/FocusMode.vue'
-import Workload from './views/Workload.vue'
 import ModulePlaceholder from './views/ModulePlaceholder.vue'
 import { applyTheme } from './store'
 import './styles.css'
@@ -17,8 +16,8 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'today', component: CommandCenter, meta: { title: 'Command Center', screen: 'S-01' } },
     { path: '/focus', name: 'focus', component: FocusMode, meta: { title: 'Focus mode', screen: 'S-01F', bare: true } },
-    { path: '/week', name: 'week', component: WeeklyPlanner, meta: { title: 'Weekly Planner', screen: 'S-10' } },
-    { path: '/workload', name: 'workload', component: Workload, meta: { title: 'Workload', screen: 'S-13' } },
+    { path: '/week', name: 'week', component: WeeklyPlanner, meta: { title: 'Plan week', screen: 'S-10' } },
+    { path: '/workload', redirect: { path: '/week', query: { mode: 'days' } } }, // merged into the planner
     { path: '/todos', name: 'todos', component: TodoInbox, meta: { title: 'Todo Inbox', screen: 'S-20' } },
     { path: '/strategy', name: 'strategy', component: StrategicPlan, meta: { title: 'Strategic Plan', screen: 'S-30' } },
     { path: '/settings', name: 'settings', component: Settings, meta: { title: 'Settings', screen: 'S-90' } },
