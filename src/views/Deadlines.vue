@@ -7,7 +7,7 @@ import DeadlineQuickAdd from '../components/DeadlineQuickAdd.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
 import DeadlineHero from '../components/DeadlineHero.vue'
-import { minsTo, countdown, urgency } from '../glance'
+import { minsTo, countdown, urgency, effDue } from '../glance'
 
 const T = computed(() => { void ui.now; return todayISO() })
 const view = ref('list')
@@ -39,8 +39,8 @@ const groups = computed(() => {
   if (showDone.value) g.push({ key: 'done', label: 'Done', icon: 'task_alt', cls: 'muted', items: visible.value.filter((d) => d.done).sort((a, b) => b.due.localeCompare(a.due)) })
   return g
 })
-/** The headline: the soonest open deadline (respects the source filter). */
-const hero = computed(() => visible.value.filter((d) => !d.done).sort((a, b) => a.due.localeCompare(b.due))[0] ?? null)
+/** The headline: the soonest open deadline by the moment it actually looms at (internal target while it still stands, else due). */
+const hero = computed(() => visible.value.filter((d) => !d.done).sort((a, b) => effDue(a).localeCompare(effDue(b)))[0] ?? null)
 const counts = computed(() => ({ open: visible.value.filter((d) => !d.done).length, overdue: visible.value.filter(isOverdue).length }))
 
 /* ── month calendar ── */
@@ -94,7 +94,7 @@ const open = (d) => { ui.deadlineId = d.id }
     <div class="panes" :class="{ wide }">
     <div v-if="wide || view === 'list'" class="left">
     <!-- headline: the soonest deadline, ticking -->
-    <section v-if="hero" class="panel inst hero" :class="'u-' + urgency(hero.due)">
+    <section v-if="hero" class="panel inst hero" :class="'u-' + urgency(effDue(hero))">
       <DeadlineHero :d="hero" :label="hero.done ? 'Deadline' : 'Next deadline'" />
     </section>
 

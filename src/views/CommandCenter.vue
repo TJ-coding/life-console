@@ -15,7 +15,7 @@ import TodoRow from '../components/TodoRow.vue'
 import Stamps from '../components/Stamps.vue'
 import NowCard from '../components/NowCard.vue'
 import DeadlineHero from '../components/DeadlineHero.vue'
-import { openDeadlines, minsTo, countdown, urgency } from '../glance'
+import { openDeadlines, minsTo, countdown, urgency, effDue } from '../glance'
 import DayTimeline from '../components/DayTimeline.vue'
 import CommandCenterMore from '../components/CommandCenterMore.vue'
 
@@ -184,13 +184,13 @@ function quickAdd() {
 
       <div class="side">
       <!-- deadline sits above the list: second only to NOW -->
-      <section class="panel inst dl-inst" :class="nextDl ? 'u-' + urgency(nextDl.due) : ''">
+      <section class="panel inst dl-inst" :class="nextDl ? 'u-' + urgency(effDue(nextDl)) : ''">
         <template v-if="nextDl">
           <DeadlineHero :d="nextDl" />
           <!-- then the next four -->
           <div class="dl-list">
             <button v-for="d in laterDls" :key="d.id" class="dl-row" @click="ui.deadlineId = d.id">
-              <span class="mono cd" :class="urgency(d.due)">{{ minsTo(d.due) <= 0 ? 'overdue' : countdown(d.due) }}</span>
+              <span class="mono cd" :class="urgency(effDue(d))">{{ minsTo(effDue(d)) <= 0 ? 'overdue' : countdown(effDue(d)) }}</span>
               <span class="ellipsis grow">{{ d.title }}</span>
               <span class="mono small muted when">{{ relDay(d.due.slice(0, 10), today) }} · {{ d.due.slice(11) }}</span>
             </button>

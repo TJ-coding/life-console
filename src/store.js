@@ -1,5 +1,6 @@
 // Central reactive store for the prototype. Persisted to localStorage.
 import { reactive, watch, computed } from 'vue'
+import { rhythm, wallMin, workIn, segments, POMODORO_DEFAULTS } from '../server/pomodoro.mjs'
 
 /* ───────────── date / time helpers ───────────── */
 export const pad = (n) => String(n).padStart(2, '0')
@@ -217,7 +218,8 @@ export function ensureOrder() {
 }
 /** Notification preferences live in the synced document so the server scheduler can read them. */
 export const NOTIFY_DEFAULTS = {
-  notify: { blocks: true, deadlines: true, daily: true, wellbeing: true, vibrate: true },
+  notify: { blocks: true, deadlines: true, daily: true, wellbeing: true, vibrate: true, pomodoro: true },
+  pomodoro: { ...POMODORO_DEFAULTS }, // work/short/long minutes, long break after `every` pomodoros
   blockLeadMin: 5, briefingTime: '07:30', eveningTime: '21:00', bedTime: '23:00', windDownMin: 60, caffeineWarnMin: 30,
 }
 export function ensureSettings() {
@@ -225,6 +227,7 @@ export function ensureSettings() {
   const s = state.settings
   for (const [k, v] of Object.entries(NOTIFY_DEFAULTS)) if (s[k] === undefined) s[k] = typeof v === 'object' ? { ...v } : v
   for (const [k, v] of Object.entries(NOTIFY_DEFAULTS.notify)) if (s.notify[k] === undefined) s.notify[k] = v
+  for (const [k, v] of Object.entries(POMODORO_DEFAULTS)) if (s.pomodoro[k] === undefined) s.pomodoro[k] = v
   // the server schedules in this timezone; keep it in step with the device you're using
   let tz = 'UTC'
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { /* ignore */ }
@@ -439,6 +442,17 @@ function parseDue(s, base) {
   return null
 }
 
+/* ───────────── pomodoro ─────────────
+ * A timed todo with `pomo: true` is laid out as pomodoros: its timeMin is work, its block on the
+ * schedule also spans the breaks (server/pomodoro.mjs). New sittings get the flag while the rhythm
+ * is on (Settings → Pomodoro); turning it off leaves existing sittings as they are.
+ */
+export const pomo = () => rhythm(state.settings)
+/** Minutes a timed todo occupies on the clock (work + breaks for a pomodoro sitting). */
+export const blockMin = (t) => (t.pomo ? wallMin(t.timeMin || 30, pomo()) : t.timeMin || 30)
+/** Clock minutes for `workMin` of new work, under the current rhythm. */
+export const newBlockMin = (workMin) => (pomo().on ? wallMin(workMin, pomo()) : workMin)
+
 /* ───────────── schedule blocks ───────────── */
 export function blocksForDay(date) {
   const tb = state.timeBlocks.filter((b) => b.date === date).map((b) => ({ ...b, kind: 'block' }))
@@ -447,8 +461,9 @@ export function blocksForDay(date) {
     .map((t) => ({
       id: t.id, todoId: t.id, kind: 'todo', title: partLabel(t) ? `${t.title} (${partLabel(t)})` : t.title, done: t.done, link: t.links[0] ?? null,
       start: t.scheduled.start,
-      end: fromMin(Math.min(24 * 60, toMin(t.scheduled.start) + (t.timeMin || 30))),
+      end: fromMin(Math.min(24 * 60, toMin(t.scheduled.start) + blockMin(t))),
       category: categoryOf(t),
+      pomo: t.pomo ? segments(t.timeMin || 30, pomo()) : null,
     }))
   return [...tb, ...tt]
 }
@@ -461,8 +476,10 @@ export function moveBlock(kind, id, date, startMin) {
   if (kind === 'todo') {
     const t = findTodo(id)
     if (!t) return
-    const dur = t.timeMin || 30
-    updateTodo(id, { scheduled: { date, start: fromMin(clamp(snap(startMin), 0, 1440 - Math.min(dur, 1440))) } })
+    // a task getting its first time follows the pomodoro rhythm when it's on
+    const pomoNow = t.scheduled?.start ? !!t.pomo : pomo().on
+    const dur = pomoNow ? wallMin(t.timeMin || 30, pomo()) : t.timeMin || 30
+    updateTodo(id, { scheduled: { date, start: fromMin(clamp(snap(startMin), 0, 1440 - Math.min(dur, 1440))) }, pomo: pomoNow || undefined })
     return
   }
   const b = state.timeBlocks.find((x) => x.id === id)
@@ -476,7 +493,8 @@ export function resizeBlock(kind, id, endMin) {
   if (kind === 'todo') {
     const t = findTodo(id)
     if (!t?.scheduled?.start) return
-    updateTodo(id, { timeMin: Math.max(SNAP, endMin - toMin(t.scheduled.start)) })
+    const wall = Math.max(SNAP, endMin - toMin(t.scheduled.start))
+    updateTodo(id, { timeMin: t.pomo ? Math.max(5, workIn(wall, pomo())) : wall })
     return
   }
   const b = state.timeBlocks.find((x) => x.id === id)
@@ -851,14 +869,14 @@ export function replanTodo(id, pieces) {
     const sched = p.date ? { date: p.date, start: p.start || null } : null
     const ex = reuse[i]
     if (ex) {
-      updateTodo(ex.id, { timeMin: p.min, scheduled: sched })
+      updateTodo(ex.id, { timeMin: p.min, scheduled: sched, pomo: (p.start && p.pomo) || undefined })
       if (multi) ex.split = { group }
       else delete ex.split
       return ex
     }
     return addTodo({
       title: t.title, vital: t.vital, lsd: t.lsd, priority: t.priority, due: t.due, links: [...t.links],
-      timeMin: p.min, scheduled: sched, split: { group }, order: t.order + i * 0.001,
+      timeMin: p.min, scheduled: sched, split: { group }, order: t.order + i * 0.001, pomo: (p.start && p.pomo) || undefined,
     })
   })
   reuse.slice(pieces.length).forEach((x) => deleteTodo(x.id))
@@ -915,8 +933,9 @@ export function autoTimebox(date, from = WORK_FROM, to = WORK_TO) {
   const end = toMin(to)
   const placed = []
   const unplaced = []
+  const P = pomo()
   for (const t of todosForDay(date).filter((x) => !x.done && !x.scheduled.start)) {
-    const dur = t.timeMin || 30
+    const dur = P.on ? wallMin(t.timeMin || 30, P) : t.timeMin || 30
     let s = earliest
     let found = null
     while (s + dur <= end) {
@@ -925,8 +944,9 @@ export function autoTimebox(date, from = WORK_FROM, to = WORK_TO) {
       s = Math.ceil(clash[1] / 15) * 15
     }
     if (found === null) { unplaced.push(t.id); continue }
-    updateTodo(t.id, { scheduled: { date, start: fromMin(found) } })
-    busy.push([found, found + dur])
+    updateTodo(t.id, { scheduled: { date, start: fromMin(found) }, pomo: P.on || undefined })
+    // after a pomodoro sitting, keep a long break before the next one
+    busy.push([found, found + dur + (P.on ? P.long : 0)])
     placed.push(t.id)
   }
   return { placed, unplaced }

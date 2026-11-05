@@ -32,8 +32,16 @@ export function dueStatus(due) {
   return n === 0 ? 'DUE TODAY' : n === 1 ? 'TOMORROW' : `IN ${n} DAYS`
 }
 
-/** Open deadlines, soonest first. */
-export const openDeadlines = () => state.deadlines.filter((d) => !d.done).sort((a, b) => a.due.localeCompare(b.due))
+/** The moment a deadline actually looms at: the personal internal target (end of that day) while it
+ *  still stands — not passed yet — else the hard due date. On a date-only internal this means the
+ *  countdown runs to 23:59 of that day. Tick-aware via ui.now. */
+export function effDue(d) {
+  void ui.now
+  return d.internal && d.internal >= todayISO() ? `${d.internal}T23:59` : d.due
+}
+
+/** Open deadlines, soonest first — by the moment each actually looms at (effDue, see above). */
+export const openDeadlines = () => state.deadlines.filter((d) => !d.done).sort((a, b) => effDue(a).localeCompare(effDue(b)))
 
 /* ───────────── goals ───────────── */
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? '')
