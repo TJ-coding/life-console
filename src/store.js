@@ -565,6 +565,33 @@ export function deletePlan(id) {
   if (i >= 0) state.plans.splice(i, 1)
 }
 export const sigsOf = (psgNo) => allSigs().filter((s) => s.psg === psgNo).sort((a, b) => a.priority - b.priority)
+/**Human readable name behind a link id: goal names, deadline titles, plan titles (ISS-19).*/
+export function linkLabel(id) {
+  const type = linkType(id)
+  if (type === 'goal') {
+    for (const p of state.plans) {
+      const g = p.psgs.find((x) => x.no === id)
+      if (g) return g.name || ''
+      const s = p.sigs.find((x) => x.no === id)
+      if (s) return s.name || ''
+    }
+  }
+  if (type === 'deadline') return state.deadlines.find((d) => d.id === id)?.title ?? ''
+  if (type === 'plan') return state.plans.find((p) => p.planNo === id || p.id === id)?.title ?? ''
+  return ''
+}
+/** ISS-20: drop a goal number from every todo link and deadline source. Returns how many edits were made. */
+export function unlinkGoal(no) {
+  let n = 0
+  for (const t of state.todos) {
+    const i = t.links.indexOf(no)
+    if (i >= 0) { t.links.splice(i, 1); n++ }
+  }
+  for (const d of state.deadlines) {
+    if (d.source === no) { d.source = ''; n++ }
+  }
+  return n
+}
 export function psgPct(psgNo) {
   const s = sigsOf(psgNo)
   return s.length ? Math.round(s.reduce((a, x) => a + Number(x.pct || 0), 0) / s.length) : 0

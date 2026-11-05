@@ -1,7 +1,7 @@
 <script setup>
 // Right 480px side drawer for editing a todo (spec §2.4 "Side drawer").
 import { computed } from 'vue'
-import { ui, state, findTodo, deleteTodo, toggleTodo, updateTodo, linkType, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast } from '../store'
+import { ui, state, findTodo, deleteTodo, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast } from '../store'
 import Chip from './Chip.vue'
 
 const t = computed(() => (ui.drawerId ? findTodo(ui.drawerId) : null))
@@ -23,6 +23,13 @@ const deadlineOptions = computed(() => state.deadlines.filter((d) => !d.done && 
 function addLink(id) {
   if (id && !t.value.links.includes(id)) t.value.links.push(id)
 }
+/** ISS-18: links can now also be removed with the ✕ on their chip. */
+function removeLink(id) {
+  t.value.links = t.value.links.filter((l) => l !== id)
+  touch()
+}
+/** ISS-19: the goal names in the dropdown, so SIG-01.2 means something. */
+const goalName = (no) => linkLabel(no)
 const fmt = (s) => new Date(s).toLocaleString()
 const parts = computed(() => splitSiblings(t.value))
 function merge() {
@@ -87,12 +94,13 @@ function remove() {
         <label class="field">
           <span>Linked records</span>
           <input v-model.lazy="linksText" class="input mono" placeholder="SIG-02.1, ST2001spA" />
+          <small class="tiny muted">Remove: ✕ on a chip, or delete the number here</small>
         </label>
         <div class="row wrap">
-          <Chip v-for="l in t.links" :key="l" :id="l" />
+          <Chip v-for="l in t.links" :key="l" :id="l" removable @remove="removeLink" />
           <select class="select sm" @change="addLink($event.target.value); $event.target.value = ''">
             <option value="">+ link goal…</option>
-            <option v-for="g in goalOptions" :key="g" :value="g">{{ g }}</option>
+            <option v-for="g in goalOptions" :key="g" :value="g">{{ g }}{{ goalName(g) ? ' · ' + goalName(g) : '' }}</option>
           </select>
           <select class="select sm" @change="addLink($event.target.value); $event.target.value = ''">
             <option value="">+ link deadline…</option>

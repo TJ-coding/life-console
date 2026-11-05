@@ -2,7 +2,7 @@
 // S-20 · Todo Inbox — every todo, with filters, smart quick-add and bulk actions.
 import { computed, ref, reactive, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
-import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel } from '../store'
+import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel } from '../store'
 import LsdToggle from '../components/LsdToggle.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -131,7 +131,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
         <span class="mono small info">{{ picked.length }} selected</span>
         <input v-model="bulk.date" type="date" class="input mono small" @change="bulkSchedule" title="Schedule to day" />
         <select v-model="bulk.prio" class="select small" @change="bulkPrio"><option value="">Set priority…</option><option v-for="p in 5" :key="p" :value="p">P{{ p }}</option></select>
-        <select v-model="bulk.link" class="select small" @change="bulkLink"><option value="">Link to goal…</option><option v-for="g in goalIds" :key="g" :value="g">{{ g }}</option></select>
+        <select v-model="bulk.link" class="select small" @change="bulkLink"><option value="">Link to goal…</option><option v-for="g in goalIds" :key="g" :value="g">{{ g }}{{ linkLabel(g) ? ' · ' + linkLabel(g) : '' }}</option></select>
         <button class="btn sm" @click="bulkDone"><span class="icon sm">done_all</span>Mark done</button>
         <span class="spacer"></span>
         <button class="btn sm" @click="picked = []">Clear</button>

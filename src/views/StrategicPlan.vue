@@ -2,7 +2,7 @@
 // S-30 · Strategic Plan (Goals Planner) — Vision → PSG → SIG cascade with tables and review widgets.
 import { computed, ref, nextTick, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle } from '../store'
+import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel } from '../store'
 import PlanTabs from '../components/PlanTabs.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -76,6 +76,41 @@ function todoFor(sig) {
   ui.selectedId = t.id
   ui.drawerId = t.id
   toast(`Created ${t.id} for ${sig.no}`)
+}
+
+/* ISS-20: deleting a PSG or SIG with a confirm; linked todos/deadlines are cleaned up (unlinkGoal) */
+function removePsg(p) {
+  const kids = sigsOf(p.no)
+  const linked = unlinkCount(p.no) + kids.reduce((n, k) => n + unlinkCount(k.no), 0)
+  const msg = kids.length ? `Delete ${p.no} "${p.name}" and its ${kids.length} SIG${kids.length > 1 ? 's' : ''}?` : `Delete ${p.no} "${p.name}"?`
+  const note = linked ? `\n\n${linked} link${linked > 1 ? 's' : ''} to it on todos/deadlines will be removed too.` : ''
+  if (!confirm(`${msg}${note}`)) return
+  const ids = kids.map((k) => k.no).concat(p.no)
+  for (const no of ids) unlinkGoal(no)
+  const arr = plan.value.psgs
+  arr.splice(arr.findIndex((x) => x.no === p.no), 1)
+  plan.value.sigs = plan.value.sigs.filter((x) => x.psg !== p.no)
+  cleanDeps(ids)
+  if (ids.includes(selected.value)) selected.value = null
+  toast(`Deleted ${p.no}${kids.length ? ` and its ${kids.length} SIG${kids.length > 1 ? 's' : ''}` : ''}`)
+}
+function removeSig(s) {
+  const linked = unlinkCount(s.no)
+  if (!confirm(`Delete ${s.no} "${s.name}"?${linked ? `\n\n${linked} link${linked > 1 ? 's' : ''} to it on todos/deadlines will be removed too.` : ''}`)) return
+  unlinkGoal(s.no)
+  const arr = plan.value.sigs
+  arr.splice(arr.findIndex((x) => x.no === s.no), 1)
+  cleanDeps([s.no])
+  if (selected.value === s.no) selected.value = null
+  toast(`Deleted ${s.no}`)
+}
+/** How many todos/deadlines currently reference this goal (for the confirm message). */
+function unlinkCount(no) {
+  return state.todos.filter((t) => t.links.includes(no)).length + state.deadlines.filter((d) => d.source === no).length
+}
+/** Drop dependencies that point at deleted SIGs. */
+function cleanDeps(ids) {
+  for (const s of plan.value.sigs) if (s.deps?.some((d) => ids.includes(d))) s.deps = s.deps.filter((d) => !ids.includes(d))
 }
 
 /* deadlines tied to PSG / SIG (ISS-4): create one pre-linked to the goal, then open the edit dialog */
@@ -204,7 +239,8 @@ const print = () => window.print()
                   <td><input v-model="p.timeBound" class="input ghost w mono small" /></td>
                   <td><button class="status" :class="p.status" @click.stop="cycle(p)">{{ LABEL[p.status] }}</button></td>
                   <td class="mono" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</td>
-                  <td><button class="btn sm icon-only" title="Add a deadline for this PSG" @click.stop="goalDeadline(p)"><span class="icon sm">alarm_add</span></button></td>
+                  <td><button class="btn sm icon-only" title="Add a deadline for this PSG" @click.stop="goalDeadline(p)"><span class="icon sm">alarm_add</span></button>
+                  <button class="btn sm icon-only danger-ghost" title="Delete this PSG (and its SIGs)" @click.stop="removePsg(p)"><span class="icon sm">delete</span></button></td>
                 </tr>
               </tbody>
               <tfoot>
@@ -249,6 +285,7 @@ const print = () => window.print()
                     <div class="row acts">
                       <button class="btn sm icon-only" title="Add a deadline for this SIG" @click.stop="goalDeadline(s)"><span class="icon sm">alarm_add</span></button>
                       <button class="btn sm icon-only" title="Create todo for this SIG" @click.stop="todoFor(s)"><span class="icon sm">add_task</span></button>
+                      <button class="btn sm icon-only danger-ghost" title="Delete this SIG" @click.stop="removeSig(s)"><span class="icon sm">delete</span></button>
                     </div>
                   </td>
                 </tr>
