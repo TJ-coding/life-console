@@ -61,23 +61,30 @@ const blocks = computed(() => blocksForDay(T.value))
 
 const more = ref(pref('life-console/cc-more', '0') === '1')
 const setMore = (v) => { more.value = v; save('life-console/cc-more', v ? '1' : '0') }
-const vert = ref(pref('life-console/cc-timeline', 'h') === 'v')
-const VPXH = 40
+const vert = ref(pref('life-console/cc-timeline', 'v') === 'v') // vertical is the default
+const VZOOMS = { S: 24, M: 40, L: 64 } // px per hour
+const vzoom = ref(VZOOMS[pref('life-console/cc-vzoom', 'M')] ? pref('life-console/cc-vzoom', 'M') : 'M')
+const vpxh = computed(() => VZOOMS[vzoom.value])
 const vscroll = ref(null)
-/** Vertical timeline: open scrolled so "now" (or 08:00 on other days) sits a third of the way down. */
-function scrollVert() {
+/** Vertical timeline: scroll so "now" (or 08:00 on other days) sits a third of the way down. */
+function scrollVert(smooth = false) {
   const el = vscroll.value
   if (!el) return
   const m = isToday.value ? nowMin.value : 8 * 60
-  el.scrollTop = Math.max(0, (m / 60) * VPXH - el.clientHeight / 3)
+  el.scrollTo({ top: Math.max(0, (m / 60) * vpxh.value - el.clientHeight / 3), behavior: smooth ? 'smooth' : 'auto' })
+}
+function setVZoom(k) {
+  vzoom.value = k
+  save('life-console/cc-vzoom', k)
+  nextTick(() => scrollVert())
 }
 function setVert(v) {
   vert.value = v
   save('life-console/cc-timeline', v ? 'v' : 'h')
-  nextTick(scrollVert)
+  nextTick(() => scrollVert())
 }
-onMounted(() => nextTick(scrollVert))
-watch(T, () => nextTick(scrollVert))
+onMounted(() => nextTick(() => scrollVert()))
+watch(T, () => nextTick(() => scrollVert()))
 const firstBlock = computed(() => [...blocks.value].sort((a, b) => toMin(a.start) - toMin(b.start))[0])
 
 /* ── deadlines: a countdown to the nearest, plus the two after it ── */
@@ -180,9 +187,17 @@ function quickAdd() {
             <button class="btn sm icon-only" :class="{ active: vert }" title="Vertical timeline" @click="setVert(true)"><span class="icon sm">view_agenda</span></button>
           </div>
         </div>
-        <div v-if="vert" ref="vscroll" class="vscroll">
-          <DayTimeline :date="T" :blocks="blocks" :from="0" :to="24" :pxh="VPXH" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
-        </div>
+        <template v-if="vert">
+          <div class="vctrl">
+            <span class="tiny upper muted">Zoom</span>
+            <button v-for="(_, k) in VZOOMS" :key="k" class="btn sm" :class="{ active: vzoom === k }" @click="setVZoom(k)">{{ k }}</button>
+            <span class="spacer"></span>
+            <button v-if="isToday" class="btn sm" title="Scroll to now" @click="scrollVert(true)"><span class="icon sm">my_location</span>Now</button>
+          </div>
+          <div ref="vscroll" class="vscroll" :class="'z-' + vzoom">
+            <DayTimeline :date="T" :blocks="blocks" :from="0" :to="24" :pxh="vpxh" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
+          </div>
+        </template>
         <div v-else class="panel-b tl-b">
           <Timeline24 :date="T" :blocks="blocks" @drop-todo="dropOnTimeline" @open="(id) => (ui.drawerId = id)" />
         </div>
@@ -196,11 +211,18 @@ function quickAdd() {
           <span class="spacer"></span>
           <button v-if="done.length" class="btn sm ghost-btn" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }} {{ done.length }} done</button>
         </div>
-        <div class="load" :title="`${hours.toFixed(1)}h planned of ${CAPACITY_H}h capacity`">
-          <span class="tiny upper muted">Workload</span>
-          <div class="load-bar" :class="loadLevel"><i class="done-part" :style="{ width: pctOf(doneMin) + '%' }"></i><i :style="{ width: pctOf(remainingMin) + '%' }"></i></div>
-          <span class="mono small"><b :class="loadLevel">{{ hours.toFixed(1) }}h</b><span class="muted"> / {{ CAPACITY_H }}h · {{ Math.round((hours / CAPACITY_H) * 100) }}%</span></span>
+        <div class="todo-body">
+        <div class="load" :title="`${hours.toFixed(1)}h planned of ${CAPACITY_H}h capacity (${fmtH(doneMin)} done)`">
+          <span class="tiny upper muted">Load</span>
+          <div class="load-bar" :class="loadLevel">
+            <i v-for="n in CAPACITY_H - 1" :key="'t' + n" class="tick" :style="{ bottom: (n / CAPACITY_H) * 100 + '%' }"></i>
+            <i class="fill done-part" :style="{ height: pctOf(doneMin) + '%' }"></i>
+            <i class="fill" :style="{ bottom: pctOf(doneMin) + '%', height: Math.max(0, Math.min(pctOf(doneMin + remainingMin), 100) - pctOf(doneMin)) + '%' }"></i>
+          </div>
+          <b class="mono small" :class="loadLevel">{{ hours.toFixed(1) }}h</b>
+          <span class="mono tiny muted">/{{ CAPACITY_H }}h</span>
         </div>
+        <div class="todo-main">
         <div class="list" @dragover.prevent @drop.prevent="dropOnList">
           <TodoRow v-for="t in pending" :key="t.id" :todo="t" compact adopt-date show-start show-prio removable :show-links="false" @remove="removeTodo" />
           <template v-if="showDone">
@@ -212,6 +234,8 @@ function quickAdd() {
           <span class="mono ok">+</span>
           <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @SIG-01.1 p2`" />
         </form>
+        </div>
+        </div>
       </section>
     </div>
 
@@ -269,12 +293,19 @@ function quickAdd() {
 .vscroll :deep(.vb .t) { font-size: 11px; }
 .vscroll :deep(.hr span) { font-size: 11px; }
 .todo-panel { min-width: 0; }
-.load { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
-.load-bar { flex: 1; display: flex; height: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
-.load-bar i { display: block; height: 100%; background: var(--accent); }
-.load-bar i.done-part { opacity: 0.4; }
-.load-bar.warn i { background: var(--warn); }
-.load-bar.danger i { background: var(--danger); }
+.vctrl { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.vscroll.z-S :deep(.vb) { font-size: 11px; line-height: 13px; padding: 1px 6px; }
+.vscroll.z-S :deep(.vb .t) { font-size: 10px; }
+.todo-body { display: flex; align-items: stretch; flex: 1; min-height: 0; }
+.todo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* vertical workload gauge: done (dim) + remaining stacked bottom-up against capacity, hour ticks */
+.load { flex: none; width: 58px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-right: 1px solid var(--border); }
+.load-bar { position: relative; flex: 1; width: 16px; min-height: 120px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
+.load-bar .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); }
+.load-bar .fill.done-part { opacity: 0.4; }
+.load-bar.warn .fill { background: var(--warn); }
+.load-bar.danger .fill { background: var(--danger); }
+.load-bar .tick { position: absolute; left: 0; right: 0; height: 1px; background: var(--bg); opacity: 0.6; z-index: 1; }
 .list { min-height: 60px; max-height: 420px; overflow: auto; }
 .vert .list { max-height: 460px; }
 /* readable rows: the shared compact row is 11px, too small for the main list */
@@ -305,5 +336,7 @@ a.tm:hover { color: var(--accent); }
   .day, .day.vert { display: flex; flex-direction: column; }
   .todo-panel { order: 1; } .tl-panel { order: 2; }
   .vscroll { height: 420px; }
+  .load { width: 40px; }
+  .load-bar { width: 12px; }
 }
 </style>
