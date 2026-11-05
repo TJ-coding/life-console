@@ -1,11 +1,12 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ui, state, todayISO, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected } from './store'
+import { ui, state, todayISO, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue } from './store'
 import { NAV } from './nav'
 import CommandPalette from './components/CommandPalette.vue'
 import TodoDrawer from './components/TodoDrawer.vue'
 import SplitDialog from './components/SplitDialog.vue'
+import DeadlineDialog from './components/DeadlineDialog.vue'
 import { useNow } from './now'
 
 // "What now" — shown in the top bar on every screen and in the browser tab title.
@@ -24,6 +25,7 @@ const clock = computed(() => {
 })
 const T = computed(() => todayISO())
 const openCount = computed(() => state.todos.filter((t) => !t.done).length)
+const overdueCount = computed(() => { void ui.now.getMinutes(); return state.deadlines.filter(isOverdue).length })
 const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name === 'day' ? 'today' : route.name))
 
 function openPalette(mode) {
@@ -40,7 +42,8 @@ function onKey(e) {
     return
   }
   if (e.key === 'Escape') {
-    if (ui.splitId) ui.splitId = null
+    if (ui.deadlineId) ui.deadlineId = null
+    else if (ui.splitId) ui.splitId = null
     else if (ui.palette) ui.palette = false
     else if (ui.drawerId) ui.drawerId = null
     else if (route.name === 'focus') router.push('/')
@@ -48,7 +51,7 @@ function onKey(e) {
     return
   }
   const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]')
-  if (typing || ui.palette || ui.splitId) return
+  if (typing || ui.palette || ui.splitId || ui.deadlineId) return
   if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && ui.selectedId) {
     e.preventDefault()
     const t = moveSelected(e.key === 'ArrowUp' ? -1 : 1)
@@ -61,7 +64,7 @@ function onKey(e) {
   if (gPending) {
     gPending = false
     clearTimeout(gTimer)
-    const to = { s: '/strategy', i: '/todos', t: '/', w: '/week', c: '/', l: '/week?mode=days' }[k]
+    const to = { s: '/strategy', i: '/todos', t: '/', w: '/week', c: '/', l: '/week?mode=days', d: '/deadlines' }[k]
     if (to) { router.push(to); e.preventDefault() }
     return
   }
@@ -146,6 +149,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <span class="icon">{{ n.icon }}</span>
           <span class="grow">{{ n.label }}</span>
           <span v-if="n.key === 'todos'" class="mono tiny count">{{ openCount }}</span>
+          <span v-else-if="n.key === 'deadlines' && overdueCount" class="mono tiny count over" title="Overdue">{{ overdueCount }}</span>
           <span v-else-if="n.to.startsWith('/m/')" class="mono tiny muted">soon</span>
         </router-link>
       </nav>
@@ -199,6 +203,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <CommandPalette />
     <TodoDrawer />
     <SplitDialog />
+    <DeadlineDialog />
     <transition name="fade">
       <div v-if="ui.toast" class="toast mono">
         {{ ui.toast }}
@@ -227,6 +232,7 @@ nav { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
 .nav { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border-radius: 2px; color: var(--muted); }
 .nav:hover { background: var(--surface-2); color: var(--text); }
 .nav.on { background: var(--surface-2); color: var(--accent); box-shadow: inset 2px 0 0 var(--accent); }
+.count.over { color: var(--danger); border-color: var(--danger); }
 .count { border: 1px solid var(--border); border-radius: 2px; padding: 2px 5px; }
 .side-foot { border-top: 1px solid var(--border); padding: 10px 6px 0; display: flex; flex-direction: column; gap: 8px; }
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }

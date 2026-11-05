@@ -14,12 +14,16 @@ npm run dev      # http://localhost:5173
 | S-11 Day view | `#/day/YYYY-MM-DD` | the Command Center for any date: ‹ › arrows or `[` `]` step a day, **Today** returns; non-today dates show a day summary instead of the live NOW card; click a day header in Plan week to open it |
 | S-10 Plan week | `#/week` | the whole planning flow on one sheet: ① backlog panel → ② a 7-hour workload bucket per day → ③ that day's timeline directly below; one-click day buttons, Auto time-box, linked hover, balance and routines in a side rail |
 | S-20 Todo Inbox | `#/todos` | views / link / L-S-D / priority filters, smart quick-add parser, bulk schedule / priority / link / done, edit drawer |
+| S-21 Deadlines | `#/deadlines` | list grouped Overdue / Today / This week / Next week / Later (+ Done), or a month calendar (click a day to add on it); quick-add, source filter, edit/delete dialog; overdue badge in the sidebar |
 | S-30 Strategic Plan | `#/strategy` | Vision → PSG → SIG tree, editable PSG/SIG tables (PSG % = mean of SIG %), check schedule, events timetable, linked todos, "create todo for SIG" |
 | Other modules | `#/m/...` | Placeholder that lists the planned screens |
 
-**Keyboard:** `F` focus mode · `⌘K` palette · `N` new todo · `T` today · `W` week · `G S` strategy · `G I` inbox · `G L` workload · `J/K` move · `Enter` open · `X` done · `1–5` priority · `S` stamp · `[` `]` week.
+**Keyboard:** `F` focus mode · `⌘K` palette · `N` new todo · `T` today · `W` week · `G S` strategy · `G I` inbox · `G L` workload · `G D` deadlines · `J/K` move · `Enter` open · `X` done · `1–5` priority · `S` stamp · `[` `]` week.
 
 **Quick-add syntax:** `Read chapter 3 #ST2001 30m due:fri p2 @SIG-02.1 [L]`
+
+## Deadlines
+Add one from the Deadlines screen, the **Deadlines · 7d** panel on Today / the day view, or the **+** in any Plan week day's Deadlines section (defaults to that day). Syntax: `ST2001 Report 3 due:fri 17:00 #ST2001 p1 ! Upload PDF` (`due:` today / tomorrow / weekday / MM-DD / YYYY-MM-DD, defaulting to the day you're on; `HH:MM`, default 23:59; `p1`–`p5`; `#` or `@` sets the source; text after `!` becomes the vital points). Click any deadline to edit or delete it.
 
 ## Planning flow (mirrors the paper planner)
 Everything happens on **Plan week** (`#/week`). Each day column is stacked like the paper template: **② Workload** (a 7-hour bucket) directly above **③ Schedule** (that day's timeline).

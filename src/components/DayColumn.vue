@@ -2,10 +2,11 @@
 // One day of the unified planner, top → bottom like the paper template:
 //   header · ② Workload bucket (assign day) · ③ Schedule timeline (assign time) · deadlines · notes · sign-off
 // A task dropped in the bucket can be dragged straight down onto a time in the same column.
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, updateTodo, diffDays, CAPACITY_H, autoTimebox, toast } from '../store'
+import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, updateTodo, diffDays, CAPACITY_H, autoTimebox, toast, isOverdue } from '../store'
 import DayTimeline from './DayTimeline.vue'
+import DeadlineQuickAdd from './DeadlineQuickAdd.vue'
 import WorkloadBucket from './WorkloadBucket.vue'
 import Gauge from './Gauge.vue'
 import Stamps from './Stamps.vue'
@@ -19,10 +20,11 @@ const todos = computed(() => todosForDay(props.date))
 const untimed = computed(() => todos.value.filter((t) => !t.done && !t.scheduled.start))
 const blocks = computed(() => blocksForDay(props.date))
 const hours = computed(() => workload(props.date))
-const deadlines = computed(() => state.deadlines.filter((d) => d.due.slice(0, 10) === props.date))
+const deadlines = computed(() => state.deadlines.filter((d) => d.due.slice(0, 10) === props.date).sort((a, b) => a.due.localeCompare(b.due)))
 const matches = (links) => !props.filter || links.includes(props.filter)
 const dimBlock = (b) => props.filter && b.link !== props.filter && !(b.todoId && matches(state.todos.find((t) => t.id === b.todoId)?.links ?? []))
 const dimTodo = (t) => !matches(t.links)
+const adding = ref(false)
 const notes = computed({ get: () => state.notes[props.date] ?? '', set: (v) => { state.notes[props.date] = v } })
 const schedule = (id, start) => updateTodo(id, { scheduled: { date: props.date, start } })
 
@@ -71,14 +73,18 @@ function auto() {
     </div>
 
     <div class="sec">
-      <div class="sh tiny upper muted">Deadlines</div>
-      <label v-for="d in deadlines" :key="d.id" class="dl small" :class="{ done: d.done }">
-        <input v-model="d.done" type="checkbox" />
-        <span class="ellipsis grow" :title="d.title">{{ d.title }}</span>
+      <div class="sh tiny upper muted">
+        Deadlines<span class="spacer"></span>
+        <button class="btn sm icon-only addbtn" :class="{ active: adding }" :title="`Add a deadline on ${wd(date)}`" @click="adding = !adding"><span class="icon sm">add</span></button>
+      </div>
+      <div v-for="d in deadlines" :key="d.id" class="dl small" :class="{ done: d.done, over: isOverdue(d) }" :title="`${d.title}${d.vital ? ' · ' + d.vital : ''} — click to edit`" @click="ui.deadlineId = d.id">
+        <input v-model="d.done" type="checkbox" @click.stop />
+        <span class="ellipsis grow">{{ d.title }}</span>
         <span v-if="d.clickUp" class="ok" title="ClickUp">●</span>
         <span class="mono muted">{{ d.due.slice(11) }}</span>
-      </label>
-      <div v-if="!deadlines.length" class="small muted pad">—</div>
+      </div>
+      <DeadlineQuickAdd v-if="adding" :date="date" compact autofocus @cancel="adding = false" />
+      <div v-if="!deadlines.length && !adding" class="small muted pad">—</div>
     </div>
 
     <template v-if="mode !== 'days'">
@@ -108,7 +114,10 @@ function auto() {
 .sh { display: flex; align-items: center; gap: 4px; padding: 0 2px 5px; min-height: 22px; }
 .n { font-size: 12px; }
 .auto { height: 20px; padding: 0 5px; font-size: 10px; color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--border)); }
-.dl { display: flex; align-items: center; gap: 5px; padding: 3px 2px; cursor: pointer; }
+.dl { display: flex; align-items: center; gap: 5px; padding: 3px 2px; cursor: pointer; border-radius: 2px; }
+.dl:hover { background: var(--surface-2); }
+.dl.over .grow { color: var(--danger); }
+.addbtn { height: 18px; padding: 0 2px; }
 .dl.done span.grow { text-decoration: line-through; color: var(--muted); }
 .pad { padding: 2px; }
 .notes { width: 100%; font-size: 11px; line-height: 15px; }

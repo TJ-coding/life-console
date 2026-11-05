@@ -236,6 +236,7 @@ export const ui = reactive({
   weekStart: mondayOf(todayISO()),
   dragId: null, // todo being dragged
   splitId: null, // todo open in the Split dialog
+  deadlineId: null, // deadline open in the edit dialog
   hoverId: null, // todo under the pointer — highlighted in backlog, bucket and timeline at once
   planMode: (() => { try { return localStorage.getItem('life-console/plan-mode') || 'both' } catch { return 'both' } })(), // 'days' | 'both' | 'times'
   backlogFocus: 0, // bump to focus the Plan-week backlog quick-add
@@ -647,4 +648,40 @@ export function autoTimebox(date, from = WORK_FROM, to = WORK_TO) {
     placed.push(t.id)
   }
   return { placed, unplaced }
+}
+
+/* ───────────── deadlines ───────────── */
+/** `YYYY-MM-DDTHH:MM` for "now", comparable with deadline.due strings. */
+export const nowKey = () => `${todayISO()}T${fromMin(new Date().getHours() * 60 + new Date().getMinutes())}`
+export const isOverdue = (d) => !d.done && d.due < nowKey()
+
+/**
+ * Deadline quick syntax: `Title due:fri 17:00 #ST2001 p1 ! vital points`
+ * - due:… (today / tomorrow / weekday / MM-DD / YYYY-MM-DD) — defaults to `baseDate`
+ * - HH:MM sets the time (default 23:59) · p1–p5 priority · #tag / @ID source · text after `!` = vital points
+ */
+export function parseDeadline(text, baseDate = todayISO()) {
+  const [main, ...vitalParts] = text.split(/\s!\s?|^!\s?/)
+  let time = null
+  const rest = main.split(/\s+/).filter((tok) => {
+    const m = tok.match(/^(\d{1,2}):(\d{2})$/)
+    if (m && +m[1] < 24 && +m[2] < 60) { time = `${pad(+m[1])}:${m[2]}`; return false }
+    return true
+  }).join(' ')
+  const q = parseQuick(rest, baseDate)
+  return {
+    title: q.title, vital: vitalParts.join(' ').trim(), date: q.due ?? baseDate, time: time ?? '23:59',
+    source: q.links[0] ?? '', priority: q.priority ?? 2,
+  }
+}
+export function addDeadline(d) {
+  const max = Math.max(0, ...state.deadlines.map((x) => Number(x.id.split('-')[1]) || 0))
+  const dl = { id: `DL-${max + 1}`, title: 'Untitled', vital: '', due: `${todayISO()}T23:59`, source: '', clickUp: false, done: false, priority: 2, ...d }
+  state.deadlines.push(dl)
+  return state.deadlines[state.deadlines.length - 1]
+}
+export function deleteDeadline(id) {
+  const i = state.deadlines.findIndex((d) => d.id === id)
+  if (i >= 0) state.deadlines.splice(i, 1)
+  if (ui.deadlineId === id) ui.deadlineId = null
 }

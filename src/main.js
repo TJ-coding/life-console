@@ -7,6 +7,7 @@ import TodoInbox from './views/TodoInbox.vue'
 import StrategicPlan from './views/StrategicPlan.vue'
 import Settings from './views/Settings.vue'
 import FocusMode from './views/FocusMode.vue'
+import Deadlines from './views/Deadlines.vue'
 import ModulePlaceholder from './views/ModulePlaceholder.vue'
 import { applyTheme } from './store'
 import './styles.css'
@@ -20,6 +21,7 @@ const router = createRouter({
     { path: '/week', name: 'week', component: WeeklyPlanner, meta: { title: 'Plan week', screen: 'S-10' } },
     { path: '/workload', redirect: { path: '/week', query: { mode: 'days' } } }, // merged into the planner
     { path: '/todos', name: 'todos', component: TodoInbox, meta: { title: 'Todo Inbox', screen: 'S-20' } },
+    { path: '/deadlines', name: 'deadlines', component: Deadlines, meta: { title: 'Deadlines', screen: 'S-21' } },
     { path: '/strategy', name: 'strategy', component: StrategicPlan, meta: { title: 'Strategic Plan', screen: 'S-30' } },
     { path: '/settings', name: 'settings', component: Settings, meta: { title: 'Settings', screen: 'S-90' } },
     { path: '/m/:module', name: 'module', component: ModulePlaceholder, meta: { title: 'Module' } },

@@ -14,6 +14,7 @@ import Stamps from '../components/Stamps.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
 import NowCard from '../components/NowCard.vue'
+import DeadlineQuickAdd from '../components/DeadlineQuickAdd.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -185,9 +186,9 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
     </section>
 
     <section class="panel c3">
-      <div class="panel-h"><span class="icon sm warn">alarm</span><h2>Deadlines · 7d</h2></div>
+      <div class="panel-h"><span class="icon sm warn">alarm</span><h2><router-link to="/deadlines" class="title-link">Deadlines · 7d</router-link></h2></div>
       <div class="dl-list">
-        <div v-for="d in deadlines" :key="d.id" class="dl" :class="{ over: diffDays(T, d.due) < 0 }">
+        <div v-for="d in deadlines" :key="d.id" class="dl" :class="{ over: diffDays(T, d.due) < 0 }" title="Click to edit" @click="ui.deadlineId = d.id">
           <div class="row">
             <Prio :p="d.priority" />
             <span class="spacer"></span>
@@ -198,10 +199,11 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
             <span class="mono" :class="diffDays(T, d.due) < 0 ? 'danger' : diffDays(T, d.due) <= 1 ? 'warn' : 'muted'">{{ relDay(d.due, T) }} · {{ d.due.slice(11) }}</span>
             <span class="spacer"></span><Chip :id="d.source" />
           </div>
-          <label class="row small muted"><input v-model="d.done" type="checkbox" /> done</label>
+          <label class="row small muted" @click.stop><input v-model="d.done" type="checkbox" /> done</label>
         </div>
         <div v-if="!deadlines.length" class="empty">No deadlines in the next 7 days.</div>
       </div>
+      <DeadlineQuickAdd :date="T" class="dl-add" />
     </section>
 
     <section class="panel c4">
@@ -291,6 +293,9 @@ const pctClass = (n) => (n >= 70 ? '' : n >= 40 ? 'info' : 'warn')
 .foot { padding: 8px 12px; }
 .dl-list { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
 .dl { border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
+.dl { cursor: pointer; }
+.dl:hover { border-color: var(--muted); }
+.dl-add { padding: 0 10px 10px; }
 .dl.over { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 6%, transparent); }
 .dl-title { font-weight: 600; }
 .psg { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: 2px; padding: 10px; color: var(--text); }
