@@ -371,6 +371,19 @@ const print = () => window.print()
             </div>
           </section>
 
+          <!-- linked todos: left of the events timetable in the widget grid -->
+          <section class="panel">
+            <div class="panel-h"><span class="icon sm ok">checklist</span><h3>Linked todos</h3><span class="spacer"></span><span class="mono small muted">{{ linked.filter((t) => !t.done).length }} pending</span></div>
+            <div class="lt">
+              <div v-for="t in linked" :key="t.id" class="lt-row" :class="{ done: t.done }" @click="ui.drawerId = t.id">
+                <input type="checkbox" :checked="t.done" @click.stop @change="toggleTodo(t.id)" />
+                <span class="grow ellipsis">{{ t.title }}</span>
+                <Chip :id="t.links.find((l) => planIds(plan).includes(l))" />
+              </div>
+              <div v-if="!linked.length" class="empty">No todos linked to this plan yet.</div>
+            </div>
+          </section>
+
           <!-- events timetable -->
           <section class="panel">
             <div class="panel-h"><span class="icon sm info">flag_circle</span><h3>Events timetable</h3></div>
@@ -387,19 +400,6 @@ const print = () => window.print()
               <input v-model="ev.date" type="date" class="input small mono" />
               <button class="btn sm" type="submit">Add</button>
             </form>
-          </section>
-
-          <!-- linked todos -->
-          <section class="panel">
-            <div class="panel-h"><span class="icon sm ok">checklist</span><h3>Linked todos</h3><span class="spacer"></span><span class="mono small muted">{{ linked.filter((t) => !t.done).length }} pending</span></div>
-            <div class="lt">
-              <div v-for="t in linked" :key="t.id" class="lt-row" :class="{ done: t.done }" @click="ui.drawerId = t.id">
-                <input type="checkbox" :checked="t.done" @click.stop @change="toggleTodo(t.id)" />
-                <span class="grow ellipsis">{{ t.title }}</span>
-                <Chip :id="t.links.find((l) => planIds(plan).includes(l))" />
-              </div>
-              <div v-if="!linked.length" class="empty">No todos linked to this plan yet.</div>
-            </div>
           </section>
 
           <!-- acronym legend -->
