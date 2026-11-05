@@ -74,8 +74,13 @@ The planner document carries `schemaVersion`. `migrateDoc()` in `src/store.js` u
   Each kind can be toggled, and its times set, in Settings.
 - **Server** (`server/`): plain Node `http` plus `web-push`. Data, subscriptions and VAPID keys live in `DATA_DIR` (`/data`, a Docker volume).
 
-## Deployment
-Live at **http://life-console.tj-coding.uk** (also http://dokpoly.netbird.cloud). Both are reachable only on the NetBird network: `life-console.tj-coding.uk` is a DNS-only (grey-cloud) Cloudflare A record pointing at the server's NetBird address `100.82.103.214`, so anyone can look it up but only NetBird peers can connect. Dokploy (project *Life Console*, app `life-console`) builds the `Dockerfile` (Vite build → Node server, volume at `/data`) from `main` via its GitHub App integration.
-- Pushing to `main` runs `.github/workflows/deploy.yml`. It builds the app and the Docker image, joins NetBird as a temporary peer, calls Dokploy's `application.deploy`, and waits until Dokploy reports `done`.
-- Needs: secrets `DOKPLOY_API_KEY` and `NETBIRD_SETUP_KEY` (reusable and ephemeral, in a group allowed to reach the Dokploy peer), plus variables `DOKPLOY_URL` and `DOKPLOY_APPLICATION_ID`.
-- Dokploy's own auto-deploy is off, so every deploy comes from Actions (or a manual deploy in Dokploy).
+## Hosting and deployment
+**Full guide: [docs/OPERATIONS.md](docs/OPERATIONS.md)** covers where it's hosted, how to deploy (automatic and manual), CI secrets, Dokploy, Cloudflare and NetBird setup, data backup and restore, migrations, a release checklist and troubleshooting.
+
+In short:
+- **Live:**
+  - https://life-console.tj-coding.uk (Cloudflare Tunnel + Access login; the address for installing on phones);
+  - http://dokpoly.netbird.cloud (NetBird only, HTTP).
+- **Code:** https://github.com/TJ-coding/life-console. `main` is the deployed branch.
+- **Deploy:** push to `main`. GitHub Actions builds and smoke-tests the image, joins NetBird and triggers Dokploy (project *Life Console*, app `life-console`), which builds the `Dockerfile` from `main`. Or press **Deploy** in the Dokploy panel (http://dokpoly.netbird.cloud:3000, NetBird only).
+- **Data:** the Docker volume `life-console-data` at `/data`. It survives deploys. Back it up with `curl -s http://dokpoly.netbird.cloud/api/state > backup.json`.
