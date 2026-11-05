@@ -1,7 +1,7 @@
 <script setup>
 // Right 480px side drawer for editing a todo (spec §2.4 "Side drawer").
 import { computed } from 'vue'
-import { ui, state, findTodo, deleteTodo, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast } from '../store'
+import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast } from '../store'
 import Chip from './Chip.vue'
 
 const t = computed(() => (ui.drawerId ? findTodo(ui.drawerId) : null))
@@ -36,9 +36,13 @@ function merge() {
   const k = mergeParts(t.value.id)
   if (k) { ui.drawerId = k.id; toast(`Merged into ${k.id} (${k.timeMin}m)`) }
 }
-function remove() {
-  if (confirm(`Delete ${t.value.id}?`)) deleteTodo(t.value.id)
-}
+/** Delete with an undo toast instead of a confirm() (DESIGN.md §2.8). */
+const remove = () => deleteTodoUndo(t.value.id)
+/** "today" / "Wed 11/5" for the schedule actions. */
+const dayName = computed(() => {
+  const d = t.value?.scheduled?.date
+  return !d ? '' : d === todayISO() ? 'today' : `${wd(d)} ${fmtSlash(d)}`
+})
 </script>
 
 <template>
@@ -61,6 +65,14 @@ function remove() {
           <label class="field"><span>Scheduled day</span><input v-model="schedDate" type="date" class="input mono" /></label>
           <label class="field"><span>Start time</span><input v-model="schedStart" type="time" step="900" class="input mono" :disabled="!t.scheduled" /></label>
         </div>
+        <div v-if="t.scheduled" class="unsched">
+          <button v-if="t.scheduled.start" class="btn sm" title="Clear the start time: off the timeline, still on that day's list (undo in the toast)" @click="unscheduleTodo(t.id, 'time')">
+            <span class="icon sm">event_busy</span>Remove from schedule
+          </button>
+          <button class="btn sm" title="Back to the backlog — no day, no time (undo in the toast)" @click="unscheduleTodo(t.id, 'day')">
+            <span class="icon sm">move_to_inbox</span>Unschedule from {{ dayName }}
+          </button>
+        </div>
         <div class="field">
           <span class="lbl">Priority</span>
           <div class="row">
@@ -76,7 +88,7 @@ function remove() {
           </div>
         </div>
         <div class="field">
-          <span class="lbl">Split across days</span>
+          <span class="lbl">Split into parts</span>
           <div v-if="parts.length > 1" class="parts">
             <div v-for="p in parts" :key="p.id" class="prt row small" :class="{ cur: p.id === t.id, done: p.done }" @click="ui.drawerId = p.id">
               <span class="mono">{{ partLabel(p) }}</span>
@@ -87,7 +99,7 @@ function remove() {
             </div>
           </div>
           <div class="row">
-            <button class="btn sm" :disabled="t.done" @click="ui.splitId = t.id"><span class="icon sm">call_split</span>{{ parts.length > 1 ? 'Split this part further…' : 'Split across days…' }}</button>
+            <button class="btn sm" :disabled="t.done" @click="ui.splitId = t.id"><span class="icon sm">call_split</span>{{ parts.length > 1 ? 'Re-split…' : 'Split…' }}</button>
             <button v-if="parts.filter((p) => !p.done).length > 1" class="btn sm" @click="merge"><span class="icon sm">merge</span>Merge open parts</button>
           </div>
         </div>
@@ -116,7 +128,7 @@ function remove() {
       </div>
       <footer class="df">
         <button class="btn primary grow" @click="toggleTodo(t.id)"><span class="icon sm">done_all</span>{{ t.done ? 'Reopen' : 'Mark completed' }} <span class="kbd">X</span></button>
-        <button class="btn danger-ghost" title="Delete" @click="remove"><span class="icon sm">delete</span></button>
+        <button class="btn danger-ghost" title="Delete this task (undo in the toast)" @click="remove"><span class="icon sm">delete</span>Delete</button>
       </footer>
     </aside>
   </transition>
@@ -143,6 +155,7 @@ function remove() {
 .prt:hover { background: var(--surface-2); }
 .prt.cur { box-shadow: inset 2px 0 0 var(--info); }
 .prt.done .grow { text-decoration: line-through; color: var(--muted); }
+.unsched { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -6px; }
 .audit { border: 1px solid var(--border); border-radius: 2px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
 .audit div { display: flex; justify-content: space-between; }
 .df { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }

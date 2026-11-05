@@ -340,7 +340,8 @@ export function toast(msg, action = null) {
   ui.toast = msg
   ui.toastAction = action // optional { label, run }
   clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => { ui.toast = ''; ui.toastAction = null }, action ? 6000 : 2200)
+  // undo toasts stay longer: on a phone you need time to notice them and reach the button
+  toastTimer = setTimeout(() => { ui.toast = ''; ui.toastAction = null }, action ? 9000 : 2200)
 }
 
 /* ───────────── todos ───────────── */
@@ -488,24 +489,49 @@ export function deleteBlock(id) {
   const [copy] = state.timeBlocks.splice(i, 1)
   return copy
 }
-/** Remove any item shown on the timeline: a scheduled todo or a fixed block (ISS-8), with an undo toast. */
+/**
+ * Take a todo off the schedule, with undo. how = 'time': clear the start time only (it leaves the
+ * timeline but stays in that day's workload); 'day': back to the backlog (scheduled = null).
+ */
+export function unscheduleTodo(id, how = 'time') {
+  const t = findTodo(id)
+  if (!t?.scheduled) return
+  const prev = { ...t.scheduled }
+  if (how === 'time' && !prev.start) return
+  updateTodo(id, { scheduled: how === 'time' ? { date: prev.date, start: null } : null })
+  toast(how === 'time' ? `${id} off the timeline · still on ${wd(prev.date)}'s list` : `${id} back to the backlog`, {
+    label: 'Undo', run: () => updateTodo(id, { scheduled: prev }),
+  })
+}
+/** Delete a todo with an undo toast (never a hard delete without a way back). */
+export function deleteTodoUndo(id) {
+  const t = findTodo(id)
+  if (!t) return
+  const copy = JSON.parse(JSON.stringify(t))
+  deleteTodo(id)
+  toast(`Deleted ${id}`, { label: 'Undo', run: () => { if (!findTodo(copy.id)) state.todos.push(copy) } })
+}
+/**
+ * The ✕ on a timeline item, with undo. A scheduled todo only leaves the timeline (its time is cleared;
+ * the task itself stays) — deleting the task lives in its drawer. A fixed block is deleted.
+ */
 export function removeTimelineBlock(b) {
-  if (b.todoId) {
-    const full = state.todos.find((t) => t.id === b.todoId)
-    if (!full) return
-    const copy = JSON.parse(JSON.stringify(full))
-    deleteTodo(full.id)
-    toast(`Deleted ${full.id}`, { label: 'Undo', run: () => state.todos.push(copy) })
-  } else {
+  if (b.todoId) unscheduleTodo(b.todoId, 'time')
+  else {
     const copy = deleteBlock(b.id)
-    if (copy) toast(`Deleted ${copy.title || 'block'}`, { label: 'Undo', run: () => state.timeBlocks.push(copy) })
+    if (copy) toast(`Removed ${copy.title || 'block'} ${copy.start}–${copy.end}`, { label: 'Undo', run: () => state.timeBlocks.push(copy) })
   }
 }
 
-/** Remove any timeline item shown on the timeline: a scheduled todo or a fixed block (ISS-8), with an undo toast. */
-export function setScheduleLock(v) {
+/** What the schedule lock does — shared by the padlock buttons' tooltips and toasts. */
+export const LOCK_HELP = {
+  on: 'Schedule locked: blocks can\'t be dragged, resized or ✕-removed. Tap a block to edit or remove it. Click to unlock.',
+  off: 'Schedule unlocked: drag to move, drag the edge to resize, ✕ removes. Click to lock against accidental drags.',
+}
+export function setScheduleLock(v, announce = true) {
   ui.scheduleLock = v
   try { localStorage.setItem('life-console/schedule-lock', v ? '1' : '0') } catch { /* ignore */ }
+  if (announce) toast(v ? 'Schedule locked · drag & ✕ off — tap a block to edit or remove it' : 'Schedule unlocked · drag to move, ✕ removes')
 }
 
 export function layoutLanes(blocks) {
@@ -767,6 +793,32 @@ export function mergeParts(id) {
   return keep
 }
 
+/**
+ * The Split dialog's apply: split `id` into `parts`, with an Undo toast that restores every todo of
+ * the group exactly as it was. whole = re-split the whole task: merge its open parts first, so a
+ * part split again doesn't end up as 2/5, 3/5… next to stale siblings.
+ */
+export function splitWithUndo(id, parts, { whole = false } = {}) {
+  const t = findTodo(id)
+  if (!t || parts.length < 2) return []
+  const before = (t.split ? splitSiblings(t) : [t]).map((x) => JSON.parse(JSON.stringify(x)))
+  const drawerWas = ui.drawerId
+  const target = whole && t.split ? (mergeParts(id) ?? t) : t
+  const made = splitTodo(target.id, parts)
+  const group = made[0].split.group
+  const ids = new Set(state.todos.filter((x) => x.split?.group === group).map((x) => x.id))
+  if (drawerWas && !findTodo(drawerWas)) ui.drawerId = made[0].id
+  const where = parts.every((p) => p.date && p.date === parts[0].date) ? ` on ${wd(parts[0].date)}` : ''
+  toast(`Split into ${made.length} parts${where}`, {
+    label: 'Undo',
+    run: () => {
+      for (let i = state.todos.length - 1; i >= 0; i--) if (ids.has(state.todos[i].id)) state.todos.splice(i, 1)
+      before.forEach((c) => { if (!findTodo(c.id)) state.todos.push(c) })
+    },
+  })
+  return made
+}
+
 /* ───────────── planning flow: backlog → day → time ───────────── */
 export const WORK_FROM = '08:00'
 export const WORK_TO = '21:00'
@@ -826,8 +878,9 @@ export function autoTimebox(date, from = WORK_FROM, to = WORK_TO) {
  * blocks, skipping the original task's own block (its parts replace it). Returns 'HH:MM' or null per part.
  */
 export function planDaySpread(date, mins, skipTodoId = null, from = WORK_FROM, to = WORK_TO) {
+  const skip = new Set([].concat(skipTodoId ?? [])) // one id or a list (a re-split skips every open part)
   const busy = blocksForDay(date)
-    .filter((b) => b.todoId !== skipTodoId)
+    .filter((b) => !skip.has(b.todoId))
     .map((b) => [toMin(b.start), toMin(b.end)])
   let earliest = toMin(from)
   if (date === todayISO()) {

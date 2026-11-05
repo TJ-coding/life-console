@@ -75,12 +75,12 @@ function openBlock(b) {
         </div>
         <div
           v-for="b in laid.blocks" :key="b.id" class="block tl-block" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id }]"
-          :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked — unlock to move' : 'Drag to move · drag right edge to change end'}`" :draggable="!ui.scheduleLock"
+          :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag right edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!ui.scheduleLock"
           @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock(b)"
         >
           <span class="mono t">{{ b.start }}–{{ b.end }}</span>
           <span class="nm">{{ b.title }}</span>
-          <button v-if="!ui.scheduleLock" class="xb icon" title="Delete (undo in the toast)" @click.stop="removeBlock(b)">close</button>
+          <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
           <span v-if="!ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
         </div>
         <div v-if="showNow" class="now" :style="{ left: x(nowMin) + 'px' }"><span class="mono">NOW {{ fromMin(nowMin) }}</span></div>
@@ -115,6 +115,7 @@ function openBlock(b) {
 .xb { position: absolute; top: 2px; right: 3px; width: 16px; height: 16px; font-size: 13px; color: var(--muted); background: transparent; border: 0; padding: 0; cursor: pointer; opacity: 0; }
 .tl-block:hover .xb { opacity: 0.7; }
 .xb:hover { opacity: 1; color: var(--danger); }
+@media (hover: none) { .xb { opacity: 0.85; width: 22px; height: 22px; font-size: 16px; top: 1px; right: 1px; color: var(--text); } }
 .handle::after { content: ''; position: absolute; top: 30%; bottom: 30%; right: 2px; width: 2px; border-radius: 1px; background: var(--c); opacity: 0; }
 .tl-block:hover .handle::after, .tl-block.sizing .handle::after { opacity: 0.9; }
 </style>

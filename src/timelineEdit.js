@@ -70,7 +70,7 @@ export function useTimelineEdit(o) {
     hover.value = null
     const d = ui.dragBlock
     if (d && h) {
-      if (locked()) { toast('Schedule locked — unlock to edit'); return } // still cancel the drag (ISS-14)
+      if (locked()) { toast('Schedule locked · unlock (padlock) to drag — tap a block to edit or remove it'); return } // still cancel the drag (ISS-14)
       moveBlock(d.kind, d.id, o.date(), h.start)
       toast(`${d.kind === 'todo' ? d.id : 'Block'} → ${o.date().slice(5)} ${fromMin(h.start)}`)
       ui.dragBlock = null

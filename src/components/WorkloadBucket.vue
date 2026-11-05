@@ -81,7 +81,7 @@ function toggleParts(t) {
         :style="{ height: cardH(t) + 'px' }"
         :title="t.grouped
           ? `${t.title} · ${t.grouped.n} parts (${t.grouped.parts.map((p) => p.scheduled.start).join(', ')}) · ${t.grouped.timeMin}m
-In the schedule below, one block per part. Dragging disabled — use Split to rearrange.`
+In the schedule below, one block per part. To change parts or times: the split button (re-split).`
           : `${t.title} · ${t.timeMin}m · P${t.priority} · ${t.scheduled.start ? 'at ' + t.scheduled.start : 'no time yet — drag onto the timeline'}`"
         @dragstart="startDrag($event, t)" @dragend="endDrag"
         @dragover="overRow($event, t, { reverse: true })" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t, { adoptDate: true })"
@@ -96,7 +96,7 @@ In the schedule below, one block per part. Dragging disabled — use Split to re
           <span v-else-if="!t.done" class="icon tiny-i warn" title="No time yet">more_time</span>
           {{ t.grouped ? t.grouped.timeMin : t.timeMin }}m
         </span>
-        <button v-if="!t.done && !t.grouped && t.timeMin >= 30" class="splitbtn" title="Split across days / spread through the day" @click.stop="ui.splitId = t.id"><span class="icon">call_split</span></button>
+        <button v-if="t.grouped ? !t.grouped.parts.every((p) => p.done) : !t.done && t.timeMin >= 30" class="splitbtn" :title="t.grouped ? 'Re-split: change the parts or their times' : 'Split: within the day or across days'" @click.stop="ui.splitId = t.grouped ? (t.grouped.parts.find((p) => !p.done) ?? t).id : t.id"><span class="icon">call_split</span></button>
       </div>
     </div>
     <div v-if="!todos.length && !fixedH" class="empty-hint small muted">drop tasks here</div>
@@ -131,5 +131,6 @@ In the schedule below, one block per part. Dragging disabled — use Split to re
 .splitbtn { position: absolute; top: 1px; right: 1px; display: none; border: 1px solid var(--border); background: var(--surface); border-radius: 2px; padding: 0 1px; cursor: pointer; color: var(--text); line-height: 1; }
 .splitbtn .icon { font-size: 13px; }
 .card:hover .splitbtn { display: block; }
+@media (hover: none) { .card.grouped .splitbtn { display: block; } }
 .empty-hint { position: absolute; left: 22px; right: 4px; bottom: 6px; text-align: center; border: 1px dashed var(--border); border-radius: 2px; padding: 6px; }
 </style>

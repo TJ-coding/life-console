@@ -39,12 +39,12 @@ const removeBlock = removeTimelineBlock
     </div>
     <div
       v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b), moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, linked: b.todoId && ui.hoverId === b.todoId }]"
-      :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked — unlock in the toolbar to move' : 'Drag to move (any day) · drag bottom edge to change end'}`" :draggable="!ui.scheduleLock"
+      :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!ui.scheduleLock"
       @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock(b)"
       @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null"
     >
       <span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> {{ b.title }}
-      <button v-if="!ui.scheduleLock" class="xb icon" title="Delete (undo in the toast)" @click.stop="removeBlock(b)">close</button>
+      <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
       <span v-if="!ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
     </div>
     <div v-if="nowY !== null" class="now" :style="{ top: nowY + 'px' }"></div>
@@ -71,6 +71,10 @@ const removeBlock = removeTimelineBlock
 .xb { position: absolute; top: 1px; right: 1px; width: 14px; height: 14px; font-size: 12px; color: var(--muted); background: transparent; border: 0; padding: 0; cursor: pointer; opacity: 0; display: none; }
 .vb:hover .xb { opacity: 0.7; display: block; }
 .xb:hover { opacity: 1; color: var(--danger); }
+/* touch screens have no hover: the ✕ is always there (only shown while the schedule is unlocked) */
+@media (hover: none) {
+  .xb { display: block; opacity: 0.85; width: 18px; height: 18px; font-size: 14px; top: 0; right: 0; color: var(--text); }
+}
 .handle::after { content: ''; position: absolute; left: 35%; right: 35%; bottom: 1px; height: 2px; border-radius: 1px; background: var(--c); opacity: 0; }
 .vb:hover .handle::after, .vb.sizing .handle::after { opacity: 0.9; }
 </style>

@@ -17,7 +17,7 @@ function remove() {
   const copy = deleteBlock(b.value.id)
   if (copy) {
     close()
-    toast(`Deleted ${copy.title}`, { label: 'Undo', run: () => state.timeBlocks.push(copy) })
+    toast(`Removed ${copy.title} ${copy.start}–${copy.end}`, { label: 'Undo', run: () => state.timeBlocks.push(copy) })
   }
 }
 </script>
@@ -47,7 +47,7 @@ function remove() {
         </div>
       </div>
       <footer class="ft">
-        <button class="btn danger-ghost" @click="remove"><span class="icon sm">delete</span>Delete</button>
+        <button class="btn danger-ghost" title="Remove this block from the schedule · undo in the toast" @click="remove"><span class="icon sm">event_busy</span>Remove from schedule</button>
         <span class="spacer"></span>
         <button class="btn primary" @click="close">Done</button>
       </footer>

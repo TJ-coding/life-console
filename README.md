@@ -37,9 +37,17 @@ Everything happens on **Plan week** (`#/week`). Each day column is stacked like 
 
 The step bar shows progress (`4 to place → 12 on this week → 4/12 time-boxed`), and its buttons switch the layout to emphasise days, times or both. A guide line names the next thing to do. Hovering a task highlights it in the backlog, its bucket and its timeline at once. `/workload` and `G L` open the planner with the day-focused layout.
 
-### Splitting a task across days
-Click a task's split button (on backlog cards and workload blocks, or **Split across days…** in the task drawer) to open the Split dialog. Choose a number of parts or a chunk size, edit each part's minutes, and pick a day for each part, or use **Auto-assign days** (most free capacity first, from today on, never past the due date, one part per day). The dialog previews every day's load before and after the split.
-Each part is an ordinary task labelled `1/3`, `2/3`… in date order, sharing the original's title, links, priority and due date. **Merge open parts** in the drawer puts them back together. If dropping a task overfills a day, a message offers to split it.
+### Splitting a task
+Click a task's split button (backlog cards and workload blocks, or **Split…** in the task drawer). The dialog has two modes:
+- **Within a day**: the parts stay on one day and each gets a start time in that day's free gaps (08:00–21:00, not in the past). A mini timeline shows the day now (the task's current block dashed) and after the split (numbered parts). Edit the minutes or start times, or clear a time so the part waits untimed in the bucket. If some parts don't fit, **All fit <day>** moves them to the first day where every part fits. The workload bucket shows these parts as one card.
+- **Across days**: one part per day (**Auto-assign days** picks the days with the most free capacity), with a load bar for every day of the week.
+
+`Enter` splits and `Esc` cancels. Splitting can be undone from the toast. Re-splitting a part re-splits the whole task (all its open parts) unless you pick **Only this part**. Each part is an ordinary task labelled `1/3`, `2/3`…, sharing the title, links, priority and due date. **Merge open parts** in the drawer puts them back together. If dropping a task overfills a day, a message offers to split it.
+
+### Removing things from the schedule
+- **Timeline ✕**: on a task it only clears the start time (the task stays on that day's list). On a fixed block it removes the block. On a phone the ✕ is always shown while the schedule is unlocked.
+- **Tap a block** (works even when locked): fixed blocks open a dialog with **Remove from schedule**. Tasks open the drawer with **Remove from schedule** (clear the time), **Unschedule from <day>** (back to the backlog) and **Delete**.
+- Every removal has **Undo** in the toast. The padlock (on by default on touch devices) only stops dragging, resizing and the ✕.
 
 ## What should I do right now?
 - **NOW card** (top of Today): the block you should be in, with a live countdown and a progress bar, or how much free time you have. It also shows **what to do**: a todo linked to the current block, or in free time the highest-priority open todo that fits before the next block (**Start now** schedules it at the current time). The next block is shown with a countdown.

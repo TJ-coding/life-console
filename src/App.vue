@@ -260,9 +260,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <BlockDialog />
     <IssueDialog />
     <transition name="fade">
-      <div v-if="ui.toast" class="toast mono">
-        {{ ui.toast }}
-        <button v-if="ui.toastAction" class="btn sm toast-act" @click="ui.toastAction.run(); ui.toast = ''">{{ ui.toastAction.label }}</button>
+      <div v-if="ui.toast" class="toast mono" role="status">
+        <span class="toast-msg">{{ ui.toast }}</span>
+        <button v-if="ui.toastAction" class="btn sm toast-act" @click="ui.toastAction.run(); ui.toast = ''; ui.toastAction = null"><span v-if="ui.toastAction.label === 'Undo'" class="icon sm">undo</span>{{ ui.toastAction.label }}</button>
       </div>
     </transition>
   </div>
@@ -334,6 +334,7 @@ nav { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
   .tab { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 5px; color: var(--muted); font-size: 10px; }
   .tab.on { color: var(--accent); }
   .tabbadge { position: absolute; top: 2px; left: 55%; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: var(--danger); color: #fff; font: 700 9px/15px 'JetBrains Mono', monospace; font-style: normal; }
-  .toast { bottom: calc(64px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px); }
+  .toast { bottom: calc(64px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px); width: max-content; font-size: 13px; padding: 6px 6px 6px 12px; }
+  .toast-act { min-height: 36px; min-width: 64px; justify-content: center; font-size: 13px; flex: none; }
 }
 </style>
