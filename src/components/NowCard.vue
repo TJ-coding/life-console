@@ -1,6 +1,5 @@
 <script setup>
-// Cockpit instruments for S-01: NOW (what to do this minute) and NEXT (what's coming), as two cells.
-// Rendered as a fragment so the parent grid places each cell.
+// Cockpit NOW instrument for S-01: what to do this minute, with what's next as a one-line hint.
 import { ui, toggleTodo, toast } from '../store'
 import { useNow, fmtDur, fmtClock } from '../now'
 import Prio from './Prio.vue'
@@ -49,21 +48,14 @@ function start(t) {
       </div>
     </template>
     <div v-else class="title muted">Nothing queued. Press <span class="kbd">N</span> to add a todo.</div>
+
+    <!-- what's next: a hint, not an instrument -->
+    <div class="next-hint mono small muted">
+      <template v-if="next">Next <b>{{ next.start }}</b> {{ next.title }} · in {{ fmtDur(untilNext) }}</template>
+      <template v-else>Nothing else on the timeline today</template>
+    </div>
   </section>
 
-  <!-- NEXT -->
-  <section class="panel inst next-inst">
-    <div class="inst-lbl"><span class="tiny upper muted">Next</span></div>
-    <template v-if="next">
-      <div class="inst-big mono warn">{{ next.start }}</div>
-      <div class="name clamp2">{{ next.title }}</div>
-      <div class="mono small muted">in {{ fmtDur(untilNext) }}</div>
-    </template>
-    <template v-else>
-      <div class="inst-big mono muted">—</div>
-      <div class="small muted">Nothing else on the timeline today.</div>
-    </template>
-  </section>
 </template>
 
 <style scoped>
@@ -82,5 +74,6 @@ function start(t) {
 .readout .btn.primary { color: var(--on-accent); }
 .do { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 2px; padding: 6px 8px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
 .do:hover { border-color: var(--accent); }
-.name { font-weight: 600; font-size: 15px; line-height: 20px; }
+.next-hint { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.next-hint b { color: var(--text); font-weight: 600; }
 </style>

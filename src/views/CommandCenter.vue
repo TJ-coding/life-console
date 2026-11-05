@@ -1,6 +1,6 @@
 <script setup>
 // S-01 · Command Center — a driver's console for today, and (S-11) a day view for any date via /day/:date.
-// Order = priority: what to do NOW · what's NEXT · time to the next DEADLINES · the rest of TODAY.
+// Order = priority: what to do NOW (with what's next as a hint) · time to the next DEADLINES · the rest of TODAY.
 // Everything else is one quiet telemetry strip at the bottom, and only exceptions get colour.
 import { computed, ref, watch, watchEffect, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -90,7 +90,7 @@ const firstBlock = computed(() => [...blocks.value].sort((a, b) => toMin(a.start
 /* ── deadlines: a countdown to the nearest, plus the two after it ── */
 const openDeadlines = computed(() => state.deadlines.filter((d) => !d.done).sort((a, b) => a.due.localeCompare(b.due)))
 const nextDl = computed(() => openDeadlines.value[0] ?? null)
-const laterDls = computed(() => openDeadlines.value.slice(1, 3))
+const laterDls = computed(() => openDeadlines.value.slice(1, 4))
 const minsTo = (d) => { void ui.now; return Math.round((new Date(d.due) - ui.now) / 60000) }
 function countdown(d) {
   const m = minsTo(d)
@@ -203,6 +203,7 @@ function quickAdd() {
         </div>
       </section>
 
+      <div class="side">
       <section class="panel todo-panel">
         <div class="panel-h">
           <span class="icon sm ok">checklist</span>
@@ -230,27 +231,29 @@ function quickAdd() {
           <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @SIG-01.1 p2`" />
         </form>
       </section>
+
+      <!-- 4 · telemetry: one quiet line -->
+      <footer class="panel telemetry mono small">
+        <span class="tm seals" title="Daily seals 印 → 印 → 確認 → 完 (S stamps the next)"><span class="muted">SEALS</span> <Stamps :date="T" :size="22" /></span>
+        <span class="tm" title="Sleep the night before"><span class="muted">SLEEP</span>
+          <b v-if="sleep" :class="{ warn: sleptMin < sleep.targetMin }">{{ Math.floor(sleptMin / 60) }}h{{ pad(sleptMin % 60) }}</b><span v-else class="muted">—</span>
+        </span>
+        <span class="tm" title="Caffeine today"><span class="muted">CAF</span>
+          <b :class="{ danger: mg > state.caffeineLimit, warn: isToday && cutoffLeft < 0 && mg > 0 }">{{ mg }}</b><span class="muted">/{{ state.caffeineLimit }}mg</span>
+          <button v-if="isToday" class="btn sm icon-only" :title="cutoffLeft > 0 ? `Add a coffee (95mg) · cutoff ${state.caffeineCutoff}` : `Cutoff ${state.caffeineCutoff} passed`" @click="addCoffee"><span class="icon sm">coffee</span></button>
+        </span>
+        <router-link to="/week" class="tm" title="Weekly routines done"><span class="muted">ROUTINES</span> <b>{{ routineCount }}</b><span class="muted">/{{ state.routines.length }}</span></router-link>
+        <span class="spacer"></span>
+        <template v-for="a in alerts" :key="a.id">
+          <router-link v-if="a.to" :to="a.to" class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</router-link>
+          <span v-else class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</span>
+        </template>
+        <span v-for="l in lectures" :key="l.id" class="tm alert info" :title="`#${l.no} ${l.title}`">{{ l.time }} {{ l.course }}<template v-if="!l.readAhead"> · read ahead</template></span>
+        <button class="btn sm more-btn" :aria-expanded="more" @click="setMore(!more)">{{ more ? 'Less' : 'More' }}<span class="icon sm">{{ more ? 'expand_less' : 'expand_more' }}</span></button>
+      </footer>
+      </div>
     </div>
 
-    <!-- 4 · telemetry: one quiet line -->
-    <footer class="panel telemetry mono small">
-      <span class="tm seals" title="Daily seals 印 → 印 → 確認 → 完 (S stamps the next)"><span class="muted">SEALS</span> <Stamps :date="T" :size="22" /></span>
-      <span class="tm" title="Sleep the night before"><span class="muted">SLEEP</span>
-        <b v-if="sleep" :class="{ warn: sleptMin < sleep.targetMin }">{{ Math.floor(sleptMin / 60) }}h{{ pad(sleptMin % 60) }}</b><span v-else class="muted">—</span>
-      </span>
-      <span class="tm" title="Caffeine today"><span class="muted">CAF</span>
-        <b :class="{ danger: mg > state.caffeineLimit, warn: isToday && cutoffLeft < 0 && mg > 0 }">{{ mg }}</b><span class="muted">/{{ state.caffeineLimit }}mg</span>
-        <button v-if="isToday" class="btn sm icon-only" :title="cutoffLeft > 0 ? `Add a coffee (95mg) · cutoff ${state.caffeineCutoff}` : `Cutoff ${state.caffeineCutoff} passed`" @click="addCoffee"><span class="icon sm">coffee</span></button>
-      </span>
-      <router-link to="/week" class="tm" title="Weekly routines done"><span class="muted">ROUTINES</span> <b>{{ routineCount }}</b><span class="muted">/{{ state.routines.length }}</span></router-link>
-      <span class="spacer"></span>
-      <template v-for="a in alerts" :key="a.id">
-        <router-link v-if="a.to" :to="a.to" class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</router-link>
-        <span v-else class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</span>
-      </template>
-      <span v-for="l in lectures" :key="l.id" class="tm alert info" :title="`#${l.no} ${l.title}`">{{ l.time }} {{ l.course }}<template v-if="!l.readAhead"> · read ahead</template></span>
-      <button class="btn sm more-btn" :aria-expanded="more" @click="setMore(!more)">{{ more ? 'Less' : 'More' }}<span class="icon sm">{{ more ? 'expand_less' : 'expand_more' }}</span></button>
-    </footer>
 
     <!-- 5 · the full briefing, on demand -->
     <CommandCenterMore v-if="more" :date="T" :is-today="isToday" />
@@ -259,8 +262,8 @@ function quickAdd() {
 
 <style scoped>
 .cc { display: flex; flex-direction: column; gap: 12px; padding: 16px; max-width: 1600px; }
-.cockpit { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
-.preview { grid-column: span 2; border-left: 3px solid var(--info); }
+.cockpit { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
+.preview { border-left: 3px solid var(--info); }
 .pv-title { font: 600 24px/30px Inter, sans-serif; }
 /* deadline instrument */
 .dl-inst { border-left: 3px solid var(--border); }
@@ -269,13 +272,16 @@ function quickAdd() {
 .dl-main, .dl-row { border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; padding: 0; }
 .dl-main { display: flex; flex-direction: column; gap: 4px; }
 .dl-main:hover .name { text-decoration: underline dotted; }
-.dl-inst .name { font-weight: 600; font-size: 15px; line-height: 20px; }
-.dl-row { display: flex; align-items: baseline; gap: 8px; border-top: 1px solid var(--border); padding-top: 6px; font-size: 13px; min-width: 0; }
-.dl-row .mono { flex: none; min-width: 52px; }
+.dl-inst .inst-big { font-size: 38px; line-height: 42px; }
+.dl-inst .name { font-weight: 600; font-size: 18px; line-height: 24px; }
+.dl-row { display: flex; align-items: baseline; gap: 10px; border-top: 1px solid var(--border); padding-top: 7px; font-size: 14px; min-width: 0; }
+.dl-row .mono { flex: none; min-width: 64px; font-size: 14px; font-weight: 600; }
 .dl-row:hover .grow { color: var(--accent); }
 /* timeline + list */
 .day { display: flex; flex-direction: column; gap: 12px; }
-.day.vert { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); align-items: stretch; }
+.day.vert { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); align-items: start; }
+/* right column hugs its content: no empty box under the list */
+.side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .dayname { min-width: 92px; text-align: center; }
 .weekchip { cursor: pointer; }
 .weekchip:hover { border-color: var(--accent); }
@@ -297,13 +303,14 @@ function quickAdd() {
 .load-bar.warn .fill { background: var(--warn); }
 .load-bar.danger .fill { background: var(--danger); }
 .list { min-height: 60px; max-height: 420px; overflow: auto; }
-.vert .list { max-height: 460px; }
 /* readable rows: the shared compact row is 11px, too small for the main list */
-.list :deep(.trow.compact) { font-size: 13px; min-height: 36px; gap: 8px; padding: 4px 10px; }
-.list :deep(.trow.compact .time) { font-size: 12px; }
-.list :deep(.trow .start) { font-size: 12px; width: 42px; }
-.qa { display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
-.qa input { font-size: 13px; }
+.list :deep(.trow.compact) { font-size: 15px; min-height: 46px; gap: 10px; padding: 6px 12px; }
+.list :deep(.trow.compact .time) { font-size: 13px; }
+.list :deep(.trow .start) { font-size: 13px; width: 46px; }
+.list :deep(.trow .prio) { font-size: 12px; padding: 1px 5px; }
+.list :deep(.trow .rm .icon) { font-size: 18px; }
+.qa { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.qa input { font-size: 14px; }
 .ghost-btn { color: var(--muted); }
 /* telemetry strip */
 .telemetry { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px 18px; padding: 8px 14px; color: var(--text); font-size: 12px; }
@@ -314,17 +321,17 @@ a.tm:hover { color: var(--accent); }
 .alert { color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent); border-radius: 2px; padding: 1px 6px; }
 .alert.info { color: var(--info); border-color: color-mix(in srgb, var(--info) 50%, transparent); }
 @media (max-width: 1100px) {
-  .cockpit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .cockpit > :first-child { grid-column: span 2; }
   .day.vert { grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); }
 }
 @media (max-width: 700px) {
   .cc { padding: 12px; }
-  .cockpit { gap: 8px; }
+  .cockpit { gap: 8px; grid-template-columns: minmax(0, 1fr); }
+  .list :deep(.trow.compact) { font-size: 14px; }
   .inst-big { font-size: 24px; line-height: 28px; }
   /* on a phone the list of what's left beats the horizontal strip */
-  .day, .day.vert { display: flex; flex-direction: column; }
-  .todo-panel { order: 1; } .tl-panel { order: 2; }
+  .day, .day.vert { display: flex; flex-direction: column; align-items: stretch; }
+  .side { display: contents; }
+  .todo-panel { order: 1; } .tl-panel { order: 2; } .telemetry { order: 3; }
   .vscroll { height: 420px; }
 }
 </style>
