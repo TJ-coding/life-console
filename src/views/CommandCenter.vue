@@ -1,6 +1,7 @@
 <script setup>
 // S-01 · Command Center — a driver's console for today, and (S-11) a day view for any date via /day/:date.
-// Order = priority: what to do NOW (with what's next as a hint) · time to the next DEADLINES · the rest of TODAY.
+// Order = priority: what to do NOW (with what's next as a hint) on top; then the day's schedule beside the
+// next DEADLINES and the rest of TODAY.
 // Everything else is one quiet telemetry strip at the bottom, and only exceptions get colour.
 import { computed, ref, watch, watchEffect, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -140,38 +141,20 @@ function quickAdd() {
 
 <template>
   <div class="cc">
-    <!-- 1 · instruments: NOW · NEXT · DEADLINE -->
-    <div class="cockpit">
-      <NowCard v-if="isToday" />
-      <section v-else class="panel inst preview">
-        <div class="inst-lbl"><span class="tiny upper info">Day view · {{ relDay(T, today) }}</span></div>
-        <div class="pv-title">{{ wd(T) }} {{ fmtSlash(T) }}</div>
-        <div class="small muted mono">
-          {{ blocks.length }} blocks · {{ pending.length }} todos · {{ hours.toFixed(1) }}h planned
-          <template v-if="firstBlock"> · first {{ firstBlock.start }} {{ firstBlock.title }}</template>
-        </div>
-        <div class="row">
-          <button class="btn" @click="router.push('/')"><span class="icon sm">today</span>Back to today <span class="kbd">T</span></button>
-          <button class="btn" @click="openWeek"><span class="icon sm">calendar_month</span>Plan week</button>
-        </div>
-      </section>
-
-      <section class="panel inst dl-inst" :class="nextDl ? 'u-' + urgency(nextDl) : ''">
-        <div class="inst-lbl"><router-link to="/deadlines" class="tiny upper muted">Next deadline</router-link></div>
-        <template v-if="nextDl">
-          <button class="dl-main" title="Open the deadline" @click="ui.deadlineId = nextDl.id">
-            <span class="inst-big mono" :class="urgency(nextDl)">{{ minsTo(nextDl) <= 0 ? 'OVERDUE' : countdown(nextDl) }}</span>
-            <span class="name clamp2">{{ nextDl.title }}</span>
-            <span class="mono small muted">{{ relDay(nextDl.due.slice(0, 10), today) }} · {{ nextDl.due.slice(11) }}<template v-if="minsTo(nextDl) <= 0"> · {{ countdown(nextDl).slice(1) }} ago</template></span>
-          </button>
-          <button v-for="d in laterDls" :key="d.id" class="dl-row" @click="ui.deadlineId = d.id">
-            <span class="mono small" :class="urgency(d)">{{ minsTo(d) <= 0 ? 'overdue' : countdown(d) }}</span>
-            <span class="ellipsis grow">{{ d.title }}</span>
-          </button>
-        </template>
-        <div v-else class="inst-big mono muted">—</div>
-      </section>
-    </div>
+    <!-- 1 · NOW, full width (next block as a hint inside it) -->
+    <NowCard v-if="isToday" />
+    <section v-else class="panel inst preview">
+      <div class="inst-lbl"><span class="tiny upper info">Day view · {{ relDay(T, today) }}</span></div>
+      <div class="pv-title">{{ wd(T) }} {{ fmtSlash(T) }}</div>
+      <div class="small muted mono">
+        {{ blocks.length }} blocks · {{ pending.length }} todos · {{ hours.toFixed(1) }}h planned
+        <template v-if="firstBlock"> · first {{ firstBlock.start }} {{ firstBlock.title }}</template>
+      </div>
+      <div class="row">
+        <button class="btn" @click="router.push('/')"><span class="icon sm">today</span>Back to today <span class="kbd">T</span></button>
+        <button class="btn" @click="openWeek"><span class="icon sm">calendar_month</span>Plan week</button>
+      </div>
+    </section>
 
     <!-- 2 + 3 · the shape of the day and what's left: stacked (horizontal strip) or side by side (vertical) -->
     <div class="day" :class="{ vert }">
@@ -204,6 +187,23 @@ function quickAdd() {
       </section>
 
       <div class="side">
+      <!-- deadline sits above the list: second only to NOW -->
+      <section class="panel inst dl-inst" :class="nextDl ? 'u-' + urgency(nextDl) : ''">
+        <div class="inst-lbl"><router-link to="/deadlines" class="tiny upper muted">Next deadline</router-link></div>
+        <template v-if="nextDl">
+          <button class="dl-main" title="Open the deadline" @click="ui.deadlineId = nextDl.id">
+            <span class="inst-big mono" :class="urgency(nextDl)">{{ minsTo(nextDl) <= 0 ? 'OVERDUE' : countdown(nextDl) }}</span>
+            <span class="name clamp2">{{ nextDl.title }}</span>
+            <span class="mono small muted">{{ relDay(nextDl.due.slice(0, 10), today) }} · {{ nextDl.due.slice(11) }}<template v-if="minsTo(nextDl) <= 0"> · {{ countdown(nextDl).slice(1) }} ago</template></span>
+          </button>
+          <button v-for="d in laterDls" :key="d.id" class="dl-row" @click="ui.deadlineId = d.id">
+            <span class="mono small" :class="urgency(d)">{{ minsTo(d) <= 0 ? 'overdue' : countdown(d) }}</span>
+            <span class="ellipsis grow">{{ d.title }}</span>
+          </button>
+        </template>
+        <div v-else class="inst-big mono muted">—</div>
+      </section>
+
       <section class="panel todo-panel">
         <div class="panel-h">
           <span class="icon sm ok">checklist</span>
@@ -264,7 +264,6 @@ function quickAdd() {
 <style scoped>
 .cc { display: flex; flex-direction: column; gap: 12px; padding: 16px; max-width: 1600px; min-height: 100%; box-sizing: border-box; }
 .telemetry { margin-top: auto; }
-.cockpit { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
 .preview { border-left: 3px solid var(--info); }
 .pv-title { font: 600 24px/30px Inter, sans-serif; }
 /* deadline instrument */
@@ -281,7 +280,11 @@ function quickAdd() {
 .dl-row:hover .grow { color: var(--accent); }
 /* timeline + list */
 .day { display: flex; flex-direction: column; gap: 12px; }
-.day.vert { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); align-items: start; }
+.day.vert { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); align-items: stretch; }
+/* the schedule takes the right column's height (deadline + list), never less than ~8 hours at M zoom */
+.vert .vscroll { flex: 1 1 0; height: auto; min-height: 340px; }
+/* horizontal strip: deadline and list side by side under it */
+.day:not(.vert) .side { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
 /* right column hugs its content: no empty box under the list */
 .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .dayname { min-width: 92px; text-align: center; }
@@ -327,13 +330,12 @@ a.tm:hover { color: var(--accent); }
 }
 @media (max-width: 700px) {
   .cc { padding: 12px; }
-  .cockpit { gap: 8px; grid-template-columns: minmax(0, 1fr); }
   .list :deep(.trow.compact) { font-size: 14px; }
   .inst-big { font-size: 24px; line-height: 28px; }
   /* on a phone the list of what's left beats the horizontal strip */
   .day, .day.vert { display: flex; flex-direction: column; align-items: stretch; }
-  .side { display: contents; }
-  .todo-panel { order: 1; } .tl-panel { order: 2; }
-  .vscroll { height: 420px; }
+  .side, .day:not(.vert) .side { display: contents; }
+  .dl-inst { order: 1; } .todo-panel { order: 2; } .tl-panel { order: 3; }
+  .vscroll, .vert .vscroll { flex: none; height: 420px; }
 }
 </style>
