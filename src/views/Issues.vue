@@ -9,6 +9,7 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 const filter = ref('active') // active | fixed | wontfix | all
 const screen = ref('')
+const platform = ref('') // '' | mobile | web
 const expanded = ref(null)
 
 onMounted(loadIssues)
@@ -19,7 +20,8 @@ const SEV_ORDER = { high: 0, medium: 1, low: 2 }
 const screens = computed(() => [...new Set(issues.list.map((i) => i.screen || '—'))].sort())
 const visible = computed(() => issues.list.filter((i) =>
   (filter.value === 'all' || (filter.value === 'active' ? ACTIVE.includes(i.status) : i.status === filter.value)) &&
-  (!screen.value || (i.screen || '—') === screen.value)))
+  (!screen.value || (i.screen || '—') === screen.value) &&
+  (!platform.value || i.platform === platform.value)))
 const groups = computed(() => {
   const by = {}
   for (const i of visible.value) (by[i.screen || '—'] ??= { screen: i.screen || '—', title: i.screenTitle, items: [] }).items.push(i)
@@ -54,6 +56,10 @@ async function remove(i) {
         <span class="tiny upper muted">Screen</span>
         <select v-model="screen" class="select mono small"><option value="">All</option><option v-for="s in screens" :key="s" :value="s">{{ s }}</option></select>
       </div>
+      <div class="row">
+        <span class="tiny upper muted">From</span>
+        <select v-model="platform" class="select mono small"><option value="">All</option><option value="mobile">Mobile</option><option value="web">Web</option></select>
+      </div>
       <span class="spacer"></span>
       <span v-if="issues.queued" class="small warn row"><span class="icon sm">cloud_off</span>{{ issues.queued }} waiting to send</span>
       <button class="btn primary" @click="openIssueDialog(route)"><span class="icon sm">add</span>Report issue <span class="kbd">I</span></button>
@@ -75,6 +81,7 @@ async function remove(i) {
           <span class="mono small muted iid">{{ i.id }}</span>
           <span class="mono tiny upper sev">{{ i.severity }}</span>
           <span class="grow ttl">{{ i.title }}</span>
+          <span class="icon sm muted" :title="i.platform === 'mobile' ? 'Reported from mobile' : 'Reported from the web (desktop)'">{{ i.platform === 'mobile' ? 'smartphone' : 'computer' }}</span>
           <span class="mono tiny muted">{{ when(i.createdAt) }}</span>
           <select :value="i.status" class="select mono small" @click.stop @change="setStatus(i, $event.target.value)">
             <option v-for="s in STATUSES" :key="s" :value="s">{{ s }}</option>
@@ -84,6 +91,7 @@ async function remove(i) {
           <p v-if="i.details" class="details">{{ i.details }}</p>
           <div class="meta mono tiny muted">
             <router-link :to="i.route || '/'">{{ i.route || '/' }}</router-link>
+            <span>platform: {{ i.platform }}</span>
             <span v-for="(v, k) in i.context" :key="k" v-show="k !== 'userAgent'">{{ k }}: {{ v }}</span>
           </div>
           <p v-if="i.resolution || i.commit" class="res">

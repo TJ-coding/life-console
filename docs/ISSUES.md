@@ -32,6 +32,7 @@ Work from that file. Afterwards, tell the owner which IDs you fixed and in which
 ```bash
 npm run issues                          # open + in-progress, grouped by screen, full details
 npm run issues -- --screen S-10         # one screen only
+npm run issues -- --platform mobile     # only reports from phones/tablets (web = desktop browser)
 npm run issues -- show ISS-3            # one issue, everything
 npm run issues -- all | fixed | wontfix # other filters
 npm run issues -- --json                # raw JSON (combine with any of the above)
@@ -44,6 +45,7 @@ npm run issues -- --url http://localhost:8787   # another server (or set LIFE_CO
 B=http://dokpoly.netbird.cloud
 curl -s "$B/api/issues?status=active"            # open + in-progress (status: open | in-progress | fixed | wontfix | active; omit for all)
 curl -s "$B/api/issues?status=active&screen=S-10" # one screen
+curl -s "$B/api/issues?status=active&platform=mobile" # only mobile reports
 curl -s "$B/api/issues/ISS-3"                     # one issue
 ```
 
@@ -60,7 +62,8 @@ curl -s "$B/api/issues/ISS-3"                     # one issue
   "screen": "S-10",               // spec screen ID (see the route table in CLAUDE.md / README.md)
   "screenTitle": "Plan week",
   "route": "/week?mode=days",     // hash route: open http://<host>/#/week?mode=days
-  "context": { "device": "iPhone", "viewport": "390×844", "theme": "dark", "build": "index-BQp4fVLy.js", "selectedId": "T-123" },
+  "platform": "mobile",           // mobile (phone/tablet) | web (desktop browser)
+  "context": { "device": "iPhone", "app": "installed", "viewport": "390×844", "theme": "dark", "build": "index-BQp4fVLy.js", "selectedId": "T-123" },
   "createdAt": "2026-11-05T07:10:00.000Z",
   "updatedAt": "2026-11-05T07:10:00.000Z",
   "resolution": "",               // filled in when fixed / won't fix
@@ -71,6 +74,7 @@ curl -s "$B/api/issues/ISS-3"                     # one issue
 
 How to read the fields:
 - `screen` maps to a view in `src/views/` (the route table in `CLAUDE.md` lists them).
+- `platform` says where it was reported: `mobile` (phone or tablet) or `web` (desktop browser). `context.app` says whether it came from the installed app (`installed`, home screen / dock) or a browser tab (`browser`). Mobile issues usually concern the phone layout, so test them at 390×844.
 - `context.viewport` tells you which layout the owner was looking at: about 390 px wide means the phone layout (below 640 px).
 - `context.build` is the front-end bundle that was live then. If it differs from the current build, the issue may already be fixed.
 

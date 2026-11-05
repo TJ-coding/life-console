@@ -43,11 +43,18 @@ function saveDoc(state, device) {
 const ISSUE_KINDS = ['bug', 'ux', 'idea']
 const ISSUE_SEVERITY = ['low', 'medium', 'high']
 const ISSUE_STATUS = ['open', 'in-progress', 'fixed', 'wontfix']
+const ISSUE_PLATFORMS = ['mobile', 'web'] // mobile = phone/tablet (installed app or mobile browser), web = desktop browser
+/** Fallback when the client didn't say (tabs still running older code, reports from scripts). */
+const platformFromUA = (ua = '') => (/iPhone|iPad|iPod|Android|Mobile/i.test(ua) ? 'mobile' : 'web')
 let issues = store.read('issues.json', [])
 const saveIssues = () => store.write('issues.json', issues)
+if (issues.some((i) => !i.platform)) { // backfill issues filed before `platform` existed
+  for (const i of issues) i.platform ||= platformFromUA(i.context?.userAgent)
+  saveIssues()
+}
 const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 const pick = (v, allowed, dflt) => (allowed.includes(v) ? v : dflt)
-function createIssue(b) {
+function createIssue(b, reqUA) {
   const title = str(b.title, 200)
   if (!title) throw Object.assign(new Error('title required'), { status: 400 })
   const n = Math.max(0, ...issues.map((i) => Number(i.id.split('-')[1]) || 0)) + 1
@@ -62,7 +69,8 @@ function createIssue(b) {
     screen: str(b.screen, 20), // spec screen ID, e.g. S-10
     screenTitle: str(b.screenTitle, 80),
     route: str(b.route, 300), // full hash route, e.g. /week?mode=days
-    context: Object.fromEntries(['device', 'viewport', 'theme', 'build', 'selectedId', 'userAgent'] // what was on screen when reported
+    platform: pick(b.platform, ISSUE_PLATFORMS, platformFromUA(b.context?.userAgent || reqUA)),
+    context: Object.fromEntries(['device', 'app', 'viewport', 'theme', 'build', 'selectedId', 'userAgent'] // what was on screen when reported
       .map((k) => [k, str(b.context?.[k], 300)]).filter(([, v]) => v)),
     createdAt: str(b.createdAt, 40) || now, // queued offline reports keep their original time
     updatedAt: now,
@@ -151,13 +159,14 @@ async function api(req, res, url) {
     return i ? send(res, 200, i) : send(res, 404, { error: 'issue not found' })
   }
   switch (route) {
-    case 'GET /api/issues': { // ?status=open|in-progress|fixed|wontfix|active (open + in-progress) · ?screen=S-10
+    case 'GET /api/issues': { // ?status=open|in-progress|fixed|wontfix|active (open + in-progress) · ?screen=S-10 · ?platform=mobile|web
       const st = url.searchParams.get('status')
       const sc = url.searchParams.get('screen')
-      return send(res, 200, issues.filter((i) => (!st || (st === 'active' ? ['open', 'in-progress'].includes(i.status) : i.status === st)) && (!sc || i.screen === sc)))
+      const pf = url.searchParams.get('platform')
+      return send(res, 200, issues.filter((i) => (!st || (st === 'active' ? ['open', 'in-progress'].includes(i.status) : i.status === st)) && (!sc || i.screen === sc) && (!pf || i.platform === pf)))
     }
     case 'POST /api/issues': {
-      const i = createIssue(await readBody(req, 64 * 1024))
+      const i = createIssue(await readBody(req, 64 * 1024), req.headers['user-agent'])
       log(`[issues] ${i.id} ${i.screen || '-'} ${i.title}`)
       return send(res, 201, i)
     }

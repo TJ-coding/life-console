@@ -4,6 +4,7 @@
 //   npm run issues                              open + in-progress issues, grouped by screen (full details)
 //   npm run issues -- all | fixed | wontfix     other filters
 //   npm run issues -- --screen S-10             only one screen
+//   npm run issues -- --platform mobile         only reports from phones/tablets (or: web = desktop)
 //   npm run issues -- show ISS-3                one issue, everything
 //   npm run issues -- start ISS-3               mark in-progress
 //   npm run issues -- fix ISS-3 "what changed" [--commit <sha>]
@@ -23,6 +24,7 @@ const flag = (name) => {
 const json = args.includes('--json') && args.splice(args.indexOf('--json'), 1)
 const BASE = (flag('--url') || process.env.LIFE_CONSOLE_URL || 'http://dokpoly.netbird.cloud').replace(/\/$/, '')
 const screen = flag('--screen')
+const platform = flag('--platform')
 const commit = flag('--commit')
 const [cmd = 'active', id, ...rest] = args
 const note = rest.join(' ')
@@ -34,7 +36,7 @@ async function call(method, path, body) {
 }
 
 function print(i, full = true) {
-  const head = `${i.id}  [${i.status}] ${i.kind}/${i.severity}  ${i.screen || '—'} ${i.screenTitle ? `(${i.screenTitle})` : ''}`
+  const head = `${i.id}  [${i.status}] ${i.kind}/${i.severity}  ${i.platform || '?'}  ${i.screen || '—'} ${i.screenTitle ? `(${i.screenTitle})` : ''}`
   console.log(head)
   console.log(`  ${i.title}`)
   if (!full) return
@@ -61,6 +63,7 @@ try {
     const q = new URLSearchParams()
     if (cmd !== 'all') q.set('status', cmd)
     if (screen) q.set('screen', screen)
+    if (platform) q.set('platform', platform)
     const list = await call('GET', `/api/issues?${q}`)
     if (json) { console.log(JSON.stringify(list, null, 2)); process.exit(0) }
     if (!list.length) { console.log(`No ${cmd === 'all' ? '' : cmd + ' '}issues.`); process.exit(0) }

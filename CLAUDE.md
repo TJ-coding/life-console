@@ -64,7 +64,7 @@ There is **no test suite and no linter** (see *Verifying changes*). The stack is
 
 ## Issues: continuous improvement
 
-The owner reports problems and ideas **on the screen they're about**: key `I`, the bug button in the top bar, or the command palette. Each issue records the screen ID (`S-10`…), the exact route, kind (`bug | ux | idea`), severity (`low | medium | high`), free-text details, and context (device, viewport, theme, build, selected item). Issues are stored on the server in `/data/issues.json`, **not** in the planner `state` (so no migration and no sync). The owner sees them at `#/issues`.
+The owner reports problems and ideas **on the screen they're about**: key `I`, the bug button in the top bar, or the command palette. Each issue records the screen ID (`S-10`…), the exact route, kind (`bug | ux | idea`), severity (`low | medium | high`), free-text details, `platform` (`mobile` or `web`), and context (device, installed app vs. browser, viewport, theme, build, selected item). Issues are stored on the server in `/data/issues.json`, **not** in the planner `state` (so no migration and no sync). The owner sees them at `#/issues`.
 
 **How to get them, update them and work through them: [`docs/ISSUES.md`](docs/ISSUES.md).** In short: `npm run issues` lists open issues (this needs NetBird; without it, ask the owner for an export). Fix them highest-severity first, put `Fixes ISS-n` in the commit, then `npm run issues -- fix ISS-n "what changed" --commit <sha>`. Ask before marking anything `wontfix`, and never delete issues.
 

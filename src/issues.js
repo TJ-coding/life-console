@@ -42,10 +42,19 @@ export function openIssueDialog(route) {
   issues.dialog = { screen: route.meta?.screen ?? '', screenTitle, route: route.fullPath }
 }
 
+/** 'mobile' for phones and tablets (iPadOS reports a Mac user agent, so also check touch), else 'web'. */
+function platform() {
+  const ua = navigator.userAgent
+  return /iPhone|iPad|iPod|Android|Mobile/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'mobile' : 'web'
+}
+/** Installed to the home screen / dock (PWA), or running in a browser tab. */
+const appMode = () => (window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone ? 'installed' : 'browser')
+
 function context() {
   const build = document.querySelector('script[src*="assets/index-"]')?.getAttribute('src')?.split('/').pop() ?? 'dev'
   return {
     device: deviceName(),
+    app: appMode(),
     viewport: `${window.innerWidth}×${window.innerHeight}`,
     theme: ui.theme,
     build,
@@ -56,7 +65,7 @@ function context() {
 
 /** Send a report. Returns 'sent' or 'queued' (kept locally and retried later). */
 export async function reportIssue(fields) {
-  const body = { ...fields, context: context(), createdAt: new Date().toISOString() }
+  const body = { ...fields, platform: platform(), context: context(), createdAt: new Date().toISOString() }
   try {
     const i = await call('POST', '/api/issues', body)
     issues.list.push(i)
