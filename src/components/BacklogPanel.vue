@@ -1,8 +1,8 @@
 <script setup>
 // Step ① Backlog — unassigned tasks. Drag onto a day, or hover and click a day button
 // (each shows that day's free hours). Drop a planned task here to send it back.
-import { computed, ref } from 'vue'
-import { state, ui, todayISO, addDays, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast } from '../store'
+import { computed, ref, watch, nextTick } from 'vue'
+import { state, ui, todayISO, addDays, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
@@ -14,6 +14,21 @@ const T = computed(() => todayISO())
 const days = computed(() => [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(ui.weekStart, i)))
 const free = computed(() => Object.fromEntries(days.value.map((d) => [d, freeHours(d)])))
 const usable = (t, d) => d >= T.value && (!t.due || d <= t.due)
+
+/* quick add */
+const draft = ref('')
+const input = ref(null)
+const parsed = computed(() => parseQuick(draft.value))
+function add() {
+  const p = parsed.value
+  if (!p.title) return
+  const t = addTodo({ title: p.title, links: p.links, due: p.due, timeMin: p.timeMin ?? 30, priority: p.priority ?? 3, lsd: p.lsd ?? 'S' })
+  prio.value = 0 // make sure the new task is visible
+  ui.selectedId = t.id
+  toast(`${t.id} added to backlog`)
+  draft.value = '' // keep focus for rapid capture
+}
+watch(() => ui.backlogFocus, async () => { await nextTick(); input.value?.focus() })
 
 const hot = ref(false)
 function onDrop(e) {
@@ -32,6 +47,23 @@ function onDrop(e) {
         <div class="mono tiny muted">{{ list.length }} tasks · {{ total.toFixed(1) }}h</div>
       </div>
     </header>
+    <form class="qa" @submit.prevent="add">
+      <span class="icon sm plus">add</span>
+      <input
+        ref="input" v-model="draft" class="mono" placeholder="New task… 45m p2 due:fri #tag"
+        title="Syntax: title 45m p1–p5 due:fri #course @SIG-01.2 [L|S|D] · Enter to add · Esc to leave"
+        @keydown.esc="draft = ''; $event.target.blur()"
+      />
+      <span class="kbd">N</span>
+    </form>
+    <div v-if="draft" class="preview">
+      <span class="pc"><b>{{ parsed.title || '—' }}</b></span>
+      <span class="pc mono">{{ parsed.timeMin ?? 30 }}m</span>
+      <span class="pc mono">P{{ parsed.priority ?? 3 }}</span>
+      <span v-if="parsed.due" class="pc mono">due {{ wd(parsed.due) }} {{ fmtSlash(parsed.due) }}</span>
+      <Chip v-for="l in parsed.links" :key="l" :id="l" />
+      <span class="small muted enter">↵ add</span>
+    </div>
     <div class="pf">
       <button class="btn sm" :class="{ active: !prio }" @click="prio = 0">All</button>
       <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: prio === p }" @click="prio = p">P{{ p }}</button>
@@ -66,7 +98,7 @@ function onDrop(e) {
           <button v-if="t.timeMin >= 30" class="qd split" title="Split across days" @click.stop="ui.splitId = t.id"><span class="icon">call_split</span></button>
         </div>
       </div>
-      <div v-if="!list.length" class="empty">Backlog clear ✓<br />Press <span class="kbd">N</span> to capture a task.</div>
+      <div v-if="!list.length" class="empty">Backlog clear ✓<br />Type above to capture a task.</div>
     </div>
     <div class="foot small muted">Hover a task → click a day, or drag it onto a day. Drop here to unassign.</div>
   </section>
@@ -77,6 +109,14 @@ function onDrop(e) {
 .bh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .stepn { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--muted); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--muted); }
 .ttl { font-weight: 600; }
+.qa { display: flex; align-items: center; gap: 6px; margin: 8px 8px 0; padding: 0 6px; height: 32px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface-2); }
+.qa:focus-within { border-color: var(--info); }
+.qa input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-size: 12px; }
+.plus { color: var(--accent); }
+.preview { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 8px 0; }
+.pc { border: 1px solid var(--border); border-radius: 2px; padding: 1px 6px; font-size: 11px; color: var(--muted); }
+.pc b { color: var(--text); font-weight: 500; }
+.enter { margin-left: auto; }
 .pf { display: flex; gap: 3px; padding: 8px 10px; flex-wrap: wrap; }
 .list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; }
 .card { border: 1px solid var(--border); border-radius: 2px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; cursor: grab; background: var(--bg); }

@@ -80,7 +80,11 @@ function onKey(e) {
     case 'g': gPending = true; gTimer = setTimeout(() => { gPending = false }, 1000); break
     case 't': router.push('/'); break
     case 'w': router.push('/week'); break
-    case 'n': e.preventDefault(); openPalette('add'); break
+    case 'n':
+      e.preventDefault()
+      if (route.name === 'week') ui.backlogFocus++ // Plan week: capture straight into the backlog panel
+      else openPalette('add')
+      break
     case '/': e.preventDefault(); openPalette('cmd'); break
     case 's': {
       const i = stampNext(T.value)

@@ -28,7 +28,6 @@ const parsed = computed(() => parseQuick(q.value.replace(/^\+\s*/, '')))
 const contextDate = computed(() => {
   const T = todayISO()
   if (route.name === 'today') return T
-  if (route.name === 'week') return T >= ui.weekStart && T <= addDays(ui.weekStart, 6) ? T : ui.weekStart
   return null
 })
 

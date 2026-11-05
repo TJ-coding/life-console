@@ -238,6 +238,7 @@ export const ui = reactive({
   splitId: null, // todo open in the Split dialog
   hoverId: null, // todo under the pointer — highlighted in backlog, bucket and timeline at once
   planMode: (() => { try { return localStorage.getItem('life-console/plan-mode') || 'both' } catch { return 'both' } })(), // 'days' | 'both' | 'times'
+  backlogFocus: 0, // bump to focus the Plan-week backlog quick-add
   sidePanel: null, // planner side panel: null | 'balance' | 'routines'
   focusIds: [], // top-3 todos shown in focus mode (keys 1–3)
   dragBlock: null, // timeline block being moved: { kind, id, offset, dur }
