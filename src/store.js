@@ -993,7 +993,8 @@ export function planPomodoroDay(date, workMin, skipTodoId = null, extraBusy = []
   const skip = new Set([].concat(skipTodoId ?? []))
   const busy = blocksForDay(date)
     .filter((b) => !skip.has(b.todoId))
-    .map((b) => [toMin(b.start), toMin(b.end)])
+    // another pomodoro sitting earns its long break too, so sittings never run back to back
+    .map((b) => [toMin(b.start), toMin(b.end) + (b.pomo ? P.long : 0)])
     .concat(extraBusy)
     .sort((a, b) => a[0] - b[0])
   let t = toMin(from)

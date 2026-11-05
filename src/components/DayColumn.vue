@@ -4,7 +4,8 @@
 // A task dropped in the bucket can be dragged straight down onto a time in the same column.
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, updateTodo, diffDays, CAPACITY_H, autoTimebox, toast, isOverdue } from '../store'
+import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, diffDays, CAPACITY_H, autoTimebox, toast, isOverdue, moveBlock, toMin, byPriority, categoryOf, partLabel, isHoverLinked } from '../store'
+import { startDrag, endDrag } from '../dnd'
 import DayTimeline from './DayTimeline.vue'
 import DeadlineQuickAdd from './DeadlineQuickAdd.vue'
 import WorkloadBucket from './WorkloadBucket.vue'
@@ -26,7 +27,12 @@ const dimBlock = (b) => props.filter && b.link !== props.filter && !(b.todoId &&
 const dimTodo = (t) => !matches(t.links)
 const adding = ref(false)
 const notes = computed({ get: () => state.notes[props.date] ?? '', set: (v) => { state.notes[props.date] = v } })
-const schedule = (id, start) => updateTodo(id, { scheduled: { date: props.date, start } })
+// via moveBlock so a task's first time follows the pomodoro rhythm (Settings → Pomodoro)
+const schedule = (id, start) => moveBlock('todo', id, props.date, toMin(start))
+// Assign time: the day's work that has no time yet, listed above the schedule to drag onto it
+const toTime = computed(() => [...untimed.value].sort(byPriority))
+const toTimeMin = computed(() => untimed.value.reduce((s, t) => s + (t.timeMin || 0), 0))
+const hm = (m) => { const h = Math.floor(m / 60); return h ? `${h}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` : `${m}m` }
 
 // sizes per layout mode; on phones (= 640px) the schedule gets a few extra px/hour so blocks stay readable (ISS-22)
 const phone = ref(typeof matchMedia === 'function' && matchMedia('(max-width: 640px)').matches)
@@ -74,6 +80,16 @@ function auto() {
         </button>
         <span v-else-if="!untimed.length && todos.length" class="ok" title="Every task has a time">✓</span>
       </div>
+      <div v-if="mode === 'times' && toTime.length" class="totime" :title="`${hm(toTimeMin)} of ${wd(date)}'s work has no time yet: drag each onto the schedule, or ⚡ to auto time-box`">
+        <div class="tth"><span class="tiny upper">Not timed</span><b class="mono">{{ hm(toTimeMin) }}</b></div>
+        <div
+          v-for="t in toTime" :key="t.id" class="tt block" :class="['cat-' + categoryOf(t), { linked: isHoverLinked(t.id) }]" draggable="true"
+          @dragstart="startDrag($event, t)" @dragend="endDrag" @click="ui.drawerId = t.id"
+          @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
+        >
+          <span class="ttl"><b v-if="partLabel(t)" class="mono pl">{{ partLabel(t) }}</b>{{ t.title }}</span><span class="mono muted">{{ hm(t.timeMin) }}</span>
+        </div>
+      </div>
       <DayTimeline :date="date" :blocks="blocks" :pxh="timelinePx" :dim-fn="filter ? dimBlock : null" @drop-todo="schedule" @open="(id) => (ui.drawerId = id)" @edit="(b) => (ui.blockId = b.id)" />
     </div>
 
@@ -116,6 +132,13 @@ function auto() {
 .today .ja { color: var(--accent); }
 .md { font-size: 15px; font-weight: 700; }
 .sec { border-bottom: 1px solid var(--border); padding: 6px; }
+.totime { margin: 0 0 6px; padding: 5px; border-radius: 2px; background: color-mix(in srgb, var(--warn) 8%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border)); display: flex; flex-direction: column; gap: 3px; }
+.tth { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; color: var(--warn); padding: 0 1px 1px; }
+.tth b { font-size: 13px; }
+.tt { display: flex; align-items: center; gap: 6px; padding: 3px 5px; font-size: 11px; cursor: grab; }
+.tt .ttl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt .pl { color: var(--muted); margin-right: 4px; font-weight: 500; }
+.tt.linked { outline: 2px solid var(--info); }
 .sh { display: flex; align-items: center; gap: 4px; padding: 0 2px 5px; min-height: 22px; }
 .n { font-size: 12px; }
 .auto { height: 20px; padding: 0 5px; font-size: 10px; color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--border)); }

@@ -122,7 +122,6 @@ function toggleParts(t) {
   background: repeating-linear-gradient(45deg, var(--border) 0 2px, transparent 2px 7px); border: 1px solid var(--border);
 }
 .card { flex: none; padding: 2px 4px; display: flex; flex-wrap: wrap; gap: 0 4px; align-items: flex-start; align-content: flex-start; cursor: grab; position: relative; overflow: hidden; }
-.card.untimed { border-style: dashed; border-left-style: solid; }
 .card.grouped { box-shadow: 2px 2px 0 -1px var(--surface-2), 3px 3px 0 -1px var(--border); } /* a quiet 'stack' cue */
 .card.grouped .is-done .ttl { text-decoration: line-through; }
 .ck { width: 11px; height: 11px; margin-top: 1px; flex: none; }
