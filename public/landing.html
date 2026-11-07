@@ -244,6 +244,9 @@ h1 { font: 700 clamp(34px, 5.4vw, 60px)/1.06 var(--sans); letter-spacing: -.03em
 @keyframes blink { 50% { opacity: 0; } }
 .hero .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 46ch; margin: 0 0 28px; }
 .ctas { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.ctas .bmc { display: block; line-height: 0; border-radius: 6px; }
+.ctas .bmc img { height: 41px; width: auto; border-radius: 6px; }
+.ctas .bmc:hover img { filter: brightness(1.05); }
 .ctas .star { color: var(--muted); font-size: 14px; margin-left: 6px; text-decoration: none; }
 .ctas .star:hover { color: var(--text); text-decoration: underline; }
 .hero figure { margin: 56px 0 0; }
@@ -362,6 +365,7 @@ footer a { color: var(--muted); }
       <div class="ctas">
         <a class="btn primary" href="/app">Open Life Console</a>
         <a class="btn" href="#self-host">Self-host it</a>
+        <a class="bmc" href="https://buymeacoffee.com/tjcoding" rel="noopener"><img src="/media/bmc-button.png" alt="Buy me a coffee" width="146" height="41" /></a>
         <a class="star" href="https://github.com/TJ-coding/life-console" rel="noopener">★ Star on GitHub</a>
       </div>
       <figure id="tour">
@@ -622,7 +626,7 @@ footer a { color: var(--muted); }
       <div class="ctas" style="margin-top:48px">
         <a class="btn primary" href="/app">Open Life Console</a>
         <a class="btn" href="https://github.com/TJ-coding/life-console" rel="noopener">★ Star on GitHub</a>
-        <a class="btn" href="https://buymeacoffee.com/tjcoding" rel="noopener">☕ Buy me a coffee</a>
+        <a class="bmc" href="https://buymeacoffee.com/tjcoding" rel="noopener"><img src="/media/bmc-button.png" alt="Buy me a coffee" width="146" height="41" /></a>
       </div>
     </div>
   </section>

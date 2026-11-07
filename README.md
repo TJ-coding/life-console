@@ -4,6 +4,8 @@
 
 [Website](https://life-console.dev) · [Self-hosting](docs/SELF_HOSTING.md) · [User guide](docs/GUIDE.md) · [License: AGPL-3.0](LICENSE) · [★ Star on GitHub](https://github.com/TJ-coding/life-console) · [☕ Buy me a coffee](https://buymeacoffee.com/tjcoding)
 
+<a href="https://buymeacoffee.com/tjcoding"><img src="public/media/bmc-button.png" alt="Buy me a coffee" height="41"></a>
+
 ![Keyboard tour: Command Center, Plan week, Todos, Deadlines, Strategy and Focus mode, driven only by the keyboard](docs/media/tour.gif)
 
 Life Console started as a set of paper planning sheets: a week plan with a backlog, a 7-hour budget for each day and a timeline, a deadline list, and a strategic plan running from vision down to milestones. It joins those sheets into one console, so the answer to "what should I be doing now?" is always on screen.
@@ -65,6 +67,8 @@ Found a bug or have an idea? Press `I` on any screen in the app to report it abo
 ## Support
 
 Life Console is free and made by one developer. If it helps you, you can [buy me a coffee](https://buymeacoffee.com/tjcoding) to keep it running, or star the repo.
+
+<a href="https://buymeacoffee.com/tjcoding"><img src="public/media/bmc-button.png" alt="Buy me a coffee" height="41"></a>
 
 ## License
 
