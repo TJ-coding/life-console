@@ -119,6 +119,9 @@ test('CSRF: cross-site or non-JSON writes are refused', async () => {
   assert.equal((await alice('POST', '/api/auth/logout', 'x', { 'Content-Type': 'text/plain' })).status, 415)
   assert.equal((await alice('PUT', '/api/state', { state: doc(), baseVersion: 0 }, { Origin: 'https://evil.example' })).status, 403)
   assert.equal((await alice('PUT', '/api/state', { state: doc(), baseVersion: 0 }, { 'Sec-Fetch-Site': 'cross-site' })).status, 403)
+  // same-origin requests pass on any host the app is served on (public domain, private-network URL)
+  assert.notEqual((await alice('GET', '/api/state', undefined, { Origin: baseA })).status, 403)
+  assert.equal((await alice('POST', '/api/issues', { title: 'same origin ok' }, { Origin: baseA })).status, 201)
 })
 
 test('planner: save, read, versioning and conflicts', async () => {
@@ -208,12 +211,12 @@ test('issues: anyone reports, reporters see their own, only admins manage', asyn
   assert.equal((await bob('GET', `/api/issues/${a.body.id}`)).status, 404)
   assert.equal((await bob('PATCH', `/api/issues/${b.body.id}`, { status: 'fixed' })).status, 403)
   const all = (await alice('GET', '/api/issues?status=active')).body
-  assert.equal(all.length, 2)
+  assert.equal(all.length, 3)
   assert.equal(all.find((i) => i.title === 'bob idea').reporter, 'bob@example.com')
   const fixed = await alice('PATCH', `/api/issues/${b.body.id}`, { status: 'fixed', resolution: 'done', commit: 'abc123' })
   assert.equal(fixed.body.status, 'fixed')
   assert.ok(fixed.body.resolvedAt)
-  assert.equal((await alice('GET', '/api/issues?status=active')).body.length, 1)
+  assert.equal((await alice('GET', '/api/issues?status=active')).body.length, 2)
 })
 
 test('API tokens work for scripts (npm run issues)', async () => {
@@ -221,7 +224,7 @@ test('API tokens work for scripts (npm run issues)', async () => {
   const token = await appA.auth.createApiToken(me.id, 'test')
   const r = await fetch(`${baseA}/api/issues`, { headers: { Authorization: `Bearer ${token}` } })
   assert.equal(r.status, 200)
-  assert.equal((await r.json()).length, 2)
+  assert.equal((await r.json()).length, 3)
   const bad = await fetch(`${baseA}/api/issues`, { headers: { Authorization: 'Bearer lct_wrong' } })
   assert.equal(bad.status, 401)
 })

@@ -51,6 +51,9 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const limit = createLimiter()
   const scheduler = createScheduler({ db, planner, push, tickMs: cfg.tickMs, log })
   const appOrigin = cfg.appUrl ? new URL(cfg.appUrl).origin : null
+  const appHost = cfg.appUrl ? new URL(cfg.appUrl).host : null
+  /** Secure cookies on the public https address; plain ones on other hosts (e.g. a private-network http URL). */
+  const secureFor = (req) => cfg.cookieSecure && (!appHost || req.headers.host === appHost)
 
   const ip = (req) => (cfg.trustProxy && (req.headers['cf-connecting-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim())) || req.socket.remoteAddress || '?'
   const body = (req, max = 64 * 1024) => readBody(req, max)
@@ -60,13 +63,18 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return
     if (req.headers.authorization) return // bearer tokens aren't sent automatically by browsers
     if (req.headers['sec-fetch-site'] === 'cross-site') throw httpError(403, 'cross-site request refused')
+    // same-origin: the Origin must name the host the request came to (works for every domain the app is served on)
     const origin = req.headers.origin
-    if (origin && appOrigin && origin !== appOrigin) throw httpError(403, 'origin not allowed')
+    if (origin && origin !== 'null') {
+      let host = ''
+      try { host = new URL(origin).host } catch { /* malformed */ }
+      if (host !== req.headers.host && origin !== appOrigin) throw httpError(403, 'origin not allowed')
+    }
     if (!/^application\/json\b/i.test(req.headers['content-type'] || '')) throw httpError(415, 'send application/json')
   }
 
   async function signedIn(res, user, req, status = 200) {
-    const { cookie } = await auth.startSession(user.id, req.headers['user-agent'])
+    const { cookie } = await auth.startSession(user.id, req.headers['user-agent'], secureFor(req))
     return send(res, status, { user: publicUser(user) }, { 'Set-Cookie': cookie })
   }
 
@@ -124,7 +132,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         const who = await auth.identify(req)
         if (who && b.endpoint) await push.unsubscribe(who.user.id, b.endpoint) // this device stops getting their notifications
         if (who?.tokenHash) await auth.endSession(who.tokenHash)
-        return send(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie() })
+        return send(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie(secureFor(req)) })
       }
     }
     return undefined
@@ -158,7 +166,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         if (!(await verifyPassword(String(b.password || ''), user.passwordHash))) throw httpError(401, 'Wrong password')
         await db.delete(users).where(eq(users.id, uid))
         log(`[auth] deleted account ${uid.slice(0, 8)}`)
-        return send(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie() })
+        return send(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie(secureFor(req)) })
       }
       case 'POST /api/auth/password': {
         const b = await body(req)

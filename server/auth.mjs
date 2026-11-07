@@ -40,7 +40,7 @@ export const publicUser = (u) => u && { id: u.id, email: u.email, name: u.name, 
 
 export function createAuth(db, cfg) {
   const days = cfg.sessionDays
-  const cookieAttrs = (maxAge) => `Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${cfg.cookieSecure ? '; Secure' : ''}`
+  const cookieAttrs = (maxAge, secure = cfg.cookieSecure) => `Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`
 
   async function findUserByEmail(email) {
     return (await db.select().from(users).where(eq(users.email, normEmail(email))).limit(1))[0] ?? null
@@ -63,13 +63,13 @@ export function createAuth(db, cfg) {
     return u
   }
 
-  async function startSession(userId, userAgent = '') {
+  async function startSession(userId, userAgent = '', secure) {
     const token = newToken()
     await db.insert(sessions).values({ tokenHash: sha256(token), userId, expiresAt: new Date(Date.now() + days * 86400000), userAgent: String(userAgent).slice(0, 200) })
     await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId))
-    return { token, cookie: `${COOKIE}=${token}; ${cookieAttrs(days * 86400)}` }
+    return { token, cookie: `${COOKIE}=${token}; ${cookieAttrs(days * 86400, secure)}` }
   }
-  const clearCookie = () => `${COOKIE}=; ${cookieAttrs(0)}`
+  const clearCookie = (secure) => `${COOKIE}=; ${cookieAttrs(0, secure)}`
 
   /** Who is calling: a session cookie or `Authorization: Bearer <api token>`. Returns { user, via, tokenHash } or null. */
   async function identify(req) {
