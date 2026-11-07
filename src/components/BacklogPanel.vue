@@ -61,7 +61,7 @@ function onDrop(e) {
       <span class="icon sm plus">add</span>
       <input
         ref="input" v-model="draft" class="mono" placeholder="New task… 45m p2 due:fri #tag"
-        title="Syntax: title 45m p1–p5 due:fri #course @SIG-01.2 [L|S|D] · Enter to add · Esc to leave"
+        title="Syntax: title 45m p1–p5 due:fri #course @EXP-MH [L|S|D] · Enter to add · Esc to leave"
         @keydown.esc="draft = ''; $event.target.blur()"
       />
       <span class="kbd">N</span>

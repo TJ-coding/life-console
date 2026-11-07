@@ -26,7 +26,7 @@ function add() {
       <span class="icon sm plus">alarm_add</span>
       <input
         ref="input" v-model="text" class="mono"
-        :placeholder="placeholder ?? (compact ? '+ deadline… 17:00 p1' : 'New deadline… due:fri 17:00 #ST2001 p1 ! vital points')"
+        :placeholder="placeholder ?? (compact ? '+ deadline… 17:00 p1' : 'New deadline… due:fri 17:00 #NLP-610 p1 ! vital points')"
         title="Syntax: title · due:fri|11-20|tomorrow · 17:00 · p1–p5 · #source · ! vital points · Enter to add, Esc to cancel"
         @keydown.esc="text = ''; emit('cancel')"
       />

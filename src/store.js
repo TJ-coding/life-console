@@ -95,126 +95,241 @@ export function categoryOf(todo) {
   return 'experiment'
 }
 
-/* ───────────── seed data (relative to the current week) ───────────── */
+/* ───────────── seed data (relative to the current week) ─────────────
+ * The demo planner a new account starts with: a first-year NLP PhD student who is pushing a paper
+ * towards an ACL submission, taking two courses, building a side project and training for a half
+ * marathon. Everything links up the way real use does: tasks → goals/deadlines/courses, goals →
+ * dependency chains, deadlines with an earlier personal target, split pomodoro sittings, subtasks.
+ * Dates are relative to today, so the demo always looks current.
+ */
 function seed() {
   const T = todayISO()
   const M = mondayOf(T)
-  const D = (n) => addDays(M, n) // 0 = Monday
+  const D = (n) => addDays(M, n) // 0 = Monday … 6 = Sunday
+  const R = (n) => addDays(T, n) // relative to today
+  const past = (d) => diffDays(d, T) > 0
   const now = new Date().toISOString()
   const todo = (id, title, o = {}) => ({
     id, title, vital: '', timeMin: 30, done: false, lsd: 'S', priority: 3,
     due: null, scheduled: null, links: [], notes: '', createdAt: now, updatedAt: now, ...o,
   })
+  const on = (date, start = null) => ({ date, start })
+  /** a task planned for weekday i: done if that day has passed */
+  const wk = (i, o = {}) => ({ scheduled: on(D(i), o.start ?? null), done: past(D(i)), ...o })
   const at = (date, t) => new Date(`${date}T${t}:00`).toISOString()
 
-  // sign-offs: past weekdays fully/partially stamped, today half-way
+  /* ── fixed calendar: mornings 08:30–11:00 stay free for deep work ── */
+  const block = (date, start, end, title, category, link = null) => ({ id: `B-${date}-${start}`, date, start, end, title, category, link })
+  const week = [
+    // [weekday, start, end, title, category, link]
+    [0, '06:30', '07:15', 'Easy run · 8 km', 'kaizen', 'BASE'],
+    [0, '11:30', '12:30', 'Lab meeting', 'research', 'SP-01'],
+    [0, '14:00', '15:30', 'NLP-610 Advanced NLP', 'academic', 'NLP-610'],
+    [1, '06:30', '07:30', 'Intervals · 6×800 m', 'kaizen', 'BASE'],
+    [1, '13:00', '14:30', 'STAT-520 Bayesian Statistics', 'academic', 'STAT-520'],
+    [1, '16:00', '16:30', 'Supervisor 1:1', 'research', 'EXP-MH'],
+    [2, '06:30', '07:15', 'Easy run · 8 km', 'kaizen', 'BASE'],
+    [2, '14:00', '15:30', 'NLP-610 Advanced NLP', 'academic', 'NLP-610'],
+    [2, '17:00', '18:00', 'Reading group: RAG papers', 'research', 'EXP-MH'],
+    [3, '06:30', '07:30', 'Tempo · 5 km @ 5:10', 'kaizen', 'BASE'],
+    [3, '13:00', '14:30', 'STAT-520 Bayesian Statistics', 'academic', 'STAT-520'],
+    [3, '15:00', '17:00', 'GPU slot: ablation grid', 'experiment', 'EXP-AB'],
+    [4, '06:30', '07:15', 'Easy run · 8 km', 'kaizen', 'BASE'],
+    [4, '15:00', '16:00', 'Pocket Kanji: sync bug bash', 'experiment', 'SYNC'],
+    [4, '17:00', '17:45', 'Weekly review', 'kaizen', 'KZ-02'],
+    [5, '06:30', '08:30', 'Long run · 18 km', 'kaizen', 'BASE'],
+    [6, '21:00', '21:30', 'Plan next week', 'kaizen', 'KZ-02'],
+  ]
+  const timeBlocks = week.map(([i, s, e, title, cat, link]) => block(D(i), s, e, title, cat, link))
+
+  /* lectures follow the course blocks */
+  const LECTURES = { 'NLP-610': ['Retrieval-augmented generation', 'Long-context evaluation'], 'STAT-520': ['Gibbs sampling', 'Hierarchical models'] }
+  const lectures = []
+  for (const [course, titles] of Object.entries(LECTURES)) {
+    week.filter((b) => b[5] === course).forEach(([i, s], k) => {
+      const d = D(i)
+      lectures.push({ id: `L-${course}-${k + 9}`, course, title: titles[k], no: k + 9, date: d, time: s, readAhead: past(d), attended: past(d), cheatSheet: past(d) && k === 0 })
+    })
+  }
+
+  /* sign-offs: earlier days stamped, today half-way */
   const signOffs = {}
   for (let i = 0; i < 7; i++) {
     const d = D(i)
     const n = diffDays(d, T)
-    if (n > 0) signOffs[d] = [at(d, '07:10'), at(d, '09:05'), at(d, '18:30'), n > 1 || i % 2 ? at(d, '21:40') : null]
+    if (n > 0) signOffs[d] = [at(d, '06:20'), at(d, '08:35'), at(d, '18:10'), n > 1 || i % 2 ? at(d, '22:40') : null]
   }
-  signOffs[T] = [at(T, '07:15'), at(T, '09:00'), null, null]
+  signOffs[T] = [at(T, '06:25'), at(T, '08:40'), null, null]
 
-  const block = (date, start, end, title, category, link = null) => ({
-    id: `B-${date}-${start}`, date, start, end, title, category, link,
-  })
-  const timeBlocks = []
-  for (let i = 0; i < 5; i++) timeBlocks.push(block(D(i), '06:30', '07:30', 'Physical training', 'kaizen', 'KZ-01'))
-  timeBlocks.push(
-    block(D(0), '08:30', '11:30', 'Deep work: literature review', 'research', 'PSG-01'),
-    block(D(0), '13:00', '15:00', 'Statistical methods', 'academic', 'ST1010'),
-    block(D(0), '20:30', '21:30', 'Debrief & review', 'kaizen'),
-    block(D(1), '08:00', '11:30', 'CARVER target analysis', 'research', 'PSG-01'),
-    block(D(1), '13:30', '15:30', 'ST2001 Lecture 2', 'academic', 'ST2001spA'),
-    block(D(1), '16:00', '17:00', 'Kaizen: filing standard', 'kaizen', 'KZ-02'),
-    block(D(2), '09:00', '11:30', 'Telemetry pipeline', 'experiment', 'SIG-01.2'),
-    block(D(2), '14:00', '16:00', 'SP-03 payload test', 'research', 'SP-03'),
-    block(D(3), '10:00', '12:00', 'Baseline experiments', 'experiment', 'SIG-01.2'),
-    block(D(3), '13:30', '15:00', 'ST2001 Lecture 3', 'academic', 'ST2001spA'),
-    block(D(3), '16:00', '17:00', 'Takt ledger review', 'kaizen', 'KZ-03'),
-    block(D(4), '08:30', '12:00', 'Full pipeline run', 'experiment', 'SIG-01.2'),
-    block(D(4), '13:30', '16:30', 'ST2001 problem set', 'academic', 'ST2001spA'),
-    block(D(4), '17:00', '18:30', 'Weekly retro', 'kaizen', 'KZ-04'),
-    block(D(5), '10:00', '11:30', 'Long run', 'kaizen'),
-    block(D(6), '15:00', '16:30', 'Next-week horizon planning', 'research', 'SP-03'),
-  )
+  /* sleep for the last week: drifting later mid-week, back on target today */
+  const SLEEP = [['23:40', '06:20'], ['23:05', '06:15'], ['00:10', '06:30'], ['23:20', '06:15'], ['22:55', '06:10'], ['23:30', '07:00'], ['23:10', '06:15']]
+  const sleep = {}
+  SLEEP.forEach(([bed, wake], k) => { sleep[R(k - 6)] = { bed, bedTarget: '23:00', wake, wakeTarget: '06:15', targetMin: 450 } })
+
+  const todos = [
+    /* ── today ── */
+    todo('T-101', 'MuSiQue eval with reranker k=20', { vital: 'Fill row 3 of Table 2', timeMin: 90, pomo: true, lsd: 'D', priority: 1, due: R(3), scheduled: on(T, '09:00'), links: ['EXP-MH', 'DL-2'], split: { group: 'T-101' }, notes: '## Setup\n- retriever: bge-small, top-100\n- rerank depth k=20, then k=50\n- 3 seeds; report mean ± sd' }),
+    todo('T-102', 'MuSiQue eval with reranker k=20', { vital: 'Fill row 3 of Table 2', timeMin: 60, pomo: true, lsd: 'D', priority: 1, due: R(3), scheduled: on(R(1), '09:00'), links: ['EXP-MH', 'DL-2'], split: { group: 'T-101' }, order: 1000.001 }),
+    todo('T-103', 'Get supervisor signature on travel grant', { vital: 'Form is in the shared drive', timeMin: 10, lsd: 'L', priority: 1, scheduled: on(T, '10:50'), links: ['DL-4'] }),
+    todo('T-104', 'STAT-520 PS4: Q3–Q5 (Gibbs sampler)', { vital: 'Q5 wants the derivation, not just code', timeMin: 60, pomo: true, lsd: 'L', priority: 1, scheduled: on(T, '19:30'), links: ['STAT-520', 'DL-1'] }),
+    todo('T-105', 'Table 2 caption + three-line takeaway', { timeMin: 20, lsd: 'S', priority: 2, scheduled: on(T, '11:00'), links: ['W-ACL'] }),
+    todo('T-106', 'Reply to co-author about Figure 3 colours', { timeMin: 15, lsd: 'L', priority: 3, scheduled: on(T), links: ['W-ACL'] }),
+    todo('T-107', 'Fix offline merge bug #42 (duplicate cards)', { vital: 'Repro: edit on phone + laptop offline', timeMin: 45, pomo: true, lsd: 'S', priority: 2, scheduled: on(T, '18:15'), links: ['SYNC'] }),
+    todo('T-108', 'Book GPU slots for next week', { timeMin: 10, lsd: 'L', priority: 2, done: true, scheduled: on(T), links: ['EXP-AB'] }),
+    todo('T-109', 'Foam roll + stretch', { timeMin: 15, lsd: 'D', priority: 4, scheduled: on(T), links: ['KZ-01'] }),
+
+    /* ── the rest of this week ── */
+    todo('T-110', 'Lab meeting slides: HotpotQA numbers', { timeMin: 45, priority: 2, links: ['EXP-MH'], ...wk(0) }),
+    todo('T-111', 'Reproduce BM25 + 128k baseline on 2Wiki', { vital: 'Within ±1% of the paper', timeMin: 120, lsd: 'D', priority: 1, links: ['EXP-BL'], ...wk(0) }),
+    todo('T-112', 'NLP-610 reading response 5', { timeMin: 40, lsd: 'L', priority: 2, links: ['NLP-610', 'DL-8'], ...wk(1) }),
+    todo('T-113', 'Pocket Kanji: conflict test with two devices', { timeMin: 30, priority: 3, links: ['SYNC'], ...wk(1) }),
+    todo('T-114', 'Read: "Lost in the Middle" + two follow-ups', { vital: 'One Ochiai card each', timeMin: 50, lsd: 'D', priority: 3, links: ['W-ACL'], ...wk(2) }),
+    todo('T-115', 'Ablation grid config (retriever size × k)', { timeMin: 45, lsd: 'S', priority: 2, links: ['EXP-AB'], ...wk(3) }),
+    todo('T-116', 'NLP-610 presentation: slide outline', { vital: '15 min + Q&A', timeMin: 60, lsd: 'L', priority: 2, links: ['NLP-610', 'DL-3'], ...wk(4) }),
+    todo('T-140', 'Inbox zero + reply to admin office', { timeMin: 20, lsd: 'L', priority: 4, links: ['KZ-03'], ...wk(0) }),
+    todo('T-141', 'STAT-520 PS3 corrections', { timeMin: 30, lsd: 'L', priority: 3, links: ['STAT-520'], ...wk(1) }),
+    todo('T-142', 'HotpotQA run: reranker k=10', { vital: 'Row 1 of Table 2', timeMin: 90, pomo: true, lsd: 'D', priority: 1, links: ['EXP-MH'], ...wk(1) }),
+    todo('T-143', 'Plot recall@k vs. context length', { timeMin: 45, lsd: 'S', priority: 2, links: ['EXP-MH'], ...wk(2) }),
+    todo('T-144', 'Pocket Kanji: write sync conflict tests', { timeMin: 60, lsd: 'S', priority: 2, links: ['SYNC'], ...wk(2) }),
+    todo('T-145', '2Wiki run: reranker k=10', { vital: 'Row 2 of Table 2', timeMin: 90, pomo: true, lsd: 'D', priority: 1, links: ['EXP-MH'], ...wk(3) }),
+    todo('T-146', 'Intro paragraph 2: why not just long context?', { timeMin: 40, lsd: 'D', priority: 2, links: ['W-ACL'], ...wk(3) }),
+    todo('T-147', 'Travel grant: budget table', { timeMin: 30, lsd: 'L', priority: 2, links: ['DL-4'], ...wk(4) }),
+    todo('T-148', 'Write the weekly report for my supervisor', { timeMin: 25, lsd: 'S', priority: 2, links: ['KZ-02'], ...wk(4) }),
+    todo('T-117', 'Weekly money check', { timeMin: 15, lsd: 'D', priority: 4, links: ['KZ-02'], ...wk(5) }),
+    todo('T-118', 'Meal prep for the week', { timeMin: 60, lsd: 'D', priority: 4, ...wk(6) }),
+
+    /* ── paper draft: a container with subtasks; its estimate is the budget ── */
+    todo('T-120', 'Paper draft v0', { vital: '8 pages for the lab review', timeMin: 480, lsd: 'D', priority: 1, due: R(24), links: ['W-ACL'] }),
+    todo('T-121', 'Introduction', { timeMin: 90, lsd: 'D', priority: 1, due: R(24), links: ['W-ACL'], parent: 'T-120', done: true }),
+    todo('T-122', 'Method + Figure 1', { vital: 'Pipeline diagram first, prose second', timeMin: 120, lsd: 'D', priority: 1, due: R(24), links: ['W-ACL'], parent: 'T-120', scheduled: on(R(2)) }),
+    todo('T-123', 'Experiments section', { timeMin: 150, lsd: 'D', priority: 1, due: R(24), links: ['W-ACL'], parent: 'T-120' }),
+    todo('T-124', 'Related work', { timeMin: 90, lsd: 'D', priority: 2, due: R(24), links: ['W-ACL'], parent: 'T-120' }),
+    todo('T-125', 'Abstract + title options', { timeMin: 30, lsd: 'D', priority: 2, due: R(24), links: ['W-ACL'], parent: 'T-120' }),
+
+    /* ── backlog ── */
+    todo('T-130', 'Error analysis: 50 failed multi-hop questions', { timeMin: 90, lsd: 'D', priority: 2, links: ['EXP-MH'] }),
+    todo('T-131', 'Clean up Overleaf .bib duplicates', { timeMin: 20, lsd: 'L', priority: 4, links: ['W-ACL'] }),
+    todo('T-132', 'Landing page copy + screenshots', { timeMin: 60, lsd: 'S', priority: 3, links: ['LAUNCH'] }),
+    todo('T-133', 'Invite list for the closed beta (20 people)', { timeMin: 30, lsd: 'L', priority: 3, links: ['BETA', 'DL-7'] }),
+    todo('T-134', 'Register for the half marathon', { vital: 'Entry fee + bib pickup details', timeMin: 15, lsd: 'L', priority: 2, links: ['RUN', 'DL-6'] }),
+    todo('T-135', 'Replace running shoes (600 km)', { timeMin: 30, lsd: 'L', priority: 4, links: ['RUN'] }),
+    todo('T-136', 'Residence card renewal appointment', { timeMin: 20, lsd: 'L', priority: 2, due: R(14) }),
+    todo('T-137', 'Back up experiment logs to cold storage', { timeMin: 25, lsd: 'L', priority: 3, links: ['EXP-BL'] }),
+  ]
+
+  const plans = [
+    {
+      id: 'SP-01', planNo: 'SP-01', title: 'Long-Context Retrieval Paper', status: 'active', health: 'On-track',
+      intent: 'Show that a small retriever + reranker beats 128k-context models on multi-hop QA at a tenth of the cost, and publish it.',
+      vision: 'A first-author paper people cite',
+      psgs: [
+        { no: 'ACL', name: '🎯 Accepted at ACL 2027', priority: 1, indicators: 'Main conference or Findings acceptance', timeBound: R(40), status: 'doing', boundLocked: true },
+        { no: 'EXP', name: '🧪 Prove the method works', priority: 2, indicators: 'Beats the 128k baseline on 3 of 4 benchmarks', timeBound: R(21), status: 'doing' },
+        { no: 'OSS', name: '📦 Release code and data', priority: 3, indicators: 'Public repo, one-command reproduction', timeBound: R(70), status: 'open' },
+      ],
+      sigs: [
+        { no: 'EXP-BL', psg: 'EXP', name: 'Baselines reproduced', priority: 1, criteria: 'BM25 + 128k model within ±1% of published numbers', timeBound: R(-3), status: 'done', pct: 100, deps: [] },
+        { no: 'EXP-MH', psg: 'EXP', name: 'Multi-hop results', priority: 1, criteria: 'HotpotQA, MuSiQue, 2Wiki rows of Table 2 filled', timeBound: R(9), status: 'doing', pct: 45, deps: ['EXP-BL'] },
+        { no: 'EXP-AB', psg: 'EXP', name: 'Ablations', priority: 2, criteria: 'Retriever size × rerank depth grid, 3 seeds', timeBound: R(18), status: 'open', pct: 10, deps: ['EXP-MH'] },
+        { no: 'W-ACL', psg: 'ACL', name: 'Paper draft', priority: 1, criteria: '8 pages, supervisor sign-off', timeBound: R(30), status: 'doing', pct: 20, deps: ['EXP-MH'], boundLocked: true },
+        { no: 'S-ACL', psg: 'ACL', name: 'ARR submission', priority: 1, criteria: 'Paper + anonymised code uploaded', timeBound: R(38), status: 'open', pct: 0, deps: ['W-ACL', 'EXP-AB'], boundLocked: true },
+        { no: 'OSS-REPO', psg: 'OSS', name: 'Clean repo', priority: 3, criteria: 'README, configs, reproduce.sh', timeBound: R(60), status: 'open', pct: 0, deps: ['S-ACL'] },
+      ],
+      checkEveryDays: 3,
+      checkLog: [
+        { date: R(-6), reminder: true, checked: true, updated: true },
+        { date: R(-3), reminder: true, checked: true, updated: false },
+      ],
+      events: [
+        { sym: '◆', event: 'Internal lab review', date: R(24) },
+        { sym: '▲', event: 'ARR deadline', date: R(38) },
+        { sym: '■', event: 'Acceptance notification', date: R(150) },
+      ],
+    },
+    {
+      id: 'SP-02', planNo: 'SP-02', title: 'Pocket Kanji (side project)', status: 'active', health: 'At risk',
+      intent: 'Ship an offline-first kanji flashcard app that pays for its own hosting.',
+      vision: 'A small tool people open every day',
+      psgs: [
+        { no: 'LAUNCH', name: '🚀 Public launch', priority: 1, indicators: 'Live on its own domain, 100 sign-ups', timeBound: R(45), status: 'doing' },
+        { no: 'MRR', name: '💰 Pays for itself', priority: 2, indicators: '$100 a month from supporters', timeBound: R(120), status: 'open' },
+      ],
+      sigs: [
+        { no: 'AUTH', psg: 'LAUNCH', name: 'Accounts', priority: 2, criteria: 'Email + Google sign-in', timeBound: R(-2), status: 'done', pct: 100, deps: [] },
+        { no: 'SYNC', psg: 'LAUNCH', name: 'Offline sync', priority: 1, criteria: 'Two devices edit offline and merge without loss', timeBound: R(12), status: 'doing', pct: 60, deps: ['AUTH'] },
+        { no: 'BETA', psg: 'LAUNCH', name: 'Closed beta', priority: 2, criteria: '20 testers, top 5 bugs fixed', timeBound: R(30), status: 'open', pct: 0, deps: ['SYNC'] },
+        { no: 'SUPP', psg: 'MRR', name: 'Supporter tier', priority: 2, criteria: 'Checkout live at $4/month', timeBound: R(90), status: 'open', pct: 0, deps: ['LAUNCH'] },
+      ],
+      checkEveryDays: 7,
+      checkLog: [{ date: R(-5), reminder: true, checked: true, updated: true }],
+      events: [{ sym: '▲', event: 'Beta invites go out', date: R(12) }],
+    },
+    {
+      id: 'SP-03', planNo: 'SP-03', title: 'Body & Energy', status: 'active', health: 'On-track',
+      intent: 'Stay fit and rested enough that research never runs on fumes.',
+      vision: 'Energy to spare at 5 pm',
+      psgs: [
+        { no: 'RUN', name: '🏃 Sub-1:50 half marathon', priority: 1, indicators: 'Official race time under 1:50:00', timeBound: R(63), status: 'doing', boundLocked: true },
+        { no: 'SLEEP', name: '😴 Sleep like an athlete', priority: 2, indicators: '7h30 average, lights out by 23:00', timeBound: 'Continuous', status: 'doing' },
+      ],
+      sigs: [
+        { no: 'BASE', psg: 'RUN', name: 'Aerobic base', priority: 1, criteria: '35 km a week for 4 weeks', timeBound: R(14), status: 'doing', pct: 70, deps: [] },
+        { no: 'TEMPO', psg: 'RUN', name: 'Tempo block', priority: 2, criteria: '3× 5 km at 5:05/km', timeBound: R(42), status: 'open', pct: 0, deps: ['BASE'] },
+        { no: 'BED', psg: 'SLEEP', name: 'Lights out 23:00', priority: 1, criteria: '6 of 7 nights', timeBound: 'Continuous', status: 'doing', pct: 55, deps: [] },
+        { no: 'CAFF', psg: 'SLEEP', name: 'No caffeine after 14:00', priority: 3, criteria: 'Logged every day', timeBound: 'Continuous', status: 'doing', pct: 80, deps: [] },
+      ],
+      checkEveryDays: 7,
+      checkLog: [{ date: R(-4), reminder: true, checked: true, updated: true }],
+      events: [{ sym: '■', event: 'Race day', date: R(63) }],
+    },
+    {
+      id: 'SP-04', planNo: 'SP-04', title: 'Japanese: JLPT N2', status: 'paused', health: 'Paused until after ARR',
+      intent: 'Read papers and contracts in Japanese without a dictionary.',
+      vision: 'Comfortable in Japanese at work',
+      psgs: [
+        { no: 'N2', name: '🗾 Pass JLPT N2', priority: 1, indicators: 'Certificate in hand', timeBound: R(240), status: 'open' },
+      ],
+      sigs: [
+        { no: 'VOCAB', psg: 'N2', name: 'Vocabulary', priority: 1, criteria: '6,000 words mature in Anki', timeBound: R(180), status: 'doing', pct: 35, deps: [] },
+        { no: 'GRAM', psg: 'N2', name: 'Grammar', priority: 2, criteria: 'Shin Kanzen grammar book finished', timeBound: R(200), status: 'open', pct: 15, deps: [] },
+      ],
+      checkEveryDays: 14,
+      checkLog: [],
+      events: [],
+    },
+  ]
 
   return {
     version: 1,
-    todos: [
-      todo('T-101', 'Outline literature review section', { vital: 'Position vs. 3 closest works', timeMin: 45, lsd: 'D', priority: 2, scheduled: { date: D(0), start: null }, done: diffDays(D(0), T) > 0, links: ['SIG-01.3'] }),
-      todo('T-102', 'Sync lab meeting notes', { timeMin: 30, scheduled: { date: D(0), start: null }, done: diffDays(D(0), T) > 0 }),
-      todo('T-103', 'Course prerequisites verification', { timeMin: 15, lsd: 'L', priority: 2, scheduled: { date: D(1), start: null }, done: diffDays(D(1), T) > 0, links: ['ST2001spA'] }),
-      todo('T-104', 'Read Ahead – ST2001 Lecture 3 (OS: Processes)', { vital: 'Process control block · context switch', timeMin: 30, lsd: 'L', priority: 1, due: T, scheduled: { date: T, start: '09:00' }, links: ['ST2001spA', 'SIG-02.1'], notes: '## Core focus\n- PCB register structure\n- Context switch overhead vs thread switch' }),
-      todo('T-105', 'Draft related-works section', { vital: 'Synthesise 5 benchmark papers', timeMin: 90, lsd: 'S', priority: 1, scheduled: { date: T, start: null }, links: ['SIG-01.3'] }),
-      todo('T-106', 'Ochiai card: LMs Represent Space and Time', { vital: 'Record 3 core insights', timeMin: 25, lsd: 'D', priority: 3, scheduled: { date: T, start: null }, links: ['SIG-01.1'] }),
-      todo('T-107', 'Vacuum clean (main desk)', { vital: 'Monthly rotation · group B', timeMin: 15, lsd: 'D', priority: 4, scheduled: { date: T, start: null }, links: ['KZ-04'] }),
-      todo('T-108', 'Baseline experiment script', { vital: 'Reproduce Table 2', timeMin: 120, lsd: 'L', priority: 2, scheduled: { date: D(4), start: null }, links: ['SIG-01.2'] }),
-      todo('T-109', 'ST2001 Report 2 writing', { vital: 'Processes & memory', timeMin: 120, lsd: 'L', priority: 1, due: addDays(T, 1), scheduled: { date: D(2), start: null }, links: ['ST2001spA'] }),
-      todo('T-110', 'Refactor CARVER weight vector', { timeMin: 45, lsd: 'S', priority: 1, links: ['SP-03'] }),
-      todo('T-111', 'Draft sensor spec sheet', { timeMin: 60, lsd: 'L', priority: 2, links: ['ST2001spA'] }),
-      todo('T-112', 'Reorganise lab Obsidian notes', { timeMin: 30, lsd: 'D', priority: 3 }),
-      todo('T-113', 'GPU cluster script fix for batch jobs', { timeMin: 40, lsd: 'S', priority: 2, links: ['SIG-01.2', 'DL-2'] }),
-      todo('T-114', 'Table 2 metric delta confirmation', { timeMin: 30, lsd: 'S', priority: 2, links: ['SIG-01.2'] }),
-      todo('T-115', 'Submit ST2001 lab assignment', { timeMin: 20, lsd: 'S', priority: 2, due: D(4), scheduled: { date: D(4), start: null }, links: ['SIG-02.1'] }),
-      todo('T-116', 'Weekly financial takt pass', { timeMin: 20, lsd: 'D', priority: 4, scheduled: { date: D(5), start: null } }),
-    ],
+    schemaVersion: 2,
+    todos,
     timeBlocks,
     deadlines: [
-      { id: 'DL-1', title: 'ST2001 Report 2 (Processes & Memory)', vital: 'Upload PDF to LMS', due: `${addDays(T, 1)}T23:59`, internal: T, source: 'ST2001spA', done: false, priority: 1 },
-      { id: 'DL-2', title: 'SIG-01.2 milestone: code freeze', vital: 'Tag release in repo', due: `${addDays(T, 3)}T18:00`, source: 'SIG-01.2', done: false, priority: 2 },
-      { id: 'DL-3', title: 'Weekly review aggregation', vital: 'KPI + Kaizen table', due: `${D(6)}T18:00`, source: 'KZ-04', done: false, priority: 3 },
-      { id: 'DL-4', title: 'PS-04 problem set', vital: '', due: `${D(0)}T18:00`, source: 'ST1010', done: diffDays(D(0), T) > 0, priority: 2 },
-      { id: 'DL-5', title: 'Hardware order form', vital: 'Needs supervisor sign', due: `${addDays(T, -1)}T17:00`, source: 'SP-03', done: false, priority: 2 },
-      { id: 'DL-6', title: 'Conference abstract', vital: '250 words', due: `${addDays(T, 12)}T23:59`, source: 'PSG-01', done: false, priority: 1 },
+      { id: 'DL-1', title: 'STAT-520 Problem set 4', vital: 'Upload one PDF to the LMS', due: `${R(1)}T23:59`, internal: T, source: 'STAT-520', done: false, priority: 1 },
+      { id: 'DL-2', title: 'Multi-hop results to supervisor', vital: 'Table 2 + one-page summary', due: `${R(4)}T17:00`, internal: R(3), source: 'EXP-MH', done: false, priority: 1 },
+      { id: 'DL-3', title: 'NLP-610 paper presentation', vital: '15 min + Q&A', due: `${R(6)}T14:00`, internal: R(5), source: 'NLP-610', done: false, priority: 2 },
+      { id: 'DL-4', title: 'Travel grant application', vital: 'Needs supervisor signature', due: `${T}T17:00`, internal: '', source: '', done: false, priority: 2 },
+      { id: 'DL-5', title: 'ARR submission (ACL 2027)', vital: 'Paper + anonymised code', due: `${R(38)}T21:00`, internal: R(33), source: 'S-ACL', done: false, priority: 1 },
+      { id: 'DL-6', title: 'Half-marathon entries close', vital: 'Entry fee + bib pickup', due: `${R(9)}T23:59`, internal: R(7), source: 'RUN', done: false, priority: 3 },
+      { id: 'DL-7', title: 'Pocket Kanji beta invites', vital: '20 testers', due: `${R(12)}T12:00`, internal: '', source: 'BETA', done: false, priority: 3 },
+      { id: 'DL-8', title: 'NLP-610 reading response 5', vital: '', due: `${D(1)}T23:59`, internal: '', source: 'NLP-610', done: past(D(1)), priority: 2 },
     ],
-    plan: {
-      planNo: 'SP-03',
-      title: 'PhD Year 1 Execution',
-      status: 'Active · On-track',
-      intent: 'Establish research independence, achieve 1× first-author tier-1 publication, and maintain a rigorous physiological operating rhythm.',
-      vision: 'Top-tier autonomous researcher & practitioner',
-      psgs: [
-        { no: 'PSG-01', name: 'Publish first paper', priority: 1, indicators: '1× camera-ready tier-1 paper', timeBound: '2027-03-31', status: 'doing' },
-        { no: 'PSG-02', name: 'Graduate coursework', priority: 2, indicators: 'GPA ≥ 3.85 & pass all credits', timeBound: '2027-01-20', status: 'doing' },
-        { no: 'PSG-03', name: 'Physiological standard', priority: 3, indicators: '≥ 85% sleep hygiene compliance', timeBound: 'Continuous', status: 'doing' },
-      ],
-      sigs: [
-        { no: 'SIG-01.1', psg: 'PSG-01', name: 'Literature position', priority: 1, criteria: 'Ochiai card on 15 core papers', timeBound: addDays(T, 10), status: 'done', pct: 100 },
-        { no: 'SIG-01.2', psg: 'PSG-01', name: 'Baseline benchmark', priority: 1, criteria: 'Reproduce Table 2 within ±1%', timeBound: addDays(T, 26), status: 'doing', pct: 40 },
-        { no: 'SIG-01.3', psg: 'PSG-01', name: 'Manuscript draft', priority: 2, criteria: '8-page draft ready for review', timeBound: addDays(T, 71), status: 'open', pct: 0 },
-        { no: 'SIG-02.1', psg: 'PSG-02', name: 'ST2001 OS course', priority: 2, criteria: '8 reports submitted + exam ≥ A', timeBound: addDays(T, 45), status: 'doing', pct: 65 },
-        { no: 'SIG-02.2', psg: 'PSG-02', name: 'ST1010 Statistics', priority: 3, criteria: 'All problem sets ≥ 80%', timeBound: addDays(T, 60), status: 'doing', pct: 75 },
-        { no: 'SIG-03.1', psg: 'PSG-03', name: 'Sleep regularity', priority: 2, criteria: 'Score ≥ 85% & 23:00 cutoff', timeBound: 'Continuous', status: 'doing', pct: 60 },
-      ],
-      checkEveryDays: 7,
-      checkLog: [
-        { date: addDays(T, -13), reminder: true, checked: true, updated: true },
-        { date: addDays(T, -6), reminder: true, checked: true, updated: false },
-      ],
-      events: [
-        { sym: '◆', event: 'Baseline code freeze', date: addDays(T, 15) },
-        { sym: '▲', event: 'Supervisor review', date: addDays(T, 30) },
-        { sym: '■', event: 'Conference deadline', date: addDays(T, 100) },
-      ],
-    },
+    plans,
     routines: [
-      'Sort table side stationery', 'Empty table', 'Put loose paper into archive queue', 'Archive papers in archive queue',
-      'Return folders into archive', 'Make bed', 'Vacuum clean', 'Empty bin', 'Sort files in PC', 'Templates printed',
-      'Refill deodorant beads', 'Dishes', 'Laundry', 'Floor is clear of any object',
+      'Make bed', 'Clear desk', 'Dishes', 'Laundry', 'Empty bin', 'Vacuum', 'Water plants',
+      'Back up laptop', 'Inbox zero', 'Archive paper notes', 'Charge watch & earbuds', 'Meal prep',
     ],
-    routineLog: { [M]: [0, 1, 2, 4, 5, 6, 7, 8, 11] },
-    monthlyGroups: { A: ['Clean sink', 'Clean kitchen'], B: ['Sort bookshelf', 'Clean bath'], C: ['Clean PC tower', 'Clean toilet'] },
+    routineLog: { [M]: [0, 1, 2, 3, 4, 6, 8, 10] },
+    monthlyGroups: { A: ['Clean bathroom', 'Descale kettle'], B: ['Sort bookshelf', 'Wash running kit bag'], C: ['Clean keyboard & monitor', 'Change bedsheets'] },
     monthlyLog: {},
     signOffs,
-    notes: { [T]: 'Morning cold start: pre-work drift down from 35m → 17m.' },
-    sleep: { [T]: { bed: '21:50', bedTarget: '21:30', wake: '06:35', wakeTarget: '06:30', targetMin: 540 } },
-    caffeine: { [T]: [{ t: '08:10', what: 'Coffee', mg: 95 }, { t: '10:30', what: 'Tea', mg: 50 }] },
-    caffeineCutoff: '13:30',
-    caffeineLimit: 400,
-    lectures: [{ id: 'L-3', course: 'ST2001spA', title: 'OS: Processes', no: 3, date: T, time: '13:30', readAhead: false, attended: false, cheatSheet: false }],
-    reviews: [{ id: 'IPB-02', title: 'IPB-02 Threat overlay', date: addDays(T, 4) }],
+    notes: { [T]: 'Reranker k=20 gives +2.1 EM on HotpotQA. Check for leakage before telling my supervisor.' },
+    sleep,
+    caffeine: { [T]: [{ t: '07:40', what: 'Coffee', mg: 95 }, { t: '11:15', what: 'Matcha latte', mg: 70 }] },
+    caffeineCutoff: '14:00',
+    caffeineLimit: 300,
+    lectures,
+    reviews: [{ id: 'RV-1', title: 'Co-author read of the Method section', date: R(1) }],
   }
 }
 
