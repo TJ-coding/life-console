@@ -106,6 +106,11 @@ async function select(no) {
   await nextTick()
   document.querySelector(`[data-row="${no}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
 }
+/* table rows: a click toggles the focus; clicks into a row's fields only select it, so editing never deselects */
+function rowClick(no, e) {
+  if (e.target.closest('input, select, textarea, button, a, label, [contenteditable]')) selected.value = no
+  else selected.value = selected.value === no ? null : no
+}
 /* goal flow: a click highlights in place (no scrolling away from the flow); a double-click jumps to the table row */
 const selectInFlow = (no) => { selected.value = selected.value === no ? null : no }
 function showInTable(no) {
@@ -365,19 +370,23 @@ const print = () => window.print()
           <div class="panel-h"><span class="icon sm ok">flag</span><h2>Prioritised strategic goals (PSG)</h2><span class="spacer"></span><span class="mono small muted">PSG % = mean of SIGs</span></div>
           <div class="tw">
             <table class="tbl">
-              <colgroup><col style="width: 58px" /><col style="width: 84px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 44px" /></colgroup>
+              <colgroup><col style="width: 58px" /><col style="width: 84px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 68px" /></colgroup>
               <thead><tr><th>Prio</th><th>PSG No.</th><th>PSG name</th><th>Indicators of success</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="[fx('goals', p.no), { selected: selected === p.no }]" @click="selected = p.no">
-                  <td><select v-model.number="p.priority" class="input ghost mono"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
+                <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="[fx('goals', p.no), { selected: selected === p.no }]" @click="rowClick(p.no, $event)">
+                  <td><select v-model.number="p.priority" class="input ghost mono prio-in" :class="'p' + p.priority" title="Priority"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
                   <td class="mono ok">{{ p.no }}</td>
                   <td><input v-model="p.name" class="input ghost w" /></td>
                   <td><input v-model="p.indicators" class="input ghost w small" /></td>
                   <td><TimeBound v-model="p.timeBound" v-model:locked="p.boundLocked" :issues="boundIssues(p)" /></td>
                   <td><button class="status" :class="p.status" @click.stop="cycle(p)">{{ LABEL[p.status] }}</button></td>
                   <td class="mono" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</td>
-                  <td><button class="btn sm icon-only" title="Add a deadline for this PSG" @click.stop="goalDeadline(p)"><span class="icon sm">alarm_add</span></button>
-                  <button class="btn sm icon-only danger-ghost" title="Delete this PSG (and its SIGs)" @click.stop="removePsg(p)"><span class="icon sm">delete</span></button></td>
+                  <td>
+                    <div class="row acts">
+                      <button class="btn sm icon-only" title="Add a deadline for this PSG" @click.stop="goalDeadline(p)"><span class="icon sm">alarm_add</span></button>
+                      <button class="btn sm icon-only danger-ghost" title="Delete this PSG (and its SIGs)" @click.stop="removePsg(p)"><span class="icon sm">delete</span></button>
+                    </div>
+                  </td>
                 </tr>
               </tbody>
               <tfoot>
@@ -397,20 +406,20 @@ const print = () => window.print()
           </div>
           <div class="tw">
             <table class="tbl wide">
-              <colgroup><col style="width: 58px" /><col style="width: 88px" /><col style="width: 70px" /><col style="width: 24%" /><col /><col style="width: 140px" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 72px" /></colgroup>
+              <colgroup><col style="width: 58px" /><col style="width: 88px" /><col style="width: 70px" /><col style="width: 24%" /><col /><col style="width: 160px" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 72px" /></colgroup>
               <thead><tr><th>Prio</th><th>SIG No.</th><th>PSG</th><th>SIG name</th><th>Specific &amp; measurable criteria</th><th>Depends on</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="[fx('goals', s.no), { selected: selected === s.no }]" @click="selected = s.no">
-                  <td><select v-model.number="s.priority" class="input ghost mono"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
+                <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="[fx('goals', s.no), { selected: selected === s.no }]" @click="rowClick(s.no, $event)">
+                  <td><select v-model.number="s.priority" class="input ghost mono prio-in" :class="'p' + s.priority" title="Priority"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
                   <td class="mono info">{{ s.no }}</td>
-                  <td><select :value="s.psg" class="input ghost mono small" title="Move this SIG under another PSG (it is renumbered; links follow)" @click.stop @change="changePsg(s, $event.target.value)"><option v-for="p in psgs" :key="p.no" :value="p.no">{{ p.no }}</option></select></td>
+                  <td><select :value="s.psg" class="input ghost mono small psg-in" title="Move this SIG under another PSG (it is renumbered; links follow)" @click.stop @change="changePsg(s, $event.target.value)"><option v-for="p in psgs" :key="p.no" :value="p.no">{{ p.no }}</option></select></td>
                   <td><input v-model="s.name" class="input ghost w" /></td>
                   <td><input v-model="s.criteria" class="input ghost w small" /></td>
-                  <td @click="selected = s.no">
+                  <td>
                     <div class="deps">
-                      <span v-for="dp in s.deps ?? []" :key="dp" class="dep"><Chip :id="dp" /><button class="dep-x" :title="`Remove dependency on ${dp}`" @click.stop="removeDep(s, dp)"><span class="icon sm">close</span></button></span>
+                      <Chip v-for="dp in s.deps ?? []" :key="dp" :id="dp" removable @remove="removeDep(s, dp)" />
                       <select class="dep-add mono" title="Add a dependency — a PSG or another SIG this one needs" @click.stop @change="addDep(s, $event.target.value); $event.target.value = ''">
-                        <option value="">＋ dep</option>
+                        <option value="">{{ s.deps?.length ? '＋' : '＋ dep' }}</option>
                         <option v-for="p in psgs.filter((x) => x.no !== s.psg)" :key="p.no" :value="p.no" :disabled="sigWouldCycle(s.no, p.no)">✦ {{ p.no }}</option>
                         <option v-for="no in sigNos.filter((n) => n !== s.no)" :key="no" :value="no" :disabled="sigWouldCycle(s.no, no)">{{ no }}</option>
                       </select>
@@ -553,7 +562,7 @@ h1 { margin: 0; font-size: 18px; font-weight: 600; }
 }
 .node { background: var(--surface); border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
 .node:hover { border-color: var(--muted); }
-.node.sel { border-color: var(--info); box-shadow: 0 0 0 1px var(--info); }
+.node.sel { border-color: var(--info); box-shadow: 0 0 0 2px var(--info); background: color-mix(in srgb, var(--info) 14%, var(--surface)); }
 .vision { border-color: var(--accent); cursor: default; }
 .vis-in { font-weight: 600; font-size: 14px; height: 28px; }
 .trunk { width: 1px; height: 18px; background: var(--border); margin-left: 20px; }
@@ -562,17 +571,45 @@ h1 { margin: 0; font-size: 18px; font-weight: 600; }
 .nm-in { height: 24px; font-size: 13px; font-weight: 600; padding: 0 2px; }
 .sig-nm { gap: 6px; align-items: baseline; }
 .sig-in { height: 20px; font-size: 11px; flex: 1; min-width: 60px; padding: 0 2px; }
-.deps { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
-.dep { display: inline-flex; align-items: center; gap: 1px; border: 1px solid var(--border); border-radius: 2px; padding: 0 2px 0 4px; }
-.dep-x { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0; height: 16px; display: inline-flex; align-items: center; }
-.dep-x:hover { color: var(--danger); }
-.dep-x .icon { font-size: 12px; }
-.dep-add { height: 20px; font-size: 10px; background: transparent; }
+/* ── table polish: quiet until you reach for it ── */
+.deps { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px 0; }
+.dep-add {
+  appearance: none; -webkit-appearance: none; height: 20px; padding: 0 6px; border: 1px solid transparent; border-radius: 999px;
+  background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; outline: none;
+}
+.dep-add:hover, .dep-add:focus { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
+.dep-add option { background: var(--surface); color: var(--text); }
+/* ghost selects (priority, PSG): no native arrow or box until hovered */
+.tbl select.input.ghost { appearance: none; -webkit-appearance: none; cursor: pointer; width: 100%; }
+.tbl select.input.ghost option { background: var(--surface); color: var(--text); }
+.prio-in { font-weight: 700; color: var(--muted); }
+.prio-in.p1 { color: var(--danger); }
+.prio-in.p2 { color: var(--warn); }
+.psg-in { color: var(--accent); }
+/* number inputs: no spinners */
+.tbl input[type='number'] { appearance: textfield; -moz-appearance: textfield; }
+.tbl input[type='number']::-webkit-inner-spin-button, .tbl input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+/* row actions: borderless, faint until the row is hovered, focused or selected (always shown on touch) */
+.acts { gap: 2px; flex-wrap: nowrap; }
+.acts .btn { border-color: transparent; background: transparent; color: var(--muted); }
+.acts .btn:hover { border-color: var(--border); color: var(--text); }
+.acts .btn.danger-ghost:hover { border-color: var(--danger); color: var(--danger); }
+@media (hover: hover) {
+  /* time bound: the ∞ / calendar toggle and the date picker icon only on the row you're on */
+  .tbl tbody tr:not(:hover):not(.selected):not(:focus-within) :deep(.tb-btn:not(.lock)) { opacity: 0; }
+  .tbl tbody tr:not(:hover):not(.selected):not(:focus-within) :deep(.tb-in::-webkit-calendar-picker-indicator) { opacity: 0; }
+  /* with chips present, the add control floats at the cell's right edge instead of wrapping onto a new line */
+  .deps { position: relative; }
+  .deps .chip ~ .dep-add { position: absolute; right: -6px; top: 50%; transform: translateY(-50%); width: 20px; padding: 0; text-align: center; text-align-last: center; background: var(--surface-2); border-color: var(--border); }
+  .tbl tbody tr .acts, .tbl tbody tr .dep-add { opacity: 0; transition: opacity 0.12s; }
+  .tbl tbody tr:hover .acts, .tbl tbody tr:hover .dep-add, .tbl tbody tr.selected .acts, .tbl tbody tr.selected .dep-add,
+  .tbl tbody tr:focus-within .acts, .tbl tbody tr:focus-within .dep-add { opacity: 1; }
+}
 .acts { gap: 2px; flex-wrap: nowrap; }
 .acts .btn { padding: 0 2px; }
 /* add-new buttons at the bottom of each table (ISS-1) */
 tfoot .td-add { padding: 0; border-bottom: 0; }
-.add-row { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 0; border: 0; border-top: 1px dashed var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.add-row { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 0; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
 .add-row:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .kids { margin: 6px 0 0 14px; padding-left: 12px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
 /* tasks linked to a goal, hanging under its node */
@@ -599,6 +636,9 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 .node.fx-rel { border-color: color-mix(in srgb, var(--info) 60%, var(--border)); }
 .gdl-row.fx-rel, .lt-row.fx-rel { background: color-mix(in srgb, var(--info) 8%, transparent); }
 .tbl tr.fx-rel { background: color-mix(in srgb, var(--info) 5%, transparent); }
+/* the selected goal itself: a solid ring and a stronger tint, so it stands out from the related rows it lights */
+.tbl tr.selected { outline: 2px solid var(--info); outline-offset: -2px; box-shadow: none; background: color-mix(in srgb, var(--info) 14%, transparent); }
+.tbl tr.selected > td:first-child { box-shadow: inset 4px 0 0 var(--info); }
 .lt-row.fx-rel { box-shadow: inset 2px 0 0 var(--info); }
 .fx-id { white-space: nowrap; flex: none; }
 .fx-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--info) 6%, transparent); min-width: 0; }
