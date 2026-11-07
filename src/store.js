@@ -859,6 +859,52 @@ export function moveSig(sig, psgNo) {
   sig.no = to
   return { from, to, edits }
 }
+/* Editable goal numbers: only the short code after the prefix changes, so IDs stay concise and parseable
+   (links, quick-add `@SIG-..`). PSG-<1–4 chars>; SIG-<its PSG's code>.<1–3 chars>. Unique across all plans. */
+export const PSG_CODE_MAX = 4
+export const SIG_CODE_MAX = 3
+const goalTaken = (no) => allPsgs().some((p) => p.no === no) || allSigs().some((s) => s.no === no)
+const cleanCode = (code, max) => {
+  const c = String(code ?? '').trim().toUpperCase()
+  if (!c) return { error: 'The code can’t be empty' }
+  if (!/^[A-Z0-9]+$/.test(c)) return { error: 'Use letters and digits only' }
+  if (c.length > max) return { error: `Keep it to ${max} characters` }
+  return { code: c }
+}
+export const psgCode = (no) => String(no).replace(/^PSG-/, '')
+export const sigCode = (no) => String(no).slice(String(no).lastIndexOf('.') + 1)
+/** Rename a PSG to PSG-<code>; its SIGs follow (SIG-<code>.n) and every reference is updated. */
+export function renamePsg(psg, code) {
+  const c = cleanCode(code, PSG_CODE_MAX)
+  if (c.error) return c
+  const from = psg.no
+  const to = `PSG-${c.code}`
+  if (to === from) return null
+  if (goalTaken(to)) return { error: `${to} is already used` }
+  const plan = state.plans.find((p) => p.psgs.includes(psg))
+  const kids = (plan?.sigs ?? []).filter((s) => s.psg === from)
+  const moves = kids.map((s) => [s, `SIG-${c.code}.${sigCode(s.no)}`])
+  const clash = moves.find(([s, no]) => no !== s.no && goalTaken(no) && !kids.some((k) => k.no === no))
+  if (clash) return { error: `${clash[1]} is already used` }
+  let edits = renameGoal(from, to)
+  psg.no = to
+  // two passes so a SIG can take a number another SIG of this PSG is giving up
+  for (const [s] of moves) s.no = `${s.no}\u0000`
+  for (const [s, no] of moves) { edits += renameGoal(s.no.slice(0, -1), no); s.no = no; s.psg = to }
+  return { from, to, edits, sigs: moves.length }
+}
+/** Rename a SIG's own code: SIG-<psg code>.<code>. */
+export function renameSig(sig, code) {
+  const c = cleanCode(code, SIG_CODE_MAX)
+  if (c.error) return c
+  const from = sig.no
+  const to = `SIG-${psgCode(sig.psg)}.${c.code}`
+  if (to === from) return null
+  if (goalTaken(to)) return { error: `${to} is already used` }
+  const edits = renameGoal(from, to)
+  sig.no = to
+  return { from, to, edits }
+}
 export function psgPct(psgNo) {
   const s = sigsOf(psgNo)
   return s.length ? Math.round(s.reduce((a, x) => a + Number(x.pct || 0), 0) / s.length) : 0
