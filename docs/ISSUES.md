@@ -10,15 +10,15 @@ The owner sees the same list in the app at `#/issues` (sidebar → **Issues**).
 
 | | |
 |---|---|
-| Stored in | `/data/issues.json` on the server (the `life-console-data` Docker volume). It's separate from the planner document, so it isn't synced to devices and isn't part of `/api/state`. |
-| API (no login) | **`http://dokpoly.netbird.cloud/api/issues`**: works only from a machine connected to the owner's **NetBird** network (the owner's Mac, for example) |
+| Stored in | The `issues` table in PostgreSQL. It's separate from the planner documents, so it isn't synced to devices and isn't part of `/api/state`. Every signed-in user can report; they see only their own reports. Admins see and manage all of them. |
+| API | **`http://dokpoly.netbird.cloud/api/issues`** (NetBird only) with an **admin API token**: `Authorization: Bearer $LIFE_CONSOLE_TOKEN`. `npm run issues` reads it from `LIFE_CONSOLE_TOKEN` or `~/.life-console-token`. Create one with `node server/cli.mjs create-token --email <admin>` (see OPERATIONS.md §11 step 6). |
 | API (public) | `https://life-console.tj-coding.uk/api/issues`: behind a **Cloudflare Access** login, so a script without a browser session gets a redirect to the login page, not JSON |
 | Local dev | `http://localhost:8787/api/issues` when the server runs locally (`npm run dev:server`); that server holds its own test issues, not the real ones |
 
 **If you can't reach the server** (a cloud sandbox, no NetBird), ask the owner to export the list and give you the file:
 
 ```bash
-curl -s http://dokpoly.netbird.cloud/api/issues > issues.json
+curl -s -H "Authorization: Bearer $(cat ~/.life-console-token)" http://dokpoly.netbird.cloud/api/issues > issues.json
 ```
 
 Work from that file. Afterwards, tell the owner which IDs you fixed and in which commits, so they (or an agent on their machine) can mark them fixed (step 4 in §4).
@@ -42,11 +42,11 @@ npm run issues -- --url http://localhost:8787   # another server (or set LIFE_CO
 ### With plain HTTP
 
 ```bash
-B=http://dokpoly.netbird.cloud
-curl -s "$B/api/issues?status=active"            # open + in-progress (status: open | in-progress | fixed | wontfix | active; omit for all)
-curl -s "$B/api/issues?status=active&screen=S-10" # one screen
-curl -s "$B/api/issues?status=active&platform=mobile" # only mobile reports
-curl -s "$B/api/issues/ISS-3"                     # one issue
+B=http://dokpoly.netbird.cloud; H="Authorization: Bearer $(cat ~/.life-console-token)"
+curl -s -H "$H" "$B/api/issues?status=active"            # open + in-progress (status: open | in-progress | fixed | wontfix | active; omit for all)
+curl -s -H "$H" "$B/api/issues?status=active&screen=S-10" # one screen
+curl -s -H "$H" "$B/api/issues?status=active&platform=mobile" # only mobile reports
+curl -s -H "$H" "$B/api/issues/ISS-3"                     # one issue
 ```
 
 ### What an issue looks like
@@ -92,7 +92,7 @@ npm run issues -- reopen  ISS-3                                   # → open, cl
 Plain HTTP equivalents:
 
 ```bash
-curl -s -X PATCH "$B/api/issues/ISS-3" -H 'Content-Type: application/json' \
+curl -s -X PATCH -H "$H" "$B/api/issues/ISS-3" -H 'Content-Type: application/json' \
      -d '{"status":"fixed","resolution":"Backlog panel now scrolls on its own","commit":"a1b2c3d"}'
 ```
 

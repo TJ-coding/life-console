@@ -8,16 +8,27 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server/server.mjs",
-    "dev:server": "DATA_DIR=.data PORT=8787 node server/server.mjs",
+    "dev:server": "node --env-file-if-exists=.env server/server.mjs",
+    "test": "node --env-file-if-exists=.env --test test/*.test.mjs",
+    "admin": "node --env-file-if-exists=.env server/cli.mjs",
+    "db:generate": "drizzle-kit generate --config drizzle.config.mjs",
+    "db:check": "drizzle-kit check --config drizzle.config.mjs",
     "issues": "node scripts/issues.mjs"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
+    "drizzle-kit": "^0.31.11",
     "vite": "^6.0.7",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.4",
+    "nodemailer": "^10.3.1",
+    "pg": "^8.23.1",
     "web-push": "^3.6.7"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

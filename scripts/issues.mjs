@@ -13,6 +13,11 @@
 //   add --json for raw JSON · --url http://localhost:8787 (or LIFE_CONSOLE_URL) to use another server
 //
 // Default server: http://dokpoly.netbird.cloud (NetBird only, no Cloudflare Access login needed).
+// Auth: an admin API token in LIFE_CONSOLE_TOKEN or ~/.life-console-token (mode 600). Create one with
+//   docker compose exec app node server/cli.mjs create-token --email you@example.com --name issues-cli
+import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+
 const args = process.argv.slice(2)
 const flag = (name) => {
   const i = args.indexOf(name)
@@ -29,8 +34,14 @@ const commit = flag('--commit')
 const [cmd = 'active', id, ...rest] = args
 const note = rest.join(' ')
 
+const TOKEN = (process.env.LIFE_CONSOLE_TOKEN || (() => {
+  try { return readFileSync(`${homedir()}/.life-console-token`, 'utf8') } catch { return '' }
+})()).trim()
+
 async function call(method, path, body) {
-  const r = await fetch(BASE + path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body && JSON.stringify(body), redirect: 'manual' })
+  const headers = { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}) }
+  const r = await fetch(BASE + path, { method, headers, body: body && JSON.stringify(body), redirect: 'manual' })
+  if (r.status === 401) throw new Error(`${method} ${path} → 401: ${TOKEN ? 'the API token was refused' : 'no API token — set LIFE_CONSOLE_TOKEN or ~/.life-console-token (see the top of scripts/issues.mjs)'}`)
   if (!r.ok) throw new Error(`${method} ${path} → HTTP ${r.status}${r.status === 0 || r.type === 'opaqueredirect' ? ' (redirected: login required? use the NetBird URL)' : ''}`)
   return r.json()
 }

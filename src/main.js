@@ -12,7 +12,8 @@ import Deadlines from './views/Deadlines.vue'
 import ModulePlaceholder from './views/ModulePlaceholder.vue'
 import Issues from './views/Issues.vue'
 import { applyTheme } from './store'
-import { startSync } from './sync'
+import { startSync, resumeSync } from './sync'
+import { auth, setSignedInHandler } from './auth'
 import { refreshPush } from './push'
 import { loadIssues } from './issues'
 import './styles.css'
@@ -41,9 +42,16 @@ router.beforeEach((to) => (to.name === 'day' && !/^\d{4}-\d{2}-\d{2}$/.test(to.p
 applyTheme()
 createApp(App).use(router).mount('#app')
 
+// after signing in (on the sign-in screen, or again after a session expired): sync, issues, push
+const swReady = 'serviceWorker' in navigator && window.isSecureContext && import.meta.env.PROD
+setSignedInHandler(async () => {
+  await resumeSync()
+  loadIssues()
+  if (swReady) refreshPush().catch(() => {})
+})
 // sync with the server (no-op without one), then the service worker for offline + push
-startSync()
-loadIssues() // issue counts for the sidebar; also sends reports queued while offline
-if ('serviceWorker' in navigator && window.isSecureContext && import.meta.env.PROD) {
-  navigator.serviceWorker.register('/sw.js').then(() => refreshPush()).catch((e) => console.warn('service worker', e))
-}
+if (swReady) navigator.serviceWorker.register('/sw.js').catch((e) => console.warn('service worker', e))
+startSync().then(() => {
+  if (auth.status === 'signed-in' || auth.status === 'none') loadIssues() // issue counts; also sends reports queued offline
+  if (auth.status === 'signed-in' && swReady) navigator.serviceWorker.ready.then(() => refreshPush()).catch(() => {})
+})

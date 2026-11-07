@@ -5,6 +5,27 @@ import { state, ui, toggleTheme, resetDemo, toast, normalizeState } from '../sto
 import { sync, pull, deviceName, setDeviceName } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
 import { rhythm, wallMin } from '../../server/pomodoro.mjs'
+import { auth, signOut, changePassword, deleteAccount, rename } from '../auth'
+
+/* ── account ── */
+const acctName = ref(auth.user?.name ?? '')
+const saveAcctName = async () => { try { await rename(acctName.value); toast('Name saved') } catch (e) { toast(e.message) } }
+const pw = ref({ current: '', next: '' })
+async function savePassword() {
+  try { await changePassword(pw.value.current, pw.value.next); pw.value = { current: '', next: '' }; toast('Password changed — your other devices must sign in again') } catch (e) { toast(e.message) }
+}
+async function logOut() {
+  await pull() // saves unsynced edits first
+  if (['offline', 'error'].includes(sync.status) && !confirm('Some changes on this device are not saved to the server yet and will be lost. Sign out anyway?')) return
+  const endpoint = push.endpoint
+  if (push.subscribed) await disablePush().catch(() => {}) // this device stops getting your notifications
+  await signOut(endpoint)
+}
+const delPw = ref('')
+async function removeAccount() {
+  if (!confirm(`Delete the account ${auth.user?.email} and its whole planner on the server? This can't be undone. Export your data first if you want a copy.`)) return
+  try { await deleteAccount(delPw.value) } catch (e) { toast(e.message) }
+}
 
 /* ── data ── */
 function exportJson() {
@@ -62,6 +83,38 @@ const reload = () => window.location.reload()
 
 <template>
   <div class="settings">
+    <!-- account -->
+    <section v-if="auth.user" class="panel">
+      <div class="panel-h"><span class="icon sm">account_circle</span><h2>Account</h2><span class="spacer"></span>
+        <span v-if="auth.user.role === 'admin'" class="chip goal">ADMIN</span></div>
+      <div class="panel-b col small">
+        <div class="row wrap">
+          <span class="muted">Signed in as</span><b class="mono">{{ auth.user.email }}</b>
+          <span class="spacer"></span>
+          <button class="btn" @click="logOut"><span class="icon sm">logout</span>Sign out</button>
+        </div>
+        <div class="row wrap">
+          <label class="field"><span>Name</span><input v-model="acctName" class="input" maxlength="80" @keydown.enter="saveAcctName" /></label>
+          <button class="btn acct-btn" @click="saveAcctName">Save name</button>
+        </div>
+        <details class="phone-help">
+          <summary>Change password</summary>
+          <form class="row wrap" @submit.prevent="savePassword">
+            <label class="field"><span>Current password</span><input v-model="pw.current" class="input" type="password" autocomplete="current-password" required /></label>
+            <label class="field"><span>New password (8+)</span><input v-model="pw.next" class="input" type="password" autocomplete="new-password" minlength="8" required /></label>
+            <button class="btn primary acct-btn" type="submit">Change password</button>
+          </form>
+        </details>
+        <details class="phone-help">
+          <summary class="danger">Delete account</summary>
+          <p class="tiny muted">Removes your account, planner, snapshots and notification devices from the server. Issues you reported stay, without your name.</p>
+          <form class="row wrap" @submit.prevent="removeAccount">
+            <label class="field"><span>Password</span><input v-model="delPw" class="input" type="password" autocomplete="current-password" required /></label>
+            <button class="btn danger-ghost acct-btn" type="submit"><span class="icon sm">delete_forever</span>Delete my account</button>
+          </form>
+        </details>
+      </div>
+    </section>
     <!-- install -->
     <section class="panel">
       <div class="panel-h"><span class="icon sm">install_mobile</span><h2>Install on your phone</h2><span class="spacer"></span>
@@ -193,7 +246,7 @@ const reload = () => window.location.reload()
           <button class="btn" :disabled="sync.status === 'local'" @click="pull"><span class="icon sm">refresh</span>Sync now</button>
           <button v-if="sync.status === 'signed-out'" class="btn primary" @click="reload">Reload to sign in</button>
         </div>
-        <p class="tiny muted">Every change is saved to the server within a couple of seconds and shows up on your other devices. If two devices edit at once, the latest edit wins and the server keeps a backup.</p>
+        <p class="tiny muted">Every change is saved to the server within a couple of seconds and shows up on your other devices. If two devices edit at once, both edits are merged (a clash on the same field goes to the newest edit), and the server keeps hourly snapshots of your planner.</p>
       </div>
     </section>
 
@@ -238,5 +291,7 @@ const reload = () => window.location.reload()
 .devs { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border); padding-top: 10px; }
 .dev { gap: 8px; padding: 4px 0; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.acct-btn { align-self: flex-end; }
+.danger { color: var(--danger); }
 @media (max-width: 700px) { .steps, .grid { grid-template-columns: 1fr; } }
 </style>

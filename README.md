@@ -4,10 +4,11 @@ A Vue 3 + Vite prototype of the Life Console spec (`../stitch_new_project_worksp
 
 ```bash
 npm install
-npm run dev:server   # API + push scheduler on :8787 (data in ./.data)
+cp .env.example .env # point DATABASE_URL at a Postgres (see docs/OPERATIONS.md §7)
+npm run dev:server   # API + push scheduler on :8787
 npm run dev          # app on http://localhost:5173 (proxies /api to :8787)
 ```
-Without the server the app still runs: sync stays off and data lives in the browser.
+Without the server the app still runs: sync stays off and data lives in the browser. **Host your own:** `cp .env.example .env && docker compose up -d`. See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md).
 
 ## What's in it
 | Screen | Route | Works |
@@ -60,7 +61,7 @@ Anything not given to a day stays in the backlog. **Estimate − / +** changes t
 - **Schedule:** drag a todo from any list onto a timeline to give it a start time.
 
 ## Notes
-- Data lives in `localStorage`. The demo data is generated relative to the current week. Use Settings to reset, export or import it.
+- **Accounts:** with a server, everyone signs in (email + password); each account has its own planner. Settings → Account has sign out, change password and delete account. Signing out removes the planner copy from that browser. A new account starts with the demo planner (generated relative to the current week); Settings → Data resets, exports or imports it.
 - Workload is the sum of the todo estimates scheduled on that day. Fixed time blocks are calendar items and don't count.
 - Code layout: `src/store.js` (state, seed data, helpers), `src/components/*`, `src/views/*`.
 
@@ -81,7 +82,7 @@ The planner document carries `schemaVersion`. `migrateDoc()` in `src/store.js` u
 
 ## Phone app, sync and notifications
 - **Install** (needs HTTPS): on iPhone use Safari → Share → *Add to Home Screen*; on Android use Chrome → *Install app*. Then go to Settings → Notifications → *Turn on for this device*. iOS needs 16.4+ and only delivers push to Home Screen apps.
-- **Sync:** the planner is one document on the server (`/api/state`, versioned). Devices push edits after about 1.5s and pull every 30s, on focus and when back online. Conflicts are three-way merged per record and field (`src/merge.js`); only clashes on the same field go to the newest edit, and the server keeps backups of overwritten versions. A device with its own data asks once whether to use the server's copy or its own.
+- **Sync:** each account's planner is one document on the server (`/api/state`, versioned, snapshotted hourly). Devices push edits after about 1.5s and pull every 30s, on focus and when back online. Conflicts are three-way merged per record and field (`src/merge.js`); only clashes on the same field go to the newest edit, and the server keeps backups of overwritten versions. A device with its own data asks once whether to use the server's copy or its own.
 - **Notifications** (server scheduler, `server/schedule.mjs`, in the timezone of the device you last used):
   - **Blocks and tasks:** N min before each block or timed task starts, plus *Time's up* when a timed task ends, with a **Mark done** action.
   - **Deadlines:** 1 day and 1 hour before, and at the due time.
@@ -91,7 +92,7 @@ The planner document carries `schemaVersion`. `migrateDoc()` in `src/store.js` u
 
   Each kind can be toggled, and its times set, in Settings.
 - **No sound or vibration?** The phone decides that, not the app, and Android often files a new site's notifications as *Silent*. Long-press a Life Console notification and choose *Alerting*, or go to Android Settings → Notifications → App notifications → Life Console (or Chrome) → the site's category → turn on Sound, Vibration and Pop on screen. Also check the site is *Allowed* in Chrome → Site settings → Notifications, the phone isn't on Mute/Do Not Disturb, and battery use is *Unrestricted*. On iPhone: Settings → Notifications → Life Console → Sounds and Banners on. The same steps are in Settings → Notifications → *Test arrives silently, or not at all?*
-- **Server** (`server/`): plain Node `http` plus `web-push`. Data, subscriptions and VAPID keys live in `DATA_DIR` (`/data`, a Docker volume).
+- **Server** (`server/`): plain Node `http`, PostgreSQL via Drizzle ORM, and `web-push`. Accounts, planners, snapshots, push devices, VAPID keys and the issue log are all in the database.
 
 ## Working on the code
 New to the codebase (human or AI agent)? Start with **[CLAUDE.md](CLAUDE.md)**: project map, data model, rules for changing the data shape, conventions, how to verify changes, and known gotchas.

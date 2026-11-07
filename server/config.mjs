@@ -1,0 +1,35 @@
+// All server settings come from the environment (see .env.example for the documented list).
+const env = process.env
+const bool = (v, d = false) => (v === undefined || v === '' ? d : /^(1|true|yes|on)$/i.test(v))
+const num = (v, d) => (Number.isFinite(Number(v)) && v !== '' && v !== undefined ? Number(v) : d)
+
+export function loadConfig(over = {}) {
+  const e = { ...env, ...over }
+  const appUrl = (e.APP_URL || '').replace(/\/$/, '')
+  const cfg = {
+    port: num(e.PORT, 80),
+    databaseUrl: e.DATABASE_URL || '',
+    appUrl, // public address, e.g. https://life-console.example.com (links in emails, cookie Secure flag, Origin check)
+    dist: e.DIST || '',
+    tickMs: num(e.TICK_MS, 30000),
+    pushDryRun: bool(e.PUSH_DRY_RUN),
+    outbox: e.PUSH_OUTBOX || '', // with PUSH_DRY_RUN: append dry-run pushes to this JSONL file
+    vapidSubject: e.VAPID_SUBJECT || (appUrl.startsWith('https://') ? appUrl : 'mailto:admin@localhost'), // web-push needs https: or mailto:
+    vapidPublicKey: e.VAPID_PUBLIC_KEY || '',
+    vapidPrivateKey: e.VAPID_PRIVATE_KEY || '',
+    signups: (e.SIGNUPS || 'open').toLowerCase() === 'closed' ? 'closed' : 'open',
+    adminEmails: (e.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+    sessionDays: num(e.SESSION_DAYS, 90),
+    cookieSecure: bool(e.COOKIE_SECURE, appUrl.startsWith('https://')),
+    trustProxy: bool(e.TRUST_PROXY), // take the client IP from CF-Connecting-IP / X-Forwarded-For (rate limits)
+    maxStateBytes: num(e.MAX_STATE_BYTES, 4 * 1024 * 1024),
+    revisionEveryMin: num(e.REVISION_EVERY_MIN, 60), // snapshot a planner at most this often while it changes
+    revisionsKeep: num(e.REVISIONS_KEEP, 200), // per user
+    backupDir: e.BACKUP_DIR || '', // pre-migration pg_dump goes here (empty = skip)
+    smtpUrl: e.SMTP_URL || '', // e.g. smtps://user:pass@smtp.example.com:465 — enables "Forgot password"
+    mailFrom: e.MAIL_FROM || 'Life Console <no-reply@localhost>',
+    skipMigrations: bool(e.SKIP_MIGRATIONS),
+  }
+  if (!cfg.databaseUrl) throw new Error('DATABASE_URL is required (e.g. postgres://user:pass@localhost:5432/life_console)')
+  return cfg
+}

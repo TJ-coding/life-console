@@ -1,11 +1,10 @@
-# Build on every push; on main, deploy to Dokploy (only reachable over NetBird).
+# Every push / PR: tests against a real PostgreSQL, build, and a smoke test of the full compose stack,
+# including an UPGRADE test (previous release → this build on the same database).
+# On main: publish the image to GHCR (ghcr.io/<owner>/life-console:latest and :sha-<short>), then deploy.
 #
-# Required repository secrets:
-#   NETBIRD_SETUP_KEY        ephemeral, reusable NetBird setup key (group must be allowed to reach the Dokploy peer)
-#   DOKPLOY_API_KEY          Dokploy API key (Settings → Profile → API/CLI)
-# Required repository variables:
-#   DOKPLOY_URL              e.g. http://dokpoly.netbird.cloud:3000
-#   DOKPLOY_APPLICATION_ID   id of the life-console application in Dokploy
+# Deploy target (repository variables/secrets; the deploy job is skipped until they're set):
+#   DOKPLOY_URL (var)  ·  DOKPLOY_COMPOSE_ID (var, preferred) or DOKPLOY_APPLICATION_ID (var)
+#   DOKPLOY_API_KEY (secret)  ·  NETBIRD_SETUP_KEY (secret, only if Dokploy is reachable over NetBird only)
 name: build-and-deploy
 
 on:
@@ -18,75 +17,117 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/life-console
+
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
+        with: { node-version: 22, cache: npm }
       - run: npm ci --no-audit --no-fund
-      - run: npm run build
-      - name: Build the Docker image (same Dockerfile Dokploy uses)
-        run: docker build -t life-console:ci .
-      - name: Smoke-test the container (app, sync API, push key)
+      - name: Migrations match the schema (forgot `npm run db:generate`?)
         run: |
-          docker run -d --name lc -p 8080:80 life-console:ci
-          for i in $(seq 1 20); do curl -fs localhost:8080/api/health && break; sleep 1; done
+          npx drizzle-kit generate --config drizzle.config.mjs
+          git status --porcelain server/db/migrations | tee /dev/stderr | (! grep .)
+          npx drizzle-kit check --config drizzle.config.mjs
+      - name: API tests (auth, isolation, conflicts, schema guard, scheduler with two instances)
+        run: npm test
+        env: { TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres }
+      - run: npm run build
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t life-console:ci .
+      - name: Smoke test + upgrade test with docker compose
+        env:
+          POSTGRES_PASSWORD: ci${{ github.run_id }}
+          APP_URL: http://localhost:8080
+        run: |
+          set -eu
+          wait_healthy() { for i in $(seq 1 60); do curl -fs localhost:8080/api/health >/dev/null && return 0; sleep 2; done; docker compose logs app; return 1; }
+          # 1. start from the previous release if there is one, so we test the upgrade path real users take
+          if docker pull "$IMAGE:latest"; then FROM="$IMAGE"; FROM_TAG=latest; else FROM=life-console; FROM_TAG=ci; fi
+          LC_IMAGE=$FROM LC_VERSION=$FROM_TAG docker compose up -d --no-build db app
+          wait_healthy
+          curl -fs -c jar -H 'Content-Type: application/json' -d '{"email":"ci@example.com","password":"ci password"}' localhost:8080/api/auth/signup | grep -q '"admin"'
+          curl -fs -b jar -X PUT -H 'Content-Type: application/json' -d '{"state":{"schemaVersion":2,"todos":[{"id":"T-1","title":"survives upgrade"}]},"baseVersion":0}' localhost:8080/api/state | grep -q '"version":1'
+          # 2. roll the new build onto the same database
+          LC_IMAGE=life-console LC_VERSION=ci docker compose up -d --no-build app
+          sleep 3; wait_healthy
           curl -fs localhost:8080/ | grep -q '<title>Life Console'
           curl -fs localhost:8080/manifest.webmanifest | grep -q '"standalone"'
-          curl -fs localhost:8080/api/push/key | grep -q publicKey
-          curl -fs -X PUT localhost:8080/api/state -H 'Content-Type: application/json' -d '{"state":{"todos":[]},"baseVersion":0}' | grep -q '"version":1'
-          docker logs lc
+          curl -fs -b jar localhost:8080/api/state | grep -q 'survives upgrade'
+          curl -fs -b jar localhost:8080/api/push/key | grep -q publicKey
+          # 3. backups and the admin CLI work inside the image
+          LC_IMAGE=life-console LC_VERSION=ci docker compose exec -T app node server/cli.mjs backup
+          LC_IMAGE=life-console LC_VERSION=ci docker compose exec -T app node server/cli.mjs users | grep -q ci@example.com
+          docker compose logs app | tail -20
+          docker compose down -v
+      - name: Publish to GHCR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          SHA=sha-$(git rev-parse --short=7 HEAD)
+          for t in latest "$SHA"; do docker tag life-console:ci "$IMAGE:$t"; docker push "$IMAGE:$t"; done
+          echo "Published $IMAGE:$SHA" >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
-    needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: image
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DOKPLOY_URL != ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       DOKPLOY_URL: ${{ vars.DOKPLOY_URL }}
+      COMPOSE_ID: ${{ vars.DOKPLOY_COMPOSE_ID }}
       APP_ID: ${{ vars.DOKPLOY_APPLICATION_ID }}
       API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
       NB_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}
     steps:
       - name: Check configuration
         run: |
-          missing=""
-          [ -n "$DOKPLOY_URL" ] || missing="$missing DOKPLOY_URL(variable)"
-          [ -n "$APP_ID" ]      || missing="$missing DOKPLOY_APPLICATION_ID(variable)"
-          [ -n "$API_KEY" ]     || missing="$missing DOKPLOY_API_KEY(secret)"
-          [ -n "$NB_KEY" ]      || missing="$missing NETBIRD_SETUP_KEY(secret)"
-          if [ -n "$missing" ]; then echo "::error::Missing:$missing"; exit 1; fi
+          [ -n "$API_KEY" ] || { echo "::error::Missing DOKPLOY_API_KEY secret"; exit 1; }
+          [ -n "$COMPOSE_ID$APP_ID" ] || { echo "::error::Set DOKPLOY_COMPOSE_ID (or DOKPLOY_APPLICATION_ID)"; exit 1; }
 
       - name: Join NetBird
+        if: env.NB_KEY != ''
         run: |
           curl -fsSL https://pkgs.netbird.io/install.sh | sh
           sudo netbird up --setup-key "$NB_KEY" --hostname "gh-actions-${{ github.run_id }}"
-          # wait until the Dokploy API answers over the mesh
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$DOKPLOY_URL/api/settings.health" || true)
             if [ "$code" != "000" ]; then echo "Dokploy reachable (HTTP $code)"; exit 0; fi
             sleep 2
           done
-          sudo netbird status -d || true
           echo "::error::Dokploy not reachable at $DOKPLOY_URL over NetBird"; exit 1
 
       - name: Trigger Dokploy deploy
         run: |
-          curl -fsS -X POST "$DOKPLOY_URL/api/application.deploy" \
-            -H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
-            -d "{\"applicationId\":\"$APP_ID\"}"
-          echo
+          if [ -n "$COMPOSE_ID" ]; then EP=compose.deploy; BODY="{\"composeId\":\"$COMPOSE_ID\"}"; else EP=application.deploy; BODY="{\"applicationId\":\"$APP_ID\"}"; fi
+          curl -fsS -X POST "$DOKPLOY_URL/api/$EP" -H "x-api-key: $API_KEY" -H 'Content-Type: application/json' -d "$BODY"; echo
 
       - name: Wait for the deployment to finish
         run: |
-          # give Dokploy a moment to queue the build, then poll the application status
           sleep 10
           for i in $(seq 1 90); do
-            status=$(curl -fsS "$DOKPLOY_URL/api/application.one?applicationId=$APP_ID" -H "x-api-key: $API_KEY" | jq -r '.applicationStatus')
+            if [ -n "$COMPOSE_ID" ]; then
+              status=$(curl -fsS "$DOKPLOY_URL/api/compose.one?composeId=$COMPOSE_ID" -H "x-api-key: $API_KEY" | jq -r '.composeStatus')
+            else
+              status=$(curl -fsS "$DOKPLOY_URL/api/application.one?applicationId=$APP_ID" -H "x-api-key: $API_KEY" | jq -r '.applicationStatus')
+            fi
             echo "status: $status"
             case "$status" in
               done)  echo "Deployed ✓"; exit 0 ;;
@@ -97,5 +138,5 @@ jobs:
           echo "::error::Timed out waiting for Dokploy"; exit 1
 
       - name: Leave NetBird
-        if: always()
+        if: always() && env.NB_KEY != ''
         run: sudo netbird down || true

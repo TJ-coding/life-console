@@ -9,6 +9,7 @@
 import { reactive, watch, nextTick } from 'vue'
 import { state, normalizeState, toast, hadLocalData, migrateDoc, SCHEMA_VERSION } from './store'
 import { merge3 } from './merge'
+import { auth, bindUser } from './auth'
 
 const K = { base: 'life-console/sync-base', version: 'life-console/sync-version', dirty: 'life-console/sync-dirty', edited: 'life-console/sync-edited', device: 'life-console/device' }
 const ls = {
@@ -41,6 +42,8 @@ let pushTimer = null
 let busy = false
 
 class AuthError extends Error {}
+/** Not syncing in these states (no server, waiting for a choice, outdated code, signed out). */
+const SKIP = ['local', 'choose', 'outdated', 'signed-out']
 /** This tab's build = its hashed entry script (matches the server's `build` when up to date). */
 const MY_BUILD = (document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src') || '').split('/').pop() || 'dev'
 const checkBuild = (h) => { if (h?.build && MY_BUILD !== 'dev' && h.build !== 'dev' && h.build !== MY_BUILD) sync.outdated = true }
@@ -52,7 +55,8 @@ function tooNew(doc) {
 /** fetch JSON from our API; detect a Cloudflare Access login redirect as "signed out". */
 async function call(path, opts = {}) {
   const res = await fetch(`/api${path}`, { redirect: 'manual', credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, ...opts })
-  if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) throw new AuthError('signed out')
+  if (res.type === 'opaqueredirect') throw Object.assign(new AuthError('signed out'), { proxy: true }) // a login proxy (e.g. Cloudflare Access) in front
+  if (res.status === 401) throw new AuthError('signed out')
   const ct = res.headers.get('content-type') || ''
   if (!ct.includes('application/json')) throw new Error(res.status === 404 ? 'no-server' : `HTTP ${res.status}`)
   return { status: res.status, body: await res.json() }
@@ -101,14 +105,18 @@ async function applyRemote(remote) {
   applying = false
 }
 function fail(err) {
-  if (err instanceof AuthError) { sync.status = 'signed-out'; sync.message = 'Sign-in expired — reload to sign in again' }
+  if (err instanceof AuthError) {
+    sync.status = 'signed-out'
+    sync.message = err.proxy ? 'Sign-in expired — reload to sign in again' : 'Signed out — sign in to sync'
+    if (!err.proxy) auth.status = 'signed-out' // shows the sign-in screen; unsaved edits stay on this device
+  }
   else if (!navigator.onLine || err instanceof TypeError) { sync.status = 'offline'; sync.message = 'Offline — changes are kept and will sync' }
   else { sync.status = 'error'; sync.message = err.message }
 }
 
 async function pushNow(force = false) {
   clearTimeout(pushTimer)
-  if (!dirty || busy || ['local', 'choose', 'outdated'].includes(sync.status)) return
+  if (!dirty || busy || SKIP.includes(sync.status)) return
   busy = true
   sync.status = 'syncing'
   try {
@@ -135,7 +143,7 @@ async function pushNow(force = false) {
 const schedulePush = () => { clearTimeout(pushTimer); pushTimer = setTimeout(() => pushNow(), 1500) }
 
 export async function pull() {
-  if (['local', 'choose', 'outdated'].includes(sync.status) || busy) return
+  if (SKIP.includes(sync.status) || busy) return
   if (dirty) return pushNow()
   try {
     const r = await call(`/state?since=${sync.version}`)
@@ -195,16 +203,40 @@ export async function chooseSync(which) {
   }
 }
 
+/**
+ * Connect to the server: no server → local-only mode; signed out → the sign-in screen (auth.status);
+ * signed in → reconcile and keep syncing. `resumeSync()` runs again after every sign-in.
+ */
 export async function startSync() {
   try {
-    checkBuild((await call('/health')).body)
+    const h = (await call('/health')).body
+    checkBuild(h)
+    auth.signups = h.auth?.signups ?? 'open'
+    auth.passwordReset = !!h.auth?.passwordReset
   } catch (err) {
     if (err instanceof AuthError) { fail(err); return }
+    auth.status = 'none'
     sync.status = 'local' // no server: local-only mode (e.g. `npm run dev` without the API)
     sync.message = 'Not connected to a server — data stays in this browser'
     return
   }
+  try {
+    const me = await call('/auth/me')
+    if (!bindUser(me.body.user)) return // another account's data was here: wiped, reloading
+  } catch (err) {
+    fail(err)
+    return
+  }
+  await resumeSync()
+}
+
+let started = false
+export async function resumeSync() {
+  sync.status = 'syncing'
+  sync.message = ''
   try { await reconcile() } catch (err) { fail(err) }
+  if (started) return
+  started = true
 
   watch(state, () => {
     if (applying) return
@@ -221,9 +253,9 @@ export async function startSync() {
   window.addEventListener('online', () => pull())
   // phones suspend apps without warning: flush unsaved edits when the page is hidden or closed
   const flush = () => {
-    if (!dirty || sync.status === 'local') return
+    if (!dirty || SKIP.includes(sync.status)) return
     const body = JSON.stringify({ state, baseVersion: sync.version, device: deviceName() })
-    if (body.length < 60000) fetch('/api/state', { method: 'PUT', body, keepalive: true, headers: { 'Content-Type': 'application/json' } }).catch(() => {})
+    if (body.length < 60000) fetch('/api/state', { method: 'PUT', body, keepalive: true, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }).catch(() => {})
     // not awaited: if it conflicted, the next start merges; if it landed, the next start sees it
   }
   window.addEventListener('pagehide', flush)

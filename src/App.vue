@@ -13,6 +13,8 @@ import SelectionBar from './components/SelectionBar.vue'
 import { issues, openIssueDialog, openCount as openIssueCount } from './issues'
 import { useNow } from './now'
 import { sync, chooseSync } from './sync'
+import { auth } from './auth'
+import AuthScreen from './components/AuthScreen.vue'
 
 const SYNC_TEXT = { outdated: 'RELOAD', choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', error: 'ERROR' }
 const SYNC_ICON = { outdated: 'system_update', choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', error: 'error' }
@@ -42,6 +44,8 @@ const clock = computed(() => {
 })
 const T = computed(() => todayISO())
 const reload = () => window.location.reload()
+/** Nobody signed in (or a password-reset link is open): the sign-in screen replaces the app. */
+const showAuth = computed(() => auth.status === 'signed-out' || !!auth.resetToken)
 const openCount = computed(() => state.todos.filter((t) => !t.done && isLeaf(t)).length)
 const overdueCount = computed(() => { void ui.now.getMinutes(); return state.deadlines.filter(isOverdue).length })
 const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name === 'day' ? 'today' : route.name === 'plans' ? 'strategy' : route.name))
@@ -62,6 +66,7 @@ function openPalette(mode) {
 let gPending = false
 let gTimer
 function onKey(e) {
+  if (showAuth.value) return // the sign-in screen is up: no app shortcuts
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
     ui.palette ? (ui.palette = false) : openPalette('cmd')
@@ -168,7 +173,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="app" :class="{ bare: route.meta.bare, 'side-hidden': !sideOpen }">
+  <AuthScreen v-if="showAuth" />
+  <div v-else class="app" :class="{ bare: route.meta.bare, 'side-hidden': !sideOpen }">
     <aside v-if="!route.meta.bare" class="sidebar">
       <div class="brand">
         <span class="logo"><span class="icon">radar</span></span>

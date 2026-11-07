@@ -4,9 +4,12 @@
 import { computed, ref, onMounted } from 'vue'
 import { issues, loadIssues, updateIssue, deleteIssue, openIssueDialog, KINDS, STATUSES } from '../issues'
 import { toast } from '../store'
+import { auth, isAdmin } from '../auth'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
+// everyone sees their own reports; only admins (or local-only mode) change or delete them
+const admin = computed(() => isAdmin() || auth.status === 'none')
 const filter = ref('active') // active | fixed | wontfix | all
 const screen = ref('')
 const platform = ref('') // '' | mobile | web
@@ -83,9 +86,10 @@ async function remove(i) {
           <span class="grow ttl">{{ i.title }}</span>
           <span class="icon sm muted" :title="i.platform === 'mobile' ? 'Reported from mobile' : 'Reported from the web (desktop)'">{{ i.platform === 'mobile' ? 'smartphone' : 'computer' }}</span>
           <span class="mono tiny muted">{{ when(i.createdAt) }}</span>
-          <select :value="i.status" class="select mono small" @click.stop @change="setStatus(i, $event.target.value)">
+          <select v-if="admin" :value="i.status" class="select mono small" @click.stop @change="setStatus(i, $event.target.value)">
             <option v-for="s in STATUSES" :key="s" :value="s">{{ s }}</option>
           </select>
+          <span v-else class="mono tiny upper muted">{{ i.status }}</span>
         </div>
         <div v-if="expanded === i.id" class="more small">
           <p v-if="i.details" class="details">{{ i.details }}</p>
@@ -99,7 +103,8 @@ async function remove(i) {
             <span v-if="i.commit" class="mono tiny muted"> · {{ i.commit }}</span>
             <span v-if="i.resolvedAt" class="mono tiny muted"> · {{ when(i.resolvedAt) }}</span>
           </p>
-          <div class="row">
+          <div v-if="admin" class="row">
+            <span v-if="i.reporter" class="mono tiny muted">reported by {{ i.reporter }}</span>
             <span class="spacer"></span>
             <button class="btn sm danger-ghost" @click="remove(i)"><span class="icon sm">delete</span>Delete</button>
           </div>
