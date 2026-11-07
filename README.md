@@ -2,7 +2,7 @@
 
 **Know what to do right now.** An open-source, keyboard-first planner for your week, your deadlines and your goals. Use it free at [life-console.dev](https://life-console.dev), or run it on your own server.
 
-[Website](https://life-console.dev) · [Self-hosting](docs/SELF_HOSTING.md) · [User guide](docs/GUIDE.md) · [License: AGPL-3.0](LICENSE)
+[Website](https://life-console.dev) · [Self-hosting](docs/SELF_HOSTING.md) · [User guide](docs/GUIDE.md) · [License: AGPL-3.0](LICENSE) · [★ Star on GitHub](https://github.com/TJ-coding/life-console)
 
 ![Keyboard tour: Command Center, Plan week, Todos, Deadlines, Strategy and Focus mode, driven only by the keyboard](docs/media/tour.gif)
 
@@ -32,7 +32,7 @@ Every screen is described in the **[user guide](docs/GUIDE.md)**.
 
 ## Use it
 
-**Hosted:** open [life-console.dev](https://life-console.dev) and sign in with Google. It's free, with no ads, analytics or tracking ([privacy policy](https://life-console.dev/privacy)).
+**Hosted:** open [life-console.dev](https://life-console.dev) and sign in with Google. It's free, with no ads ([privacy policy](https://life-console.dev/privacy)).
 
 **Self-hosted:** you need Docker with the compose plugin and about 300 MB of RAM.
 
