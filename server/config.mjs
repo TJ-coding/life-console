@@ -34,6 +34,9 @@ export function loadConfig(over = {}) {
     googleClientId: e.GOOGLE_CLIENT_ID || '',
     googleClientSecret: e.GOOGLE_CLIENT_SECRET || '',
     googleAuthUrl: e.GOOGLE_AUTH_URL || 'https://accounts.google.com/o/oauth2/v2/auth', // overridable for tests
+    // public landing page at / for visitors who aren't signed in, plus a search-engine-friendly robots.txt/sitemap.
+    // Off (the default) keeps a self-hosted server private: / is the app and robots.txt asks crawlers to stay out.
+    landing: bool(e.LANDING),
     googleTokenUrl: e.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token',
   }
   cfg.google = !!(cfg.googleClientId && cfg.googleClientSecret)

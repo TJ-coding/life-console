@@ -38,6 +38,7 @@ services:
       APP_URL: ${APP_URL:-http://localhost:8080}
       SIGNUPS: ${SIGNUPS:-open}
       AUTH_PASSWORD: ${AUTH_PASSWORD:-on}
+      LANDING: ${LANDING:-off}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}

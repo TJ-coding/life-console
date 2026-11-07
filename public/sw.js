@@ -22,7 +22,8 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     // network first so new deploys show up; fall back to the cached shell offline
     e.respondWith(fetch(req).then((res) => {
-      if (cacheable(res)) caches.open(CACHE).then((c) => c.put('/', res.clone()))
+      // the landing page (signed-out visitors at /) is not the app shell: keep the cached app for offline use
+      if (cacheable(res) && !res.headers.get('X-LC-Page')) caches.open(CACHE).then((c) => c.put('/', res.clone()))
       return res
     }).catch(() => caches.match('/')))
     return
