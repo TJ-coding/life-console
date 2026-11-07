@@ -227,12 +227,14 @@ function toggleLock(n) {
 const live = computed(() => (drag.value?.moved && !drag.value.locked ? drag.value : null))
 const shift = (n) => (live.value?.id === n.id ? live.value.px : 0)
 const metaOf = (n) => (live.value?.id === n.id ? (live.value.to ? when(live.value.to) : nodeView(n).meta) : nodeView(n).meta)
-/* a dated card is selected: other dates read relative to it ("+16d" after it, "−4d" before it) instead of to today */
+/* other dates read relative to an anchor ("+16d" after it, "−4d" before it) instead of to today: the card being
+   dragged, at the date it would drop on (so you see the gaps you'd get), else the selected dated card */
 const anchor = computed(() => {
+  if (live.value) return live.value.to ? { id: live.value.id, date: live.value.to } : null
   const n = props.selected && graph.value.nodes.get(props.selected)
-  return n?.end && !live.value ? { id: n.id, date: n.end } : null
+  return n?.end ? { id: n.id, date: n.end } : null
 })
-const offset = (iso) => { const d = diffDays(anchor.value.date, iso); return d === 0 ? 'same day' : d > 0 ? `+${d}d` : `−${-d}d` }
+const offset = (iso) => { const d = diffDays(anchor.value.date, iso); return d === 0 ? '±0d' : d > 0 ? `+${d}d` : `−${-d}d` }
 const relMeta = (n) => (anchor.value && n.end && n.id !== anchor.value.id ? `${n.end.slice(5).replace('-', '/')} · ${offset(n.end)}` : null)
 const markTitle = (m) => (anchor.value ? `${m.title}\n${offset(m.date)} from ${anchor.value.id}` : m.title)
 const open = (n) => { if (n.kind !== 'vision' && !n.ext) emit('open', n.id) }
