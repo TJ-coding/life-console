@@ -15,13 +15,14 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull(), // stored lower-cased
   name: text('name').notNull().default(''),
-  passwordHash: text('password_hash').notNull(),
+  passwordHash: text('password_hash').notNull(), // '' = no password (signs in with Google only)
+  googleSub: text('google_sub'), // Google account id ("sub"), set once linked
   role: text('role').notNull().default('user'), // user | admin
   disabled: boolean('disabled').notNull().default(false),
   createdAt: created(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
   lastLoginAt: ts('last_login_at'),
-}, (t) => [uniqueIndex('users_email_key').on(t.email)])
+}, (t) => [uniqueIndex('users_email_key').on(t.email), uniqueIndex('users_google_sub_key').on(t.googleSub)])
 
 /** Browser sessions: the cookie holds a random token, the table holds only its SHA-256. */
 export const sessions = pgTable('sessions', {

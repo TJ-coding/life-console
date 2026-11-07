@@ -29,7 +29,16 @@ export function loadConfig(over = {}) {
     smtpUrl: e.SMTP_URL || '', // e.g. smtps://user:pass@smtp.example.com:465 — enables "Forgot password"
     mailFrom: e.MAIL_FROM || 'Life Console <no-reply@localhost>',
     skipMigrations: bool(e.SKIP_MIGRATIONS),
+    // sign-in methods: email + password (default on), and/or Google (on when a client id + secret are set)
+    passwordAuth: bool(e.AUTH_PASSWORD, true),
+    googleClientId: e.GOOGLE_CLIENT_ID || '',
+    googleClientSecret: e.GOOGLE_CLIENT_SECRET || '',
+    googleAuthUrl: e.GOOGLE_AUTH_URL || 'https://accounts.google.com/o/oauth2/v2/auth', // overridable for tests
+    googleTokenUrl: e.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token',
   }
+  cfg.google = !!(cfg.googleClientId && cfg.googleClientSecret)
+  if (cfg.google && !cfg.appUrl) throw new Error('GOOGLE_CLIENT_ID needs APP_URL (the redirect URL is APP_URL/api/auth/google/callback)')
+  if (!cfg.passwordAuth && !cfg.google) throw new Error('AUTH_PASSWORD=off needs Google sign-in (GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET), or nobody could sign in')
   if (!cfg.databaseUrl) throw new Error('DATABASE_URL is required (e.g. postgres://user:pass@localhost:5432/life_console)')
   return cfg
 }

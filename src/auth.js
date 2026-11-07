@@ -11,12 +11,22 @@ const ls = {
   del: (k) => { try { localStorage.removeItem(k) } catch { /* ignore */ } },
 }
 const resetFromHash = () => /^#\/reset\/([\w-]+)/.exec(location.hash)?.[1] ?? null
+/** A failed Google sign-in comes back as #/?auth_error=… : show it once on the sign-in screen, then tidy the URL. */
+function errorFromHash() {
+  const m = /[?&]auth_error=([^&]*)/.exec(location.hash)
+  if (!m) return ''
+  history.replaceState(null, '', location.pathname + '#/')
+  try { return decodeURIComponent(m[1]) } catch { return 'Sign-in failed' }
+}
 
 export const auth = reactive({
   status: 'unknown', // unknown | signed-in | signed-out | none (no server: local-only)
   user: null, // { id, email, name, role }
   signups: 'open',
   passwordReset: false,
+  password: true, // email + password sign-in offered by this server
+  google: false, // "Continue with Google" offered by this server
+  error: errorFromHash(),
   resetToken: resetFromHash(), // from a password-reset email link (#/reset/<token>)
 })
 export const isAdmin = () => auth.user?.role === 'admin'
@@ -62,6 +72,8 @@ async function finish(data) {
   await onSignedIn()
 }
 
+/** Full-page redirect: the server sends the browser to Google and back to #/ signed in (or with auth_error). */
+export const signInWithGoogle = () => { location.href = '/api/auth/google/start' }
 export const signIn = async (email, password) => finish(await api('POST', '/auth/login', { email, password }))
 export const signUp = async (email, password, name) => finish(await api('POST', '/auth/signup', { email, password, name }))
 export const requestReset = (email) => api('POST', '/auth/forgot', { email })
@@ -76,8 +88,8 @@ export async function signOut(endpoint) {
   location.replace(location.pathname + '#/')
   location.reload()
 }
-export async function deleteAccount(password) {
-  await api('DELETE', '/auth/me', { password })
+export async function deleteAccount(password, confirm) {
+  await api('DELETE', '/auth/me', { password, confirm })
   wipeLocalData()
   location.replace(location.pathname + '#/')
   location.reload()

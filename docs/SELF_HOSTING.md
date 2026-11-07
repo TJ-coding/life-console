@@ -39,10 +39,20 @@ All the settings are in [`.env.example`](../.env.example), with comments. These 
 | `SIGNUPS` | `open` | `closed`: only the admin CLI can create accounts. |
 | `ADMIN_EMAILS` | none | Emails that are always admin. |
 | `SMTP_URL`, `MAIL_FROM` | none | Turns on "Forgot password?" emails. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | none | Turns on "Continue with Google" (see below). |
+| `AUTH_PASSWORD` | `on` | `off` = Google only: no passwords are accepted or stored. |
 | `LC_VERSION` | `latest` | The image tag to run. Pin one for controlled updates. |
 | `BACKUP_INTERVAL_HOURS` / `BACKUP_KEEP_DAYS` | 24 / 14 | The schedule and retention of the backup job. |
 
 Advanced settings (set them under `app: environment:`): `SESSION_DAYS` (90), `MAX_STATE_BYTES` (4 MB per planner), `REVISION_EVERY_MIN` (60), `REVISIONS_KEEP` (200 per user), `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` (otherwise they're generated once and stored in the database).
+
+**Sign in with Google:**
+
+1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials), set up the *OAuth consent screen*: External, app name, support email, scopes `openid`, `email` and `profile`. Then press **Publish app**. These scopes don't need Google's review, and while the app is in *Testing* only listed test users can sign in.
+2. Go to *Credentials → Create credentials → OAuth client ID → Web application*. Under *Authorized redirect URIs*, add `<APP_URL>/api/auth/google/callback`, e.g. `https://planner.example.com/api/auth/google/callback`.
+3. Put the client ID and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, then run `docker compose up -d`.
+
+Existing accounts are linked by their (verified) email at their first Google sign-in. Add `AUTH_PASSWORD=off` to make Google the only way in. Each remaining password hash is then deleted at that user's next Google sign-in. Google sign-in works only on the `APP_URL` host, because the redirect URI is fixed.
 
 **Using Supabase or another managed Postgres:** drop the `db` service and set `DATABASE_URL` for `app` and `backup` to that database's connection string (Supabase: *Project Settings → Database → Connection string*, the **session** pooler or a direct connection, not the transaction pooler, because migrations use advisory locks). Nothing else changes.
 

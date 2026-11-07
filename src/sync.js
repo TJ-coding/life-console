@@ -213,6 +213,8 @@ export async function startSync() {
     checkBuild(h)
     auth.signups = h.auth?.signups ?? 'open'
     auth.passwordReset = !!h.auth?.passwordReset
+    auth.password = h.auth?.password !== false
+    auth.google = !!h.auth?.google
   } catch (err) {
     if (err instanceof AuthError) { fail(err); return }
     auth.status = 'none'

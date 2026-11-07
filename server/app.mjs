@@ -9,6 +9,7 @@ import { createPush } from './push.mjs'
 import { createIssues } from './issues.mjs'
 import { createScheduler } from './scheduler.mjs'
 import { createMailer } from './mail.mjs'
+import { createGoogle } from './google.mjs'
 import { settingsOf } from './schedule.mjs'
 
 const MIME = {
@@ -47,7 +48,8 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const planner = createPlanner(db, cfg)
   const push = await createPush(db, cfg, log)
   const issues = createIssues(db)
-  const mailer = createMailer(cfg, log)
+  const mailer = cfg.passwordAuth ? createMailer(cfg, log) : null
+  const google = cfg.google ? createGoogle(cfg) : null
   const limit = createLimiter()
   const scheduler = createScheduler({ db, planner, push, tickMs: cfg.tickMs, log })
   const appOrigin = cfg.appUrl ? new URL(cfg.appUrl).origin : null
@@ -73,6 +75,9 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     if (!/^application\/json\b/i.test(req.headers['content-type'] || '')) throw httpError(415, 'send application/json')
   }
 
+  const noPasswords = () => { if (!cfg.passwordAuth) throw httpError(403, 'Password sign-in is turned off on this server — continue with Google') }
+  const redirect = (res, location, cookies = []) => { res.writeHead(302, { Location: location, 'Cache-Control': 'no-store', 'Set-Cookie': cookies, ...SECURITY_HEADERS }); res.end() }
+
   async function signedIn(res, user, req, status = 200) {
     const { cookie } = await auth.startSession(user.id, req.headers['user-agent'], secureFor(req))
     return send(res, status, { user: publicUser(user) }, { 'Set-Cookie': cookie })
@@ -84,9 +89,28 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       case 'GET /api/health': {
         let dbOk = true
         try { await db.execute(sql`select 1`) } catch { dbOk = false }
-        return send(res, dbOk ? 200 : 503, { ok: dbOk, build: BUILD, time: new Date().toISOString(), auth: { signups: cfg.signups, passwordReset: !!mailer } })
+        return send(res, dbOk ? 200 : 503, { ok: dbOk, build: BUILD, time: new Date().toISOString(), auth: { signups: cfg.signups, passwordReset: !!mailer, password: cfg.passwordAuth, google: !!google } })
+      }
+      case 'GET /api/auth/google/start': {
+        if (!google) throw httpError(404, 'Google sign-in is not set up on this server')
+        limit(`google:${ip(req)}`, 60, 900000)
+        const s = google.start()
+        return redirect(res, s.location, [s.cookie])
+      }
+      case 'GET /api/auth/google/callback': {
+        if (!google) throw httpError(404, 'Google sign-in is not set up on this server')
+        try {
+          const u = await auth.googleSignIn(await google.finish(req, new URL(req.url, 'http://x').searchParams))
+          if (u.created) log(`[auth] new account via Google ${u.role === 'admin' ? '(admin) ' : ''}${u.id.slice(0, 8)}`)
+          const { cookie } = await auth.startSession(u.id, req.headers['user-agent'], secureFor(req))
+          return redirect(res, '/#/', [cookie, google.clearFlow()])
+        } catch (e) {
+          if (!e.status || e.status >= 500) log('[auth] google sign-in failed:', e.message)
+          return redirect(res, `/#/?auth_error=${encodeURIComponent(e.status && e.status < 500 ? e.message : 'Google sign-in failed — try again')}`, [google.clearFlow()])
+        }
       }
       case 'POST /api/auth/signup': {
+        noPasswords()
         limit(`signup:${ip(req)}`, 10, 3600000)
         if (cfg.signups === 'closed') throw httpError(403, 'Sign-ups are closed on this server')
         const b = await body(req)
@@ -95,6 +119,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         return signedIn(res, u, req, 201)
       }
       case 'POST /api/auth/login': {
+        noPasswords()
         const b = await body(req)
         const email = normEmail(b.email)
         limit(`login:${ip(req)}`, 30, 900000)
@@ -106,6 +131,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         return signedIn(res, u, req)
       }
       case 'POST /api/auth/forgot': {
+        noPasswords()
         if (!mailer) throw httpError(501, 'Password reset by email is not set up on this server — ask its admin')
         const b = await body(req)
         const email = normEmail(b.email)
@@ -121,6 +147,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         return send(res, 200, { ok: true }) // same answer either way: don't reveal which emails have accounts
       }
       case 'POST /api/auth/reset': {
+        noPasswords()
         limit(`reset:${ip(req)}`, 10, 3600000)
         const b = await body(req)
         const userId = await auth.useResetToken(b.token, b.password)
@@ -163,12 +190,16 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       case 'DELETE /api/auth/me': { // delete the account and everything in it
         const b = await body(req)
         limit(`delete:${uid}`, 5, 3600000)
-        if (!(await verifyPassword(String(b.password || ''), user.passwordHash))) throw httpError(401, 'Wrong password')
+        // accounts with a password confirm with it; Google-only accounts type their email instead
+        if (user.passwordHash ? !(await verifyPassword(String(b.password || ''), user.passwordHash)) : normEmail(b.confirm) !== user.email) {
+          throw httpError(401, user.passwordHash ? 'Wrong password' : 'Type your email exactly to confirm')
+        }
         await db.delete(users).where(eq(users.id, uid))
         log(`[auth] deleted account ${uid.slice(0, 8)}`)
         return send(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie(secureFor(req)) })
       }
       case 'POST /api/auth/password': {
+        noPasswords()
         const b = await body(req)
         limit(`password:${uid}`, 10, 3600000)
         if (!(await verifyPassword(String(b.current || ''), user.passwordHash))) throw httpError(401, 'Current password is wrong')

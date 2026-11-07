@@ -128,7 +128,7 @@ curl -s http://dokpoly.netbird.cloud/api/health      # "build" names the deploye
 | Setting | Value |
 |---|---|
 | Source | GitHub `TJ-coding/life-console`, branch `main`, compose path `./docker-compose.yml` |
-| Environment | `POSTGRES_PASSWORD` (hex), `APP_URL=https://life-console.tj-coding.uk`, `TRUST_PROXY=1`, `ADMIN_EMAILS=<owner email>`, `SIGNUPS=open` or `closed`, optionally `SMTP_URL`/`MAIL_FROM`, `LC_VERSION` (pin to roll back) |
+| Environment | `POSTGRES_PASSWORD` (hex), `APP_URL=https://life-console.tj-coding.uk`, `TRUST_PROXY=1`, `ADMIN_EMAILS=jinno.tomoyuki@gmail.com`, `SIGNUPS=open`, `LC_PORT=127.0.0.1:18080`, **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` + `AUTH_PASSWORD=off`** (the hosted service is Google-only: it stores no passwords), `LC_VERSION` (pin to roll back) |
 | Domains | `life-console.tj-coding.uk` → service `app`, port **8080**, HTTP · `dokpoly.netbird.cloud` → `app`, 8080 |
 | Auto deploy | Off (GitHub Actions triggers deploys) |
 
@@ -152,7 +152,7 @@ HTTPS is terminated by Cloudflare in front of the tunnel. The app listens on 808
 
 | Table | Contents |
 |---|---|
-| `users` | Email (lower-cased), name, scrypt password hash, role (`user`/`admin`), disabled flag |
+| `users` | Email (lower-cased), name, `google_sub` (linked Google account), scrypt password hash (`''` for Google-only accounts, the norm on the hosted service), role (`user`/`admin`), disabled flag |
 | `sessions` · `api_tokens` · `password_resets` | SHA-256 hashes of cookie sessions (90 days, sliding), script tokens, reset links (1 h) |
 | `planner_docs` | One row per user: `version`, `schema_version`, `state` (jsonb: the whole planner, the same JSON as before) |
 | `planner_revisions` | Snapshots: `periodic` (hourly while changing), `force`, `before-restore`, `import` |

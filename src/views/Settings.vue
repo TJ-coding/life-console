@@ -22,9 +22,10 @@ async function logOut() {
   await signOut(endpoint)
 }
 const delPw = ref('')
+const hasPw = computed(() => !!auth.user?.hasPassword)
 async function removeAccount() {
   if (!confirm(`Delete the account ${auth.user?.email} and its whole planner on the server? This can't be undone. Export your data first if you want a copy.`)) return
-  try { await deleteAccount(delPw.value) } catch (e) { toast(e.message) }
+  try { await (hasPw.value ? deleteAccount(delPw.value) : deleteAccount(undefined, delPw.value)) } catch (e) { toast(e.message) }
 }
 
 /* ── data ── */
@@ -90,6 +91,7 @@ const reload = () => window.location.reload()
       <div class="panel-b col small">
         <div class="row wrap">
           <span class="muted">Signed in as</span><b class="mono">{{ auth.user.email }}</b>
+          <span v-if="auth.user.google" class="tiny muted">with Google</span>
           <span class="spacer"></span>
           <button class="btn" @click="logOut"><span class="icon sm">logout</span>Sign out</button>
         </div>
@@ -97,7 +99,7 @@ const reload = () => window.location.reload()
           <label class="field"><span>Name</span><input v-model="acctName" class="input" maxlength="80" @keydown.enter="saveAcctName" /></label>
           <button class="btn acct-btn" @click="saveAcctName">Save name</button>
         </div>
-        <details class="phone-help">
+        <details v-if="auth.password && hasPw" class="phone-help">
           <summary>Change password</summary>
           <form class="row wrap" @submit.prevent="savePassword">
             <label class="field"><span>Current password</span><input v-model="pw.current" class="input" type="password" autocomplete="current-password" required /></label>
@@ -109,7 +111,8 @@ const reload = () => window.location.reload()
           <summary class="danger">Delete account</summary>
           <p class="tiny muted">Removes your account, planner, snapshots and notification devices from the server. Issues you reported stay, without your name.</p>
           <form class="row wrap" @submit.prevent="removeAccount">
-            <label class="field"><span>Password</span><input v-model="delPw" class="input" type="password" autocomplete="current-password" required /></label>
+            <label v-if="hasPw" class="field"><span>Password</span><input v-model="delPw" class="input" type="password" autocomplete="current-password" required /></label>
+            <label v-else class="field"><span>Type your email to confirm</span><input v-model="delPw" class="input" type="email" autocomplete="off" required /></label>
             <button class="btn danger-ghost acct-btn" type="submit"><span class="icon sm">delete_forever</span>Delete my account</button>
           </form>
         </details>

@@ -36,7 +36,7 @@ export function checkPassword(pw) {
   return ''
 }
 
-export const publicUser = (u) => u && { id: u.id, email: u.email, name: u.name, role: u.role, createdAt: u.createdAt }
+export const publicUser = (u) => u && { id: u.id, email: u.email, name: u.name, role: u.role, createdAt: u.createdAt, hasPassword: !!u.passwordHash, google: !!u.googleSub }
 
 export function createAuth(db, cfg) {
   const days = cfg.sessionDays
@@ -60,6 +60,33 @@ export function createAuth(db, cfg) {
     const [u] = await db.insert(users).values({
       email, name: String(name).trim().slice(0, 80), passwordHash: await hashPassword(password), role: role || (await roleFor(email)),
     }).returning()
+    return u
+  }
+
+  /**
+   * Sign in with a verified Google identity: the account linked to that Google id, else the account with
+   * the same email (linked now), else a new account (if sign-ups are open). With password sign-in off,
+   * any stored password hash is deleted: the server keeps no passwords at all.
+   */
+  async function googleSignIn({ sub, email, name }) {
+    let [u] = await db.select().from(users).where(eq(users.googleSub, sub)).limit(1)
+    if (!u) {
+      u = await findUserByEmail(email)
+      if (u?.googleSub && u.googleSub !== sub) throw httpError(409, 'This email is linked to a different Google account')
+      if (u) [u] = await db.update(users).set({ googleSub: sub, updatedAt: new Date() }).where(eq(users.id, u.id)).returning()
+    }
+    if (!u) {
+      if (cfg.signups === 'closed') throw httpError(403, 'Sign-ups are closed on this server')
+      ;[u] = await db.insert(users).values({ email, name, passwordHash: '', googleSub: sub, role: await roleFor(email) }).returning()
+      u.created = true
+    }
+    if (u.disabled) throw httpError(403, 'This account is disabled')
+    const set = {}
+    if (!cfg.passwordAuth && u.passwordHash) set.passwordHash = ''
+    if (!u.name && name) set.name = name
+    if (u.email !== email && !(await findUserByEmail(email))) set.email = email // the Google account's email changed
+    if (cfg.adminEmails.includes(email) && u.role !== 'admin') set.role = 'admin'
+    if (Object.keys(set).length) { const created = u.created; [u] = await db.update(users).set({ ...set, updatedAt: new Date() }).where(eq(users.id, u.id)).returning(); u.created = created }
     return u
   }
 
@@ -130,7 +157,7 @@ export function createAuth(db, cfg) {
     await db.delete(passwordResets).where(lt(passwordResets.expiresAt, new Date(Date.now() - 86400000)))
   }
 
-  return { findUserByEmail, createUser, startSession, clearCookie, identify, endSession, endOtherSessions, setPassword, createResetToken, useResetToken, createApiToken, purgeExpired }
+  return { findUserByEmail, createUser, googleSignIn, startSession, clearCookie, identify, endSession, endOtherSessions, setPassword, createResetToken, useResetToken, createApiToken, purgeExpired }
 }
 
 export function parseCookies(header = '') {
