@@ -35,7 +35,7 @@ function remove() {
         <label class="field"><span>Title</span><input v-model="b.title" class="input big" autofocus /></label>
         <div class="grid">
           <label class="field"><span>Date</span><input v-model="b.date" type="date" class="input mono" /></label>
-          <label class="field"><span>Link (goal / plan / course)</span><input v-model.trim="b.link" class="input mono" placeholder="EXP-MH, SP-01" /></label>
+          <label class="field"><span>Link (goal / plan / course)</span><input v-model.trim="b.link" class="input mono" placeholder="CASE1, SP-01" /></label>
           <label class="field"><span>Start</span><input v-model="b.start" type="time" step="900" class="input mono" /></label>
           <label class="field"><span>End</span><input v-model="b.end" type="time" step="900" class="input mono" /></label>
         </div>

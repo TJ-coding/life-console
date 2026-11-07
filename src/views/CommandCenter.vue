@@ -227,7 +227,7 @@ function quickAdd() {
         </div>
         <form class="qa" @submit.prevent="quickAdd">
           <span class="mono ok">+</span>
-          <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @EXP-MH p2`" />
+          <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @CASE1 p2`" />
         </form>
       </section>
 

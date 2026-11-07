@@ -133,7 +133,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
     <section class="main">
       <form class="qa" @submit.prevent="add">
         <span class="mono ok prompt">&gt;</span>
-        <input v-model="quick" class="mono grow" placeholder="Read chapter 3 #NLP-610 30m due:fri p2 @EXP-MH" />
+        <input v-model="quick" class="mono grow" placeholder="Read chapter 3 #UX-101 30m due:fri p2 @CASE1" />
         <button class="btn primary" type="submit"><span class="icon sm">add_task</span>Add to inbox <span class="kbd">↵</span></button>
       </form>
       <div v-if="quick" class="parser">
