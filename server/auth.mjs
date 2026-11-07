@@ -45,9 +45,10 @@ export function createAuth(db, cfg) {
   async function findUserByEmail(email) {
     return (await db.select().from(users).where(eq(users.email, normEmail(email))).limit(1))[0] ?? null
   }
-  /** Admins: emails in ADMIN_EMAILS, plus the very first account on a fresh install. */
+  /** Admins: the emails in ADMIN_EMAILS; only when that's empty, the very first account on a fresh install. */
   async function roleFor(email) {
     if (cfg.adminEmails.includes(email)) return 'admin'
+    if (cfg.adminEmails.length) return 'user' // a stranger who signs up first must not become admin
     const [{ n }] = await db.select({ n: sql`count(*)::int` }).from(users)
     return n === 0 ? 'admin' : 'user'
   }

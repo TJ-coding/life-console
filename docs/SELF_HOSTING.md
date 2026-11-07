@@ -13,7 +13,7 @@ sed -i.bak "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" 
 docker compose up -d
 ```
 
-Open **http://localhost:8080** and create an account. **The first account is the admin.** After that, set `SIGNUPS=closed` in `.env` (then `docker compose up -d`) if nobody else should sign up.
+Open **http://localhost:8080** and create an account. **The first account is the admin**, unless `ADMIN_EMAILS` is set, in which case only those emails are. After that, set `SIGNUPS=closed` in `.env` (then `docker compose up -d`) if nobody else should sign up.
 
 The images are prebuilt (`ghcr.io/tj-coding/life-console`). To build from source instead, run `docker compose up -d --build`.
 

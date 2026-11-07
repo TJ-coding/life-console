@@ -46,6 +46,7 @@ before(async () => {
   await runMigrations(conn.pool, { log: quiet })
   const cfg = loadConfig({
     DATABASE_URL: dbUrl, APP_URL: 'https://lc.test', AUTH_PASSWORD: 'off', GOOGLE_CLIENT_ID: CLIENT_ID, GOOGLE_CLIENT_SECRET: 'test-secret',
+    ADMIN_EMAILS: 'owner@gmail.com',
     GOOGLE_AUTH_URL: `${fakeBase}/auth`, GOOGLE_TOKEN_URL: `${fakeBase}/token`, PUSH_DRY_RUN: '1', DIST: '/nonexistent', COOKIE_SECURE: '0',
   })
   app = await createApp({ cfg, db: conn.db, pool: conn.pool, log: quiet })
@@ -92,7 +93,12 @@ test('password endpoints are off', async () => {
   }
 })
 
-test('first Google sign-in creates the (admin) account, with no password stored', async () => {
+test('with ADMIN_EMAILS set, a stranger signing in first does not become admin', async () => {
+  const r = await googleLogin({ sub: 'g-0', email: 'stranger@example.com', email_verified: true })
+  assert.equal((await me(r.session)).user.role, 'user')
+})
+
+test('the ADMIN_EMAILS account is admin, with no password stored', async () => {
   const r = await googleLogin({ sub: 'g-1', email: 'Owner@Gmail.com', email_verified: true, name: 'Owner' })
   assert.equal(r.location, '/#/')
   assert.ok(r.session)
