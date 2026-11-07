@@ -19,7 +19,7 @@ Where Life Console is hosted, how code gets from a commit to the live site, wher
 | Dokploy panel | http://dokpoly.netbird.cloud:3000 (NetBird only) → project **Life Console** |
 | Data | PostgreSQL (`db` service of the compose stack, volume `db`); dumps in the `backups` volume |
 
-> ⚠️ **Status (2026-11-07):** the database/accounts version lives on branch `feature/accounts-postgres` and is **not deployed yet**. Production still runs the old JSON-file app (Dokploy application `life-console`, volume `life-console-data`, behind Cloudflare Access). Cut over with §11, *then* merge to `main`: merging first would deploy the new image into the old application, which has no database.
+> **Status (2026-11-07):** cut over. Production runs the compose service **`life-console-stack`** (Dokploy `appName` `life-console-stack-vkaqq8`, composeId `qM_iz40YcC1ORWTr81gnY`, containers `life-console-stack-vkaqq8-{app,db,backup}-1`, network `life-console-stack-vkaqq8_default`). The old application `life-console` (`life-console-ulreqw`) is **stopped, not deleted**, and its volume `life-console-data` is kept. Backups of it are in `/root/life-console-backups/` on the server and in `~/Downloads/Templates/life-console-backups/` on the owner's Mac. Still to do: remove Cloudflare Access (§5.2).
 
 ---
 
@@ -234,7 +234,9 @@ Any Postgres ≥ 15 works: Homebrew (`brew services start postgresql@17`), `dock
 
 ## 10. Open items (as of 2026-11-07)
 
-- [ ] **Cut over production to the database version (§11).**
+- [x] Cut over production to the database version (§11), 2026-11-07.
+- [ ] Remove the Cloudflare Access application for `life-console.tj-coding.uk` (Zero Trust → Access → Applications), so other people can sign up and phones can install the app.
+- [ ] After a week: delete the stopped application `life-console` and the `life-console-data` volume.
 - [ ] Off-server copies of the `backups` volume (MinIO / rclone).
 - [ ] Add `NETBIRD_SETUP_KEY` so pushes to `main` deploy automatically.
 - [ ] Rotate the Dokploy API key (an old one was pasted into a chat), then update `~/.dokploy-api-key` and the `DOKPLOY_API_KEY` secret.

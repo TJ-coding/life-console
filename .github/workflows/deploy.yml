@@ -98,9 +98,14 @@ jobs:
       NB_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}
     steps:
       - name: Check configuration
+        id: cfg
         run: |
           [ -n "$API_KEY" ] || { echo "::error::Missing DOKPLOY_API_KEY secret"; exit 1; }
           [ -n "$COMPOSE_ID$APP_ID" ] || { echo "::error::Set DOKPLOY_COMPOSE_ID (or DOKPLOY_APPLICATION_ID)"; exit 1; }
+          if [ -z "$NB_KEY" ] && echo "$DOKPLOY_URL" | grep -q netbird; then
+            echo "::notice::Dokploy is NetBird-only and NETBIRD_SETUP_KEY isn't set: deploy by hand (docs/OPERATIONS.md §4.3). The image is published."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Join NetBird
         if: env.NB_KEY != ''
@@ -115,11 +120,13 @@ jobs:
           echo "::error::Dokploy not reachable at $DOKPLOY_URL over NetBird"; exit 1
 
       - name: Trigger Dokploy deploy
+        if: steps.cfg.outputs.skip != 'true'
         run: |
           if [ -n "$COMPOSE_ID" ]; then EP=compose.deploy; BODY="{\"composeId\":\"$COMPOSE_ID\"}"; else EP=application.deploy; BODY="{\"applicationId\":\"$APP_ID\"}"; fi
           curl -fsS -X POST "$DOKPLOY_URL/api/$EP" -H "x-api-key: $API_KEY" -H 'Content-Type: application/json' -d "$BODY"; echo
 
       - name: Wait for the deployment to finish
+        if: steps.cfg.outputs.skip != 'true'
         run: |
           sleep 10
           for i in $(seq 1 90); do
