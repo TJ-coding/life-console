@@ -340,6 +340,7 @@ export function ensureOrder() {
 export const NOTIFY_DEFAULTS = {
   notify: { blocks: true, deadlines: true, daily: true, wellbeing: true, vibrate: true, pomodoro: true },
   pomodoro: { ...POMODORO_DEFAULTS }, // work/short/long minutes, long break after `every` pomodoros
+  shareUsage: true, // anonymous usage statistics, when the server collects them (Settings → Privacy)
   blockLeadMin: 5, briefingTime: '07:30', eveningTime: '21:00', bedTime: '23:00', windDownMin: 60, caffeineWarnMin: 30,
 }
 export function ensureSettings() {

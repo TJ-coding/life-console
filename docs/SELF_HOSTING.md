@@ -42,7 +42,7 @@ All the settings are in [`.env.example`](../.env.example), with comments. These 
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | none | Turns on "Continue with Google" (see below). |
 | `AUTH_PASSWORD` | `on` | `off` = Google only: no passwords are accepted or stored. |
 | `LANDING` | `off` | `on` shows the life-console.dev landing page at `/` to visitors who aren't signed in and lets search engines index it. Off, `robots.txt` asks crawlers to stay out. `/app` always opens the app. |
-| `ANALYTICS_SCRIPT`, `ANALYTICS_SITE_ID` | none | With `LANDING=on`: adds an [Umami](https://umami.is) tracker (script URL + website ID) to the landing page only. The app itself is never tracked. |
+| `ANALYTICS_SCRIPT`, `ANALYTICS_SITE_ID` | none | Anonymous [Umami](https://umami.is) statistics (script URL + website ID): the landing page (with `LANDING=on`) and the app's screen views, as route patterns only. Each person can turn the app's off in Settings → Privacy. |
 | `LC_VERSION` | `latest` | The image tag to run. Pin one for controlled updates. |
 | `BACKUP_INTERVAL_HOURS` / `BACKUP_KEEP_DAYS` | 24 / 14 | The schedule and retention of the backup job. |
 

@@ -92,7 +92,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       case 'GET /api/health': {
         let dbOk = true
         try { await db.execute(sql`select 1`) } catch { dbOk = false }
-        return send(res, dbOk ? 200 : 503, { ok: dbOk, build: BUILD, time: new Date().toISOString(), auth: { signups: cfg.signups, passwordReset: !!mailer, password: cfg.passwordAuth, google: !!google } })
+        return send(res, dbOk ? 200 : 503, { ok: dbOk, build: BUILD, time: new Date().toISOString(), auth: { signups: cfg.signups, passwordReset: !!mailer, password: cfg.passwordAuth, google: !!google }, ...(cfg.analyticsScript && cfg.analyticsSiteId ? { analytics: { script: cfg.analyticsScript, siteId: cfg.analyticsSiteId } } : {}) })
       }
       case 'GET /api/auth/google/start': {
         if (!google) throw httpError(404, 'Google sign-in is not set up on this server')

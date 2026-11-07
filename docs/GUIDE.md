@@ -56,6 +56,7 @@ Anything not given to a day stays in the backlog. **Estimate − / +** changes t
 
 ## Notes
 - **Accounts:** with a server, everyone signs in (email + password); each account has its own planner. Settings → Account has sign out, change password and delete account. Signing out removes the planner copy from that browser. A new account starts with the demo planner (generated relative to the current week); Settings → Data resets, exports or imports it.
+- **Usage statistics:** if the server collects them (the public service does), the app sends which screens are opened, as route patterns only (`/app/day/:date`, never dates, IDs or planner content), with no cookies. Turn it off in **Settings → Privacy**; the choice syncs to all your devices.
 - Workload is the sum of the todo estimates scheduled on that day. Fixed time blocks are calendar items and don't count.
 - Category colours (`--cat-*` in `styles.css`) come from the validated categorical palette. They're separate from the status colours (green = done, amber = warning, red = overdue).
 

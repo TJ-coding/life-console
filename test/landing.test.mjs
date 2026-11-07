@@ -129,3 +129,9 @@ test('ANALYTICS_SCRIPT + ANALYTICS_SITE_ID: the landing page gets the tracker ta
   assert.doesNotMatch((await get(tracked, '/app')).body.toString(), /data-website-id/)
   assert.doesNotMatch((await get(on, '/')).body.toString(), /data-website-id/)
 })
+
+test('/api/health tells the app about analytics only when it is configured', async () => {
+  const h = JSON.parse((await get(tracked, '/api/health')).body)
+  assert.deepEqual(h.analytics, { script: '/stats/lc.js', siteId: 'abc-123' })
+  assert.equal(JSON.parse((await get(on, '/api/health')).body).analytics, undefined)
+})

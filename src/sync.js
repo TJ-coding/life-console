@@ -215,6 +215,7 @@ export async function startSync() {
     auth.passwordReset = !!h.auth?.passwordReset
     auth.password = h.auth?.password !== false
     auth.google = !!h.auth?.google
+    auth.analytics = h.analytics?.script && h.analytics?.siteId ? h.analytics : null
   } catch (err) {
     if (err instanceof AuthError) { fail(err); return }
     auth.status = 'none'

@@ -6,6 +6,7 @@ import { sync, pull, deviceName, setDeviceName } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
 import { rhythm, wallMin } from '../../server/pomodoro.mjs'
 import { auth, signOut, changePassword, deleteAccount, rename } from '../auth'
+import { analyticsAvailable } from '../analytics'
 
 /* ── account ── */
 const acctName = ref(auth.user?.name ?? '')
@@ -258,6 +259,16 @@ const reload = () => window.location.reload()
       <div class="panel-h"><span class="icon sm">palette</span><h2>Appearance</h2></div>
       <div class="panel-b row"><span class="grow">Theme: <b class="mono">{{ ui.theme }}</b></span><button class="btn" @click="toggleTheme">Toggle light / dark</button></div>
     </section>
+    <section v-if="analyticsAvailable()" class="panel">
+      <div class="panel-h"><span class="icon sm">shield</span><h2>Privacy</h2><span class="spacer"></span><span class="tiny muted">applies to all your devices</span></div>
+      <div class="panel-b col">
+        <label class="kind">
+          <input v-model="state.settings.shareUsage" type="checkbox" />
+          <div><b>Share anonymous usage statistics</b><div class="small muted">Counts which screens are opened (for example "Plan week"), with browser, device type and rough location, to show what to improve. Never your planner, dates, IDs or what you type. No cookies. <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a></div></div>
+        </label>
+      </div>
+    </section>
+
     <section class="panel">
       <div class="panel-h"><span class="icon sm">local_cafe</span><h2>Wellbeing limits</h2></div>
       <div class="panel-b row">
