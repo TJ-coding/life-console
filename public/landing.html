@@ -174,7 +174,7 @@
       "@type": "FAQPage",
       "mainEntity": [
         { "@type": "Question", "name": "Is Life Console open source?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The code is on GitHub under the GNU Affero General Public License v3.0 (AGPL-3.0). You can use, change and self-host it. If you run a modified version as a public service, you must share your changes under the same license." } },
-        { "@type": "Question", "name": "Is it free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The hosted service at life-console.dev is free and has no ads, analytics or tracking. Self-hosting is free too." } },
+        { "@type": "Question", "name": "Is it free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The hosted service at life-console.dev is free and has no ads. Self-hosting is free too. If it helps you, you can support it at buymeacoffee.com/tjcoding." } },
         { "@type": "Question", "name": "What do I need to self-host it?", "acceptedAnswer": { "@type": "Answer", "text": "A machine with Docker and the compose plugin, and about 300 MB of RAM. It runs as three containers: PostgreSQL, the app and a backup job. Put an HTTPS reverse proxy in front of it to install it on phones and get push notifications." } },
         { "@type": "Question", "name": "Can I move between the hosted service and my own server?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Export your planner as JSON from Settings and import it on the other server." } },
         { "@type": "Question", "name": "How do I sign in on life-console.dev?", "acceptedAnswer": { "@type": "Answer", "text": "With Google. The hosted service doesn't store passwords. A self-hosted server can use email and password, Google, or both." } },
@@ -219,6 +219,7 @@ header .wrap { display: flex; align-items: center; gap: 28px; height: 56px; }
 header nav { display: flex; gap: 22px; margin-left: auto; font-size: 14px; }
 header nav a { color: var(--muted); text-decoration: none; }
 header nav a:hover { color: var(--text); }
+header nav a, .brand { white-space: nowrap; }
 @media (max-width: 760px) { header nav a.opt { display: none; } }
 
 .btn { display: inline-block; padding: 10px 16px; border-radius: 4px; border: 1px solid var(--border); color: var(--text); background: var(--surface); text-decoration: none; font: 600 14px/1.2 var(--sans); white-space: nowrap; }
@@ -231,10 +232,23 @@ header .btn { padding: 7px 12px; font-size: 13px; }
 .hero { padding: 72px 0 0; }
 .kicker { font: 500 13px/1.4 var(--mono); color: var(--muted); margin: 0 0 18px; }
 .kicker a { color: inherit; }
-h1 { font: 700 clamp(34px, 5.4vw, 60px)/1.06 var(--sans); letter-spacing: -.03em; margin: 0 0 18px; max-width: 14ch; }
+h1 { font: 700 clamp(34px, 5.4vw, 60px)/1.06 var(--sans); letter-spacing: -.03em; margin: 0 0 18px; max-width: 15ch; }
+/* typed headline: invisible copies of every line share one grid cell with the typed line, so the heading
+   is always as tall as the longest line and nothing below moves while it types */
+.rotator { display: grid; }
+.rotator > * { grid-area: 1 / 1; }
+.rotator .sizer { visibility: hidden; }
+.rotator .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.caret { display: inline-block; width: .07em; height: .86em; margin-left: .06em; vertical-align: -.06em; background: var(--accent); animation: blink 1.05s steps(1) infinite; }
+.rotator.typing .caret { animation: none; }
+@keyframes blink { 50% { opacity: 0; } }
 .hero .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 46ch; margin: 0 0 28px; }
 .ctas { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.ctas small { color: var(--muted); font-size: 14px; margin-left: 6px; }
+.ctas .bmc { display: block; line-height: 0; border-radius: 6px; }
+.ctas .bmc img { height: 41px; width: auto; border-radius: 6px; }
+.ctas .bmc:hover img { filter: brightness(1.05); }
+.ctas .star { color: var(--muted); font-size: 14px; margin-left: 6px; text-decoration: none; }
+.ctas .star:hover { color: var(--text); text-decoration: underline; }
 .hero figure { margin: 56px 0 0; }
 
 figure { margin: 0; }
@@ -346,12 +360,13 @@ footer a { color: var(--muted); }
   <div class="hero">
     <div class="wrap">
       <p class="kicker">Open source · <a href="https://github.com/TJ-coding/life-console/blob/main/LICENSE" rel="noopener">AGPL-3.0</a> · self-hostable</p>
-      <h1>Know what to do right now.</h1>
-      <p class="lede">A keyboard-first planner for your week, your deadlines and your goals. Use it free, or run it on your own server.</p>
+      <h1><span class="rotator" data-lines="Take back control of your life.|Strategise, then execute.|Turn big goals into today's tasks.|Plan the week in three moves.|See every deadline coming.">Know what to do right now.</span></h1>
+      <p class="lede">Life Console turns your goals into a week plan, and your week plan into the next thing to do. Keyboard-first and free; use it here or run it on your own server.</p>
       <div class="ctas">
         <a class="btn primary" href="/app">Open Life Console</a>
         <a class="btn" href="#self-host">Self-host it</a>
-        <small>Free. No ads, no tracking.</small>
+        <a class="bmc" href="https://buymeacoffee.com/tjcoding" rel="noopener"><img src="/media/bmc-button.png" alt="Buy me a coffee" width="146" height="41" /></a>
+        <a class="star" href="https://github.com/TJ-coding/life-console" rel="noopener">★ Star on GitHub</a>
       </div>
       <figure id="tour">
         <video class="auto" muted loop playsinline preload="metadata" poster="/media/tour-poster.webp" width="1440" height="900" aria-label="Keyboard tour of Life Console: Command Center, Plan week, Todo inbox, Deadlines, Strategy and Focus mode">
@@ -601,7 +616,7 @@ footer a { color: var(--muted); }
       <p class="label">FAQ</p>
       <div class="faq">
         <details open><summary>Is Life Console open source?</summary><p>Yes. The code is on <a href="https://github.com/TJ-coding/life-console" rel="noopener">GitHub</a> under the GNU Affero General Public License v3.0. You can use, change and self-host it. If you run a modified version as a public service, you must share your changes under the same license.</p></details>
-        <details><summary>Is it free?</summary><p>Yes. The hosted service at life-console.dev is free and has no ads, analytics or tracking. Self-hosting is free too.</p></details>
+        <details><summary>Is it free?</summary><p>Yes. The hosted service at life-console.dev is free and has no ads. Self-hosting is free too. If it helps you, you can <a href="https://buymeacoffee.com/tjcoding" rel="noopener">buy me a coffee</a> to keep it running.</p></details>
         <details><summary>What do I need to self-host it?</summary><p>A machine with Docker and the compose plugin, and about 300 MB of RAM. It runs as three containers: PostgreSQL, the app and a backup job. Put an HTTPS reverse proxy in front of it to install it on phones and get push notifications.</p></details>
         <details><summary>Can I move between the hosted service and my own server?</summary><p>Yes. Export your planner as JSON from Settings and import it on the other server.</p></details>
         <details><summary>How do I sign in on life-console.dev?</summary><p>With Google. The hosted service doesn't store passwords. A self-hosted server can use email and password, Google, or both. The <a href="/privacy">privacy policy</a> lists what's stored.</p></details>
@@ -610,7 +625,8 @@ footer a { color: var(--muted); }
       </div>
       <div class="ctas" style="margin-top:48px">
         <a class="btn primary" href="/app">Open Life Console</a>
-        <a class="btn" href="https://github.com/TJ-coding/life-console" rel="noopener">Source on GitHub</a>
+        <a class="btn" href="https://github.com/TJ-coding/life-console" rel="noopener">★ Star on GitHub</a>
+        <a class="bmc" href="https://buymeacoffee.com/tjcoding" rel="noopener"><img src="/media/bmc-button.png" alt="Buy me a coffee" width="146" height="41" /></a>
       </div>
     </div>
   </section>
@@ -619,7 +635,7 @@ footer a { color: var(--muted); }
 <footer>
   <div class="wrap">
     <span>Life Console · free software under AGPL-3.0</span>
-    <nav aria-label="Footer"><a href="/app">App</a><a href="https://github.com/TJ-coding/life-console" rel="noopener">GitHub</a><a href="https://github.com/TJ-coding/life-console/blob/main/docs/SELF_HOSTING.md" rel="noopener">Self-hosting</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+    <nav aria-label="Footer"><a href="/app">App</a><a href="https://github.com/TJ-coding/life-console" rel="noopener">GitHub</a><a href="https://github.com/TJ-coding/life-console/blob/main/docs/SELF_HOSTING.md" rel="noopener">Self-hosting</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://buymeacoffee.com/tjcoding" rel="noopener">Buy me a coffee</a></nav>
   </div>
 </footer>
 
@@ -627,6 +643,35 @@ footer a { color: var(--muted); }
 
 <script>
 (() => {
+  // headline: types each line, pauses, deletes it, types the next. The first line stays the heading's
+  // real text for screen readers (and without JavaScript); the typed copy is hidden from them.
+  const rot = document.querySelector('.rotator')
+  if (rot && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const lines = [rot.textContent.trim(), ...rot.dataset.lines.split('|')]
+    const el = (cls, text = '') => { const e = document.createElement('span'); e.className = cls; e.textContent = text; return e }
+    rot.textContent = ''
+    rot.append(el('sr', lines[0]))
+    for (const l of lines) { const z = el('sizer', l); z.setAttribute('aria-hidden', 'true'); rot.append(z) }
+    const typed = el('typed'); typed.setAttribute('aria-hidden', 'true')
+    const txt = el('txt', lines[0]); typed.append(txt, el('caret')); rot.append(typed)
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+    const visible = () => new Promise((r) => { if (!document.hidden) r(); else document.addEventListener('visibilitychange', r, { once: true }) })
+    ;(async () => {
+      let i = 0
+      await wait(2600)
+      for (;;) {
+        await visible()
+        rot.classList.add('typing')
+        for (let n = lines[i].length; n >= 0; n--) { txt.textContent = lines[i].slice(0, n); await wait(26) }
+        i = (i + 1) % lines.length
+        await wait(320)
+        for (let n = 1; n <= lines[i].length; n++) { txt.textContent = lines[i].slice(0, n); await wait(48 + Math.random() * 45) }
+        rot.classList.remove('typing')
+        await wait(2200)
+      }
+    })()
+  }
+
   // videos play only while on screen; with reduced motion they get controls instead
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
   const vo = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting ? e.target.play().catch(() => {}) : e.target.pause()), { threshold: 0.35 })

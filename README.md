@@ -2,7 +2,9 @@
 
 **Know what to do right now.** An open-source, keyboard-first planner for your week, your deadlines and your goals. Use it free at [life-console.dev](https://life-console.dev), or run it on your own server.
 
-[Website](https://life-console.dev) · [Self-hosting](docs/SELF_HOSTING.md) · [User guide](docs/GUIDE.md) · [License: AGPL-3.0](LICENSE)
+[Website](https://life-console.dev) · [Self-hosting](docs/SELF_HOSTING.md) · [User guide](docs/GUIDE.md) · [License: AGPL-3.0](LICENSE) · [★ Star on GitHub](https://github.com/TJ-coding/life-console) · [☕ Buy me a coffee](https://buymeacoffee.com/tjcoding)
+
+<a href="https://buymeacoffee.com/tjcoding"><img src="public/media/bmc-button.png" alt="Buy me a coffee" height="41"></a>
 
 ![Keyboard tour: Command Center, Plan week, Todos, Deadlines, Strategy and Focus mode, driven only by the keyboard](docs/media/tour.gif)
 
@@ -32,7 +34,7 @@ Every screen is described in the **[user guide](docs/GUIDE.md)**.
 
 ## Use it
 
-**Hosted:** open [life-console.dev](https://life-console.dev) and sign in with Google. It's free, with no ads, analytics or tracking ([privacy policy](https://life-console.dev/privacy)).
+**Hosted:** open [life-console.dev](https://life-console.dev) and sign in with Google. It's free, with no ads ([privacy policy](https://life-console.dev/privacy)).
 
 **Self-hosted:** you need Docker with the compose plugin and about 300 MB of RAM.
 
@@ -61,6 +63,12 @@ Without the server the app still runs: sync stays off and data lives in the brow
 Built with Vue 3 and Vite on the front end, and Node 22, PostgreSQL (Drizzle ORM) and Web Push on the server, in plain JavaScript. Before changing code, read **[CLAUDE.md](CLAUDE.md)**: the project map, data model, rules for changing the data shape, conventions and how to verify changes. **[docs/DESIGN.md](docs/DESIGN.md)** has the screen design rules, and **[docs/OPERATIONS.md](docs/OPERATIONS.md)** covers hosting, deploys, backups and troubleshooting.
 
 Found a bug or have an idea? Press `I` on any screen in the app to report it about that screen, or open a GitHub issue.
+
+## Support
+
+Life Console is free and made by one developer. If it helps you, you can [buy me a coffee](https://buymeacoffee.com/tjcoding) to keep it running, or star the repo.
+
+<a href="https://buymeacoffee.com/tjcoding"><img src="public/media/bmc-button.png" alt="Buy me a coffee" height="41"></a>
 
 ## License
 
