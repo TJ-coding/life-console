@@ -125,6 +125,17 @@
     },
     {
       "@type": "VideoObject",
+      "name": "Goal flow in Life Console",
+      "description": "A strategic plan drawn as a flow on a timeline: clicking a goal highlights the chain of milestones it depends on, through to the vision.",
+      "thumbnailUrl": "https://life-console.dev/media/goalflow-poster.webp",
+      "contentUrl": "https://life-console.dev/media/goalflow.mp4",
+      "uploadDate": "2026-11-08T00:00:00+09:00",
+      "duration": "PT13S",
+      "width": 1600,
+      "height": 706
+    },
+    {
+      "@type": "VideoObject",
       "name": "Auto time-box a week in Life Console",
       "description": "Untimed tasks are placed into each day's free gaps between 08:00 and 21:00, in priority order.",
       "thumbnailUrl": "https://life-console.dev/media/autobox-poster.webp",
@@ -269,9 +280,11 @@ p { margin: 0 0 14px; }
 .split.rev { grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); }
 .split.rev > :first-child { order: 2; }
 .split + .split { margin-top: 88px; }
+.wide, .wide + .split { margin-top: 88px; }
+.wide > p:not(.label) { color: var(--muted); max-width: 68ch; margin-bottom: 28px; }
 .split p { color: var(--muted); }
 .split p b { color: var(--text); font-weight: 600; }
-@media (max-width: 900px) { .split, .split.rev { grid-template-columns: 1fr; gap: 24px; } .split.rev > :first-child { order: 0; } .split + .split { margin-top: 64px; } }
+@media (max-width: 900px) { .split, .split.rev { grid-template-columns: 1fr; gap: 24px; } .split.rev > :first-child { order: 0; } .split + .split, .wide, .wide + .split { margin-top: 64px; } }
 
 ul.plain { margin: 6px 0 0; padding: 0 0 0 18px; color: var(--muted); }
 ul.plain li { margin: 6px 0; }
@@ -313,6 +326,7 @@ tbody th { font-weight: 500; color: var(--muted); width: 22%; }
 .phones img { width: 100%; aspect-ratio: 390 / 844; object-fit: cover; object-position: top; border: 1px solid var(--border); border-radius: 14px; cursor: zoom-in; }
 .phone-video { max-width: 300px; }
 .phone-video video { aspect-ratio: 390 / 844; border-radius: 18px; }
+.wide figure > video { aspect-ratio: 1600 / 706; border: 0; }
 @media (max-width: 760px) { .phones { grid-template-columns: repeat(2, 1fr); } .phone-video { margin: 0 auto; } }
 .gallery-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
@@ -511,6 +525,18 @@ footer a { color: var(--muted); }
         <figure>
           <img src="/media/strategy.webp" srcset="/media/strategy.webp 1440w, /media/strategy@2x.webp 2880w" sizes="(max-width: 900px) 100vw, 680px" width="1440" height="900" loading="lazy" decoding="async" alt="Strategy overview: next milestone in 26 days, and a plan's goals and milestones with progress and time bounds" />
           <figcaption><b>Strategy</b>: every active plan's goals and milestones.</figcaption>
+        </figure>
+      </div>
+
+      <div class="wide">
+        <p class="label">S-30 Goal flow</p>
+        <h2>See what each goal is waiting on.</h2>
+        <p>Every plan draws itself as a flow on a timeline. Milestones feed the goals that depend on them, goals feed the vision, and each card sits on its end date. Click a goal to trace everything it needs; drag a card to move its date.</p>
+        <figure>
+          <video class="auto" muted loop playsinline preload="none" poster="/media/goalflow-poster.webp" width="1600" height="706" aria-label="Clicking goals in the goal flow highlights the chain of milestones each one depends on">
+            <source src="/media/goalflow.mp4" type="video/mp4" />
+          </video>
+          <figcaption><b>Goal flow</b>: click a card to trace what it needs.</figcaption>
         </figure>
       </div>
 

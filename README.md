@@ -21,6 +21,10 @@ Life Console started as a set of paper planning sheets: a week plan with a backl
 - **Pomodoro-aware planning**, push notifications with a **Mark done** action, dark and light themes.
 - **Works on phones and offline.** Install it from the browser; it syncs across devices and merges edits made on two devices at once.
 
+![Goal flow: milestones feed the goals that depend on them, on a timeline, ending in the vision](public/media/goalflow@2x.webp)
+
+Each strategic plan is also drawn as a **goal flow**: milestones feed the goals that depend on them, laid out on a timeline and ending in the vision. Click a goal to trace everything it needs.
+
 ![Quick-add: the live parser reads estimate, priority, due date and goal link as you type](docs/media/quickadd.gif)
 
 | | |

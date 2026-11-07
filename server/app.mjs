@@ -302,12 +302,14 @@ ${img('week@2x.webp', 'Plan week: backlog, workload buckets and timelines')}
 ${img('deadlines@2x.webp', 'Deadlines with live countdowns')}
 ${img('strategy@2x.webp', 'Strategy: goals and milestones')}
 ${img('plan@2x.webp', 'Strategic plan: vision, goals and milestones')}
+${img('goalflow@2x.webp', 'Goal flow: milestones feeding goals on a timeline')}
 ${img('todos@2x.webp', 'Todo inbox with quick-add')}
 ${img('focus@2x.webp', 'Focus mode')}
 ${img('palette@2x.webp', 'Command palette')}
 ${img('m-today.webp', 'Life Console on a phone')}
 ${vid('tour', 'Life Console keyboard tour', 'Every screen of Life Console, driven only by the keyboard.', 16)}
 ${vid('autobox', 'Auto time-box a week', 'Untimed tasks drop into free gaps by priority with one click.', 7)}
+${vid('goalflow', 'Goal flow', 'Click a goal to trace the milestones it depends on.', 13)}
 ${vid('quickadd', 'Quick-add with the live parser', 'Estimate, priority, due date and goal link parsed as you type.', 8)}
 ${vid('palette', 'Command palette', 'Jump anywhere or add a task from anywhere with Command K.', 12)}
 ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)}

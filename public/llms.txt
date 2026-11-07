@@ -7,7 +7,7 @@
 - Plan week: backlog → a 7-hour workload bucket per day → that day's timeline. "Auto time-box" places untimed tasks into free gaps between 08:00 and 21:00 by priority. Large tasks can be planned over several days as a time budget.
 - Todo inbox: one-line quick-add with a live parser, e.g. `Read chapter 3 #ST2001 30m due:fri p2 @SIG-02.1 [L]` (estimate, due date, priority 1–5, course/goal links, L/S/D type). Subtasks to any depth, bulk edits, filters.
 - Deadlines: every deadline as a ticking countdown, grouped Overdue / Today / This week / Next week / Later, with a month calendar and optional personal target dates.
-- Strategy: strategic plans as Vision → goals (PSG) → milestones (SIG) with success criteria and time bounds; tasks link to goals with `@SIG-01.2`.
+- Strategy: strategic plans as Vision → goals (PSG) → milestones (SIG) with success criteria and time bounds; tasks link to goals with `@SIG-01.2`. Each plan is also drawn as a goal flow: a dependency diagram on a timeline, from milestones to goals to the vision.
 - Focus mode (key F): full-screen timer for the current block and the top three actions.
 - Pomodoro-aware planning (default 25/5/15), push notifications with a "Mark done" action, dark and light themes.
 - Keyboard: ⌘K command palette, N new todo, F focus, T today, W week, G D deadlines, G S strategy, G I inbox, J/K move, X done, 1–5 priority.
