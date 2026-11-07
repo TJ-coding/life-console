@@ -51,7 +51,7 @@ jobs:
       - name: Image name (registry names must be lowercase)
         run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/life-console" >> "$GITHUB_ENV"
       - name: Build the image
-        run: docker build -t life-console:ci .
+        run: docker build -t life-console:ci --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" --label "org.opencontainers.image.revision=${{ github.sha }}" .
       - name: Smoke test + upgrade test with docker compose
         env:
           POSTGRES_PASSWORD: ci${{ github.run_id }}
