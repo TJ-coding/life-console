@@ -259,13 +259,14 @@ const pick = (n) => { if (swallowClick) return; if (n.kind !== 'vision' && !n.ex
         <div class="row fn-top">
           <span class="mono fn-id">{{ nodeView(n).label }}</span>
           <span v-if="nodeView(n).issues.length" class="icon sm warn fn-warn">error</span>
-          <button v-if="draggable(n)" type="button" class="fn-lock" :title="isLocked(n) ? 'Time bound locked: click to unlock' : 'Lock the time bound'" @pointerdown.stop @click.stop="toggleLock(n)"><span class="icon sm">{{ isLocked(n) ? 'lock' : 'lock_open' }}</span></button>
           <span class="spacer"></span>
           <span class="mono fn-when">{{ metaOf(n) }}</span>
         </div>
         <div class="fn-nm ellipsis">{{ nodeView(n).name }}</div>
         <div class="bar"><i :style="{ width: nodeView(n).pct + '%' }"></i></div>
-        <span v-if="n.end" class="dia"></span>
+        <span v-if="n.end && !isLocked(n)" class="dia"></span>
+        <!-- lock badge sits where the ◆ is (a pin holding the card at its date); unlocked, it shows on hover -->
+        <button v-if="draggable(n)" type="button" class="pin" :class="{ on: isLocked(n) }" :title="isLocked(n) ? 'Time bound locked: click to unlock' : 'Lock the time bound'" @pointerdown.stop @click.stop="toggleLock(n)"><span class="icon">{{ isLocked(n) ? 'lock' : 'lock_open' }}</span></button>
       </div>
     </div>
   </div>
@@ -316,11 +317,16 @@ marker path { fill: var(--muted); }
 .st-soon .fn-when { color: var(--warn); }
 .st-late .fn-when { color: var(--danger); }
 .fn-warn { font-size: 14px; flex-shrink: 0; }
-.fn-lock { flex-shrink: 0; border: 0; padding: 0; height: 14px; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; }
-.fn-lock .icon { font-size: 12px; }
-.fn-lock:hover { color: var(--accent); }
-/* unlocked: the lock takes no room until the card is hovered, so the date isn't squeezed (phones lock in the tables) */
-.fn:not(.locked):not(:hover) .fn-lock:not(:focus-visible), .fn.dragging .fn-lock { display: none; }
+/* lock badge on the right edge, in the ◆'s place and colour; unlocked it only appears on hover (phones lock in the tables) */
+.pin { position: absolute; right: -9px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid currentColor; border-radius: 3px; background: var(--surface); color: var(--info); cursor: pointer; z-index: 2; }
+.pin .icon { font-size: 12px; }
+.k-psg .pin, .st-done .pin { color: var(--accent); }
+.st-soon .pin { color: var(--warn); }
+.st-late .pin { color: var(--danger); }
+.pin:not(.on) { color: var(--muted); }
+.pin:hover { color: var(--text); }
+.fn:not(:hover) .pin:not(.on):not(:focus-visible), .fn.dragging .pin { display: none; }
 .fn-nm { font-size: 13px; font-weight: 500; }
 .k-psg .fn-nm, .k-vision .fn-nm { font-weight: 600; }
 .bar { margin-top: auto; }
