@@ -37,6 +37,9 @@ export function loadConfig(over = {}) {
     // public landing page at / for visitors who aren't signed in, plus a search-engine-friendly robots.txt/sitemap.
     // Off (the default) keeps a self-hosted server private: / is the app and robots.txt asks crawlers to stay out.
     landing: bool(e.LANDING),
+    // optional Umami analytics on the landing page only (never the app): the tracker script URL and the website ID
+    analyticsScript: e.ANALYTICS_SCRIPT || '',
+    analyticsSiteId: e.ANALYTICS_SITE_ID || '',
     googleTokenUrl: e.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token',
   }
   cfg.google = !!(cfg.googleClientId && cfg.googleClientSecret)

@@ -20,7 +20,7 @@ const quiet = () => {}
 // a fake build: the app shell, the landing page and one "video"
 const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-dist-'))
 fs.writeFileSync(path.join(dist, 'index.html'), '<title>APP</title>')
-fs.writeFileSync(path.join(dist, 'landing.html'), '<title>LANDING</title>')
+fs.writeFileSync(path.join(dist, 'landing.html'), '<head><title>LANDING</title></head>')
 fs.writeFileSync(path.join(dist, 'llms.txt'), '# Life Console')
 fs.mkdirSync(path.join(dist, 'media'))
 const VIDEO = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 256))
@@ -36,7 +36,7 @@ async function start(env) {
   servers.push([app, s])
   return `http://127.0.0.1:${s.address().port}`
 }
-let on, off
+let on, off, tracked
 
 before(async () => {
   const admin = new pg.Client({ connectionString: ADMIN_URL })
@@ -47,6 +47,7 @@ before(async () => {
   await runMigrations(conn.pool, { log: quiet })
   on = await start({ LANDING: 'on' })
   off = await start({})
+  tracked = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123' })
 })
 after(async () => {
   for (const [app, s] of servers) { app.close(); s.close() }
@@ -115,4 +116,16 @@ test('static files support byte ranges (Safari needs them for <video>)', async (
   const suffix = await get(on, '/media/clip.mp4', { Range: 'bytes=-5' })
   assert.equal(suffix.headers.get('content-range'), 'bytes 995-999/1000')
   assert.equal((await get(on, '/media/clip.mp4', { Range: 'bytes=5000-' })).status, 416)
+})
+
+test('ANALYTICS_SCRIPT + ANALYTICS_SITE_ID: the landing page gets the tracker tag, the app and a plain landing page never do', async () => {
+  const tag = '<script defer src="/stats/lc.js" data-website-id="abc-123"></script>'
+  const visitor = await get(tracked, '/')
+  assert.equal(visitor.status, 200)
+  assert.equal(visitor.headers.get('x-lc-page'), 'landing')
+  assert.ok(visitor.body.toString().includes(tag + '\n</head>'))
+  assert.equal(Number(visitor.headers.get('content-length')), visitor.body.length)
+  assert.doesNotMatch((await get(tracked, '/', { Cookie: 'lc_session=abc' })).body.toString(), /data-website-id/)
+  assert.doesNotMatch((await get(tracked, '/app')).body.toString(), /data-website-id/)
+  assert.doesNotMatch((await get(on, '/')).body.toString(), /data-website-id/)
 })

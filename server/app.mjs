@@ -284,6 +284,9 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   }
 
   const site = cfg.appUrl || ''
+  const attr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+  const analyticsTag = cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
+    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` : ''
   /** robots.txt: crawlers may index the landing page only where it's on; a private server asks them to stay out. */
   const robots = () => cfg.landing
     ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /app\n\nSitemap: ${site}/sitemap.xml\n`
@@ -333,6 +336,15 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
     else if (rel === '/' || !path.extname(rel)) rel = '/index.html' // SPA fallback (routes use #, but be safe); /app always opens the app
     const file = path.normalize(path.join(dist, rel))
     if (!file.startsWith(dist)) return send(res, 403, 'forbidden')
+    if (rel === '/landing.html' && analyticsTag) {
+      // analytics configured: the landing page with the tracker tag added (small file, read per request)
+      return fs.readFile(file, 'utf8', (err, html) => {
+        if (err) return send(res, 404, 'not found')
+        const body = html.replace('</head>', `${analyticsTag}\n</head>`)
+        res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), Vary: 'Cookie', 'X-LC-Page': 'landing', ...SECURITY_HEADERS })
+        res.end(req.method === 'HEAD' ? undefined : body)
+      })
+    }
     fs.stat(file, (err, st) => {
       if (err || !st.isFile()) return send(res, 404, 'not found')
       const cache = rel.startsWith('/assets/') ? 'public, max-age=31536000, immutable'
