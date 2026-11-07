@@ -41,6 +41,7 @@ All the settings are in [`.env.example`](../.env.example), with comments. These 
 | `SMTP_URL`, `MAIL_FROM` | none | Turns on "Forgot password?" emails. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | none | Turns on "Continue with Google" (see below). |
 | `AUTH_PASSWORD` | `on` | `off` = Google only: no passwords are accepted or stored. |
+| `LANDING` | `off` | `on` shows the life-console.dev landing page at `/` to visitors who aren't signed in and lets search engines index it. Off, `robots.txt` asks crawlers to stay out. `/app` always opens the app. |
 | `LC_VERSION` | `latest` | The image tag to run. Pin one for controlled updates. |
 | `BACKUP_INTERVAL_HOURS` / `BACKUP_KEEP_DAYS` | 24 / 14 | The schedule and retention of the backup job. |
 

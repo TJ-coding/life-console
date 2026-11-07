@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 import { users } from './db/schema.js'
-import { createAuth, createLimiter, publicUser, normEmail, verifyPassword, burnPasswordCheck, httpError } from './auth.mjs'
+import { COOKIE, parseCookies, createAuth, createLimiter, publicUser, normEmail, verifyPassword, burnPasswordCheck, httpError } from './auth.mjs'
 import { createPlanner } from './planner.mjs'
 import { createPush } from './push.mjs'
 import { createIssues } from './issues.mjs'
@@ -16,8 +16,10 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
+  '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4', '.xml': 'application/xml; charset=utf-8',
 }
 const LEGAL = new Set(['/privacy', '/terms'])
+const LANDING_DATE = '2026-11-07' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
 function send(res, status, body, headers = {}) {
@@ -281,21 +283,78 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     return userRoute(req, res, url, route, who)
   }
 
+  const site = cfg.appUrl || ''
+  /** robots.txt: crawlers may index the landing page only where it's on; a private server asks them to stay out. */
+  const robots = () => cfg.landing
+    ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /app\n\nSitemap: ${site}/sitemap.xml\n`
+    : 'User-agent: *\nDisallow: /\n'
+  const sitemap = () => {
+    const img = (f, title) => `<image:image><image:loc>${site}/media/${f}</image:loc><image:title>${title}</image:title></image:image>`
+    const vid = (f, title, desc, secs) => `<video:video><video:thumbnail_loc>${site}/media/${f}-poster.webp</video:thumbnail_loc><video:title>${title}</video:title><video:description>${desc}</video:description><video:content_loc>${site}/media/${f}.mp4</video:content_loc><video:duration>${secs}</video:duration><video:family_friendly>yes</video:family_friendly></video:video>`
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
+<url><loc>${site}/</loc><lastmod>${LANDING_DATE}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority>
+${img('today@2x.webp', 'Life Console Command Center: what to do right now')}
+${img('week@2x.webp', 'Plan week: backlog, workload buckets and timelines')}
+${img('deadlines@2x.webp', 'Deadlines with live countdowns')}
+${img('strategy@2x.webp', 'Strategy: goals and milestones')}
+${img('plan@2x.webp', 'Strategic plan: vision, goals and milestones')}
+${img('todos@2x.webp', 'Todo inbox with quick-add')}
+${img('focus@2x.webp', 'Focus mode')}
+${img('palette@2x.webp', 'Command palette')}
+${img('m-today.webp', 'Life Console on a phone')}
+${vid('tour', 'Life Console keyboard tour', 'Every screen of Life Console, driven only by the keyboard.', 16)}
+${vid('autobox', 'Auto time-box a week', 'Untimed tasks drop into free gaps by priority with one click.', 7)}
+${vid('quickadd', 'Quick-add with the live parser', 'Estimate, priority, due date and goal link parsed as you type.', 8)}
+${vid('palette', 'Command palette', 'Jump anywhere or add a task from anywhere with Command K.', 12)}
+${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)}
+</url>
+<url><loc>${site}/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+<url><loc>${site}/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+</urlset>
+`
+  }
+
   function serveStatic(req, res, pathname) {
     let rel
     try { rel = decodeURIComponent(pathname) } catch { return send(res, 400, 'bad path') }
-    if (LEGAL.has(rel)) rel += '.html' // /privacy, /terms: plain URLs for people and Google's consent screen
-    else if (rel === '/' || !path.extname(rel)) rel = '/index.html' // SPA fallback (routes use #, but be safe)
+    if (rel === '/robots.txt') return send(res, 200, robots(), { 'Cache-Control': 'public, max-age=3600' })
+    if (rel === '/sitemap.xml' || rel === '/llms.txt') {
+      if (!cfg.landing) return send(res, 404, 'not found')
+      if (rel === '/sitemap.xml') return send(res, 200, sitemap(), { 'Content-Type': MIME['.xml'], 'Cache-Control': 'public, max-age=3600' })
+    }
+    let vary = false
+    if (rel === '/' && cfg.landing) {
+      // the landing page for visitors without a session (and crawlers); signed-in people get the app as before
+      vary = true
+      rel = parseCookies(req.headers.cookie)[COOKIE] ? '/index.html' : '/landing.html'
+    } else if (rel === '/landing.html' && !cfg.landing) return send(res, 404, 'not found')
+    else if (LEGAL.has(rel)) rel += '.html' // /privacy, /terms: plain URLs for people and Google's consent screen
+    else if (rel === '/' || !path.extname(rel)) rel = '/index.html' // SPA fallback (routes use #, but be safe); /app always opens the app
     const file = path.normalize(path.join(dist, rel))
     if (!file.startsWith(dist)) return send(res, 403, 'forbidden')
     fs.stat(file, (err, st) => {
       if (err || !st.isFile()) return send(res, 404, 'not found')
-      const cache = rel.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'
-      const headers = { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': cache, 'Content-Length': st.size, ...SECURITY_HEADERS }
+      const cache = rel.startsWith('/assets/') ? 'public, max-age=31536000, immutable'
+        : rel.startsWith('/media/') ? 'public, max-age=86400' : 'no-cache'
+      const headers = { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': cache, 'Accept-Ranges': 'bytes', ...SECURITY_HEADERS }
       if (rel === '/sw.js') headers['Service-Worker-Allowed'] = '/'
-      res.writeHead(200, headers)
+      if (vary) headers.Vary = 'Cookie'
+      if (rel === '/landing.html') headers['X-LC-Page'] = 'landing' // the service worker never caches it as the app shell
+      // byte ranges: Safari won't play a <video> without them
+      const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '')
+      let start = 0, end = st.size - 1, status = 200
+      if (m && (m[1] || m[2])) {
+        if (m[1]) { start = Number(m[1]); if (m[2]) end = Math.min(Number(m[2]), end) } else start = Math.max(0, st.size - Number(m[2]))
+        if (start > end || start >= st.size) {
+          res.writeHead(416, { 'Content-Range': `bytes */${st.size}`, ...SECURITY_HEADERS }); return res.end()
+        }
+        status = 206; headers['Content-Range'] = `bytes ${start}-${end}/${st.size}`
+      }
+      headers['Content-Length'] = end - start + 1
+      res.writeHead(status, headers)
       if (req.method === 'HEAD') return res.end()
-      fs.createReadStream(file).pipe(res)
+      fs.createReadStream(file, { start, end }).pipe(res)
     })
   }
 

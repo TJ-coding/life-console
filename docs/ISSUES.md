@@ -59,7 +59,7 @@ curl -s -H "$H" "$B/api/issues/ISS-3"                     # one issue
   "kind": "bug",                  // bug | ux | idea
   "severity": "medium",           // low | medium | high
   "status": "open",               // open | in-progress | fixed | wontfix
-  "screen": "S-10",               // spec screen ID (see the route table in CLAUDE.md / README.md)
+  "screen": "S-10",               // spec screen ID (see the route table in CLAUDE.md / docs/GUIDE.md)
   "screenTitle": "Plan week",
   "route": "/week?mode=days",     // hash route: open http://<host>/#/week?mode=days
   "platform": "mobile",           // mobile (phone/tablet) | web (desktop browser)
