@@ -131,7 +131,7 @@ function remove(p) {
         </div>
       </article>
     </div>
-    <p class="small muted note">Goal numbers (PSG-nn / SIG-nn.m) are unique across all plans, so tasks can link to any plan's goals. Paused and archived plans drop out of the overview, Today and reviews.</p>
+    <p class="small muted note">Goal numbers (PSG-01, SIG-01.2, or any short name you give them) are unique across all plans, so tasks can link to any plan's goals. Paused and archived plans drop out of the overview, Today and reviews.</p>
   </div>
 </template>
 

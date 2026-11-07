@@ -59,7 +59,7 @@ There is **no test suite and no linter** (see *Verifying changes*). The stack is
 - `settings`: notification preferences, `pomodoro {on, work, short, long, every}` and `timezone`, read by the server scheduler.
 - `schemaVersion`.
 
-**ID rules:** goal numbers `PSG-nn` / `SIG-nn.m` are **unique across all plans** (use `nextPsgNo()`), so a link names exactly one goal. The owner can rename the short code (`renamePsg` / `renameSig`: PSG code ≤ 4, SIG code after the dot ≤ 3, `[A-Z0-9]` only; a SIG's middle part always follows its PSG), so don't assume codes are numeric. Records that sync must have a stable `id` (or `no` for goals) so `merge.js` can merge per record.
+**ID rules:** goal numbers `PSG-nn` / `SIG-nn.m` are **unique across all plans** (use `nextPsgNo()`), so a link names exactly one goal. The owner can rename them to **any short name** (`renameGoalNo`/`checkGoalNo`: ≤ 10 chars, `[A-Za-z0-9._-]`, no reserved link prefixes, unique ignoring case). **Never infer PSG vs SIG from the prefix**: use `isGoalNo()` / `isPsgNo()` or the plan's arrays (`linkType()` already does). Records that sync must have a stable `id` (or `no` for goals) so `merge.js` can merge per record.
 
 ---
 

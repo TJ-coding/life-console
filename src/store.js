@@ -54,13 +54,32 @@ export function relDay(s, base = todayISO()) {
   return `In ${n} days`
 }
 
+let stateReady = false // see goalMap()
+
 /* ───────────── domain constants ───────────── */
 export const STAMPS = ['印', '印', '確認', '完']
 export const STAMP_NAMES = ['Draft', 'Self-check', 'Confirmed', 'Complete']
 export const CAPACITY_H = 7
 
+/* number → 'psg' | 'sig', built lazily: linkType also runs inside migrations while `state` is still loading */
+let goalIndex = null
+function goalMap() {
+  if (!stateReady) return new Map()
+  goalIndex ??= computed(() => {
+    const m = new Map()
+    for (const p of state.plans) {
+      for (const g of p.psgs) m.set(String(g.no), 'psg')
+      for (const g of p.sigs) m.set(String(g.no), 'sig')
+    }
+    return m
+  })
+  return goalIndex.value
+}
+export const isGoalNo = (no) => goalMap().has(String(no))
+export const isPsgNo = (no) => goalMap().get(String(no)) === 'psg'
+
 export function linkType(id) {
-  if (/^(PSG|SIG)-/.test(id)) return 'goal'
+  if (isGoalNo(id) || /^(PSG|SIG)-/.test(id)) return 'goal' // goal numbers are free-form: look them up first
   if (/^DL-/.test(id)) return 'deadline'
   if (/^SP-/.test(id)) return 'plan'
   if (/^R-/.test(id)) return 'risk'
@@ -212,6 +231,7 @@ const loaded = load()
 /** true if this browser already had planner data saved (vs. a fresh demo seed) */
 export const hadLocalData = loaded !== null
 export const state = reactive(loaded ?? seed())
+stateReady = true
 /** Every todo carries a numeric `order` used to rank todos that share a priority. */
 export function ensureOrder() {
   state.todos?.forEach((t, i) => { if (typeof t.order !== 'number') t.order = (i + 1) * 1000 })
@@ -786,8 +806,9 @@ export const allPsgs = () => state.plans.flatMap((p) => p.psgs)
 export const allSigs = () => state.plans.flatMap((p) => p.sigs)
 export const planOfGoal = (no) => state.plans.find((p) => p.psgs.some((x) => x.no === no) || p.sigs.some((x) => x.no === no))
 export function nextPsgNo() {
-  const n = Math.max(0, ...allPsgs().map((p) => Number(String(p.no).replace(/^PSG-/, '')) || 0))
-  return `PSG-${String(n + 1).padStart(2, '0')}`
+  let n = Math.max(0, ...allPsgs().map((p) => Number(String(p.no).replace(/^PSG-/, '')) || 0)) + 1
+  while (goalTaken(`PSG-${String(n).padStart(2, '0')}`)) n++
+  return `PSG-${String(n).padStart(2, '0')}`
 }
 export function createPlan(title = 'New strategic plan') {
   const n = Math.max(0, ...state.plans.map((p) => Number(String(p.planNo).replace(/^SP-/, '')) || 0)) + 1
@@ -851,59 +872,48 @@ export function renameGoal(from, to) {
 /** Move a SIG under another PSG of the same plan; it gets the next free number there (SIG-02.n) and all references follow. */
 export function moveSig(sig, psgNo) {
   if (!sig || sig.psg === psgNo) return null
-  const n = Math.max(0, ...sigsOf(psgNo).map((s) => Number(s.no.split('.')[1]) || 0)) + 1
   const from = sig.no
-  const to = `SIG-${psgNo.slice(4)}.${n}`
-  const edits = renameGoal(from, to)
+  // an automatic number (SIG-<old psg>.n) is renumbered under the new PSG; a number the owner chose is kept
+  const auto = from.startsWith(`SIG-${String(sig.psg).replace(/^PSG-/i, '')}.`)
+  const to = auto ? nextSigNo(psgNo) ?? from : from
+  const edits = to === from ? 0 : renameGoal(from, to)
   sig.psg = psgNo
   sig.no = to
   return { from, to, edits }
 }
-/* Editable goal numbers: only the short code after the prefix changes, so IDs stay concise and parseable
-   (links, quick-add `@SIG-..`). PSG-<1–4 chars>; SIG-<its PSG's code>.<1–3 chars>. Unique across all plans. */
-export const PSG_CODE_MAX = 4
-export const SIG_CODE_MAX = 3
-const goalTaken = (no) => allPsgs().some((p) => p.no === no) || allSigs().some((s) => s.no === no)
-const cleanCode = (code, max) => {
-  const c = String(code ?? '').trim().toUpperCase()
-  if (!c) return { error: 'The code can’t be empty' }
-  if (!/^[A-Z0-9]+$/.test(c)) return { error: 'Use letters and digits only' }
-  if (c.length > max) return { error: `Keep it to ${max} characters` }
-  return { code: c }
+/* Editable goal numbers (PSG/SIG "No."): free-form but concise, so they stay readable as chips and usable as
+   links (quick-add `@NO`, which splits on spaces). Unique across all plans, ignoring case; whether a number is a PSG
+   or a SIG comes from the data, never from its prefix. */
+export const GOAL_NO_MAX = 10
+const RESERVED = /^(DL|SP|T|R|IPB|KZ)-/i // other link types' prefixes (linkType)
+const goalTaken = (no, except = null) => [...goalMap().keys()].some((k) => k !== except && k.toLowerCase() === String(no).toLowerCase())
+/** Check a typed goal number. Returns { no } or { error }. */
+export function checkGoalNo(value, except = null) {
+  const no = String(value ?? '').trim()
+  if (!no) return { error: 'The number can’t be empty' }
+  if (/\s/.test(no)) return { error: 'No spaces (it’s used as a link)' }
+  if (!/^[A-Za-z0-9._-]+$/.test(no)) return { error: 'Use letters, digits, - . _ only' }
+  if (no.length > GOAL_NO_MAX) return { error: `Keep it to ${GOAL_NO_MAX} characters` }
+  if (RESERVED.test(no)) return { error: `${no.split('-')[0].toUpperCase()}- is used by other links` }
+  if (goalTaken(no, except)) return { error: `${no} is already used` }
+  return { no }
 }
-export const psgCode = (no) => String(no).replace(/^PSG-/, '')
-export const sigCode = (no) => String(no).slice(String(no).lastIndexOf('.') + 1)
-/** Rename a PSG to PSG-<code>; its SIGs follow (SIG-<code>.n) and every reference is updated. */
-export function renamePsg(psg, code) {
-  const c = cleanCode(code, PSG_CODE_MAX)
-  if (c.error) return c
-  const from = psg.no
-  const to = `PSG-${c.code}`
-  if (to === from) return null
-  if (goalTaken(to)) return { error: `${to} is already used` }
-  const plan = state.plans.find((p) => p.psgs.includes(psg))
-  const kids = (plan?.sigs ?? []).filter((s) => s.psg === from)
-  const moves = kids.map((s) => [s, `SIG-${c.code}.${sigCode(s.no)}`])
-  const clash = moves.find(([s, no]) => no !== s.no && goalTaken(no) && !kids.some((k) => k.no === no))
-  if (clash) return { error: `${clash[1]} is already used` }
-  let edits = renameGoal(from, to)
-  psg.no = to
-  // two passes so a SIG can take a number another SIG of this PSG is giving up
-  for (const [s] of moves) s.no = `${s.no}\u0000`
-  for (const [s, no] of moves) { edits += renameGoal(s.no.slice(0, -1), no); s.no = no; s.psg = to }
-  return { from, to, edits, sigs: moves.length }
+/** Rename a PSG or SIG; every reference follows (links, deadlines, blocks, deps, and a PSG's SIGs' parent). */
+export function renameGoalNo(goal, value) {
+  const from = String(goal.no)
+  const r = checkGoalNo(value, from)
+  if (r.error) return r
+  if (r.no === from) return null
+  const edits = renameGoal(from, r.no)
+  for (const p of state.plans) if (p.psgs.includes(goal)) for (const s of p.sigs) if (s.psg === from) s.psg = r.no
+  goal.no = r.no
+  return { from, to: r.no, edits }
 }
-/** Rename a SIG's own code: SIG-<psg code>.<code>. */
-export function renameSig(sig, code) {
-  const c = cleanCode(code, SIG_CODE_MAX)
-  if (c.error) return c
-  const from = sig.no
-  const to = `SIG-${psgCode(sig.psg)}.${c.code}`
-  if (to === from) return null
-  if (goalTaken(to)) return { error: `${to} is already used` }
-  const edits = renameGoal(from, to)
-  sig.no = to
-  return { from, to, edits }
+/** Default number for a new SIG under `psgNo`: SIG-<psg code>.n, else <psg>.n, else SIG-n (whichever fits). */
+export function nextSigNo(psgNo) {
+  const base = String(psgNo).replace(/^PSG-/i, '')
+  const tryN = (fmt) => { for (let n = 1; n < 1000; n++) { const no = fmt(n); if (no.length <= GOAL_NO_MAX && !goalTaken(no)) return no } return null }
+  return tryN((n) => `SIG-${base}.${n}`) ?? tryN((n) => `${base}.${n}`) ?? tryN((n) => `SIG-${n}`)
 }
 export function psgPct(psgNo) {
   const s = sigsOf(psgNo)

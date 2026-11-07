@@ -1,7 +1,7 @@
 <script setup>
 // Week balance: verdict, rebalance suggestions and hours by goal (side panel of the planner).
 import { computed } from 'vue'
-import { allPsgs, allSigs, state, ui, addDays, wd, fmtSlash, CAPACITY_H, dayLoad, suggestRebalance, todosForDay, updateTodo, toast } from '../store'
+import { allPsgs, allSigs, state, ui, addDays, wd, fmtSlash, CAPACITY_H, dayLoad, suggestRebalance, todosForDay, updateTodo, toast, isPsgNo } from '../store'
 
 const days = computed(() => [0, 1, 2, 3, 4].map((i) => addDays(ui.weekStart, i)))
 const all = computed(() => [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(ui.weekStart, i)))
@@ -34,7 +34,7 @@ const byGoal = computed(() => {
     for (const t of todosForDay(d)) {
       let psg = 'Unlinked'
       for (const l of t.links) {
-        if (l.startsWith('PSG-')) { psg = l; break }
+        if (isPsgNo(l)) { psg = l; break }
         const s = allSigs().find((x) => x.no === l)
         if (s) { psg = s.psg; break }
       }

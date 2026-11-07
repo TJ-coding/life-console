@@ -2,7 +2,7 @@
 // S-30 · Strategic Plan (Goals Planner) — Vision → PSG → SIG cascade with tables and review widgets.
 import { computed, ref, nextTick, reactive, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel, moveSig, renamePsg, renameSig, psgCode, sigCode, PSG_CODE_MAX, SIG_CODE_MAX } from '../store'
+import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel, moveSig, renameGoalNo, nextSigNo, isPsgNo, GOAL_NO_MAX } from '../store'
 import PlanTabs from '../components/PlanTabs.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -64,8 +64,7 @@ const focus = computed(() => {
   const p = plan.value
   const goals = new Set([sel])
   const own = new Set([sel])
-  if (sel.startsWith('PSG-')) {
-    if (!p.psgs.some((x) => x.no === sel)) return null
+  if (p.psgs.some((x) => x.no === sel)) {
     for (const s of p.sigs) if (s.psg === sel) { goals.add(s.no); own.add(s.no) }
   } else {
     const s = p.sigs.find((x) => x.no === sel)
@@ -125,10 +124,9 @@ function addPsg() {
 }
 function addSig(psgNo) {
   const sel = selected.value
-  psgNo = psgNo || (sel?.startsWith('PSG') ? sel : plan.value.sigs.find((s) => s.no === sel)?.psg) || psgs.value[0]?.no
+  psgNo = psgNo || (plan.value.psgs.some((p) => p.no === sel) ? sel : plan.value.sigs.find((s) => s.no === sel)?.psg) || psgs.value[0]?.no
   if (!psgNo) return
-  const n = Math.max(0, ...sigsOf(psgNo).map((s) => Number(s.no.split('.')[1]) || 0)) + 1
-  const no = `SIG-${psgNo.slice(4)}.${n}`
+  const no = nextSigNo(psgNo)
   plan.value.sigs.push({ no, psg: psgNo, name: 'New indicator goal', priority: 3, criteria: '', timeBound: '', status: 'open', pct: 0 })
   selected.value = no
 }
@@ -139,20 +137,16 @@ function changePsg(sig, psgNo) {
   if (selected.value === r.from) selected.value = r.to
   toast(`${r.from} → ${r.to}${r.edits ? ` · ${r.edits} link${r.edits > 1 ? 's' : ''} updated` : ''}`)
 }
-/* editable goal numbers: only the short code changes; links, deps, child SIGs and the selection follow */
-const codeInput = (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }
-function setCode(goal, e) {
-  const r = goal.no.startsWith('PSG-') ? renamePsg(goal, e.target.value) : renameSig(goal, e.target.value)
+/* editable goal numbers (the whole "No."): links, deps, a PSG's SIGs, the selection and the filter follow */
+function setNo(goal, e) {
+  const r = renameGoalNo(goal, e.target.value)
   if (r?.error) toast(r.error)
-  if (!r || r.error) { e.target.value = goal.no.startsWith('PSG-') ? psgCode(goal.no) : sigCode(goal.no); return }
-  const sel = selected.value
-  if (sel === r.from) selected.value = r.to
-  else if (r.sigs && sel?.startsWith(`SIG-${psgCode(r.from)}.`)) selected.value = `SIG-${psgCode(r.to)}.${sigCode(sel)}`
+  if (!r || r.error) { e.target.value = goal.no; return }
+  if (selected.value === r.from) selected.value = r.to
   if (psgFilter.value === r.from) psgFilter.value = r.to
-  const more = [r.sigs ? `${r.sigs} SIG${r.sigs > 1 ? 's' : ''} renumbered` : '', r.edits ? `${r.edits} link${r.edits > 1 ? 's' : ''} updated` : ''].filter(Boolean).join(' · ')
-  toast(`${r.from} → ${r.to}${more ? ` · ${more}` : ''}`)
+  toast(`${r.from} → ${r.to}${r.edits ? ` · ${r.edits} link${r.edits > 1 ? 's' : ''} updated` : ''}`)
 }
-const resetCode = (goal, e) => { e.target.value = goal.no.startsWith('PSG-') ? psgCode(goal.no) : sigCode(goal.no); e.target.blur() }
+const resetNo = (goal, e) => { e.target.value = goal.no; e.target.blur() }
 function todoFor(sig) {
   const t = addTodo({ title: `Advance ${sig.no}: ${sig.name}`, links: [sig.no], priority: sig.priority, lsd: 'L', timeMin: 60 })
   ui.selectedId = t.id
@@ -232,7 +226,7 @@ const tasksByGoal = computed(() => {
     const sigLinks = t.links.filter((l) => sigNosHere.has(l))
     for (const no of sigLinks) put(no, t)
     const covered = new Set(sigLinks.map((no) => psgOfSig[no]))
-    for (const l of t.links) if (l.startsWith('PSG-') && !covered.has(l) && plan.value.psgs.some((p) => p.no === l)) put(l, t)
+    for (const l of t.links) if (!covered.has(l) && plan.value.psgs.some((p) => p.no === l)) put(l, t)
   }
   // a subtask shows nested under its parent when the parent is listed under the same goal
   for (const g of Object.values(m)) {
@@ -384,12 +378,12 @@ const print = () => window.print()
           <div class="panel-h"><span class="icon sm ok">flag</span><h2>Prioritised strategic goals (PSG)</h2><span class="spacer"></span><span class="mono small muted">PSG % = mean of SIGs</span></div>
           <div class="tw">
             <table class="tbl">
-              <colgroup><col style="width: 58px" /><col style="width: 84px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 68px" /></colgroup>
+              <colgroup><col style="width: 58px" /><col style="width: 100px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 68px" /></colgroup>
               <thead><tr><th>Prio</th><th>PSG No.</th><th>PSG name</th><th>Indicators of success</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="[fx('goals', p.no), { selected: selected === p.no }]" @click="rowClick(p.no, $event)">
                   <td><select v-model.number="p.priority" class="input ghost mono prio-in" :class="'p' + p.priority" title="Priority"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
-                  <td class="mono ok no-cell" title="PSG number: edit the short code (letters/digits); its SIGs and every link follow">PSG-<input :value="psgCode(p.no)" class="input ghost mono code-in" :maxlength="PSG_CODE_MAX" :style="{ width: PSG_CODE_MAX + 1 + 'ch' }" spellcheck="false" aria-label="PSG code" @input="codeInput" @change="setCode(p, $event)" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetCode(p, $event)" /></td>
+                  <td class="mono ok" title="PSG number: type any short name (letters, digits, - . _); every link follows"><input :value="p.no" class="input ghost mono no-in" :maxlength="GOAL_NO_MAX" spellcheck="false" aria-label="PSG number" @change="setNo(p, $event)" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetNo(p, $event)" /></td>
                   <td><input v-model="p.name" class="input ghost w" /></td>
                   <td><input v-model="p.indicators" class="input ghost w small" /></td>
                   <td><TimeBound v-model="p.timeBound" v-model:locked="p.boundLocked" :issues="boundIssues(p)" /></td>
@@ -420,12 +414,12 @@ const print = () => window.print()
           </div>
           <div class="tw">
             <table class="tbl wide">
-              <colgroup><col style="width: 58px" /><col style="width: 108px" /><col style="width: 84px" /><col style="width: 24%" /><col /><col style="width: 160px" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 72px" /></colgroup>
+              <colgroup><col style="width: 58px" /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 24%" /><col /><col style="width: 160px" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 72px" /></colgroup>
               <thead><tr><th>Prio</th><th>SIG No.</th><th>PSG</th><th>SIG name</th><th>Specific &amp; measurable criteria</th><th>Depends on</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="[fx('goals', s.no), { selected: selected === s.no }]" @click="rowClick(s.no, $event)">
                   <td><select v-model.number="s.priority" class="input ghost mono prio-in" :class="'p' + s.priority" title="Priority"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
-                  <td class="mono info no-cell" title="SIG number: edit the code after the dot (letters/digits); the middle part follows its PSG">SIG-{{ psgCode(s.psg) }}.<input :value="sigCode(s.no)" class="input ghost mono code-in" :maxlength="SIG_CODE_MAX" :style="{ width: SIG_CODE_MAX + 1 + 'ch' }" spellcheck="false" aria-label="SIG code" @input="codeInput" @change="setCode(s, $event)" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetCode(s, $event)" /></td>
+                  <td class="mono info" title="SIG number: type any short name (letters, digits, - . _); every link follows"><input :value="s.no" class="input ghost mono no-in" :maxlength="GOAL_NO_MAX" spellcheck="false" aria-label="SIG number" @change="setNo(s, $event)" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetNo(s, $event)" /></td>
                   <td><select :value="s.psg" class="input ghost mono small psg-in" title="Move this SIG under another PSG (it is renumbered; links follow)" @click.stop @change="changePsg(s, $event.target.value)"><option v-for="p in psgs" :key="p.no" :value="p.no">{{ p.no }}</option></select></td>
                   <td><input v-model="s.name" class="input ghost w" /></td>
                   <td><input v-model="s.criteria" class="input ghost w small" /></td>
@@ -655,8 +649,7 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 .tbl tr.selected > td:first-child { box-shadow: inset 4px 0 0 var(--info); }
 .lt-row.fx-rel { box-shadow: inset 2px 0 0 var(--info); }
 .fx-id { white-space: nowrap; flex: none; }
-.no-cell { white-space: nowrap; }
-.input.ghost.code-in { height: 22px; padding: 0 1px 0 0; margin-left: -1px; box-sizing: content-box; color: inherit; font: inherit; }
+.input.ghost.no-in { width: 100%; height: 22px; padding: 0 3px; margin-left: -4px; color: inherit; font: inherit; }
 .fx-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--info) 6%, transparent); min-width: 0; }
 .btn.on { color: var(--accent); border-color: var(--accent); }
 .sig { flex-direction: row; align-items: center; gap: 8px; }
