@@ -44,6 +44,7 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
       BACKUP_DIR: /backups
     ports:
+      # host port; "127.0.0.1:18080" keeps it local when a reverse proxy on the same Docker network serves it
       - "${LC_PORT:-8080}:8080"
     volumes:
       - backups:/backups
@@ -51,6 +52,7 @@ services:
 
   backup:
     image: ${LC_IMAGE:-ghcr.io/tj-coding/life-console}:${LC_VERSION:-latest}
+    build: . # same image as app (lets hosts that build from source, e.g. Dokploy, run it before it's on GHCR)
     restart: unless-stopped
     depends_on:
       db: { condition: service_healthy }
