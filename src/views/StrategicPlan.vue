@@ -138,7 +138,14 @@ function changePsg(sig, psgNo) {
   toast(`${r.from} → ${r.to}${r.edits ? ` · ${r.edits} link${r.edits > 1 ? 's' : ''} updated` : ''}`)
 }
 /* editable goal numbers (the whole "No."): links, deps, a PSG's SIGs, the selection and the filter follow */
+/* The field edits a draft while focused: this page re-renders every second (live countdowns), and a one-way
+   :value binding would put the saved number back over whatever is being typed. */
+const draft = reactive({ obj: null, field: '', text: '' })
+const dv = (obj, field) => (draft.obj === obj && draft.field === field ? draft.text : obj[field])
+const dFocus = (obj, field) => { draft.obj = obj; draft.field = field; draft.text = String(obj[field] ?? '') }
+const dBlur = (obj, field) => { if (draft.obj === obj && draft.field === field) draft.obj = null }
 function setNo(goal, e) {
+  draft.obj = null
   const r = renameGoalNo(goal, e.target.value)
   if (r?.error) toast(r.error)
   if (!r || r.error) { e.target.value = goal.no; return }
@@ -146,7 +153,7 @@ function setNo(goal, e) {
   if (psgFilter.value === r.from) psgFilter.value = r.to
   toast(`${r.from} → ${r.to}${r.edits ? ` · ${r.edits} link${r.edits > 1 ? 's' : ''} updated` : ''}`)
 }
-const resetNo = (goal, e) => { e.target.value = goal.no; e.target.blur() }
+const resetNo = (goal, e) => { draft.text = goal.no; e.target.value = goal.no; e.target.blur(); draft.obj = null }
 function todoFor(sig) {
   const t = addTodo({ title: `Advance ${sig.no}: ${sig.name}`, links: [sig.no], priority: sig.priority, lsd: 'L', timeMin: 60 })
   ui.selectedId = t.id
@@ -383,7 +390,7 @@ const print = () => window.print()
               <tbody>
                 <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="[fx('goals', p.no), { selected: selected === p.no }]" @click="rowClick(p.no, $event)">
                   <td><select v-model.number="p.priority" class="input ghost mono prio-in" :class="'p' + p.priority" title="Priority"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
-                  <td class="mono ok" title="PSG number: type any short name (letters, digits, - . _); every link follows"><input :value="p.no" class="input ghost mono no-in" :maxlength="GOAL_NO_MAX" spellcheck="false" aria-label="PSG number" @change="setNo(p, $event)" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetNo(p, $event)" /></td>
+                  <td class="mono ok" title="PSG number: type any short name (letters, digits, - . _); every link follows"><input :value="dv(p, 'no')" class="input ghost mono no-in" :maxlength="GOAL_NO_MAX" spellcheck="false" aria-label="PSG number" @focus="dFocus(p, 'no')" @input="draft.text = $event.target.value" @change="setNo(p, $event)" @blur="dBlur(p, 'no')" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetNo(p, $event)" /></td>
                   <td><input v-model="p.name" class="input ghost w" /></td>
                   <td><input v-model="p.indicators" class="input ghost w small" /></td>
                   <td><TimeBound v-model="p.timeBound" v-model:locked="p.boundLocked" :issues="boundIssues(p)" /></td>
@@ -419,7 +426,7 @@ const print = () => window.print()
               <tbody>
                 <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="[fx('goals', s.no), { selected: selected === s.no }]" @click="rowClick(s.no, $event)">
                   <td><select v-model.number="s.priority" class="input ghost mono prio-in" :class="'p' + s.priority" title="Priority"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
-                  <td class="mono info" title="SIG number: type any short name (letters, digits, - . _); every link follows"><input :value="s.no" class="input ghost mono no-in" :maxlength="GOAL_NO_MAX" spellcheck="false" aria-label="SIG number" @change="setNo(s, $event)" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetNo(s, $event)" /></td>
+                  <td class="mono info" title="SIG number: type any short name (letters, digits, - . _); every link follows"><input :value="dv(s, 'no')" class="input ghost mono no-in" :maxlength="GOAL_NO_MAX" spellcheck="false" aria-label="SIG number" @focus="dFocus(s, 'no')" @input="draft.text = $event.target.value" @change="setNo(s, $event)" @blur="dBlur(s, 'no')" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetNo(s, $event)" /></td>
                   <td><select :value="s.psg" class="input ghost mono small psg-in" title="Move this SIG under another PSG (it is renumbered; links follow)" @click.stop @change="changePsg(s, $event.target.value)"><option v-for="p in psgs" :key="p.no" :value="p.no">{{ p.no }}</option></select></td>
                   <td><input v-model="s.name" class="input ghost w" /></td>
                   <td><input v-model="s.criteria" class="input ghost w small" /></td>
@@ -435,7 +442,7 @@ const print = () => window.print()
                   </td>
                   <td><TimeBound v-model="s.timeBound" v-model:locked="s.boundLocked" :issues="boundIssues(s)" /></td>
                   <td><button class="status" :class="s.status" @click.stop="cycle(s)">{{ LABEL[s.status] }}</button></td>
-                  <td><input :value="s.pct" type="number" min="0" max="100" step="5" class="input ghost w mono" :class="pctClass(s.pct)" @change="setPct(s, $event.target.value)" /></td>
+                  <td><input :value="dv(s, 'pct')" type="number" min="0" max="100" step="5" class="input ghost w mono" :class="pctClass(s.pct)" @focus="dFocus(s, 'pct')" @input="draft.text = $event.target.value" @change="draft.obj = null; setPct(s, $event.target.value)" @blur="dBlur(s, 'pct')" @keydown.enter="$event.target.blur()" /></td>
                   <td>
                     <div class="row acts">
                       <button class="btn sm icon-only" title="Add a deadline for this SIG" @click.stop="goalDeadline(s)"><span class="icon sm">alarm_add</span></button>

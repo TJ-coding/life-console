@@ -1,7 +1,7 @@
 <script setup>
 // A goal's time bound: an end date (date picker) or Continuous (no end). Problems from `boundIssues` show as an amber mark.
 // v-model:locked freezes it (no date edits here, no dragging in the goal flow); the lock button only shows on hover until used.
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { CONTINUOUS } from '../glance'
 
 const props = defineProps({ modelValue: { type: String, default: '' }, issues: { type: Array, default: () => [] }, locked: { type: Boolean, default: false } })
@@ -9,12 +9,14 @@ const emit = defineEmits(['update:modelValue', 'update:locked'])
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s ?? '')
 const cont = computed(() => props.modelValue === CONTINUOUS)
 const toggle = () => emit('update:modelValue', cont.value ? '' : CONTINUOUS)
+// what's in the box while focused: the page re-renders every second, and a one-way :value would reset a half-typed date
+const typing = ref(null)
 </script>
 
 <template>
   <div class="tb" :class="{ bad: issues.length }" :title="issues.join('\n')" @click.stop>
     <span v-if="cont" class="cont mono">∞ Continuous</span>
-    <input v-else type="date" class="input ghost mono tb-in" :disabled="locked" :value="isDate(modelValue) ? modelValue : ''" @change="emit('update:modelValue', $event.target.value)" />
+    <input v-else type="date" class="input ghost mono tb-in" :disabled="locked" :value="typing ?? (isDate(modelValue) ? modelValue : '')" @focus="typing = $event.target.value" @input="typing = $event.target.value" @blur="typing = null" @change="emit('update:modelValue', $event.target.value)" />
     <button v-if="!locked" type="button" class="tb-btn" :class="{ on: cont }" :title="cont ? 'Give it an end date instead' : 'Make it continuous (no end date)'" @click="toggle">
       <span class="icon sm">{{ cont ? 'event' : 'all_inclusive' }}</span>
     </button>
