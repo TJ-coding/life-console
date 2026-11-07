@@ -11,7 +11,7 @@ Where Life Console is hosted, how code gets from a commit to the live site, wher
 | What | Where |
 |---|---|
 | **App (test instance)** | **https://life-console.tj-coding.uk**: the owner's **self-hosted test deployment**, run with the self-hosted defaults (email + password) to try releases before the public service. Cloudflare Tunnel in front. |
-| Public service | Not deployed yet. It will be **Google sign-in only** (`AUTH_PASSWORD=off` + `GOOGLE_CLIENT_ID/SECRET`), so it stores no passwords. |
+| **Public service** | **https://life-console.app**: Dokploy project *Life Console*, environment **public**, compose service `life-console-public` (`appName` `life-console-public-3usvai`, composeId `-jt4y2jcvoTE601CoLvZh`), its own database and backups, host port `127.0.0.1:18081`. Meant to run **Google sign-in only** (`AUTH_PASSWORD=off` + `GOOGLE_CLIENT_ID/SECRET`): it stores no passwords. Until Google is configured it runs with `SIGNUPS=closed` and no accounts. Cloudflare tunnel hostname `life-console.app` → `http://localhost:80` (Traefik). |
 | App over NetBird (HTTP only) | http://dokpoly.netbird.cloud (only works with NetBird connected) |
 | Source code | https://github.com/TJ-coding/life-console (public), branch **`main`** is what's deployed |
 | Images | `ghcr.io/tj-coding/life-console:latest` and `:sha-<short>`, published by CI from `main` |
@@ -237,7 +237,8 @@ Any Postgres ≥ 15 works: Homebrew (`brew services start postgresql@17`), `dock
 
 - [x] Cut over production to the database version (§11), 2026-11-07.
 - [ ] Optional for the test instance: remove the Cloudflare Access application for `life-console.tj-coding.uk` if testers other than the owner need in (or to test phone install and sign-up as a stranger would).
-- [ ] Public service (later): a separate deployment with Google-only sign-in (`AUTH_PASSWORD=off`, see SELF_HOSTING.md "Sign in with Google").
+- [ ] Public service `life-console.app`: add the tunnel hostname (Cloudflare dashboard), create the Google OAuth client, then set `GOOGLE_CLIENT_ID/SECRET`, `AUTH_PASSWORD=off`, `SIGNUPS=open` and redeploy.
+- [ ] Release flow: deploy to the test instance first; promote to the public service by deploying it (pin `LC_VERSION=sha-…` on public for full control).
 - [ ] After a week: delete the stopped application `life-console` and the `life-console-data` volume.
 - [ ] Off-server copies of the `backups` volume (MinIO / rclone).
 - [ ] Add `NETBIRD_SETUP_KEY` so pushes to `main` deploy automatically.
