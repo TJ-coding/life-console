@@ -80,6 +80,7 @@ async function submit() {
         <p v-if="mode === 'signin' && !auth.passwordReset" class="tiny muted">Forgot your password? Ask whoever runs this server to reset it.</p>
       </template>
       <p v-else-if="error" class="auth-msg danger" role="alert">{{ error }}</p>
+      <p class="auth-legal tiny muted">By continuing you agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </form>
   </div>
 </template>
@@ -101,6 +102,8 @@ h1 { margin: 4px 0 0; font: 600 22px/28px Inter, sans-serif; }
 .ok { color: var(--accent); }
 .google-btn { height: 40px; display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: 2px; border: 1px solid var(--border); background: #fff; color: #1f1f1f; font: 500 15px/1 Inter, sans-serif; cursor: pointer; }
 .google-btn:hover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--info) 45%, transparent); }
+.auth-legal { margin: 0; border-top: 1px solid var(--border); padding-top: 10px; }
+.auth-legal a { color: var(--info); }
 .auth-or { display: flex; align-items: center; gap: 10px; }
 .auth-or::before, .auth-or::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
 .danger { color: var(--danger); }

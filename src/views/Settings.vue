@@ -116,6 +116,7 @@ const reload = () => window.location.reload()
             <button class="btn danger-ghost acct-btn" type="submit"><span class="icon sm">delete_forever</span>Delete my account</button>
           </form>
         </details>
+        <p class="tiny muted"><a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a> · <a href="/terms" target="_blank" rel="noopener">Terms of Service</a></p>
       </div>
     </section>
     <!-- install -->

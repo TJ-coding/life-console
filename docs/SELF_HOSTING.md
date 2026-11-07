@@ -56,6 +56,8 @@ Existing accounts are linked by their (verified) email at their first Google sig
 
 **Using Supabase or another managed Postgres:** drop the `db` service and set `DATABASE_URL` for `app` and `backup` to that database's connection string (Supabase: *Project Settings → Database → Connection string*, the **session** pooler or a direct connection, not the transaction pooler, because migrations use advisory locks). Nothing else changes.
 
+**Privacy policy and terms:** `/privacy` and `/terms` serve `public/privacy.html` and `public/terms.html`, which are written for the public service at life-console.dev. If other people use your server, replace them with your own (same file names) and build from source.
+
 ## 4. Updating
 
 ```bash
