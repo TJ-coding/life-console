@@ -10,7 +10,8 @@ Where Life Console is hosted, how code gets from a commit to the live site, wher
 
 | What | Where |
 |---|---|
-| **App** | **https://life-console.tj-coding.uk** (own accounts; Cloudflare Tunnel in front) |
+| **App (test instance)** | **https://life-console.tj-coding.uk**: the owner's **self-hosted test deployment**, run with the self-hosted defaults (email + password) to try releases before the public service. Cloudflare Tunnel in front. |
+| Public service | Not deployed yet. It will be **Google sign-in only** (`AUTH_PASSWORD=off` + `GOOGLE_CLIENT_ID/SECRET`), so it stores no passwords. |
 | App over NetBird (HTTP only) | http://dokpoly.netbird.cloud (only works with NetBird connected) |
 | Source code | https://github.com/TJ-coding/life-console (public), branch **`main`** is what's deployed |
 | Images | `ghcr.io/tj-coding/life-console:latest` and `:sha-<short>`, published by CI from `main` |
@@ -128,7 +129,7 @@ curl -s http://dokpoly.netbird.cloud/api/health      # "build" names the deploye
 | Setting | Value |
 |---|---|
 | Source | GitHub `TJ-coding/life-console`, branch `main`, compose path `./docker-compose.yml` |
-| Environment | `POSTGRES_PASSWORD` (hex), `APP_URL=https://life-console.tj-coding.uk`, `TRUST_PROXY=1`, `ADMIN_EMAILS=jinno.tomoyuki@gmail.com`, `SIGNUPS=open`, `LC_PORT=127.0.0.1:18080`, **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` + `AUTH_PASSWORD=off`** (the hosted service is Google-only: it stores no passwords), `LC_VERSION` (pin to roll back) |
+| Environment | `POSTGRES_PASSWORD` (hex), `APP_URL=https://life-console.tj-coding.uk`, `TRUST_PROXY=1`, `ADMIN_EMAILS=jinno.tomoyuki@gmail.com`, `SIGNUPS=open`, `LC_PORT=127.0.0.1:18080`, `LC_VERSION` (pin to roll back). Self-hosted defaults: password sign-in **on**. Optionally add `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (keeping passwords on) to try Google sign-in here before the public service. **Don't set `AUTH_PASSWORD=off` on this instance**; that's for the public service. |
 | Domains | `life-console.tj-coding.uk` → service `app`, port **8080**, HTTP · `dokpoly.netbird.cloud` → `app`, 8080 |
 | Auto deploy | Off (GitHub Actions triggers deploys) |
 
@@ -235,7 +236,8 @@ Any Postgres ≥ 15 works: Homebrew (`brew services start postgresql@17`), `dock
 ## 10. Open items (as of 2026-11-07)
 
 - [x] Cut over production to the database version (§11), 2026-11-07.
-- [ ] Remove the Cloudflare Access application for `life-console.tj-coding.uk` (Zero Trust → Access → Applications), so other people can sign up and phones can install the app.
+- [ ] Optional for the test instance: remove the Cloudflare Access application for `life-console.tj-coding.uk` if testers other than the owner need in (or to test phone install and sign-up as a stranger would).
+- [ ] Public service (later): a separate deployment with Google-only sign-in (`AUTH_PASSWORD=off`, see SELF_HOSTING.md "Sign in with Google").
 - [ ] After a week: delete the stopped application `life-console` and the `life-console-data` volume.
 - [ ] Off-server copies of the `backups` volume (MinIO / rclone).
 - [ ] Add `NETBIRD_SETUP_KEY` so pushes to `main` deploy automatically.
