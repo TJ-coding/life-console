@@ -53,7 +53,7 @@ function pomos(b) {
       @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null"
     >
       <i v-for="(g, k) in pomos(b)" :key="'pm' + k" class="pm" :style="g"></i>
-      <span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> <span class="bt">{{ b.title }}</span><span v-if="b.pomo && b.pomo.length > 1" class="mono pc" :title="`${b.pomo.length} pomodoros`"><span class="icon">timer</span>{{ b.pomo.length }}</span>
+      <span v-if="b.done" class="icon dn" title="Completed">check_circle</span><span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> <span class="bt">{{ b.title }}</span><span v-if="b.pomo && b.pomo.length > 1" class="mono pc" :title="`${b.pomo.length} pomodoros`"><span class="icon">timer</span>{{ b.pomo.length }}</span>
       <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
       <span v-if="!ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
     </div>

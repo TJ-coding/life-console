@@ -80,7 +80,7 @@ function openBlock(e, b) {
           :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag right edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!ui.scheduleLock"
           @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock($event, b)" @contextmenu.prevent="toggleBlockSel(b)"
         >
-          <span class="mono t">{{ b.start }}–{{ b.end }}</span>
+          <span class="mono t"><span v-if="b.done" class="icon dn" title="Completed">check_circle</span>{{ b.start }}–{{ b.end }}</span>
           <span class="nm">{{ b.title }}</span>
           <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
           <span v-if="!ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>

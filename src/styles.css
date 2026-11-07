@@ -229,7 +229,9 @@ label.field > span { font: 600 10px/12px 'JetBrains Mono', monospace; letter-spa
   line-height: 13px;
 }
 .block.todo { cursor: pointer; }
-.block.is-done { opacity: 0.5; }
+.block.is-done { opacity: 0.55; }
+.block.is-done .bt, .block.is-done .nm { text-decoration: line-through; }
+.block .dn { font-size: 1.1em; vertical-align: -2px; color: var(--accent); margin-right: 2px; }
 .block.dim { opacity: 0.2; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
 .legend i { display: inline-block; width: 8px; height: 8px; background: var(--c); margin-right: 6px; border-radius: 1px; }

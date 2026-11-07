@@ -3,7 +3,7 @@
 // Tasks stack from the bottom, each sized by its estimate; past capacity spills into a red zone.
 // Lives inside DayColumn directly above that day's timeline — drag a block down onto a time.
 import { computed, ref } from 'vue'
-import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked } from '../store'
+import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked, loadsDay } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 
 const props = defineProps({
@@ -35,10 +35,12 @@ const todos = computed(() => {
 const fixedH = computed(() => (props.withBlocks
   ? state.timeBlocks.filter((b) => b.date === props.date).reduce((s, b) => s + (toMin(b.end) - toMin(b.start)) / 60, 0)
   : 0))
-const total = computed(() => fixedH.value + todos.value.reduce((s, t) => s + (t.grouped ? t.grouped.timeMin : t.timeMin || 0) / 60, 0))
+// minutes a card adds to the gauge: work finished ahead of a future day no longer loads it (its card shrinks to a strip)
+const loadMin = (t) => (t.grouped ? t.grouped.parts : [t]).reduce((s, p) => s + (loadsDay(p, props.date) ? p.timeMin || 0 : 0), 0)
+const total = computed(() => fixedH.value + todos.value.reduce((s, t) => s + loadMin(t) / 60, 0))
 const rows = computed(() => Math.max(props.cap, Math.ceil(total.value)))
 const blockH = (min) => Math.max(16, (min / 60) * props.hourPx - 2)
-const cardH = (t) => blockH(t.grouped ? t.grouped.timeMin : t.timeMin)
+const cardH = (t) => blockH(loadMin(t))
 // small blocks have a minimum height; let the bucket grow so they never spill over the header
 const stackPx = computed(() => todos.value.reduce((s, t) => s + cardH(t) + 2, fixedH.value ? blockH(fixedH.value * 60) + 2 : 0))
 const height = computed(() => Math.max(rows.value * props.hourPx, stackPx.value + 2) + 2)

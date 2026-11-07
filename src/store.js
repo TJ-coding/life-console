@@ -512,7 +512,9 @@ export function moveSelected(dir) {
   return findTodo(ui.selectedId)
 }
 export const todosForDay = (date) => state.todos.filter((t) => t.scheduled?.date === date).sort(byPriority)
-export const workload = (date) => todosForDay(date).reduce((s, t) => s + (t.timeMin || 0), 0) / 60
+/** Does `t` still count toward its day's load? A task finished ahead of a future day frees that day. */
+export const loadsDay = (t, date) => !(t.done && date > todayISO())
+export const workload = (date) => todosForDay(date).filter((t) => loadsDay(t, date)).reduce((s, t) => s + (t.timeMin || 0), 0) / 60
 
 /** Quick-add syntax: `Read chapter 3 #ST2001 30m due:fri p2 @SIG-02.1` */
 export function parseQuick(text, base = todayISO()) {
@@ -562,6 +564,8 @@ export const blockMin = (t) => (t.pomo ? wallMin(t.timeMin || 30, pomo()) : t.ti
 export const newBlockMin = (workMin) => (pomo().on ? wallMin(workMin, pomo()) : workMin)
 
 /* ───────────── schedule blocks ───────────── */
+/** Blocks that occupy time when planning: a todo done ahead of a future day no longer does. */
+const busyBlocks = (date) => blocksForDay(date).filter((b) => !(b.done && date > todayISO()))
 export function blocksForDay(date) {
   const tb = state.timeBlocks.filter((b) => b.date === date).map((b) => ({ ...b, kind: 'block' }))
   const tt = state.todos
@@ -928,7 +932,7 @@ export const CATEGORIES = [
 /** Hours for one day split by category. withBlocks adds fixed calendar blocks to todo estimates. */
 export function dayLoad(date, withBlocks = false) {
   const by = Object.fromEntries(CATEGORIES.map((c) => [c.key, 0]))
-  for (const t of todosForDay(date)) by[categoryOf(t)] += (t.timeMin || 0) / 60
+  for (const t of todosForDay(date)) if (loadsDay(t, date)) by[categoryOf(t)] += (t.timeMin || 0) / 60
   if (withBlocks) {
     for (const b of state.timeBlocks.filter((x) => x.date === date)) by[b.category] = (by[b.category] ?? 0) + (toMin(b.end) - toMin(b.start)) / 60
   }
@@ -1153,7 +1157,7 @@ export function assignToDay(id, date, cap = CAPACITY_H) {
  * Returns { placed: [ids], unplaced: [ids] }.
  */
 export function autoTimebox(date, from = WORK_FROM, to = WORK_TO) {
-  const busy = blocksForDay(date).map((b) => [toMin(b.start), toMin(b.end)])
+  const busy = busyBlocks(date).map((b) => [toMin(b.start), toMin(b.end)])
   let earliest = toMin(from)
   if (date === todayISO()) {
     const n = new Date()
@@ -1186,7 +1190,7 @@ export function autoTimebox(date, from = WORK_FROM, to = WORK_TO) {
  */
 export function planDaySpread(date, mins, skipTodoId = null, from = WORK_FROM, to = WORK_TO, extraBusy = []) {
   const skip = new Set([].concat(skipTodoId ?? [])) // one id or a list (a re-split skips every open part)
-  const busy = blocksForDay(date)
+  const busy = busyBlocks(date)
     .filter((b) => !skip.has(b.todoId))
     .map((b) => [toMin(b.start), toMin(b.end)])
     .concat(extraBusy) // [startMin, endMin] pairs not saved yet (sittings planned in the dialog)
@@ -1220,7 +1224,7 @@ export function planDaySpread(date, mins, skipTodoId = null, from = WORK_FROM, t
 export function planPomodoroDay(date, workMin, skipTodoId = null, extraBusy = [], from = WORK_FROM, to = WORK_TO) {
   const P = pomo()
   const skip = new Set([].concat(skipTodoId ?? []))
-  const busy = blocksForDay(date)
+  const busy = busyBlocks(date)
     .filter((b) => !skip.has(b.todoId))
     // another pomodoro sitting earns its long break too, so sittings never run back to back
     .map((b) => [toMin(b.start), toMin(b.end) + (b.pomo ? P.long : 0)])
