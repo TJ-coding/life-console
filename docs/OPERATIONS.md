@@ -153,7 +153,7 @@ HTTPS is terminated by Cloudflare in front of the tunnel. The app listens on 808
 
 | Table | Contents |
 |---|---|
-| `users` | Email (lower-cased), name, `google_sub` (linked Google account), scrypt password hash (`''` for Google-only accounts, the norm on the hosted service), role (`user`/`admin`), disabled flag |
+| `users` | Email (lower-cased), name, `google_sub` (linked Google account), scrypt password hash (`''` for Google-only accounts, the norm on the public service), role (`user`/`admin`), disabled flag |
 | `sessions` · `api_tokens` · `password_resets` | SHA-256 hashes of cookie sessions (90 days, sliding), script tokens, reset links (1 h) |
 | `planner_docs` | One row per user: `version`, `schema_version`, `state` (jsonb: the whole planner, the same JSON as before) |
 | `planner_revisions` | Snapshots: `periodic` (hourly while changing), `force`, `before-restore`, `import` |
