@@ -96,8 +96,8 @@ const graph = computed(() => {
     else if (ppd >= 8 && new Date(d + 'T00:00').getDay() === 1) ticks.push({ x: x(d), label: d.slice(8), major: false })
   }
   const marks = [
-    ...evs.map((e) => ({ x: x(e.date), sym: e.sym, title: `${e.event} · ${e.date}`, cls: 'ev' })),
-    ...dls.map((d) => ({ x: x(d.due.slice(0, 10)), sym: '⏰', title: `${d.id} ${d.title} · ${d.due.replace('T', ' ')} (${d.source})`, cls: 'dl' })),
+    ...evs.map((e) => ({ x: x(e.date), date: e.date, sym: e.sym, title: `${e.event} · ${e.date}`, cls: 'ev' })),
+    ...dls.map((d) => ({ x: x(d.due.slice(0, 10)), date: d.due.slice(0, 10), sym: '⏰', title: `${d.id} ${d.title} · ${d.due.replace('T', ' ')} (${d.source})`, cls: 'dl' })),
   ]
   const H = AX + used.length * (NH + GY)
   const W = (nodes.has('VISION') ? nodes.get('VISION').R : undated.length ? infX : axisEnd) + 8
@@ -227,6 +227,14 @@ function toggleLock(n) {
 const live = computed(() => (drag.value?.moved && !drag.value.locked ? drag.value : null))
 const shift = (n) => (live.value?.id === n.id ? live.value.px : 0)
 const metaOf = (n) => (live.value?.id === n.id ? (live.value.to ? when(live.value.to) : nodeView(n).meta) : nodeView(n).meta)
+/* a dated card is selected: other dates read relative to it ("+16d" after it, "−4d" before it) instead of to today */
+const anchor = computed(() => {
+  const n = props.selected && graph.value.nodes.get(props.selected)
+  return n?.end && !live.value ? { id: n.id, date: n.end } : null
+})
+const offset = (iso) => { const d = diffDays(anchor.value.date, iso); return d === 0 ? 'same day' : d > 0 ? `+${d}d` : `−${-d}d` }
+const relMeta = (n) => (anchor.value && n.end && n.id !== anchor.value.id ? `${n.end.slice(5).replace('-', '/')} · ${offset(n.end)}` : null)
+const markTitle = (m) => (anchor.value ? `${m.title}\n${offset(m.date)} from ${anchor.value.id}` : m.title)
 const open = (n) => { if (n.kind !== 'vision' && !n.ext) emit('open', n.id) }
 const pick = (n) => { if (swallowClick) return; if (n.kind !== 'vision' && !n.ext) emit('select', n.id) }
 </script>
@@ -237,7 +245,7 @@ const pick = (n) => { if (swallowClick) return; if (n.kind !== 'vision' && !n.ex
       <div v-for="t in graph.ticks" :key="t.x" class="tick" :class="{ major: t.major }" :style="{ left: t.x + 'px' }"><span class="mono">{{ t.label }}</span></div>
       <div class="today" :style="{ left: graph.todayX + 'px' }"><span class="mono">today</span></div>
       <div v-if="graph.infX !== null" class="inf tiny upper muted" :style="{ left: graph.infX + 'px', width: NW + 'px' }">∞ / no end</div>
-      <span v-for="(m, i) in graph.marks" :key="'m' + i" class="mark" :class="m.cls" :title="m.title" :style="{ left: m.x + 'px' }">{{ m.sym }}</span>
+      <span v-for="(m, i) in graph.marks" :key="'m' + i" class="mark" :class="m.cls" :title="markTitle(m)" :style="{ left: m.x + 'px' }">{{ m.sym }}</span>
 
       <svg class="edges" :width="graph.W" :height="graph.H">
         <defs>
@@ -260,7 +268,8 @@ const pick = (n) => { if (swallowClick) return; if (n.kind !== 'vision' && !n.ex
           <span class="mono fn-id">{{ nodeView(n).label }}</span>
           <span v-if="nodeView(n).issues.length" class="icon sm warn fn-warn">error</span>
           <span class="spacer"></span>
-          <span class="mono fn-when">{{ metaOf(n) }}</span>
+          <span v-if="relMeta(n)" class="mono fn-when rel" :title="`${relMeta(n)} from ${anchor.id}`">{{ relMeta(n) }}</span>
+          <span v-else class="mono fn-when">{{ metaOf(n) }}</span>
         </div>
         <div class="fn-nm ellipsis">{{ nodeView(n).name }}</div>
         <div class="bar"><i :style="{ width: nodeView(n).pct + '%' }"></i></div>
@@ -316,6 +325,7 @@ marker path { fill: var(--muted); }
 .fn-when { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .st-soon .fn-when { color: var(--warn); }
 .st-late .fn-when { color: var(--danger); }
+.fn-when.rel { color: var(--info); }
 .fn-warn { font-size: 14px; flex-shrink: 0; }
 /* lock badge on the right edge, in the ◆'s place and colour; unlocked it only appears on hover (phones lock in the tables) */
 .pin { position: absolute; right: -9px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
