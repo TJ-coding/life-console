@@ -44,3 +44,32 @@ export function analyticsReady(route) {
   ready = true
   trackRoute(route)
 }
+
+// Signed out: the sign-in screen (S-00). Nobody's settings exist yet, so there's no opt-out to read; only these fixed
+// names are sent, with no account, email or route data. Lets the landing page funnel be measured:
+// "open-app" click on the landing page → sign-in screen shown → "Continue with Google" → signed in (/app page views).
+const signedOutAllowed = () => config() && auth.status === 'signed-out'
+
+/** The sign-in screen was shown. `inApp`: an in-app browser (Reddit, Instagram…) where Google refuses to sign in. */
+export function trackSignInScreen(inApp) {
+  if (!signedOutAllowed()) return
+  load().then(() => window.umami?.track((p) => ({ ...p, url: '/app/sign-in', title: 'Sign in', referrer: '', data: { inApp } }))).catch(() => {})
+}
+
+/** A button on the sign-in screen: 'signin-google', 'signin-open-browser', 'signin-copy-link', 'signin-error'. */
+export function trackSignInEvent(name, data = {}) {
+  if (!signedOutAllowed()) return
+  load().then(() => window.umami?.track((p) => ({ ...p, url: '/app/sign-in', title: 'Sign in', referrer: '', name, data }))).catch(() => {})
+}
+
+/**
+ * True inside an app's embedded browser (a WebView), where Google blocks sign-in with "403 disallowed_useragent".
+ * Android WebViews mark themselves with "; wv)"; iOS WebViews (WKWebView) lack the "Safari/" token that Safari and
+ * SFSafariViewController send; known apps name themselves in the user agent.
+ */
+export function inAppBrowser(ua = navigator.userAgent) {
+  if (/FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|TikTok|musical_ly|Bytedance|Twitter|LinkedInApp|Pinterest|Reddit|MicroMessenger|KAKAOTALK/i.test(ua)) return true
+  if (/Android/.test(ua) && /; wv\)/.test(ua)) return true
+  if (/iPhone|iPad|iPod/.test(ua) && /AppleWebKit/.test(ua) && !/Safari\//.test(ua)) return true
+  return false
+}
