@@ -669,10 +669,15 @@ footer a { color: var(--muted); }
 
 <script>
 (() => {
+  // inside a frame (e.g. the Umami heatmap, which lays the whole page out at full height so every video counts as
+  // on screen): no typing headline and no playing videos, just the posters. Constant repaints in a cross-site
+  // frame can make browsers draw the frame over the heatmap dots until the next scroll
+  let framed
+  try { framed = window.top !== window.self } catch { framed = true }
   // headline: types each line, pauses, deletes it, types the next. The first line stays the heading's
   // real text for screen readers (and without JavaScript); the typed copy is hidden from them.
   const rot = document.querySelector('.rotator')
-  if (rot && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  if (rot && !framed && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const lines = [rot.textContent.trim(), ...rot.dataset.lines.split('|')]
     const el = (cls, text = '') => { const e = document.createElement('span'); e.className = cls; e.textContent = text; return e }
     rot.textContent = ''
@@ -701,7 +706,7 @@ footer a { color: var(--muted); }
   // videos play only while on screen; with reduced motion they get controls instead
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
   const vo = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting ? e.target.play().catch(() => {}) : e.target.pause()), { threshold: 0.35 })
-  document.querySelectorAll('video.auto').forEach((v) => reduce ? (v.controls = true) : vo.observe(v))
+  if (!framed) document.querySelectorAll('video.auto').forEach((v) => reduce ? (v.controls = true) : vo.observe(v))
 
   // gallery: dark / light
   const btns = document.querySelectorAll('.seg button')
