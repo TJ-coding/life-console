@@ -2,6 +2,7 @@
 // S-00 · Sign in — shown instead of the app while nobody is signed in (or a reset link is open).
 import { computed, onMounted, ref } from 'vue'
 import { auth, signIn, signUp, requestReset, resetPassword, signInWithGoogle } from '../auth'
+import { inAppBrowser, trackSignInScreen, trackSignInEvent } from '../analytics'
 
 const mode = ref(auth.resetToken ? 'reset' : 'signin') // signin | signup | forgot | reset
 const email = ref('')
@@ -12,7 +13,27 @@ const note = ref('')
 const busy = ref(false)
 const card = ref(null)
 const focusFirst = () => card.value?.querySelector('input')?.focus() // name / email / new password: always the first field
-onMounted(focusFirst)
+onMounted(() => {
+  focusFirst()
+  trackSignInScreen(inApp)
+  if (error.value) trackSignInEvent('signin-error', { inApp })
+})
+
+// In an app's built-in browser (tapping a link in Reddit, Instagram…) Google refuses to sign in
+// ("403 disallowed_useragent"), so offer the way out first: open this page in the real browser.
+const inApp = inAppBrowser()
+const android = /Android/.test(navigator.userAgent)
+const pageUrl = `${location.origin}/app`
+const chromeIntent = `intent://${location.host}/app#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(pageUrl)};end`
+const copied = ref(false)
+async function copyLink() {
+  trackSignInEvent('signin-copy-link', { inApp })
+  try { await navigator.clipboard.writeText(pageUrl); copied.value = true } catch { window.prompt('Copy this link and open it in your browser:', pageUrl) }
+}
+function google() {
+  trackSignInEvent('signin-google', { inApp })
+  setTimeout(signInWithGoogle, 150) // let the event leave before the page navigates away
+}
 
 const TITLES = { signin: auth.password ? 'Sign in' : 'Sign in to Life Console', signup: 'Create your account', forgot: 'Reset your password', reset: 'Choose a new password' }
 const ACTION = { signin: 'Sign in', signup: 'Create account', forgot: 'Send reset link', reset: 'Save password' }
@@ -47,8 +68,15 @@ async function submit() {
       </div>
       <h1>{{ TITLES[mode] }}</h1>
 
+      <div v-if="inApp && auth.google" class="inapp" role="note">
+        <p><b>Open this page in your browser to sign in.</b> Google doesn't allow sign-in inside an app's built-in browser.</p>
+        <a v-if="android" class="btn primary inapp-go" :href="chromeIntent" @click="trackSignInEvent('signin-open-browser', { inApp })">Open in Chrome</a>
+        <p v-else class="small">Tap <b>•••</b> or the share button, then <b>Open in Safari</b> (or your browser).</p>
+        <button type="button" class="btn inapp-go" @click="copyLink">{{ copied ? 'Link copied' : 'Copy link' }}</button>
+      </div>
+
       <template v-if="mode === 'signin' || mode === 'signup'">
-        <button v-if="auth.google" type="button" class="google-btn" @click="signInWithGoogle">
+        <button v-if="auth.google" type="button" class="google-btn" @click="google">
           <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
           Continue with Google
         </button>
@@ -97,6 +125,9 @@ h1 { margin: 4px 0 0; font: 600 22px/28px Inter, sans-serif; }
 .auth-go:disabled { opacity: 0.6; }
 .auth-msg { margin: 0; font-size: 13px; }
 .auth-links { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.inapp { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--warn); border-radius: 2px; }
+.inapp p { margin: 0; font-size: 14px; line-height: 1.45; }
+.inapp-go { height: 40px; font: 600 15px/1 Inter, sans-serif; justify-content: center; text-decoration: none; }
 .linkish { background: none; border: 0; padding: 0; color: var(--info); cursor: pointer; font: inherit; }
 .linkish:hover { text-decoration: underline; }
 .ok { color: var(--accent); }
