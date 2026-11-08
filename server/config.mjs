@@ -1,6 +1,14 @@
 // All server settings come from the environment (see .env.example for the documented list).
 const env = process.env
 const bool = (v, d = false) => (v === undefined || v === '' ? d : /^(1|true|yes|on)$/i.test(v))
+/** an http(s) origin like http://umami.lan:3000 (a path is dropped), or '' when unset; anything else is a config error */
+const origin = (v) => {
+  if (!v) return ''
+  let u
+  try { u = new URL(v) } catch { u = null }
+  if (!u || !/^https?:$/.test(u.protocol)) throw new Error(`ANALYTICS_DASHBOARD must be an http(s) URL, got ${JSON.stringify(v)}`)
+  return u.origin
+}
 const num = (v, d) => (Number.isFinite(Number(v)) && v !== '' && v !== undefined ? Number(v) : d)
 
 export function loadConfig(over = {}) {
@@ -43,6 +51,9 @@ export function loadConfig(over = {}) {
     analyticsSiteId: e.ANALYTICS_SITE_ID || '',
     // optional Umami recorder script (recorder.js) for a click and scroll heatmap of the landing page only; never the app
     analyticsRecorder: e.ANALYTICS_RECORDER || '',
+    // optional Umami dashboard origin (e.g. http://umami.lan:3000) allowed to show the landing page in a frame: Umami
+    // draws the heatmap over the live page in an iframe. Only the landing page; everything else stays unframeable
+    analyticsDashboard: origin(e.ANALYTICS_DASHBOARD),
     googleTokenUrl: e.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token',
   }
   cfg.google = !!(cfg.googleClientId && cfg.googleClientSecret)
