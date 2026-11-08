@@ -41,6 +41,8 @@ export function loadConfig(over = {}) {
     // the app loads it itself, sends screen names only, and each person can turn it off in Settings → Privacy
     analyticsScript: e.ANALYTICS_SCRIPT || '',
     analyticsSiteId: e.ANALYTICS_SITE_ID || '',
+    // optional Umami recorder script (recorder.js) for a click and scroll heatmap of the landing page only; never the app
+    analyticsRecorder: e.ANALYTICS_RECORDER || '',
     googleTokenUrl: e.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token',
   }
   cfg.google = !!(cfg.googleClientId && cfg.googleClientSecret)

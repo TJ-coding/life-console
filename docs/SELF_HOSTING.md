@@ -43,6 +43,7 @@ All the settings are in [`.env.example`](../.env.example), with comments. These 
 | `AUTH_PASSWORD` | `on` | `off` = Google only: no passwords are accepted or stored. |
 | `LANDING` | `off` | `on` shows the life-console.dev landing page at `/` to visitors who aren't signed in and lets search engines index it. Off, `robots.txt` asks crawlers to stay out. `/app` always opens the app. |
 | `ANALYTICS_SCRIPT`, `ANALYTICS_SITE_ID` | none | Anonymous [Umami](https://umami.is) statistics (script URL + website ID): the landing page (with `LANDING=on`) and the app's screen views, as route patterns only. Each person can turn the app's off in Settings → Privacy. |
+| `ANALYTICS_RECORDER` | none | Umami's `recorder.js` URL: a click and scroll heatmap, and optionally session replays, of the landing page only (the app never loads it). Switch them on for the website in Umami. Self-hosted Umami never deletes old replays, so add a cleanup job if you turn them on: delete rows older than your retention period from `session_replay` and `session_replay_saved` in Umami's database. |
 | `LC_VERSION` | `latest` | The image tag to run. Pin one for controlled updates. |
 | `BACKUP_INTERVAL_HOURS` / `BACKUP_KEEP_DAYS` | 24 / 14 | The schedule and retention of the backup job. |
 

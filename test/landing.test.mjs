@@ -36,7 +36,7 @@ async function start(env) {
   servers.push([app, s])
   return `http://127.0.0.1:${s.address().port}`
 }
-let on, off, tracked
+let on, off, tracked, heat
 
 before(async () => {
   const admin = new pg.Client({ connectionString: ADMIN_URL })
@@ -48,6 +48,7 @@ before(async () => {
   on = await start({ LANDING: 'on' })
   off = await start({})
   tracked = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123' })
+  heat = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123', ANALYTICS_RECORDER: '/stats/recorder.js' })
 })
 after(async () => {
   for (const [app, s] of servers) { app.close(); s.close() }
@@ -128,6 +129,16 @@ test('ANALYTICS_SCRIPT + ANALYTICS_SITE_ID: the landing page gets the tracker ta
   assert.doesNotMatch((await get(tracked, '/', { Cookie: 'lc_session=abc' })).body.toString(), /data-website-id/)
   assert.doesNotMatch((await get(tracked, '/app')).body.toString(), /data-website-id/)
   assert.doesNotMatch((await get(on, '/')).body.toString(), /data-website-id/)
+  assert.doesNotMatch(visitor.body.toString(), /recorder/)
+})
+
+test('ANALYTICS_RECORDER: the heatmap recorder goes on the landing page only, never the app or /api/health', async () => {
+  const rec = '<script defer src="/stats/recorder.js" data-website-id="abc-123"></script>'
+  const visitor = (await get(heat, '/')).body.toString()
+  assert.ok(visitor.includes('data-website-id="abc-123"></script>\n' + rec + '\n</head>'), 'tracker first, then the recorder')
+  assert.doesNotMatch((await get(heat, '/', { Cookie: 'lc_session=abc' })).body.toString(), /recorder/)
+  assert.doesNotMatch((await get(heat, '/app')).body.toString(), /recorder/)
+  assert.doesNotMatch((await get(heat, '/api/health')).body.toString(), /recorder/)
 })
 
 test('/api/health tells the app about analytics only when it is configured', async () => {

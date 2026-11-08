@@ -286,7 +286,10 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const site = cfg.appUrl || ''
   const attr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
   const analyticsTag = cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
-    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` : ''
+    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` +
+      // heatmap (click positions, scroll depth) and, if switched on in Umami's settings for the website, session replays of this page
+      (cfg.analyticsRecorder ? `\n<script defer src="${attr(cfg.analyticsRecorder)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` : '')
+    : ''
   /** robots.txt: crawlers may index the landing page only where it's on; a private server asks them to stay out. */
   const robots = () => cfg.landing
     ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /app\n\nSitemap: ${site}/sitemap.xml\n`
