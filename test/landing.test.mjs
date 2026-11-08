@@ -36,7 +36,7 @@ async function start(env) {
   servers.push([app, s])
   return `http://127.0.0.1:${s.address().port}`
 }
-let on, off, tracked, heat
+let on, off, tracked, heat, framed
 
 before(async () => {
   const admin = new pg.Client({ connectionString: ADMIN_URL })
@@ -49,6 +49,7 @@ before(async () => {
   off = await start({})
   tracked = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123' })
   heat = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123', ANALYTICS_RECORDER: '/stats/recorder.js' })
+  framed = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123', ANALYTICS_DASHBOARD: 'http://umami.lan:3100/websites' })
 })
 after(async () => {
   for (const [app, s] of servers) { app.close(); s.close() }
@@ -139,6 +140,24 @@ test('ANALYTICS_RECORDER: the heatmap recorder goes on the landing page only, ne
   assert.doesNotMatch((await get(heat, '/', { Cookie: 'lc_session=abc' })).body.toString(), /recorder/)
   assert.doesNotMatch((await get(heat, '/app')).body.toString(), /recorder/)
   assert.doesNotMatch((await get(heat, '/api/health')).body.toString(), /recorder/)
+})
+
+test('ANALYTICS_DASHBOARD: only that origin may frame the landing page (heatmap background); the app stays unframeable', async () => {
+  for (const base of [on, tracked]) { // without it, the landing page refuses every frame
+    const r = await get(base, '/')
+    assert.equal(r.headers.get('x-frame-options'), 'DENY')
+    assert.equal(r.headers.get('content-security-policy'), null)
+  }
+  const landing = await get(framed, '/')
+  assert.match(landing.body.toString(), /LANDING/)
+  assert.equal(landing.headers.get('x-frame-options'), null)
+  assert.equal(landing.headers.get('content-security-policy'), "frame-ancestors 'self' http://umami.lan:3100")
+  for (const [p, h] of [['/', { Cookie: 'lc_session=abc' }], ['/app', {}], ['/privacy', {}], ['/api/health', {}]]) {
+    const r = await get(framed, p, h)
+    assert.equal(r.headers.get('x-frame-options'), 'DENY', p)
+    assert.equal(r.headers.get('content-security-policy'), null, p)
+  }
+  assert.throws(() => loadConfig({ DATABASE_URL: dbUrl, ANALYTICS_DASHBOARD: 'umami.lan' }), /ANALYTICS_DASHBOARD/)
 })
 
 test('/api/health tells the app about analytics only when it is configured', async () => {

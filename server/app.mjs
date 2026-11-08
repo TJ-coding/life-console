@@ -285,6 +285,11 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
 
   const site = cfg.appUrl || ''
   const attr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+  // the landing page may be framed by the Umami dashboard (heatmap background); X-Frame-Options can't name an origin
+  const { 'X-Frame-Options': _deny, ...NO_XFO } = SECURITY_HEADERS
+  const LANDING_HEADERS = cfg.analyticsDashboard
+    ? { ...NO_XFO, 'Content-Security-Policy': `frame-ancestors 'self' ${cfg.analyticsDashboard}` }
+    : SECURITY_HEADERS
   const analyticsTag = cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
     ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` +
       // heatmap (click positions, scroll depth) and, if switched on in Umami's settings for the website, session replays of this page
@@ -346,7 +351,7 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
       return fs.readFile(file, 'utf8', (err, html) => {
         if (err) return send(res, 404, 'not found')
         const body = html.replace('</head>', `${analyticsTag}\n</head>`)
-        res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), Vary: 'Cookie', 'X-LC-Page': 'landing', ...SECURITY_HEADERS })
+        res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), Vary: 'Cookie', 'X-LC-Page': 'landing', ...LANDING_HEADERS })
         res.end(req.method === 'HEAD' ? undefined : body)
       })
     }
@@ -354,7 +359,7 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
       if (err || !st.isFile()) return send(res, 404, 'not found')
       const cache = rel.startsWith('/assets/') ? 'public, max-age=31536000, immutable'
         : rel.startsWith('/media/') ? 'public, max-age=86400' : 'no-cache'
-      const headers = { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': cache, 'Accept-Ranges': 'bytes', ...SECURITY_HEADERS }
+      const headers = { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': cache, 'Accept-Ranges': 'bytes', ...(rel === '/landing.html' ? LANDING_HEADERS : SECURITY_HEADERS) }
       if (rel === '/sw.js') headers['Service-Worker-Allowed'] = '/'
       if (vary) headers.Vary = 'Cookie'
       if (rel === '/landing.html') headers['X-LC-Page'] = 'landing' // the service worker never caches it as the app shell
