@@ -77,7 +77,7 @@ export function useNow() {
   /** One-line summary for the top bar / tab title. */
   const headline = computed(() => {
     if (current.value) return { state: 'busy', text: current.value.title, meta: `${fmtDur(progress.value.remaining)} left` }
-    if (suggestion.value) return { state: 'free', text: suggestion.value.title, meta: `free ${fmtDur(gap.value)}` }
+    if (suggestion.value) return { state: 'free', text: `Free ${next.value ? fmtDur(gap.value) : 'for the day'}`, meta: `next: ${suggestion.value.title}` }
     if (next.value) return { state: 'free', text: `Free until ${next.value.start}`, meta: next.value.title }
     return { state: 'idle', text: 'Nothing scheduled', meta: 'press N to add' }
   })
