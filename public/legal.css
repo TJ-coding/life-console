@@ -15,3 +15,12 @@ th { background: var(--surface); }
 ul { padding-left: 20px; } li { margin: 4px 0; }
 code, kbd { font: 13px ui-monospace, Menlo, monospace; background: var(--surface); border: 1px solid var(--border); padding: 0 4px; border-radius: 2px; }
 @media (max-width: 560px) { th, td { display: block; border-bottom: 0; } tr { display: block; border-bottom: 1px solid var(--border); margin-bottom: 8px; } }
+/* docs pages (/docs/…, built from docs/*.md) */
+.doc h1 { margin-top: 18px; }
+.doc h3 { font-size: 16px; margin: 22px 0 6px; }
+.doc pre { background: var(--surface); border: 1px solid var(--border); padding: 10px 12px; overflow-x: auto; border-radius: 2px; }
+.doc pre code { border: 0; padding: 0; background: none; }
+.doc { overflow-wrap: anywhere; }
+.doc pre { overflow-wrap: normal; }
+@media (min-width: 561px) { .doc table { display: block; overflow-x: auto; } }
+.doc img { max-width: 100%; height: auto; }

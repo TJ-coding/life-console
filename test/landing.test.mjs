@@ -23,6 +23,9 @@ fs.writeFileSync(path.join(dist, 'index.html'), '<title>APP</title>')
 fs.writeFileSync(path.join(dist, 'landing.html'), '<head><title>LANDING</title></head>')
 fs.writeFileSync(path.join(dist, 'landing-b.html'), '<head><title>LANDING-B</title></head><b class="stars"><!--stars--></b>')
 fs.writeFileSync(path.join(dist, 'llms.txt'), '# Life Console')
+fs.mkdirSync(path.join(dist, 'docs'))
+fs.writeFileSync(path.join(dist, 'docs', 'guide.html'), '<title>GUIDE</title>')
+fs.writeFileSync(path.join(dist, 'docs', 'self-hosting.html'), '<title>SELF-HOSTING</title>')
 fs.mkdirSync(path.join(dist, 'media'))
 const VIDEO = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 256))
 fs.writeFileSync(path.join(dist, 'media', 'clip.mp4'), VIDEO)
@@ -220,4 +223,32 @@ test('/api/health tells the app about analytics only when it is configured', asy
   const h = JSON.parse((await get(tracked, '/api/health')).body)
   assert.deepEqual(h.analytics, { script: '/stats/lc.js', siteId: 'abc-123' })
   assert.equal(JSON.parse((await get(on, '/api/health')).body).analytics, undefined)
+})
+
+test('/docs/guide and /docs/self-hosting: served on every server, listed in the sitemap, never cached as the app shell', async () => {
+  for (const base of [on, off]) {
+    for (const [p, title] of [['/docs/guide', 'GUIDE'], ['/docs/self-hosting', 'SELF-HOSTING']]) {
+      const r = await get(base, p)
+      assert.equal(r.status, 200, p)
+      assert.match(r.body.toString(), new RegExp(`<title>${title}</title>`))
+      assert.equal(r.headers.get('x-lc-page'), 'page')
+      assert.equal(r.headers.get('x-frame-options'), 'DENY')
+    }
+  }
+  assert.equal((await get(on, '/docs/nope')).status, 200, 'unknown paths still fall back to the app')
+  assert.match((await get(on, '/docs/nope')).body.toString(), /APP/)
+  assert.equal((await get(on, '/app')).headers.get('x-lc-page'), null, 'the app shell stays cacheable')
+  const map = (await get(on, '/sitemap.xml')).body.toString()
+  for (const p of ['/docs/guide', '/docs/self-hosting']) assert.ok(map.includes(`<loc>https://lc.test${p}</loc>`), p)
+})
+
+test('scripts/docs-pages.mjs: markdown links become site links or GitHub links', async () => {
+  const { renderDoc } = await import('../scripts/docs-pages.mjs')
+  const html = renderDoc('guide', '# Guide\n\nSee [self-hosting](SELF_HOSTING.md#2-put-it-on-the-internet-https), the [README](../README.md), [compose](../docker-compose.yml) and [Umami](https://umami.is).\n')
+  assert.match(html, /<link rel="canonical" href="https:\/\/life-console.dev\/docs\/guide" \/>/)
+  assert.match(html, /<h1 id="guide">Guide<\/h1>/)
+  assert.ok(html.includes('href="/docs/self-hosting#2-put-it-on-the-internet-https"'))
+  assert.ok(html.includes('href="/"'))
+  assert.ok(html.includes('href="https://github.com/TJ-coding/life-console/blob/main/docker-compose.yml"'))
+  assert.ok(html.includes('href="https://umami.is"'))
 })

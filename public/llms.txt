@@ -21,8 +21,9 @@
 - License: GNU AGPL-3.0 (https://github.com/TJ-coding/life-console/blob/main/LICENSE). The hosted service runs the same code.
 - Source: https://github.com/TJ-coding/life-console
 - `git clone https://github.com/TJ-coding/life-console.git && cd life-console && cp .env.example .env && docker compose up -d` — PostgreSQL + app + backup job, about 300 MB RAM.
-- Guide: https://github.com/TJ-coding/life-console/blob/main/docs/SELF_HOSTING.md
+- Self-hosting guide: https://life-console.dev/docs/self-hosting
 
 ## Links
+- User guide (every screen and shortcut): https://life-console.dev/docs/guide
 - App: https://life-console.dev/app
 - Keyboard tour video: https://life-console.dev/media/tour.mp4

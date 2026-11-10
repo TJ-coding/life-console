@@ -20,6 +20,8 @@ const MIME = {
   '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4', '.xml': 'application/xml; charset=utf-8',
 }
 const LEGAL = new Set(['/privacy', '/terms'])
+const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
+const DOCS_DATE = '2026-11-10' // sitemap <lastmod> for the docs pages: bump when they change
 const LANDING_DATE = '2026-11-10' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
@@ -325,6 +327,8 @@ ${vid('quickadd', 'Quick-add with the live parser', 'Estimate, priority, due dat
 ${vid('palette', 'Command palette', 'Jump anywhere or add a task from anywhere with Command K.', 12)}
 ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)}
 </url>
+<url><loc>${site}/docs/self-hosting</loc><lastmod>${DOCS_DATE}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+<url><loc>${site}/docs/guide</loc><lastmod>${DOCS_DATE}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
 <url><loc>${site}/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 <url><loc>${site}/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>
@@ -379,7 +383,7 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
         if (cfg.landingAb || query.get('lp')) extra['Set-Cookie'] = `${LP_COOKIE}=${variant}; Path=/; Max-Age=${90 * 86400}; SameSite=Lax${secureFor(req) ? '; Secure' : ''}`
       }
     } else if (LANDING_PAGES.has(rel) && !cfg.landing) return send(res, 404, 'not found')
-    else if (LEGAL.has(rel)) rel += '.html' // /privacy, /terms: plain URLs for people and Google's consent screen
+    else if (LEGAL.has(rel) || DOCS.has(rel)) rel += '.html' // /privacy, /terms, /docs/…: plain URLs for people, search engines and Google's consent screen
     else if (rel === '/' || !path.extname(rel)) rel = '/index.html' // SPA fallback (routes use #, but be safe); /app always opens the app
     const file = path.normalize(path.join(dist, rel))
     if (!file.startsWith(dist)) return send(res, 403, 'forbidden')
@@ -404,6 +408,7 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
       if (rel === '/sw.js') headers['Service-Worker-Allowed'] = '/'
       if (vary) headers.Vary = 'Cookie'
       if (landingPage) headers['X-LC-Page'] = 'landing' // the service worker never caches it as the app shell
+      else if (rel.endsWith('.html') && rel !== '/index.html') headers['X-LC-Page'] = 'page' // /privacy, /terms, /docs/…: not the app shell either
       // byte ranges: Safari won't play a <video> without them
       const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '')
       let start = 0, end = st.size - 1, status = 200

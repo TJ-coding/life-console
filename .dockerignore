@@ -8,3 +8,5 @@ dist
 .env
 backups
 test
+!docs/GUIDE.md
+!docs/SELF_HOSTING.md
