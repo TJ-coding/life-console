@@ -82,7 +82,12 @@ const router = useRouter()
 const i = ref(0)
 const step = computed(() => STEPS[i.value])
 const body = computed(() => (isPhone() && step.value.phoneBody) || step.value.body)
-const rect = ref(null) // spotlight box in viewport px, or null for the centred cards
+const centreBox = () => ({ top: innerHeight / 2, left: innerWidth / 2, width: 0, height: 0 })
+/* the spotlight's box in viewport px. On the centred cards it shrinks to a point mid-screen (its shadow still dims
+   everything), so moving between any two stops is one continuous glide */
+const rect = ref(centreBox())
+const centred = ref(true) // welcome / finish, or a stop whose target isn't on screen
+const ready = ref(false) // the card has its first position (hidden until then, so it never flashes elsewhere)
 const cardEl = ref(null)
 const cardPos = ref({})
 const phone = ref(isPhone())
@@ -104,7 +109,6 @@ let tick = 0
 async function locate() {
   cancelAnimationFrame(poll)
   clearInterval(tick)
-  rect.value = null
   hand.value = null
   done.value = false
   missing.value = false
@@ -112,11 +116,11 @@ async function locate() {
   if (isPhone()) ui.backlogOnly = !!s.backlog
   else if (s.route === '/week') ui.backlogOnly = false
   if (s.route === '/week' && ui.planMode === 'days') ui.planMode = 'both'
-  if (!s.target) return place()
+  if (!s.target) return centre()
   const route = typeof s.route === 'function' ? s.route() : s.route
   if (route && router.currentRoute.value.path !== route) await router.push(route)
   const visible = (el) => el && el.getBoundingClientRect().height > 0
-  if (s.optional && !visible(targetEl())) { missing.value = true; return place() } // e.g. no sidebar on phones
+  if (s.optional && !visible(targetEl())) { missing.value = true; return centre() } // e.g. no sidebar on phones
   const t0 = performance.now()
   const find = () => {
     const el = targetEl()
@@ -124,20 +128,24 @@ async function locate() {
       // small targets go mid-screen, clear of the phone's bottom card; big ones only as far as needed
       const small = el.getBoundingClientRect().height < innerHeight / 2
       el.scrollIntoView({ block: small && isPhone() ? 'center' : 'nearest', inline: 'nearest', behavior: reduced ? 'auto' : 'smooth' })
-      setTimeout(() => {
-        if (s !== step.value) return
-        if (s.action) baseline.value = s.action.start()
-        measure()
-        tick = setInterval(measure, 300) // follow layout changes (a task added, a drawer opening)
-      }, reduced ? 0 : 350)
+      // start gliding now and keep following while the page scrolls or the layout changes
+      if (s.action) baseline.value = s.action.start()
+      measure()
+      tick = setInterval(measure, 120)
     } else if (performance.now() - t0 < 2500) poll = requestAnimationFrame(find)
-    else { missing.value = true; place() } // the element never showed up: centred card with a Next button
+    else { missing.value = true; centre() } // the element never showed up: centred card with a Next button
   }
   find()
+}
+function centre() {
+  centred.value = true
+  rect.value = centreBox()
+  place()
 }
 function measure() {
   const el = targetEl()
   if (!el) return
+  centred.value = false
   const r = el.getBoundingClientRect()
   const pad = 8
   const vw = innerWidth, vh = innerHeight
@@ -168,30 +176,51 @@ function handAt(sel, panel) {
   else { const mid = panel.left + panel.width / 2; dx = Math.abs(mid - cx) < 40 ? 90 : Math.sign(mid - cx) * Math.min(140, Math.abs(mid - cx)) }
   return { left: cx, top: c.top + c.height / 2, dx }
 }
-/** Put the card beside the spotlight where there's room (below, above, right, left), else over its lower part. */
+/**
+ * Put the card beside the spotlight where there's room (below, above, right, left), else over its lower part;
+ * centred cards in the middle; phones as a sheet at the bottom. Always top/left/width in px, so the one card
+ * glides between stops (CSS transitions) instead of jumping.
+ */
 async function place() {
   phone.value = isPhone()
   await nextTick()
   const c = cardEl.value
   if (!c) return
-  const r = rect.value
-  if (!r || phone.value) { cardPos.value = {}; return }
-  const w = c.offsetWidth, h = c.offsetHeight, gap = 18, vw = innerWidth, vh = innerHeight
+  const vw = innerWidth, vh = innerHeight
+  const w = phone.value ? vw - (centred.value ? 32 : 24) : Math.min(vw - 24, centred.value ? 440 : 380)
+  c.style.width = w + 'px' // so the height below is measured at the width it's about to have
+  const h = c.scrollHeight, gap = 18, r = rect.value
   const clampX = (x) => Math.min(vw - w - 12, Math.max(12, x))
   const clampY = (y) => Math.min(vh - h - 12, Math.max(12, y))
   let p
-  if (r.top + r.height + gap + h < vh) p = { top: r.top + r.height + gap, left: clampX(r.left) }
+  if (centred.value) p = { top: (vh - h) / 2, left: (vw - w) / 2 }
+  else if (phone.value) p = { top: vh - h - 12, left: 12 }
+  else if (r.top + r.height + gap + h < vh) p = { top: r.top + r.height + gap, left: clampX(r.left) }
   else if (r.top - gap - h > 0) p = { top: r.top - gap - h, left: clampX(r.left) }
   else if (r.left + r.width + gap + w < vw) p = { top: clampY(r.top + 24), left: r.left + r.width + gap }
   else if (r.left - gap - w > 0) p = { top: clampY(r.top + 24), left: r.left - gap - w }
   else p = { top: clampY(r.top + r.height - h - 24), left: clampX(r.left + (r.width - w) / 2) }
-  cardPos.value = { top: p.top + 'px', left: p.left + 'px' }
+  cardPos.value = { top: p.top + 'px', left: p.left + 'px', width: w + 'px' }
+  if (!ready.value) requestAnimationFrame(() => { ready.value = true })
+}
+/** Change the card's content and let its height follow smoothly (height: auto can't transition by itself). */
+async function morph(change) {
+  const c = cardEl.value
+  const h0 = c?.offsetHeight
+  await change()
+  await nextTick()
+  if (!c || reduced || !h0) return
+  const h1 = c.scrollHeight
+  if (Math.abs(h1 - h0) <= 1) return
+  c.style.overflow = 'hidden' // only while it grows or shrinks; the badge's rays may poke out otherwise
+  c.animate([{ height: h0 + 'px' }, { height: h1 + 'px' }], { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' }).onfinish = () => { c.style.overflow = '' }
 }
 
 /* "your turn": watch the planner for the action, then cheer and move on */
 watch(() => step.value.action && baseline.value !== null && !done.value && step.value.action.done(baseline.value), (ok) => {
   if (!ok) return
-  done.value = true
+  morph(() => { done.value = true })
+  place()
   step.value.action.after?.()
   const r = rect.value
   burst(r ? r.left + r.width / 2 : innerWidth / 2, r ? r.top + Math.min(r.height, 120) / 2 : innerHeight / 2, 60)
@@ -204,7 +233,8 @@ async function go(n) {
   if (n > i.value && then && !router.currentRoute.value.path.startsWith(then)) await router.push(then)
   if (n >= STEPS.length) return finish()
   baseline.value = null
-  i.value = n
+  await morph(() => { i.value = n })
+  place() // the new content's size, at the old spot until the next target is found
 }
 function finish() {
   close()
@@ -265,7 +295,7 @@ function onKey(e) {
   else if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); go(i.value + 1) }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); go(i.value - 1) }
 }
-const onResize = () => (rect.value ? measure() : place())
+const onResize = () => (centred.value ? centre() : measure())
 onMounted(() => {
   window.addEventListener('keydown', onKey, true)
   window.addEventListener('resize', onResize)
@@ -279,11 +309,10 @@ onBeforeUnmount(() => {
 })
 
 const px = (n) => n + 'px'
-const spotStyle = computed(() => rect.value && ({ top: px(rect.value.top), left: px(rect.value.left), width: px(rect.value.width), height: px(rect.value.height) }))
+const spotStyle = computed(() => ({ top: px(rect.value.top), left: px(rect.value.left), width: px(rect.value.width), height: px(rect.value.height) }))
 /* four click-blockers around the spotlight; on info stops a fifth covers the spotlight too */
 const blockers = computed(() => {
   const r = rect.value
-  if (!r) return []
   return [
     { top: 0, left: 0, right: 0, height: px(r.top) },
     { top: px(r.top + r.height), left: 0, right: 0, bottom: 0 },
@@ -296,29 +325,26 @@ const blockers = computed(() => {
 
 <template>
   <div class="tour" role="dialog" aria-modal="true" :aria-label="step.title">
-    <!-- dimmer: a full scrim for the centred cards, or the spotlight's own shadow -->
-    <div v-if="!rect" class="tour-scrim"></div>
-    <template v-else>
-      <div v-for="(b, k) in blockers" :key="k" class="tour-block" :style="b"></div>
-      <div class="tour-spot" :class="{ act: waiting && !done }" :style="spotStyle">
-        <span class="tour-ring"></span>
-        <span v-for="(s, k) in SPARKS" :key="k" class="tour-spark" :style="{ left: s[0] * 100 + '%', top: s[1] * 100 + '%', animationDelay: k * 0.17 + 's' }">✦</span>
-      </div>
-    </template>
+    <!-- the spotlight's shadow dims everything else; on the centred cards it's a point mid-screen -->
+    <div v-for="(b, k) in blockers" :key="k" class="tour-block" :style="b"></div>
+    <div class="tour-spot" :class="{ act: waiting && !done, centred }" :style="spotStyle">
+      <span class="tour-ring"></span>
+      <span v-for="(s, k) in SPARKS" :key="k" class="tour-spark" :style="{ left: s[0] * 100 + '%', top: s[1] * 100 + '%', animationDelay: k * 0.17 + 's' }">✦</span>
+    </div>
     <div v-if="hand && waiting && !done" class="tour-hand" :style="{ left: hand.left + 'px', top: hand.top + 'px', '--dx': hand.dx + 'px', '--w': Math.abs(hand.dx) + 'px', '--dir': Math.sign(hand.dx) }" aria-hidden="true">
       <span class="trail"></span><span class="icon">pan_tool_alt</span>
     </div>
     <canvas ref="canvas" class="tour-confetti"></canvas>
 
-    <transition name="tour-pop" mode="out-in">
-      <div :key="i + (done ? '-ok' : '')" ref="cardEl" class="tour-card" :class="[step.kind ?? 'move', { centred: !rect, sheet: phone && rect, act: waiting }]" :style="rect && !phone ? cardPos : null">
+    <div ref="cardEl" class="tour-card" :class="[step.kind ?? 'move', { centred, act: waiting, ready }]" :style="cardPos">
+      <div :key="i + (done ? '-ok' : '')" class="tour-in">
         <div class="tour-badge" :class="{ ok: done }"><span class="icon">{{ done ? 'check' : step.icon }}</span>
-          <span v-if="!rect || done" class="tour-burst" aria-hidden="true"><i v-for="k in 8" :key="k" :style="{ '--a': k * 45 + 'deg' }"></i></span>
+          <span v-if="centred || done" class="tour-burst" aria-hidden="true"><i v-for="k in 8" :key="k" :style="{ '--a': k * 45 + 'deg' }"></i></span>
         </div>
         <div class="tour-moves mono" aria-label="Progress">
           <span v-for="(m, k) in MOVES" :key="m" :class="{ on: step.move === k, past: step.kind === 'finish' || (step.move ?? -1) > k }">{{ k + 1 }} {{ m }}</span>
         </div>
-        <h2 class="tour-title" :class="{ shimmer: !rect || done }">{{ done ? 'Nice!' : step.title }}</h2>
+        <h2 class="tour-title" :class="{ shimmer: centred || done }">{{ done ? 'Nice!' : step.title }}</h2>
         <p v-if="!done" class="tour-body">{{ body }}</p>
         <p v-else-if="step.doneBody" class="tour-body">{{ step.doneBody }}</p>
         <div v-if="waiting && !done" class="tour-wait mono small">waiting for you <i>✦</i></div>
@@ -331,12 +357,12 @@ const blockers = computed(() => {
         </div>
         <div v-if="step.move !== undefined" class="tour-count mono tiny muted">{{ i }} / {{ STEPS.length - 2 }}</div>
       </div>
-    </transition>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.tour { position: fixed; inset: 0; z-index: 400; pointer-events: none; }
+.tour { position: fixed; inset: 0; z-index: 400; pointer-events: none; animation: tour-fade 0.35s ease; }
 .tour-scrim, .tour-card, .tour-block { pointer-events: auto; }
 .tour-block { position: absolute; }
 .tour-scrim { position: absolute; inset: 0; background: var(--scrim); backdrop-filter: blur(2px); animation: tour-fade 0.3s ease; }
@@ -346,8 +372,12 @@ const blockers = computed(() => {
 .tour-spot {
   position: absolute; border-radius: 12px; pointer-events: none;
   box-shadow: 0 0 0 200vmax var(--scrim);
-  transition: top 0.45s cubic-bezier(.2,.8,.2,1), left 0.45s cubic-bezier(.2,.8,.2,1), width 0.45s cubic-bezier(.2,.8,.2,1), height 0.45s cubic-bezier(.2,.8,.2,1);
+  transition: top 0.5s cubic-bezier(.2,.8,.2,1), left 0.5s cubic-bezier(.2,.8,.2,1), width 0.5s cubic-bezier(.2,.8,.2,1), height 0.5s cubic-bezier(.2,.8,.2,1), border-radius 0.5s;
 }
+/* shrunk to a point for the centred cards: ring and sparkles fade out */
+.tour-ring, .tour-spark { transition: opacity 0.3s; }
+.tour-spot.centred { border-radius: 50%; }
+.tour-spot.centred .tour-ring, .tour-spot.centred .tour-spark { opacity: 0 !important; }
 .tour-ring {
   position: absolute; inset: -3px; border-radius: 14px; padding: 3px;
   background: conic-gradient(from var(--tour-angle, 0deg), var(--accent), var(--info), var(--warn), var(--accent));
@@ -374,12 +404,18 @@ const blockers = computed(() => {
 .tour-card {
   position: absolute; width: 380px; max-width: calc(100vw - 24px);
   background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px;
-  padding: 20px 20px 16px; display: flex; flex-direction: column; gap: 10px;
+  padding: 20px 20px 16px; opacity: 0;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
-  transition: top 0.4s cubic-bezier(.2,.8,.2,1), left 0.4s cubic-bezier(.2,.8,.2,1);
+  transition: top 0.5s cubic-bezier(.2,.8,.2,1), left 0.5s cubic-bezier(.2,.8,.2,1), width 0.5s cubic-bezier(.2,.8,.2,1), padding 0.5s, border-color 0.3s;
 }
-.tour-card.centred { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 440px; text-align: center; align-items: center; padding-top: 26px; }
-.tour-card.sheet { top: auto; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); width: auto; max-width: none; }
+.tour-card:not(.ready) { transition: none; }
+.tour-card.ready { opacity: 1; animation: tour-pop-in 0.45s cubic-bezier(.3,1.4,.5,1); }
+@keyframes tour-pop-in { from { opacity: 0; scale: 0.88; } }
+.tour-card.centred { padding-top: 26px; }
+/* the content cross-fades in place while the card glides */
+.tour-in { display: flex; flex-direction: column; gap: 10px; animation: tour-in 0.4s ease both; }
+.tour-card.centred .tour-in { text-align: center; align-items: center; }
+@keyframes tour-in { from { opacity: 0; transform: translateY(6px); } }
 .tour-badge {
   position: relative; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center;
   background: linear-gradient(135deg, var(--accent), var(--info)); color: var(--on-accent);
@@ -428,10 +464,6 @@ const blockers = computed(() => {
 }
 @keyframes tour-glint { 0% { transform: translateX(-120%); } 45%, 100% { transform: translateX(120%); } }
 
-.tour-pop-enter-active { transition: opacity 0.3s, scale 0.35s cubic-bezier(.3,1.5,.5,1); }
-.tour-pop-leave-active { transition: opacity 0.15s, scale 0.15s; }
-.tour-pop-enter-from { opacity: 0; scale: 0.85; }
-.tour-pop-leave-to { opacity: 0; scale: 0.95; }
 @keyframes tour-fade { from { opacity: 0; } }
 
 
@@ -473,7 +505,6 @@ const blockers = computed(() => {
 }
 
 @media (max-width: 640px) {
-  .tour-card.centred { width: calc(100vw - 32px); }
   .tour-title { font-size: 19px; line-height: 25px; }
   .tour-title.shimmer { font-size: 22px; line-height: 28px; }
   .tour-body { font-size: 14px; line-height: 20px; }
@@ -483,5 +514,6 @@ const blockers = computed(() => {
   .tour-spark, .tour-burst, .tour-hand .trail { display: none; }
   .tour-hand .icon { animation: none; }
   .tour-spot, .tour-card { transition: none; }
+  .tour-in, .tour-card.ready, .tour { animation: none; }
 }
 </style>
