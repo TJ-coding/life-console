@@ -1,12 +1,14 @@
 <script setup>
-// Backlog-only view (ISS-16, reworked Nov 2026): the next weeks stacked as rows beside the
-// Unplanned backlog, so tasks can be spread over weeks before they get a day. Questions, in order:
-//   1. Which week has room for this task?   → free hours in each week's header
-//   2. What is due in that week?            → its deadlines & goal milestones under the header
-//   3. What's already planned for it?       → the task cards below
-// Drag a task onto a week (or click a week on the card); the week view then offers it in that
-// week's backlog. The week bar arrows page through the weeks.
+// Backlog-only view (ISS-16, reworked Nov 2026): one list inside the backlog panel — Unplanned on
+// top, then the next weeks — so tasks can be put into a week before they get a day, and the week
+// view's backlog (② Assign day) only shows that week's share. Questions, in order:
+//   1. What still has no week?              → Unplanned, first
+//   2. Which week has room for this task?   → free hours in each week's header (and on the buttons)
+//   3. What is due in that week?            → its deadlines & goal milestones under the header
+// Click a week on a row, or drag it onto a week. The week bar arrows page through the weeks.
 import { computed, ref } from 'vue'
+
+const props = defineProps({ prio: { type: Number, default: 0 } }) // the panel's P1–P5 filter
 import { state, ui, todayISO, addDays, mondayOf, wd, fmtMD, isoWeek, byPriority, partLabel, isHoverLinked, parentPath, planWeek, backlogTodos, planWeeks, weekFree, assignToWeek } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
@@ -28,9 +30,15 @@ const cols = computed(() => weeks.value.map((w) => {
   return {
     w, free, planned,
     due: [...dls, ...goals].sort((a, b) => a.due.localeCompare(b.due)),
-    tasks: backlogTodos().filter((t) => planWeek(t) === w).sort(byPriority),
+    tasks: backlogTodos().filter((t) => planWeek(t) === w && shown(t)).sort(byPriority),
   }
 }))
+const shown = (t) => !props.prio || t.priority === props.prio
+const unplanned = computed(() => backlogTodos().filter((t) => !planWeek(t) && shown(t)).sort(byPriority))
+const uHours = computed(() => unplanned.value.reduce((s, t) => s + (t.timeMin || 0) / 60, 0))
+const freeOf = computed(() => Object.fromEntries(cols.value.map((c) => [c.w, c.free])))
+// sections top to bottom: Unplanned (w = null), then the weeks
+const secs = computed(() => [{ w: null, tasks: unplanned.value, due: [] }, ...cols.value])
 const later = computed(() => {
   const last = weeks.value[weeks.value.length - 1]
   return backlogTodos().filter((t) => planWeek(t) > last).length
@@ -50,10 +58,14 @@ const leave = (e, w) => { if (hot.value === w && !e.currentTarget.contains(e.rel
 <template>
   <div class="board">
     <section
-      v-for="c in cols" :key="c.w" class="wk" :class="{ hot: hot === c.w, now: c.w === thisWeek }"
-      @dragover.prevent="hot = c.w" @dragleave="leave($event, c.w)" @drop.prevent="onDrop($event, c.w)"
+      v-for="c in secs" :key="c.w ?? 'none'" class="wk" :class="{ hot: hot === (c.w ?? 'none'), now: c.w === thisWeek, un: !c.w }"
+      @dragover.prevent.stop="hot = c.w ?? 'none'" @dragleave="leave($event, c.w ?? 'none')" @drop.prevent.stop="onDrop($event, c.w)"
     >
-      <header class="wh row">
+      <header v-if="!c.w" class="wh row">
+        <b>Unplanned</b>
+        <span class="mono small muted">{{ c.tasks.length }} tasks · {{ uHours.toFixed(1) }}h</span>
+      </header>
+      <header v-else class="wh row">
         <b class="mono">W{{ isoWeek(c.w) }}</b>
         <span class="muted">{{ label(c.w) }}</span>
         <span class="mono small muted">{{ fmtMD(c.w) }} – {{ fmtMD(addDays(c.w, 6)) }}</span>
@@ -74,7 +86,7 @@ const leave = (e, w) => { if (hot.value === w && !e.currentTarget.contains(e.rel
       </div>
 
       <div
-        v-for="t in c.tasks" :key="t.id" class="trow" :class="[dropClass(t), { linked: isHoverLinked(t.id), sel: ui.selectedId === t.id, late: !weekOk(t, c.w) }]" draggable="true"
+        v-for="t in c.tasks" :key="t.id" class="trow" :class="[dropClass(t), { linked: isHoverLinked(t.id), sel: ui.selectedId === t.id, late: c.w && !weekOk(t, c.w) }]" draggable="true"
         @dragstart="startDrag($event, t)" @dragend="endDrag" @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)"
         @drop="dropOnRow($event, t, { unschedule: true, week: c.w })" @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
         @click="ui.selectedId = t.id" @dblclick="ui.drawerId = t.id"
@@ -86,18 +98,19 @@ const leave = (e, w) => { if (hot.value === w && !e.currentTarget.contains(e.rel
         </span>
         <span class="meta row">
           <Chip v-for="l in t.links" :key="l" :id="l" />
-          <span v-if="t.due" class="mono small" :class="weekOk(t, c.w) ? 'muted' : 'danger'">due {{ wd(t.due) }} {{ fmtMD(t.due) }}</span>
+          <span v-if="t.due" class="mono small" :class="!c.w || weekOk(t, c.w) ? 'muted' : 'danger'">due {{ wd(t.due) }} {{ fmtMD(t.due) }}</span>
         </span>
         <span class="mono small muted tm">{{ t.timeMin }}m</span>
         <span class="quick">
-          <button class="qd" title="Back to unplanned" @click.stop="assignToWeek(t.id, null)"><span class="icon">undo</span></button>
+          <button v-if="c.w" class="qd" title="Back to unplanned" @click.stop="assignToWeek(t.id, null)"><span class="icon">undo</span></button>
           <button
             v-for="w in weeks.filter((x) => x !== c.w)" :key="w" class="qd mono" :disabled="!weekOk(t, w)"
-            :title="`Move to W${isoWeek(w)}${!weekOk(t, w) ? ' · after due date' : ''}`" @click.stop="assignToWeek(t.id, w)"
+            :class="{ tight: freeOf[w] < t.timeMin / 60 }"
+            :title="`${c.w ? 'Move' : 'Plan'} for W${isoWeek(w)} · ${freeOf[w].toFixed(1)}h free${!weekOk(t, w) ? ' · after due date' : ''}`" @click.stop="assignToWeek(t.id, w)"
           >W{{ isoWeek(w) }}</button>
         </span>
       </div>
-      <div v-if="!c.tasks.length" class="empty-row small muted">Drop tasks here</div>
+      <div v-if="!c.tasks.length" class="empty-row small muted">{{ c.w ? 'Drop tasks here' : 'Every task has a week ✓' }}</div>
     </section>
     <button v-if="later" class="later small" title="Next week ( ] )" @click="ui.weekStart = addDays(ui.weekStart < thisWeek ? thisWeek : ui.weekStart, 7)">
       <span class="mono">{{ later }}</span> more in later weeks<span class="icon sm">chevron_right</span>
@@ -107,9 +120,10 @@ const leave = (e, w) => { if (hot.value === w && !e.currentTarget.contains(e.rel
 
 <style scoped>
 /* weeks stacked top to bottom; the last one stretches so the board ends on the same line as Unplanned */
-.board { display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow: auto; min-height: 0; }
+.board { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 0 8px 8px; overflow: auto; min-height: 0; }
 .wk { flex: none; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 2px; background: var(--surface); }
 .wk:last-of-type { flex: 1 0 auto; }
+.wk.un { border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
 .wk.now { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
 .wk.hot { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
 .wh { gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
@@ -136,6 +150,7 @@ const leave = (e, w) => { if (hot.value === w && !e.currentTarget.contains(e.rel
 .qd { display: flex; align-items: center; justify-content: center; min-width: 40px; height: 26px; padding: 0 6px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface); cursor: pointer; font-size: 11px; color: var(--text); }
 .qd .icon { font-size: 15px; }
 .qd:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.qd.tight { color: var(--warn); }
 .qd:disabled { opacity: 0.3; cursor: not-allowed; }
 .empty-row { padding: 12px; }
 .later { flex: none; align-self: flex-start; display: flex; align-items: center; gap: 4px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 2px; background: transparent; color: var(--muted); cursor: pointer; }
