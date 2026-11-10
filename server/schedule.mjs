@@ -144,17 +144,17 @@ export function computeEvents(state, fromMs, toMs) {
         todos.length ? `Top: ${todos.slice(0, 3).map((t) => clip(t.title, 26)).join(' · ')}` : 'No tasks on today’s sheet',
         dls.length ? `Due: ${dls.slice(0, 2).map((d) => `${clip(d.title, 24)} (${d.due.slice(0, 10) === D ? 'today' : 'tomorrow'} ${d.due.slice(11)})`).join(' · ')}` : '',
       ].filter(Boolean)
-      add({ key: `brief:${D}`, at: zoned(D, s.briefingTime, tz), title: `Good morning · ${wd(D)} ${D.slice(5)}`, body: bits.join('\n'), url: '/#/', tag: `brief-${D}` })
+      add({ key: `brief:${D}`, at: zoned(D, s.briefingTime, tz), title: `Briefing · ${wd(D)} ${D.slice(5)}`, body: bits.join('\n'), url: '/#/briefing', tag: `brief-${D}` })
 
       const stamped = (state.signOffs?.[D] ?? []).filter(Boolean).length
       const tomorrow = todosOn(state, addDays(D, 1)).filter((t) => !t.done)
       const untimed = tomorrow.filter((t) => !t.scheduled.start).length
       if (stamped < 4 || untimed) {
         add({
-          key: `eve:${D}`, at: zoned(D, s.eveningTime, tz), title: 'Evening sign-off',
+          key: `eve:${D}`, at: zoned(D, s.eveningTime, tz), title: 'Debrief',
           body: [stamped < 4 ? `Sign-off ${stamped}/4 stamped — press S to stamp` : 'Sign-off complete ✓',
             `Tomorrow: ${tomorrow.length} task${tomorrow.length === 1 ? '' : 's'}${untimed ? `, ${untimed} without a time` : ''}`].join('\n'),
-          url: '/#/week', tag: `eve-${D}`,
+          url: '/#/debrief', tag: `eve-${D}`,
         })
       }
     }
@@ -168,7 +168,7 @@ export function computeEvents(state, fromMs, toMs) {
       })
       add({
         key: `wind:${D}`, at: zoned(D, s.bedTime, tz) - s.windDownMin * 60000, title: `Wind down · bed at ${s.bedTime}`,
-        body: 'Screens off soon. Stamp today’s sign-off and glance at tomorrow.', url: '/#/', tag: `wind-${D}`,
+        body: 'Screens off soon. Stamp today’s sign-off and glance at tomorrow.', url: '/#/debrief', tag: `wind-${D}`,
       })
     }
   }

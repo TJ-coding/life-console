@@ -8,6 +8,8 @@ import StrategicPlan from './views/StrategicPlan.vue'
 import PlansIndex from './views/PlansIndex.vue'
 import Settings from './views/Settings.vue'
 import FocusMode from './views/FocusMode.vue'
+import Briefing from './views/Briefing.vue'
+import Debrief from './views/Debrief.vue'
 import Deadlines from './views/Deadlines.vue'
 import ModulePlaceholder from './views/ModulePlaceholder.vue'
 import Issues from './views/Issues.vue'
@@ -25,6 +27,8 @@ const router = createRouter({
     { path: '/', name: 'today', component: CommandCenter, meta: { title: 'Command Center', screen: 'S-01' } },
     { path: '/day/:date', name: 'day', component: CommandCenter, meta: { title: 'Day', screen: 'S-11' } },
     { path: '/focus', name: 'focus', component: FocusMode, meta: { title: 'Focus mode', screen: 'S-01F', bare: true } },
+    { path: '/briefing', name: 'briefing', component: Briefing, meta: { title: 'Briefing', screen: 'S-02', bare: true, sheet: true } },
+    { path: '/debrief', name: 'debrief', component: Debrief, meta: { title: 'Debrief', screen: 'S-03', bare: true, sheet: true } },
     { path: '/week', name: 'week', component: WeeklyPlanner, meta: { title: 'Plan week', screen: 'S-10' } },
     { path: '/workload', redirect: { path: '/week', query: { mode: 'days' } } }, // merged into the planner
     { path: '/todos', name: 'todos', component: TodoInbox, meta: { title: 'Todo Inbox', screen: 'S-20' } },

@@ -34,6 +34,8 @@ const contextDate = computed(() => {
 
 const commands = computed(() => [
   ...NAV.map((n) => ({ label: `Go to ${n.label}`, icon: n.icon, hint: n.key1, run: () => router.push(n.to) })),
+  { label: 'Briefing (morning review)', icon: 'wb_sunny', run: () => router.push('/briefing') },
+  { label: 'Debrief (evening review)', icon: 'bedtime', run: () => router.push('/debrief') },
   { label: 'New todo…', icon: 'add', hint: 'N', run: () => { ui.paletteMode = 'add'; q.value = ''; return false } },
   { label: 'Stamp next sign-off (today)', icon: 'approval', hint: 'S', run: () => { const i = stampNext(todayISO()); toast(i < 0 ? 'Today is fully stamped 完' : `Stamped ${STAMPS[i]}`) } },
   { label: 'Report an issue on this screen…', icon: 'bug_report', hint: 'I', run: () => openIssueDialog(route) },

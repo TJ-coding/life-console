@@ -77,7 +77,7 @@ const setWall = computed(() => {
 const KINDS = [
   { key: 'blocks', label: 'Blocks & tasks', desc: 'Before each scheduled block or time-boxed task starts, and “Time’s up” when a task ends (with Mark done).' },
   { key: 'deadlines', label: 'Deadlines', desc: '1 day and 1 hour before each deadline, and when it becomes overdue.' },
-  { key: 'daily', label: 'Daily briefing & sign-off', desc: 'Morning summary of the day; evening reminder to stamp sign-off and plan tomorrow.' },
+  { key: 'daily', label: 'Briefing & debrief', desc: 'Morning: the day ahead (opens the Briefing). Evening: review the day, move what\'s left and sign off (opens the Debrief).' },
   { key: 'wellbeing', label: 'Wellbeing', desc: 'Caffeine cutoff warning and a wind-down reminder before bedtime.' },
   { key: 'pomodoro', label: 'Pomodoro switches', desc: 'In a pomodoro sitting: “Break” when each pomodoro ends and “Back to work” when the break is over.' },
 ]
@@ -220,8 +220,8 @@ const reload = () => window.location.reload()
         </label>
         <div class="grid">
           <label class="field"><span>Block reminder (min before)</span><input v-model.number="n.blockLeadMin" type="number" min="0" max="120" class="input mono" /></label>
-          <label class="field"><span>Morning briefing</span><input v-model="n.briefingTime" type="time" class="input mono" /></label>
-          <label class="field"><span>Evening sign-off</span><input v-model="n.eveningTime" type="time" class="input mono" /></label>
+          <label class="field"><span>Briefing</span><input v-model="n.briefingTime" type="time" class="input mono" /></label>
+          <label class="field"><span>Debrief</span><input v-model="n.eveningTime" type="time" class="input mono" /></label>
           <label class="field"><span>Bedtime</span><input v-model="n.bedTime" type="time" class="input mono" /></label>
           <label class="field"><span>Wind-down (min before bed)</span><input v-model.number="n.windDownMin" type="number" min="0" max="240" class="input mono" /></label>
           <label class="field"><span>Caffeine cutoff</span><input v-model="state.caffeineCutoff" type="time" class="input mono" /></label>
