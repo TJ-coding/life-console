@@ -4,18 +4,28 @@
 // A task dropped in the bucket can be dragged straight down onto a time in the same column.
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, diffDays, CAPACITY_H, autoTimebox, toast, isOverdue, moveBlock, toMin, byPriority, categoryOf, partLabel, isHoverLinked } from '../store'
+import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, diffDays, CAPACITY_H, autoTimebox, toast, isOverdue, moveBlock, toMin, byPriority, categoryOf, partLabel, isHoverLinked, isLeaf, assignToDay, updateTodo } from '../store'
 import { startDrag, endDrag } from '../dnd'
 import DayTimeline from './DayTimeline.vue'
 import DeadlineQuickAdd from './DeadlineQuickAdd.vue'
 import WorkloadBucket from './WorkloadBucket.vue'
 import Gauge from './Gauge.vue'
 import Stamps from './Stamps.vue'
+import Prio from './Prio.vue'
 
 const router = useRouter()
 const openDay = () => router.push(props.date === todayISO() ? '/' : `/day/${props.date}`)
 // balance: ② Assign day only — { avg, counts (days the average covers), rows, moves } from the planner
 const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object })
+/* ② Assign day: the space under the day does that day's job — on an over-full day, what to move out
+   (the planner's rebalance moves); on a day with room, the backlog tasks the planner gives it */
+const free = computed(() => CAPACITY_H - hours.value)
+const moveOut = computed(() => (props.balance && !past.value && hours.value > CAPACITY_H ? Object.values(props.balance.moves).filter((s) => s.from === props.date) : []))
+const fits = computed(() => (props.balance && !past.value ? props.balance.place[props.date] ?? [] : []))
+function moveTo(s) {
+  updateTodo(s.todo.id, { scheduled: { date: s.to, start: null } })
+  toast(`${s.todo.id} → ${wd(s.to)} ${fmtSlash(s.to)}`)
+}
 const delta = computed(() => (props.balance?.counts.includes(props.date) ? hours.value - props.balance.avg : null))
 const isToday = computed(() => props.date === todayISO())
 const past = computed(() => diffDays(props.date, todayISO()) > 0)
@@ -69,13 +79,13 @@ function auto() {
       </div>
       <div v-if="balance && delta === null" class="delta mono muted" title="Not counted in the week's average">{{ date < todayISO() ? 'past' : 'weekend' }}</div>
       <div v-else-if="delta !== null" class="delta mono" :class="hours > CAPACITY_H ? 'danger' : delta > 1 ? 'warn' : delta < -1 ? 'room' : 'muted'" :title="`${Math.abs(delta).toFixed(1)}h ${delta >= 0 ? 'above' : 'below'} the week's average of ${balance.avg.toFixed(1)}h`">
-        <span class="icon sm">{{ Math.abs(delta) <= 1 ? 'drag_handle' : delta > 0 ? 'arrow_upward' : 'arrow_downward' }}</span>{{ delta >= 0 ? '+' : '−' }}{{ Math.abs(delta).toFixed(1) }}h <span class="muted">vs avg</span><template v-if="delta < -1 && hours <= CAPACITY_H"> · room</template>
+        <span class="icon sm">{{ delta >= 0 ? 'arrow_upward' : 'arrow_downward' }}</span>{{ delta >= 0 ? '+' : '−' }}{{ Math.abs(delta).toFixed(1) }}h <span class="muted">vs avg</span><template v-if="delta < -1 && hours <= CAPACITY_H"> · room</template>
       </div>
     </header>
 
     <div class="sec">
       <div class="sh tiny upper muted"><span class="n">②</span> Workload<span class="spacer"></span>{{ todos.filter((t) => t.done).length }}/{{ todos.length }} done</div>
-      <WorkloadBucket :date="date" :hour-px="bucketPx" :dim-fn="filter ? dimTodo : null" :min-rows="balance?.rows" :avg="balance && balance.counts.includes(date) ? balance.avg : null" :moves="balance?.moves" />
+      <WorkloadBucket :date="date" :hour-px="bucketPx" :dim-fn="filter ? dimTodo : null" :min-rows="balance?.rows" :avg="balance && balance.counts.includes(date) ? balance.avg : null" />
     </div>
 
     <div v-if="mode !== 'days'" class="sec">
@@ -113,6 +123,19 @@ function auto() {
       <div v-if="!deadlines.length && !adding" class="small muted pad">—</div>
     </div>
 
+    <div v-if="moveOut.length" class="sec">
+      <div class="sh tiny upper danger">Move out<span class="spacer"></span><span class="mono">{{ (hours - CAPACITY_H).toFixed(1) }}h over</span></div>
+      <button v-for="s in moveOut" :key="s.todo.id" class="pick" :title="`Move ${s.todo.title} to ${wd(s.to)} ${fmtSlash(s.to)}`" @click="moveTo(s)" @mouseenter="ui.hoverId = s.todo.id" @mouseleave="ui.hoverId = null">
+        <span class="ellipsis grow">{{ s.todo.title }}</span><span class="mono to">→ {{ wd(s.to) }}</span>
+      </button>
+    </div>
+    <div v-else-if="fits.length" class="sec">
+      <div class="sh tiny upper muted" :title="`Backlog tasks that would even out the week here, by priority and due date · ${free.toFixed(1)}h free`">Fits here<span class="spacer"></span><span class="mono">{{ free.toFixed(1) }}h free</span></div>
+      <button v-for="t in fits" :key="t.id" class="pick" :class="{ linked: isHoverLinked(t.id) }" :title="`Put ${t.title} on ${wd(date)} ${fmtSlash(date)}`" @click="assignToDay(t.id, date)" @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null">
+        <Prio :p="t.priority" /><span class="ellipsis grow">{{ t.title }}</span><span class="mono muted">{{ t.timeMin }}m</span>
+      </button>
+    </div>
+
     <template v-if="mode !== 'days'">
       <div class="sec">
         <div class="sh tiny upper muted">Notes</div>
@@ -140,6 +163,11 @@ function auto() {
 .delta { display: flex; align-items: center; gap: 3px; font-size: 12px; height: 18px; white-space: nowrap; overflow: hidden; }
 .delta .icon { font-size: 14px; }
 .delta.room { color: var(--info); }
+.pick { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 13px; text-align: left; padding: 4px 3px; border-radius: 2px; cursor: pointer; }
+.pick:hover, .pick.linked { background: var(--surface-2); }
+.pick:hover .grow { color: var(--accent); }
+.pick .to { color: var(--accent); white-space: nowrap; }
+.pick .mono { font-size: 11px; }
 .totime { margin: 0 0 6px; padding: 5px; border-radius: 2px; background: color-mix(in srgb, var(--warn) 8%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border)); display: flex; flex-direction: column; gap: 3px; }
 .tth { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; color: var(--warn); padding: 0 1px 1px; }
 .tth b { font-size: 13px; }

@@ -7,14 +7,13 @@ import { useRoute } from 'vue-router'
 import {
   state, ui, todayISO, addDays, wd, todosForDay, workload, CAPACITY_H, toast, autoTimebox,
   routineDone, toggleRoutine, monthGroup, toggleMonthly, suggestRebalance,
-  isLeaf, weekBalance,
+  isLeaf, weekBalance, byPriority,
 } from '../store'
 import WeekBar from '../components/WeekBar.vue'
 import DayColumn from '../components/DayColumn.vue'
 import BacklogPanel from '../components/BacklogPanel.vue'
 import BalancePanel from '../components/BalancePanel.vue'
 import WeekContext from '../components/WeekContext.vue'
-import BalanceBar from '../components/BalanceBar.vue'
 
 const route = useRoute()
 const T = computed(() => todayISO())
@@ -47,7 +46,8 @@ const balance = computed(() => weekBalance(ui.weekStart))
 const moves = computed(() => suggestRebalance(balance.value.days))
 const rebalanceN = computed(() => moves.value.length)
 /* ② Assign day: everything the columns need to compare days — the week average (on the days the
-   balance counts), one shared bucket height so the average line runs straight across, and the moves */
+   balance counts), one shared bucket height so the average line runs straight across, and the moves
+   that empty an over-full day */
 // rows a day's bucket needs at the ② size (30px/h): its hours, or more when many short cards
 // (16px minimum each, see WorkloadBucket) stack higher than their hours
 const bucketRows = (d) => {
@@ -55,12 +55,31 @@ const bucketRows = (d) => {
   const px = ts.reduce((s, t) => s + Math.max(16, (t.timeMin || 0) / 2 - 2) + 2, 4)
   return Math.max(Math.ceil(workload(d)), Math.ceil(px / 30))
 }
+// ② Assign day: a balanced home for each backlog task — by priority, onto the lightest day still
+// ahead where it fits under capacity and before its due date (weekdays first, the weekend as a
+// fallback). Each task is offered in one column only, so the columns don't repeat each other.
+const placement = computed(() => {
+  const ahead = (ds) => ds.filter((d) => d >= T.value)
+  const tiers = [ahead(days.value), ahead([sat.value, sun.value])]
+  const load = Object.fromEntries(week.value.map((d) => [d, workload(d)]))
+  const out = Object.fromEntries(week.value.map((d) => [d, []]))
+  const backlog = state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t)).sort(byPriority)
+  for (const t of backlog) {
+    const h = (t.timeMin || 0) / 60
+    for (const tier of tiers) {
+      const d = tier.filter((x) => (!t.due || x <= t.due) && load[x] + h <= CAPACITY_H).sort((a, b) => load[a] - load[b])[0]
+      if (d) { out[d].push(t); load[d] += h; break }
+    }
+  }
+  return out
+})
 const balancing = computed(() => ui.planMode === 'days' && !ui.backlogOnly)
 const dayBalance = computed(() => (balancing.value
   ? {
       avg: balance.value.avg,
       counts: balance.value.days,
       rows: Math.max(CAPACITY_H, ...week.value.map(bucketRows)),
+      place: placement.value,
       moves: Object.fromEntries(moves.value.map((s) => [s.todo.id, s])),
     }
   : null))
@@ -118,8 +137,6 @@ const print = () => window.print()
       </div>
       <button class="btn sm icon-only" title="Print A4" @click="print"><span class="icon sm">print</span></button>
     </div>
-
-    <BalanceBar v-if="balancing" :balance="balance" :moves="moves" />
 
     <!-- phones: backlog & days don't fit stacked — full-height screens with a switch on top (ISS-22) -->
     <nav class="phone-switch" aria-label="Backlog or week">
