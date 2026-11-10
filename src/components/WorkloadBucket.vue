@@ -3,7 +3,7 @@
 // Tasks stack from the bottom, each sized by its estimate; past capacity spills into a red zone.
 // Lives inside DayColumn directly above that day's timeline — drag a block down onto a time.
 import { computed, ref } from 'vue'
-import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked, loadsDay } from '../store'
+import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked, loadsDay, updateTodo, wd, fmtSlash } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 
 const props = defineProps({
@@ -12,7 +12,15 @@ const props = defineProps({
   cap: { type: Number, default: CAPACITY_H },
   hourPx: { type: Number, default: 30 },
   dimFn: Function,
+  minRows: Number, // ② Assign day: every bucket in the week gets the same height so their lines line up
+  avg: { type: Number, default: null }, // ② Assign day: the week's average load, drawn as a line
+  moves: Object, // ② Assign day: todo id → suggested rebalance move, shown as a "→ Thu" tag
 })
+const moveOf = (t) => (props.moves ? (t.grouped ? t.grouped.parts : [t]).map((p) => props.moves[p.id]).find(Boolean) : null)
+function applyMove(s) {
+  updateTodo(s.todo.id, { scheduled: { date: s.to, start: null } })
+  toast(`${s.todo.id} → ${wd(s.to)} ${fmtSlash(s.to)}`)
+}
 const todos = computed(() => {
   const ts = todosForDay(props.date)
   // ISS-21 feedback: every part of one task on this day is ONE card (timed sittings and the untimed
@@ -38,7 +46,7 @@ const fixedH = computed(() => (props.withBlocks
 // minutes a card adds to the gauge: work finished ahead of a future day no longer loads it (its card shrinks to a strip)
 const loadMin = (t) => (t.grouped ? t.grouped.parts : [t]).reduce((s, p) => s + (loadsDay(p, props.date) ? p.timeMin || 0 : 0), 0)
 const total = computed(() => fixedH.value + todos.value.reduce((s, t) => s + loadMin(t) / 60, 0))
-const rows = computed(() => Math.max(props.cap, Math.ceil(total.value)))
+const rows = computed(() => Math.max(props.cap, Math.ceil(total.value), props.minRows || 0))
 const blockH = (min) => Math.max(16, (min / 60) * props.hourPx - 2)
 const cardH = (t) => blockH(loadMin(t))
 // small blocks have a minimum height; let the bucket grow so they never spill over the header
@@ -76,6 +84,7 @@ function toggleParts(t) {
       <span v-if="showLabels" class="mono">{{ rows - r + 1 }}h</span>
     </div>
     <div class="capline" :style="{ bottom: cap * hourPx + 1 + 'px' }"></div>
+    <div v-if="avg !== null" class="avgline" :style="{ bottom: avg * hourPx + 1 + 'px' }" :title="`Week average ${avg.toFixed(1)}h`"><span class="mono">avg</span></div>
     <div class="stack">
       <div v-if="fixedH" class="fixed" :style="{ height: blockH(fixedH * 60) + 'px' }" title="Fixed calendar blocks (lectures, training…)">
         <span class="mono">fixed {{ fixedH.toFixed(1) }}h</span>
@@ -98,6 +107,7 @@ function toggleParts(t) {
       >
         <input type="checkbox" class="ck" :checked="t.grouped ? t.grouped.parts.every((p) => p.done) : t.done" :title="t.grouped ? 'Done: all of this task today' : 'Done'" @click.stop @change="t.grouped ? toggleParts(t) : toggleTodo(t.id)" />
         <span class="ttl"><b v-if="partLabel(t) && !t.grouped" class="part mono">{{ partLabel(t) }}</b>{{ t.title }}</span>
+        <button v-if="moveOf(t)" class="mvtag mono" :title="`Suggested to even out the week: move to ${wd(moveOf(t).to)} ${fmtSlash(moveOf(t).to)}`" @click.stop="applyMove(moveOf(t))">→ {{ wd(moveOf(t).to) }}</button>
         <span class="meta mono">
           <template v-if="t.grouped">{{ groupMeta(t.grouped) }}</template>
           <template v-else-if="t.scheduled.start">{{ t.scheduled.start }}</template>
@@ -117,6 +127,10 @@ function toggleParts(t) {
 .hrow:first-child { border-top: 0; }
 .hrow span { position: absolute; left: 3px; top: 1px; font-size: 9px; color: var(--muted); }
 .hrow.over { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.avgline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--info); z-index: 3; pointer-events: none; }
+.avgline span { position: absolute; left: 1px; top: -6px; font-size: 9px; line-height: 11px; padding: 0 2px; color: var(--info); background: var(--surface-2); }
+.mvtag { flex: none; border: 1px solid var(--info); background: var(--surface); color: var(--info); border-radius: 2px; font-size: 10px; line-height: 12px; padding: 0 3px; cursor: pointer; }
+.mvtag:hover { background: var(--info); color: var(--surface); }
 .capline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--muted); z-index: 1; pointer-events: none; }
 .stack { position: absolute; left: 22px; right: 3px; bottom: 1px; display: flex; flex-direction: column-reverse; gap: 2px; z-index: 2; }
 .fixed {

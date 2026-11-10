@@ -1135,6 +1135,29 @@ export function suggestRebalance(days, withBlocks = false, cap = CAPACITY_H) {
   return out
 }
 
+export const BALANCE_LEVEL = {
+  balanced: { icon: 'check_circle', label: 'Balanced', cls: 'ok' },
+  uneven: { icon: 'error', label: 'Uneven', cls: 'warn' },
+  unbalanced: { icon: 'warning', label: 'Unbalanced', cls: 'danger' },
+}
+/**
+ * How even the week's weekdays are: only the ones still ahead count (a past Monday can't be
+ * changed), or all five for a week that's already over. Feeds the Balance panel and the ② bar.
+ */
+export function weekBalance(weekStart) {
+  const wk = [0, 1, 2, 3, 4].map((i) => addDays(weekStart, i))
+  const ahead = wk.filter((d) => d >= todayISO())
+  const days = ahead.length ? ahead : wk
+  const loads = Object.fromEntries(days.map((d) => [d, dayLoad(d).total]))
+  const v = Object.values(loads)
+  const avg = v.reduce((a, b) => a + b, 0) / v.length
+  const spread = Math.max(...v) - Math.min(...v)
+  const over = days.filter((d) => loads[d] > CAPACITY_H)
+  const level = over.length || spread > 3 ? 'unbalanced' : spread > 1.5 ? 'uneven' : 'balanced'
+  const free = v.reduce((s, x) => s + Math.max(0, CAPACITY_H - x), 0)
+  return { days, loads, avg, spread, over, level, free }
+}
+
 /* ───────────── splitting a task across days ───────────── */
 /** Parts of the same original task, in chronological order (unscheduled last). */
 // Hover highlight: the hovered todo plus every other part of the same split task, so hovering a

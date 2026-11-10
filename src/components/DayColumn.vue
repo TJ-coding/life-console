@@ -14,7 +14,9 @@ import Stamps from './Stamps.vue'
 
 const router = useRouter()
 const openDay = () => router.push(props.date === todayISO() ? '/' : `/day/${props.date}`)
-const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' } })
+// balance: ② Assign day only — { avg, counts (days the average covers), rows, moves } from the planner
+const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object })
+const delta = computed(() => (props.balance?.counts.includes(props.date) ? hours.value - props.balance.avg : null))
 const isToday = computed(() => props.date === todayISO())
 const past = computed(() => diffDays(props.date, todayISO()) > 0)
 const todos = computed(() => todosForDay(props.date))
@@ -65,11 +67,15 @@ function auto() {
         <span class="mono small" :class="hours > CAPACITY_H ? 'danger' : ''">{{ hours.toFixed(1) }}<span class="muted">/{{ CAPACITY_H }}h</span></span>
         <div class="grow"><Gauge :hours="hours" horizontal /></div>
       </div>
+      <div v-if="balance && delta === null" class="delta mono muted" title="Not counted in the week's average">{{ date < todayISO() ? 'past' : 'weekend' }}</div>
+      <div v-else-if="delta !== null" class="delta mono" :class="hours > CAPACITY_H ? 'danger' : delta > 1 ? 'warn' : delta < -1 ? 'room' : 'muted'" :title="`${Math.abs(delta).toFixed(1)}h ${delta >= 0 ? 'above' : 'below'} the week's average of ${balance.avg.toFixed(1)}h`">
+        <span class="icon sm">{{ Math.abs(delta) <= 1 ? 'drag_handle' : delta > 0 ? 'arrow_upward' : 'arrow_downward' }}</span>{{ delta >= 0 ? '+' : '−' }}{{ Math.abs(delta).toFixed(1) }}h <span class="muted">vs avg</span><template v-if="delta < -1 && hours <= CAPACITY_H"> · room</template>
+      </div>
     </header>
 
     <div class="sec">
       <div class="sh tiny upper muted"><span class="n">②</span> Workload<span class="spacer"></span>{{ todos.filter((t) => t.done).length }}/{{ todos.length }} done</div>
-      <WorkloadBucket :date="date" :hour-px="bucketPx" :dim-fn="filter ? dimTodo : null" />
+      <WorkloadBucket :date="date" :hour-px="bucketPx" :dim-fn="filter ? dimTodo : null" :min-rows="balance?.rows" :avg="balance && balance.counts.includes(date) ? balance.avg : null" :moves="balance?.moves" />
     </div>
 
     <div v-if="mode !== 'days'" class="sec">
@@ -131,6 +137,9 @@ function auto() {
 .today .ja { color: var(--accent); }
 .md { font-size: 15px; font-weight: 700; }
 .sec { border-bottom: 1px solid var(--border); padding: 6px; }
+.delta { display: flex; align-items: center; gap: 3px; font-size: 12px; height: 18px; white-space: nowrap; overflow: hidden; }
+.delta .icon { font-size: 14px; }
+.delta.room { color: var(--info); }
 .totime { margin: 0 0 6px; padding: 5px; border-radius: 2px; background: color-mix(in srgb, var(--warn) 8%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border)); display: flex; flex-direction: column; gap: 3px; }
 .tth { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; color: var(--warn); padding: 0 1px 1px; }
 .tth b { font-size: 13px; }
@@ -138,7 +147,7 @@ function auto() {
 .tt .ttl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tt .pl { color: var(--muted); margin-right: 4px; font-weight: 500; }
 .tt.linked { outline: 2px solid var(--info); }
-.sh { display: flex; align-items: center; gap: 4px; padding: 0 2px 5px; min-height: 22px; }
+.sh { display: flex; align-items: center; gap: 4px; padding: 0 2px 5px; min-height: 22px; white-space: nowrap; overflow: hidden; }
 .n { font-size: 12px; }
 .auto { height: 20px; padding: 0 5px; font-size: 10px; color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--border)); }
 .dl { display: flex; align-items: center; gap: 5px; padding: 3px 2px; cursor: pointer; border-radius: 2px; }

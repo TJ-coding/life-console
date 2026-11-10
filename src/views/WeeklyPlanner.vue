@@ -7,13 +7,14 @@ import { useRoute } from 'vue-router'
 import {
   state, ui, todayISO, addDays, wd, todosForDay, workload, CAPACITY_H, toast, autoTimebox,
   routineDone, toggleRoutine, monthGroup, toggleMonthly, suggestRebalance,
-  isLeaf,
+  isLeaf, weekBalance,
 } from '../store'
 import WeekBar from '../components/WeekBar.vue'
 import DayColumn from '../components/DayColumn.vue'
 import BacklogPanel from '../components/BacklogPanel.vue'
 import BalancePanel from '../components/BalancePanel.vue'
 import WeekContext from '../components/WeekContext.vue'
+import BalanceBar from '../components/BalanceBar.vue'
 
 const route = useRoute()
 const T = computed(() => todayISO())
@@ -42,7 +43,27 @@ watchEffect(() => { ui.visibleIds = weekTodos.value.map((t) => t.id) })
 const backlogN = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t)).length)
 const untimed = computed(() => weekTodos.value.filter((t) => !t.done && !t.scheduled.start && t.scheduled.date >= T.value))
 const overDays = computed(() => days.value.filter((d) => workload(d) > CAPACITY_H))
-const rebalanceN = computed(() => suggestRebalance(days.value).length)
+const balance = computed(() => weekBalance(ui.weekStart))
+const moves = computed(() => suggestRebalance(balance.value.days))
+const rebalanceN = computed(() => moves.value.length)
+/* ② Assign day: everything the columns need to compare days — the week average (on the days the
+   balance counts), one shared bucket height so the average line runs straight across, and the moves */
+// rows a day's bucket needs at the ② size (30px/h): its hours, or more when many short cards
+// (16px minimum each, see WorkloadBucket) stack higher than their hours
+const bucketRows = (d) => {
+  const ts = todosForDay(d)
+  const px = ts.reduce((s, t) => s + Math.max(16, (t.timeMin || 0) / 2 - 2) + 2, 4)
+  return Math.max(Math.ceil(workload(d)), Math.ceil(px / 30))
+}
+const balancing = computed(() => ui.planMode === 'days' && !ui.backlogOnly)
+const dayBalance = computed(() => (balancing.value
+  ? {
+      avg: balance.value.avg,
+      counts: balance.value.days,
+      rows: Math.max(CAPACITY_H, ...week.value.map(bucketRows)),
+      moves: Object.fromEntries(moves.value.map((s) => [s.todo.id, s])),
+    }
+  : null))
 const next = computed(() => {
   if (overDays.value.length) return { icon: 'warning', cls: 'danger', text: `${overDays.value.map(wd).join(', ')} over ${CAPACITY_H}h — move or split a task`, action: 'balance' }
   if (backlogN.value) return { icon: 'inventory_2', cls: 'info', text: `${backlogN.value} backlog tasks to place — hover one and click a day, or drag it into a bucket` }
@@ -98,6 +119,8 @@ const print = () => window.print()
       <button class="btn sm icon-only" title="Print A4" @click="print"><span class="icon sm">print</span></button>
     </div>
 
+    <BalanceBar v-if="balancing" :balance="balance" :moves="moves" />
+
     <!-- phones: backlog & days don't fit stacked — full-height screens with a switch on top (ISS-22) -->
     <nav class="phone-switch" aria-label="Backlog or week">
       <button :class="{ on: !ui.backlogOnly }" @click="ui.backlogOnly = false"><span class="icon sm">view_agenda</span>Days</button>
@@ -109,10 +132,10 @@ const print = () => window.print()
 
       <template v-if="!ui.backlogOnly">
       <div class="days" :class="'mode-' + ui.planMode">
-        <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" />
+        <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" :balance="dayBalance" />
         <div class="weekend">
-          <DayColumn :date="sat" :filter="filter" :mode="ui.planMode" />
-          <DayColumn :date="sun" :filter="filter" :mode="ui.planMode" />
+          <DayColumn :date="sat" :filter="filter" :mode="ui.planMode" :balance="dayBalance" />
+          <DayColumn :date="sun" :filter="filter" :mode="ui.planMode" :balance="dayBalance" />
         </div>
       </div>
       </template>
