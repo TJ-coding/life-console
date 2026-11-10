@@ -8,7 +8,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { state, ui, toast, todayISO, isLeaf, workload, CAPACITY_H, addDays, mondayOf, diffDays } from '../store'
+import { state, ui, toast, clearPlanner, todayISO, isLeaf, workload, CAPACITY_H, addDays, mondayOf, diffDays } from '../store'
 
 const isPhone = () => innerWidth <= 640
 const T = () => todayISO()
@@ -86,7 +86,7 @@ const STEPS = [
     action: { start: () => doneCount(), done: (n) => doneCount() > n } },
   { move: 2, route: '/', target: '.now-inst a[href="#/focus"]', icon: 'center_focus_strong', title: 'Focus mode', body: 'One tap hides everything else.' },
 
-  { kind: 'finish', icon: 'celebration', title: 'You’re ready', body: 'Strategise, distribute, execute. Your plan is saved; the rest is demo data, so play freely.', next: 'Start planning' },
+  { kind: 'finish', icon: 'celebration', title: 'You’re ready', body: 'Strategise, distribute, execute. Keep the demo to play with, or start empty and plan your own.', next: 'Keep the demo' },
 ]
 const MOVES = ['Strategise', 'Distribute', 'Execute']
 
@@ -274,6 +274,13 @@ async function go(n) {
 function finish() {
   close()
 }
+/* the finish card's other choice: delete everything (demo and what the tour added) and start on Strategy */
+function startEmpty() {
+  close() // first, so the snapshot Undo restores already has the tour marked done
+  const undo = clearPlanner()
+  router.push('/strategy')
+  toast('Planner emptied. Start with + New plan', { label: 'Undo', run: () => { undo(); router.push('/') } })
+}
 function skip() {
   close()
   toast('Take the tour anytime: Settings → Getting started')
@@ -392,6 +399,7 @@ const blockers = computed(() => {
         <div v-if="waiting && !done" class="tour-wait mono small">waiting for you <i>✦</i></div>
         <div v-if="!done" class="tour-actions">
           <button v-if="step.kind !== 'finish'" class="btn ghost" @click="skip">Skip tour</button>
+          <button v-else class="btn danger-ghost" title="Delete everything in the planner, including the demo, and start with nothing" @click="startEmpty"><span class="icon sm">delete_sweep</span>Start empty</button>
           <span class="spacer"></span>
           <button v-if="i > 0 && step.kind !== 'finish'" class="btn" @click="go(i - 1)">Back</button>
           <button v-if="waiting" class="btn ghost" title="Skip this step" @click="go(i + 1)">Skip step</button>

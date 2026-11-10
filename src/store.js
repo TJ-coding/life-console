@@ -333,6 +333,32 @@ export function resetDemo() {
   normalizeState()
 }
 
+/** An empty planner: same shape as the demo, nothing in it. */
+function emptyPlanner() {
+  return {
+    version: 1, schemaVersion: 2, todos: [], timeBlocks: [], deadlines: [], plans: [],
+    routines: [], routineLog: {}, monthlyGroups: { A: [], B: [], C: [] }, monthlyLog: {},
+    signOffs: {}, notes: {}, sleep: {}, caffeine: {}, caffeineCutoff: '14:00', caffeineLimit: 300,
+    lectures: [], reviews: [], tour: 'done',
+  }
+}
+/**
+ * Delete everything in the planner (demo data and anything added) and keep only the settings, for someone
+ * who wants to start their own. Returns a restore function for the Undo in the toast.
+ */
+export function clearPlanner() {
+  const before = JSON.parse(JSON.stringify(state))
+  const settings = state.settings
+  for (const k of Object.keys(state)) delete state[k]
+  Object.assign(state, emptyPlanner(), { settings })
+  normalizeState()
+  return () => {
+    for (const k of Object.keys(state)) delete state[k]
+    Object.assign(state, before)
+    normalizeState()
+  }
+}
+
 /* ───────────── transient UI state ───────────── */
 let savedTheme = 'dark'
 try { savedTheme = localStorage.getItem('life-console/theme') || 'dark' } catch { /* ignore */ }
