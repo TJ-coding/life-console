@@ -22,7 +22,8 @@ function start(t) {
         <div class="inst-lbl">
           <span v-if="current" class="tag mono"><span class="pulse"></span>NOW</span>
           <span v-else class="tag mono free-tag">FREE</span>
-          <span class="mono muted range">{{ current ? `${current.start}–${current.end}` : `until ${next ? next.start : 'end of day'}` }}</span>
+          <span v-if="current" class="mono muted range">{{ current.start }}–{{ current.end }}</span>
+          <span v-else class="muted range ellipsis">until <b class="mono until">{{ next ? next.start : 'end of day' }}</b><template v-if="next"> · {{ next.title }}</template></span>
         </div>
         <template v-if="current">
           <div class="title clamp2">{{ current.title }}</div>
@@ -61,9 +62,9 @@ function start(t) {
 
     <div v-if="current" class="bar big-bar"><i :style="{ width: progress.pct + '%' }"></i></div>
 
-    <!-- what's next: one readable line -->
-    <div class="next-row">
-      <span class="tiny upper muted">{{ current ? 'Next' : 'Then' }}</span>
+    <!-- busy: what's next as one readable line (when free, the next block is already in the label row) -->
+    <div v-if="current" class="next-row">
+      <span class="tiny upper muted">Next</span>
       <template v-if="next">
         <b class="mono">{{ next.start }}</b>
         <span class="ellipsis grow">{{ next.title }}</span>
@@ -89,7 +90,9 @@ function start(t) {
 .free-tag { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
 .pulse { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: pulse 1.6s infinite; }
 @keyframes pulse { 50% { opacity: 0.2; } }
-.range { font-size: 13px; }
+.range { font-size: 13px; min-width: 0; }
+.free .range { font-size: 15px; }
+.range .until { color: var(--warn); font-weight: 600; }
 .title { font: 600 30px/36px Inter, sans-serif; letter-spacing: -0.015em; }
 .now-inst .inst-big { font-size: 48px; line-height: 50px; }
 .meta { gap: 10px; font-size: 14px; flex-wrap: wrap; }
