@@ -172,7 +172,7 @@ Every device also keeps a copy of its user's planner in the browser. Signing out
 
 - **See them any time:** `npm run admin -- metrics` (yesterday) · `--days 30` (a table of the last 30 days) · `--day 2026-11-01`.
 - **Umami:** set `UMAMI_URL` (Umami as the app server reaches it; the public service uses `http://dokpoly.netbird.cloud:3100`). The website is `UMAMI_WEBSITE_ID`, else `ANALYTICS_SITE_ID`. Once a day (checked hourly, claimed in `app_kv` so replicas don't double-send, retried on failure) the server POSTs one `daily-metrics` event to `/api/send` with the numbers above as event data. `npm run admin -- metrics --send` sends yesterday by hand.
-- **In Umami:** *Events* shows one `daily-metrics` per day; its event data (or *Reports → Event data*) charts `mau`, `dau`, `churn_rate`, … over time. Umami goals count events and can't target a value, so track targets (e.g. MAU ≥ 100) against the `mau` property.
+- **In Umami:** *Events → Properties*, event `daily-metrics`, then a property: each is named in plain English (`LABELS` in `metrics.mjs`, e.g. *Active users, last 30 days*, *Churn rate: share of users who stopped (%)*). Reports before 2026-11-10 used the short keys (`mau`, `churn_rate`, …). Umami 3's Goals report is a conversion rate (sessions that did X ÷ all sessions) and can't hold a target number, so there's no goal for these.
 - Off when `UMAMI_URL` is empty (self-hosted servers send nothing).
 
 ### 6.2 Backups

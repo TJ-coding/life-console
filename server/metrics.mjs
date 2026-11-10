@@ -45,6 +45,22 @@ export async function computeMetrics(pool, day) {
 // suffix (even "Mozilla/5.0 (X11; Linux x86_64) Foo/1.0"), so this must read as a plain desktop Chrome.
 export const UMAMI_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
 
+/** Plain-English names for the metrics, as they appear in Umami (event data) and the admin CLI. */
+export const LABELS = {
+  day: 'Day',
+  users: 'Total users',
+  new_users: 'New users',
+  dau: 'Active users that day',
+  wau: 'Active users, last 7 days',
+  mau: 'Active users, last 30 days',
+  stickiness: 'Share of last-30-day users active that day (%)',
+  churned: 'Users who stopped (active 31-60 days ago, not since)',
+  churn_rate: 'Churn rate: share of users who stopped (%)',
+  retained: 'Users who stayed (active 31-60 days ago and since)',
+  resurrected: 'Users who came back after 60+ days away',
+}
+export const labelled = (m) => Object.fromEntries(Object.entries(LABELS).map(([k, label]) => [label, m[k]]))
+
 /** One Umami event: POST /api/send. Throws if Umami didn't record it. */
 export async function sendToUmami(cfg, name, data) {
   const r = await fetch(`${cfg.umamiUrl}/api/send`, {
@@ -80,7 +96,7 @@ export function createMetricsReporter({ db, pool, cfg, log }) {
     if (!(await claim(day))) return null
     try {
       const m = await computeMetrics(pool, day)
-      await sendToUmami(cfg, 'daily-metrics', m)
+      await sendToUmami(cfg, 'daily-metrics', labelled(m))
       log(`[metrics] ${day} → Umami: ${m.users} users · DAU ${m.dau} · WAU ${m.wau} · MAU ${m.mau} · churn ${m.churn_rate}%`)
       return m
     } catch (e) {

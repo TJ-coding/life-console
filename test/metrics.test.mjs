@@ -103,7 +103,8 @@ test('the daily report goes to Umami once per day, and retries after a failure',
   assert.equal(body.payload.website, 'site-1')
   assert.equal(body.payload.hostname, 'lc.test')
   assert.equal(body.payload.name, 'daily-metrics')
-  assert.equal(body.payload.data.mau, 5)
+  assert.equal(body.payload.data['Active users, last 30 days'], 5)
+  assert.equal(body.payload.data['Churn rate: share of users who stopped (%)'], 40)
   assert.ok(!JSON.stringify(body).includes('@x'), 'no emails or ids, only counts')
   // a marker left by the release whose reports Umami dropped as a bot: that day goes out once more
   await q(`update app_kv set value = '{"day":"2026-06-30"}' where key = 'umami_metrics_day'`)

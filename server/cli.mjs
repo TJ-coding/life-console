@@ -27,7 +27,7 @@ import { users, plannerDocs, plannerRevisions, pushSubscriptions, issues, appKv,
 import { createAuth, normEmail } from './auth.mjs'
 import { createPlanner } from './planner.mjs'
 import { issueNo, platformFromUA } from './issues.mjs'
-import { computeMetrics, sendToUmami, utcDay, addDays } from './metrics.mjs'
+import { computeMetrics, sendToUmami, utcDay, addDays, labelled } from './metrics.mjs'
 
 const argv = process.argv.slice(2)
 const cmd = argv[0]
@@ -53,10 +53,10 @@ const commands = {
     const n = Number(opt('days') || 1)
     const rows = []
     for (let i = n - 1; i >= 0; i--) rows.push(await computeMetrics(pool, addDays(last, -i)))
-    console.table(rows.map(({ prev_mau, ...m }) => ({ ...m, stickiness: `${m.stickiness}%`, churn_rate: `${m.churn_rate}%` })))
+    for (const m of rows) { console.log(''); for (const [k, v] of Object.entries(labelled(m))) console.log(`${k.padEnd(52)} ${v}`) }
     if (has('send')) {
       if (!cfg.umami) throw new Error('set UMAMI_URL and UMAMI_WEBSITE_ID (or ANALYTICS_SITE_ID) to send')
-      await sendToUmami(cfg, 'daily-metrics', rows[rows.length - 1])
+      await sendToUmami(cfg, 'daily-metrics', labelled(rows[rows.length - 1]))
       console.log(`sent ${last} to ${cfg.umamiUrl}`)
     }
   },
