@@ -22,7 +22,7 @@ function start(t) {
         <div class="inst-lbl">
           <span v-if="current" class="tag mono"><span class="pulse"></span>NOW</span>
           <span v-if="current" class="mono muted range">{{ current.start }}–{{ current.end }}</span>
-          <span v-else class="muted range ellipsis">until <b class="mono until">{{ next ? next.start : 'end of day' }}</b><template v-if="next"> · {{ next.title }}</template></span>
+          <span v-else class="muted range ellipsis" :title="next ? `${next.start} ${next.title}` : null">until <b class="mono until">{{ next ? next.start : 'end of day' }}</b></span>
         </div>
         <template v-if="current">
           <div class="title clamp2">{{ current.title }}</div>
@@ -48,7 +48,7 @@ function start(t) {
 
     <div v-if="current" class="bar big-bar"><i :style="{ width: progress.pct + '%' }"></i></div>
 
-    <!-- free: the todo you could start, as the bottom line (the next block is already in the label row) -->
+    <!-- free: the todo you could start, as the bottom line (only the next block's start time is in the label row, so "next" is said once) -->
     <div v-if="!current" class="next-row upnext">
       <span class="tiny upper muted">Up next</span>
       <template v-if="suggestion">
