@@ -599,9 +599,11 @@ export const newBlockMin = (workMin) => (pomo().on ? wallMin(workMin, pomo()) : 
 /* ───────────── schedule blocks ───────────── */
 /** Blocks that occupy time when planning: a todo done ahead of a future day no longer does. */
 const busyBlocks = (date) => blocksForDay(date).filter((b) => !(b.done && date > todayISO()))
-export function blocksForDay(date) {
+export const blocksForDay = (date) => blocksFrom(date, state.todos)
+/** A day's timeline from a given todo list: the real one, or a what-if copy (Briefing / Debrief previews). */
+export function blocksFrom(date, todos) {
   const tb = state.timeBlocks.filter((b) => b.date === date).map((b) => ({ ...b, kind: 'block' }))
-  const tt = state.todos
+  const tt = todos
     .filter((t) => t.scheduled?.date === date && t.scheduled.start)
     .map((t) => ({
       id: t.id, todoId: t.id, kind: 'todo', title: partLabel(t) ? `${t.title} (${partLabel(t)})` : t.title, done: t.done, link: t.links[0] ?? null,

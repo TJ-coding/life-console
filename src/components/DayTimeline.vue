@@ -3,7 +3,9 @@
 import { computed, ref } from 'vue'
 import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
-const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 6 }, to: { type: Number, default: 23 }, pxh: { type: Number, default: 22 }, dimFn: Function })
+const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 6 }, to: { type: Number, default: 23 }, pxh: { type: Number, default: 22 }, dimFn: Function,
+  // preview mode (Briefing / Debrief): no editing; markFn(b) adds classes (pv-new, pv-ghost, pv-late, pv-star); lineAt draws a line (minutes)
+  readonly: Boolean, markFn: Function, lineAt: Number, lineLabel: String })
 const emit = defineEmits(['drop-todo', 'open', 'edit'])
 const laid = computed(() => layoutLanes(props.blocks.map((b) => ed.view(b))))
 const y = (m) => ((m - props.from * 60) / 60) * props.pxh
@@ -42,21 +44,22 @@ function pomos(b) {
 }
 </script>
 <template>
-  <div class="vt" :style="{ height: (to - from) * pxh + 'px' }" @dragover="ed.onOver" @dragleave="ed.onLeave" @drop.stop="ed.onDrop">
+  <div class="vt" :class="{ ro: readonly }" :style="{ height: (to - from) * pxh + 'px' }" @dragover="!readonly && ed.onOver($event)" @dragleave="!readonly && ed.onLeave($event)" @drop.stop="!readonly && ed.onDrop($event)">
     <div v-for="h in to - from" :key="h" class="hr" :style="{ top: (h - 1) * pxh + 'px', height: pxh + 'px' }">
       <span class="mono">{{ String(from + h - 1).padStart(2, '0') }}</span>
     </div>
     <div
-      v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b), moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b), linked: isHoverLinked(b.todoId) }]"
-      :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!ui.scheduleLock"
-      @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock($event, b)" @contextmenu.prevent="toggleBlockSel(b)"
+      v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b) }, markFn ? markFn(b) : '', { moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b), linked: isHoverLinked(b.todoId) }]"
+      :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!readonly && !ui.scheduleLock"
+      @dragstart="!readonly && ed.dragStartBlock($event, b)" @dragend="!readonly && ed.dragEnd($event)" @click="!readonly && openBlock($event, b)" @contextmenu.prevent="!readonly && toggleBlockSel(b)"
       @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null"
     >
       <i v-for="(g, k) in pomos(b)" :key="'pm' + k" class="pm" :style="g"></i>
       <span v-if="b.done" class="icon dn" title="Completed">check_circle</span><span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> <span class="bt">{{ b.title }}</span><span v-if="b.pomo && b.pomo.length > 1" class="mono pc" :title="`${b.pomo.length} pomodoros`"><span class="icon">timer</span>{{ b.pomo.length }}</span>
-      <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
-      <span v-if="!ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
+      <button v-if="!readonly && !ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
+      <span v-if="!readonly && !ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
     </div>
+    <div v-if="lineAt != null && lineAt > from * 60 && lineAt < to * 60" class="wline" :style="{ top: y(lineAt) + 'px' }"><span class="mono">{{ lineLabel }}</span></div>
     <div v-if="nowY !== null" class="now" :style="{ top: nowY + 'px' }"></div>
     <div v-if="hover" class="ghost" :style="{ top: y(hover.start) + 'px', height: Math.max(4, y(hover.start + hover.dur) - y(hover.start)) + 'px' }">
       <span class="mono">{{ fromMin(hover.start) }}</span>
@@ -74,6 +77,16 @@ function pomos(b) {
 .ghost { position: absolute; left: 28px; right: 0; border: 1px dashed var(--info); background: color-mix(in srgb, var(--info) 10%, transparent); z-index: 3; pointer-events: none; }
 .ghost span { position: absolute; right: 2px; top: 1px; font-size: 10px; color: var(--info); background: var(--surface); padding: 0 2px; }
 .vb { cursor: grab; }
+/* preview mode (Briefing / Debrief) */
+.ro .vb { cursor: default; min-height: 17px; }
+.wline { position: absolute; left: 28px; right: 0; border-top: 2px solid color-mix(in srgb, var(--danger) 55%, transparent); z-index: 1; pointer-events: none; }
+.wline span { position: absolute; right: 2px; top: 1px; font-size: 9px; color: var(--danger); }
+.vb.pv-new { background: var(--accent); color: var(--on-accent); outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); z-index: 3; }
+.vb.pv-new .t { color: var(--on-accent); }
+.vb.pv-ghost { background: transparent; border: 1.5px solid var(--muted); color: var(--muted); opacity: 0.6; }
+.vb.pv-late { background: color-mix(in srgb, var(--danger) 28%, var(--surface)); outline: 1px solid var(--danger); }
+.vb.pv-new.pv-late { background: var(--danger); }
+.vb.pv-star { outline: 2px solid var(--warn); outline-offset: 1px; z-index: 4; font-weight: 600; }
 /* a pomodoro sitting: a slim rail on the right edge, one rounded segment per pomodoro, gaps = breaks */
 .pm { position: absolute; right: 2px; width: 3px; border-radius: 2px; background: var(--c); opacity: 0.75; pointer-events: none; }
 .vb:has(.pm) { padding-right: 8px; }
