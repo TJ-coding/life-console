@@ -66,8 +66,11 @@ export function createMetricsReporter({ db, pool, cfg, log }) {
   let timer = null
   const KEY = 'umami_metrics_day'
   async function claim(day) {
+    // v: 2 marks claims from releases that detect Umami's silent bot drop; an older marker may stand for a
+    // report Umami discarded, so that day is claimable once more
     const { rowCount } = await pool.query(`insert into app_kv (key, value) values ($1, $2::jsonb)
-      on conflict (key) do update set value = excluded.value, updated_at = now() where app_kv.value->>'day' < $3`, [KEY, JSON.stringify({ day }), day])
+      on conflict (key) do update set value = excluded.value, updated_at = now()
+      where app_kv.value->>'day' < $3 or app_kv.value->>'v' is null`, [KEY, JSON.stringify({ day, v: 2 }), day])
     return rowCount === 1
   }
   async function report(now = new Date()) {
