@@ -34,19 +34,6 @@ function start(t) {
         </template>
         <template v-else>
           <div class="title">{{ next ? `You're free for ${fmtDur(gap)}` : `You're free for the rest of the day` }}</div>
-          <div class="upnext">
-            <span class="tiny upper muted lbl">Up next</span>
-            <template v-if="suggestion">
-              <button class="un-open" title="Open this todo" @click="ui.drawerId = suggestion.id">
-                <Prio :p="suggestion.priority" />
-                <span class="ellipsis un-title">{{ suggestion.title }}</span>
-              </button>
-              <span class="mono small un-meta" :class="suggestionFits ? 'ok' : 'warn'">{{ suggestion.timeMin }}m{{ suggestionFits ? ' · fits' : ' · longer than the gap' }}</span>
-              <span v-if="missedAt" class="mono small danger un-meta">missed {{ missedAt }}</span>
-              <button class="btn primary un-start" @click="start(suggestion)"><span class="icon sm">play_arrow</span>Start now</button>
-            </template>
-            <span v-else class="muted grow">Nothing queued. Press <span class="kbd">N</span> to add a todo.</span>
-          </div>
         </template>
       </div>
 
@@ -62,8 +49,22 @@ function start(t) {
 
     <div v-if="current" class="bar big-bar"><i :style="{ width: progress.pct + '%' }"></i></div>
 
-    <!-- busy: what's next as one readable line (when free, the next block is already in the label row) -->
-    <div v-if="current" class="next-row">
+    <!-- free: the todo you could start, as the bottom line (the next block is already in the label row) -->
+    <div v-if="!current" class="next-row upnext">
+      <span class="tiny upper muted">Up next</span>
+      <template v-if="suggestion">
+        <button class="un-open" title="Open this todo" @click="ui.drawerId = suggestion.id">
+          <Prio :p="suggestion.priority" />
+          <span class="ellipsis un-title">{{ suggestion.title }}</span>
+        </button>
+        <span class="mono un-meta" :class="suggestionFits ? 'ok' : 'warn'">{{ suggestion.timeMin }}m{{ suggestionFits ? ' · fits' : ' · longer than the gap' }}</span>
+        <span v-if="missedAt" class="mono danger un-meta">missed {{ missedAt }}</span>
+        <button class="btn sm primary un-start" @click="start(suggestion)"><span class="icon sm">play_arrow</span>Start now</button>
+      </template>
+      <span v-else class="muted grow">Nothing queued. Press <span class="kbd">N</span> to add a todo.</span>
+    </div>
+    <!-- busy: what's next as one readable line -->
+    <div v-else class="next-row">
       <span class="tiny upper muted">Next</span>
       <template v-if="next">
         <b class="mono">{{ next.start }}</b>
@@ -100,13 +101,12 @@ function start(t) {
 .busy .big-bar > i { background: var(--c); }
 .do { display: flex; align-items: center; gap: 8px; max-width: 640px; border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px; background: var(--surface); color: var(--text); font: inherit; font-size: 15px; text-align: left; cursor: pointer; min-width: 0; }
 .do:hover { border-color: var(--accent); }
-/* free: the task you could pick up, boxed apart from the free-time headline */
-.upnext { display: flex; align-items: center; gap: 12px; max-width: 900px; border: 1px solid var(--border); border-radius: 2px; padding: 8px 8px 8px 12px; background: var(--surface-2); font-size: 16px; min-width: 0; }
-.upnext .lbl { flex: none; }
+/* free: the todo you could start, in the bottom line */
+.upnext { align-items: center; }
 .un-open { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; padding: 0; }
 .un-open:hover .un-title { color: var(--accent); }
-.un-meta, .un-start { flex: none; }
-.un-start { color: var(--on-accent); }
+.un-meta { flex: none; font-size: 14px; }
+.un-start { flex: none; color: var(--on-accent); }
 .next-row { display: flex; align-items: baseline; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 16px; min-width: 0; }
 .next-row b { font-size: 16px; color: var(--warn); }
 .next-row .in { font-size: 14px; flex: none; }
@@ -120,7 +120,7 @@ function start(t) {
   .title { font-size: 24px; line-height: 30px; }
   .now-inst .inst-big { font-size: 34px; line-height: 38px; }
   .next-row { font-size: 15px; }
-  .upnext { flex-wrap: wrap; font-size: 15px; row-gap: 6px; }
+  .upnext { flex-wrap: wrap; row-gap: 6px; }
   .un-open { flex-basis: calc(100% - 70px); }
   .un-start { margin-left: auto; }
 }
