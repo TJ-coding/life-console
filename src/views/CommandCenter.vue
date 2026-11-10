@@ -8,7 +8,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, CAPACITY_H,
   diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, nextCheckDate, activePlans,
-  updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash, setScheduleLock, LOCK_HELP,
+  updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash, setScheduleLock, LOCK_HELP, touchUI,
   isLeaf, byPriority,
 } from '../store'
 import Prio from '../components/Prio.vue'
@@ -183,7 +183,7 @@ function quickAdd() {
             <button class="btn sm icon-only" :class="{ active: !vert }" title="Horizontal timeline" @click="setVert(false)"><span class="icon sm">view_column</span></button>
             <button class="btn sm icon-only" :class="{ active: vert }" title="Vertical timeline" @click="setVert(true)"><span class="icon sm">view_agenda</span></button>
           </div>
-          <button class="btn sm icon-only lockbtn" :class="{ active: ui.scheduleLock }" :title="ui.scheduleLock ? LOCK_HELP.on : LOCK_HELP.off" :aria-label="ui.scheduleLock ? LOCK_HELP.on : LOCK_HELP.off" @click="setScheduleLock(!ui.scheduleLock)"><span class="icon sm">{{ ui.scheduleLock ? 'lock' : 'lock_open' }}</span></button>
+          <button v-if="touchUI" class="btn sm icon-only lockbtn" :class="{ active: ui.scheduleLock }" :title="ui.scheduleLock ? LOCK_HELP.on : LOCK_HELP.off" :aria-label="ui.scheduleLock ? LOCK_HELP.on : LOCK_HELP.off" @click="setScheduleLock(!ui.scheduleLock)"><span class="icon sm">{{ ui.scheduleLock ? 'lock' : 'lock_open' }}</span></button>
         </div>
         <template v-if="vert">
           <div class="vctrl">

@@ -54,7 +54,7 @@ function onDrop(e) {
           <span class="ttl">Backlog<template v-if="focus"> only</template></span>
           <span class="mono tiny muted">{{ list.length }} tasks · {{ total.toFixed(1) }}h</span>
         </span>
-        <span class="icon sm" :class="{ info: focus }">{{ focus ? 'first_page' : 'crop_din' }}</span>
+        <span class="icon sm" :class="{ info: focus }">{{ focus ? 'close_fullscreen' : 'open_in_full' }}</span>
       </button>
     </header>
     <form v-if="open" class="qa" @submit.prevent="add">
