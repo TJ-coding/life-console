@@ -138,8 +138,13 @@ const fromBacklog = () => { const t = ui.dragId && findTodo(ui.dragId); return t
 /** A timeline item dragged onto the list leaves the timeline but stays on this day's list: a task
  *  just loses its start time; a fixed block becomes a task for the day. Undo in the toast. */
 const fromTimeline = () => ui.dragBlock && !ui.dragBlock.group ? ui.dragBlock : null
+/** While a timeline item is being dragged, the list and the Backlog button show where it can go. */
+const tlDrag = computed(() => fromTimeline()?.kind ?? null) // 'todo' | 'block' | null
+const listHot = ref(false)
+watch(tlDrag, (k) => { if (!k) listHot.value = btnHot.value = false })
 function listDragOverCapture(e) {
   if (!fromBacklog() && !fromTimeline()) return
+  listHot.value = !!fromTimeline()
   e.preventDefault()
   e.stopPropagation()
 }
@@ -272,8 +277,8 @@ function quickAdd() {
           <h2><router-link to="/todos" class="title-link">{{ isToday ? 'Left today' : `Todos · ${wd(T)}` }}</router-link></h2>
           <span class="mono small muted">{{ pending.length }} open · {{ fmtH(remainingMin) }} left</span>
           <span class="spacer"></span>
-          <button v-if="T >= today" class="btn sm plan-btn" :class="{ active: planning, 'drop-hot': btnHot }" :aria-pressed="planning" :title="planning ? 'Hide the backlog · drop a task here to send it back' : `Show the backlog beside the list: drag or click tasks into ${isToday ? 'today' : wd(T)} · drop a task here to send it back`" @click="planning = !planning" @dragover="overBacklogBtn" @dragleave="btnHot = false" @drop.prevent="dropOnBacklog">
-            <span class="icon sm">inventory_2</span>Backlog<span v-if="backlog.length" class="mono n">{{ backlog.length }}</span>
+          <button v-if="T >= today" class="btn sm plan-btn" :class="{ active: planning, 'drop-ready': tlDrag === 'todo', 'drop-hot': btnHot }" :aria-pressed="planning" :title="planning ? 'Hide the backlog · drop a task here to send it back' : `Show the backlog beside the list: drag or click tasks into ${isToday ? 'today' : wd(T)} · drop a task here to send it back`" @click="planning = !planning" @dragover="overBacklogBtn" @dragleave="btnHot = false" @drop.prevent="dropOnBacklog">
+            <span class="icon sm">inventory_2</span>{{ tlDrag === 'todo' ? 'Drop: back to backlog' : 'Backlog' }}<span v-if="backlog.length" class="mono n">{{ backlog.length }}</span>
           </button>
           <button v-if="done.length" class="btn sm ghost-btn" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }} {{ done.length }} done</button>
           <span class="load" :title="`Workload: ${hours.toFixed(1)}h planned of ${CAPACITY_H}h (${fmtH(doneMin)} done)`">
@@ -286,7 +291,8 @@ function quickAdd() {
         </div>
         <div class="tp-body" :class="{ split: planning }">
           <div class="tp-main">
-            <div class="list" @dragover.capture="listDragOverCapture" @drop.capture="listDropCapture" @dragover.prevent @drop.prevent="dropOnList">
+            <div class="list" :class="{ 'tl-drop': tlDrag, 'tl-hot': listHot }" @dragleave="(e) => { if (!e.currentTarget.contains(e.relatedTarget)) listHot = false }" @dragover.capture="listDragOverCapture" @drop.capture="listDropCapture" @dragover.prevent @drop.prevent="dropOnList">
+              <div v-if="tlDrag" class="tl-hint"><span class="icon sm">{{ tlDrag === 'todo' ? 'schedule' : 'add_task' }}</span>{{ tlDrag === 'todo' ? `Drop here to unschedule · stays on ${isToday ? "today's" : wd(T) + "'s"} list` : `Drop here to make it a task for ${isToday ? 'today' : wd(T)}` }}</div>
               <TodoRow v-for="t in pending" :key="t.id" :todo="t" compact adopt-date show-start show-prio removable :show-links="false" @remove="removeTodo" />
               <template v-if="showDone">
                 <TodoRow v-for="t in done" :key="t.id" :todo="t" compact adopt-date show-start show-prio removable :show-links="false" @remove="removeTodo" />
@@ -423,7 +429,13 @@ function quickAdd() {
 .tp-body.split .tp-main { flex: 3 1 0; }
 .bl-col { display: flex; flex-direction: column; flex: 2 1 0; min-width: 220px; border-left: 1px solid var(--border); background: var(--surface-2); }
 .bl-col.drop-hot { box-shadow: inset 0 0 0 1px var(--accent); }
+.plan-btn.drop-ready { outline: 1px dashed var(--info); outline-offset: 1px; }
 .plan-btn.drop-hot { box-shadow: 0 0 0 1px var(--accent); }
+/* a timeline item being dragged: the list is a drop zone that says what a drop does */
+.list.tl-drop { outline: 1px dashed var(--info); outline-offset: -1px; }
+.list.tl-hot { background: color-mix(in srgb, var(--info) 6%, transparent); }
+.tl-hint { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 14px; color: var(--info); background: var(--surface); border-bottom: 1px dashed var(--info); pointer-events: none; }
+.list.tl-hot .tl-hint { background: color-mix(in srgb, var(--info) 12%, var(--surface)); }
 .bl-h { display: flex; align-items: center; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--border); }
 .bl-list { flex: 1 1 0; min-height: 140px; overflow: auto; }
 .bl-row { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 10px 6px 6px; border-bottom: 1px solid var(--border); font-size: 15px; cursor: grab; }
