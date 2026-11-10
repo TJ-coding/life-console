@@ -1,8 +1,8 @@
 <script setup>
 // Cockpit NOW instrument for S-01 (full width): what to do this minute on the left, the countdown and
 // actions on the right, progress across, and what's next as one line at the bottom.
-// Between blocks the headline is the free time itself ("You're free for 1h 25m"); the task you could
-// pick up sits in its own UP NEXT box with Start now, so it never reads as something already running.
+// Between blocks the headline is just "Free" (the clock says how long, the label row until when); the
+// task you could pick up is the UP NEXT bottom line with Start now, so it never reads as already running.
 import { ui, toggleTodo, toast } from '../store'
 import { useNow, fmtDur, fmtClock } from '../now'
 import Prio from './Prio.vue'
@@ -21,7 +21,6 @@ function start(t) {
       <div class="what">
         <div class="inst-lbl">
           <span v-if="current" class="tag mono"><span class="pulse"></span>NOW</span>
-          <span v-else class="tag mono free-tag">FREE</span>
           <span v-if="current" class="mono muted range">{{ current.start }}–{{ current.end }}</span>
           <span v-else class="muted range ellipsis">until <b class="mono until">{{ next ? next.start : 'end of day' }}</b><template v-if="next"> · {{ next.title }}</template></span>
         </div>
@@ -33,13 +32,13 @@ function start(t) {
           </button>
         </template>
         <template v-else>
-          <div class="title">{{ next ? `You're free for ${fmtDur(gap)}` : `You're free for the rest of the day` }}</div>
+          <div class="title">Free</div>
         </template>
       </div>
 
       <div class="clock">
         <div v-if="current" class="readout"><span class="inst-big mono">{{ fmtClock(progress.remaining) }}</span><span class="muted">left</span></div>
-        <div v-else class="readout"><span class="inst-big mono muted">{{ fmtClock(gap) }}</span><span class="muted">free</span></div>
+        <div v-else class="readout"><span class="inst-big mono muted">{{ fmtClock(gap) }}</span><span class="muted">left</span></div>
         <div class="actions">
           <button v-if="current?.kind === 'todo'" class="btn primary" @click="toggleTodo(current.todoId)"><span class="icon sm">check</span>Done <span class="kbd">X</span></button>
           <router-link to="/focus" class="btn"><span class="icon sm">center_focus_strong</span>Focus <span class="kbd">F</span></router-link>
@@ -88,7 +87,6 @@ function start(t) {
 .actions .btn { color: inherit; }
 .actions .btn.primary { color: var(--on-accent); }
 .tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 2px; background: var(--stamp); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }
-.free-tag { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
 .pulse { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: pulse 1.6s infinite; }
 @keyframes pulse { 50% { opacity: 0.2; } }
 .range { font-size: 13px; min-width: 0; }
