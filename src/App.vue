@@ -215,7 +215,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </div>
         <span class="spacer"></span>
         <router-link v-if="route.name !== 'focus'" to="/focus" class="nowpill" :class="headline.state" :title="`${headline.text} — ${headline.meta} (F for focus mode)`">
-          <span class="nowtag mono">{{ headline.state === 'busy' ? 'NOW' : headline.state === 'free' ? 'NEXT' : 'IDLE' }}</span>
+          <span class="nowtag mono">{{ headline.state === 'busy' ? 'NOW' : headline.state === 'free' ? 'FREE' : 'IDLE' }}</span>
           <span class="ellipsis">{{ headline.text }}</span>
           <span class="mono small muted">{{ headline.meta }}</span>
         </router-link>

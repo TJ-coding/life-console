@@ -1,6 +1,8 @@
 <script setup>
 // Cockpit NOW instrument for S-01 (full width): what to do this minute on the left, the countdown and
 // actions on the right, progress across, and what's next as one line at the bottom.
+// Between blocks the headline is the free time itself ("You're free for 1h 25m"); the task you could
+// pick up sits in its own UP NEXT box with Start now, so it never reads as something already running.
 import { ui, toggleTodo, toast } from '../store'
 import { useNow, fmtDur, fmtClock } from '../now'
 import Prio from './Prio.vue'
@@ -20,7 +22,7 @@ function start(t) {
         <div class="inst-lbl">
           <span v-if="current" class="tag mono"><span class="pulse"></span>NOW</span>
           <span v-else class="tag mono free-tag">FREE</span>
-          <span class="mono muted range">{{ current ? `${current.start}–${current.end}` : `${fmtDur(gap)} until ${next ? next.start : 'end of day'}` }}</span>
+          <span class="mono muted range">{{ current ? `${current.start}–${current.end}` : `until ${next ? next.start : 'end of day'}` }}</span>
         </div>
         <template v-if="current">
           <div class="title clamp2">{{ current.title }}</div>
@@ -29,15 +31,22 @@ function start(t) {
             <span class="ellipsis grow">{{ suggestion.title }}</span><span class="mono small muted">{{ suggestion.timeMin }}m</span>
           </button>
         </template>
-        <template v-else-if="suggestion">
-          <div class="title clamp2">{{ suggestion.title }}</div>
-          <div class="row meta">
-            <Prio :p="suggestion.priority" />
-            <span class="mono" :class="suggestionFits ? 'ok' : 'warn'">{{ suggestion.timeMin }}m{{ suggestionFits ? ' · fits' : ' · longer than the gap' }}</span>
-            <span v-if="missedAt" class="mono danger">missed {{ missedAt }}</span>
+        <template v-else>
+          <div class="title">{{ next ? `You're free for ${fmtDur(gap)}` : `You're free for the rest of the day` }}</div>
+          <div class="upnext">
+            <span class="tiny upper muted lbl">Up next</span>
+            <template v-if="suggestion">
+              <button class="un-open" title="Open this todo" @click="ui.drawerId = suggestion.id">
+                <Prio :p="suggestion.priority" />
+                <span class="ellipsis un-title">{{ suggestion.title }}</span>
+              </button>
+              <span class="mono small un-meta" :class="suggestionFits ? 'ok' : 'warn'">{{ suggestion.timeMin }}m{{ suggestionFits ? ' · fits' : ' · longer than the gap' }}</span>
+              <span v-if="missedAt" class="mono small danger un-meta">missed {{ missedAt }}</span>
+              <button class="btn primary un-start" @click="start(suggestion)"><span class="icon sm">play_arrow</span>Start now</button>
+            </template>
+            <span v-else class="muted grow">Nothing queued. Press <span class="kbd">N</span> to add a todo.</span>
           </div>
         </template>
-        <div v-else class="title muted">Nothing queued. Press <span class="kbd">N</span> to add a todo.</div>
       </div>
 
       <div class="clock">
@@ -45,7 +54,6 @@ function start(t) {
         <div v-else class="readout"><span class="inst-big mono muted">{{ fmtClock(gap) }}</span><span class="muted">free</span></div>
         <div class="actions">
           <button v-if="current?.kind === 'todo'" class="btn primary" @click="toggleTodo(current.todoId)"><span class="icon sm">check</span>Done <span class="kbd">X</span></button>
-          <button v-if="!current && suggestion" class="btn primary" @click="start(suggestion)"><span class="icon sm">play_arrow</span>Start now</button>
           <router-link to="/focus" class="btn"><span class="icon sm">center_focus_strong</span>Focus <span class="kbd">F</span></router-link>
         </div>
       </div>
@@ -55,7 +63,7 @@ function start(t) {
 
     <!-- what's next: one readable line -->
     <div class="next-row">
-      <span class="tiny upper muted">Next</span>
+      <span class="tiny upper muted">{{ current ? 'Next' : 'Then' }}</span>
       <template v-if="next">
         <b class="mono">{{ next.start }}</b>
         <span class="ellipsis grow">{{ next.title }}</span>
@@ -89,6 +97,13 @@ function start(t) {
 .busy .big-bar > i { background: var(--c); }
 .do { display: flex; align-items: center; gap: 8px; max-width: 640px; border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px; background: var(--surface); color: var(--text); font: inherit; font-size: 15px; text-align: left; cursor: pointer; min-width: 0; }
 .do:hover { border-color: var(--accent); }
+/* free: the task you could pick up, boxed apart from the free-time headline */
+.upnext { display: flex; align-items: center; gap: 12px; max-width: 900px; border: 1px solid var(--border); border-radius: 2px; padding: 8px 8px 8px 12px; background: var(--surface-2); font-size: 16px; min-width: 0; }
+.upnext .lbl { flex: none; }
+.un-open { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; padding: 0; }
+.un-open:hover .un-title { color: var(--accent); }
+.un-meta, .un-start { flex: none; }
+.un-start { color: var(--on-accent); }
 .next-row { display: flex; align-items: baseline; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 16px; min-width: 0; }
 .next-row b { font-size: 16px; color: var(--warn); }
 .next-row .in { font-size: 14px; flex: none; }
@@ -102,5 +117,8 @@ function start(t) {
   .title { font-size: 24px; line-height: 30px; }
   .now-inst .inst-big { font-size: 34px; line-height: 38px; }
   .next-row { font-size: 15px; }
+  .upnext { flex-wrap: wrap; font-size: 15px; row-gap: 6px; }
+  .un-open { flex-basis: calc(100% - 70px); }
+  .un-start { margin-left: auto; }
 }
 </style>
