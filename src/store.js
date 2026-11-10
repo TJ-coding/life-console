@@ -456,6 +456,10 @@ export function resetDemo() {
 /* ───────────── transient UI state ───────────── */
 let savedTheme = 'dark'
 try { savedTheme = localStorage.getItem('life-console/theme') || 'dark' } catch { /* ignore */ }
+/** Phones/tablets: the schedule lock (ISS-14) guards against accidental drags while scrolling.
+ *  With a mouse there's no such risk, so the lock is off and its padlock buttons are hidden. */
+export const touchUI = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+
 export const ui = reactive({
   now: new Date(),
   palette: false,
@@ -469,11 +473,12 @@ export const ui = reactive({
   deadlineId: null, // deadline open in the edit dialog
   blockId: null, // fixed timeBlock open in the block dialog (ISS-8: detail + delete for timeline blocks)
   scheduleLock: (() => { // ISS-14: locks moving/resizing/deleting schedule blocks, default on for touch
+    if (!touchUI) return false
     try {
       const s = localStorage.getItem('life-console/schedule-lock')
       if (s !== null) return s === '1'
     } catch { /* ignore */ }
-    return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+    return true
   })(),
   backlogOnly: false, // Plan week: hide the day columns, show deadlines & goals beside the backlog only (ISS-16)
   hoverId: null, // todo under the pointer — highlighted in backlog, bucket and timeline at once

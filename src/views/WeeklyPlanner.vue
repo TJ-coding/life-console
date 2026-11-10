@@ -77,17 +77,6 @@ const kpi = computed(() => {
 })
 
 const print = () => window.print()
-function copyLastWeek() {
-  const prev = addDays(ui.weekStart, -7)
-  let n = 0
-  for (const b of state.timeBlocks.filter((x) => x.date >= prev && x.date < ui.weekStart)) {
-    const date = addDays(b.date, 7)
-    if (state.timeBlocks.some((x) => x.date === date && x.start === b.start && x.title === b.title)) continue
-    state.timeBlocks.push({ ...b, id: `B-${date}-${b.start}-${Math.random().toString(36).slice(2, 6)}`, date })
-    n++
-  }
-  toast(n ? `Copied ${n} blocks from last week` : 'Nothing new to copy')
-}
 </script>
 
 <template>
@@ -106,7 +95,6 @@ function copyLastWeek() {
           <option v-for="l in linkOptions" :key="l" :value="l">{{ l }}</option>
         </select>
       </div>
-      <button class="btn sm" title="Copy last week's fixed blocks" @click="copyLastWeek"><span class="icon sm">content_copy</span>Copy last week</button>
       <button class="btn sm icon-only" title="Print A4" @click="print"><span class="icon sm">print</span></button>
     </div>
 

@@ -1,9 +1,11 @@
 <script setup>
 // Week selector + planning-flow progress for the unified planner:
 //   ① Backlog → ② Assign day (workload) → ③ Assign time (schedule)
-// Steps don't navigate away — they switch the column layout to emphasise that step.
+// Steps don't navigate away — ① toggles the backlog-only view; ② and ③ are the two layers of
+// each day column (workload bucket, schedule). Both lit = both shown; click one to focus it,
+// click it again to show both.
 import { computed } from 'vue'
-import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, setScheduleLock, LOCK_HELP, isLeaf } from '../store'
+import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, setScheduleLock, LOCK_HELP, isLeaf, touchUI } from '../store'
 
 const weekEnd = computed(() => addDays(ui.weekStart, 6))
 const isThisWeek = computed(() => ui.weekStart === mondayOf(todayISO()))
@@ -13,7 +15,10 @@ const assigned = computed(() => state.todos.filter((t) => !t.done && t.scheduled
 const timed = computed(() => assigned.value.filter((t) => t.scheduled.start).length)
 const pct = computed(() => (assigned.value.length ? Math.round((timed.value / assigned.value.length) * 100) : 100))
 const shift = (n) => { ui.weekStart = addDays(ui.weekStart, n * 7) }
-const setMode = (m) => {
+const shows = (m) => !ui.backlogOnly && (ui.planMode === m || ui.planMode === 'both')
+const setMode = (step) => {
+  const m = !ui.backlogOnly && ui.planMode === step ? 'both' : step // focused step clicked again → both
+  ui.backlogOnly = false // ②/③ are about the day columns, so bring them back
   ui.planMode = m
   try { localStorage.setItem('life-console/plan-mode', m) } catch { /* ignore */ }
 }
@@ -29,17 +34,17 @@ const setMode = (m) => {
     </div>
 
     <div class="flow" role="group" aria-label="Planning flow and layout">
-      <div class="step" :class="{ done: !backlog }" title="Tasks not yet on a day (left panel)">
+      <button class="step" :class="{ on: ui.backlogOnly, done: !backlog }" :aria-pressed="ui.backlogOnly" :title="ui.backlogOnly ? 'Back to the week view' : 'Backlog only: hide the day columns and show the deadlines & goals it serves'" @click="ui.backlogOnly = !ui.backlogOnly">
         <span class="n mono">{{ backlog ? 1 : '✓' }}</span>
         <span class="lbl"><b>Backlog</b><small class="mono">{{ backlog }} to place</small></span>
-      </div>
+      </button>
       <span class="icon sm arrow">arrow_forward</span>
-      <button class="step" :class="{ on: ui.planMode === 'days' }" title="Emphasise workload buckets (assign a day)" @click="setMode('days')">
+      <button class="step" :class="{ on: shows('days') }" :aria-pressed="shows('days')" :title="ui.planMode === 'days' && !ui.backlogOnly ? 'Show the schedule too' : 'Focus on the workload buckets (assign a day)'" @click="setMode('days')">
         <span class="n mono">2</span>
         <span class="lbl"><b>Assign day</b><small class="mono">{{ assigned.length }} on this week</small></span>
       </button>
       <span class="icon sm arrow">arrow_forward</span>
-      <button class="step" :class="{ on: ui.planMode === 'times', done: assigned.length && pct === 100 }" title="Emphasise the schedule (assign a time)" @click="setMode('times')">
+      <button class="step" :class="{ on: shows('times'), done: assigned.length && pct === 100 }" :aria-pressed="shows('times')" :title="ui.planMode === 'times' && !ui.backlogOnly ? 'Show the workload buckets too' : 'Focus on the schedule (assign a time)'" @click="setMode('times')">
         <span class="n mono">{{ assigned.length && pct === 100 ? '✓' : 3 }}</span>
         <span class="lbl">
           <b>Assign time</b>
@@ -47,12 +52,9 @@ const setMode = (m) => {
           <i class="prog"><i :style="{ width: pct + '%' }"></i></i>
         </span>
       </button>
-      <button class="step both" :class="{ on: ui.planMode === 'both' }" title="Show workload and schedule together" @click="setMode('both')">
-        <span class="icon sm">view_agenda</span><span class="lbl"><b>Both</b></span>
-      </button>
     </div>
 
-    <button class="btn icon-only" :class="{ lockon: ui.scheduleLock }" :title="ui.scheduleLock ? LOCK_HELP.on : LOCK_HELP.off" :aria-label="ui.scheduleLock ? LOCK_HELP.on : LOCK_HELP.off" @click="setScheduleLock(!ui.scheduleLock)"><span class="icon sm">{{ ui.scheduleLock ? 'lock' : 'lock_open' }}</span></button>
+    <button v-if="touchUI" class="btn icon-only" :class="{ lockon: ui.scheduleLock }" :title="ui.scheduleLock ? LOCK_HELP.on : LOCK_HELP.off" :aria-label="ui.scheduleLock ? LOCK_HELP.on : LOCK_HELP.off" @click="setScheduleLock(!ui.scheduleLock)"><span class="icon sm">{{ ui.scheduleLock ? 'lock' : 'lock_open' }}</span></button>
     <span class="spacer"></span>
     <slot />
   </div>
@@ -68,7 +70,6 @@ button.step { cursor: pointer; }
 button.step:hover { border-color: var(--muted); color: var(--text); }
 .step.on { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .step.done .n { border-color: var(--accent); color: var(--accent); }
-.step.both { margin-left: 6px; padding-left: 8px; }
 .n { width: 20px; height: 20px; border-radius: 50%; border: 1px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex: none; }
 .step.on .n { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .lbl { display: flex; flex-direction: column; line-height: 14px; }
@@ -86,6 +87,6 @@ button.step:hover { border-color: var(--muted); color: var(--text); }
   .wk { min-width: 0; flex: 1; }
   .flow { width: 100%; flex-wrap: wrap; row-gap: 4px; }
   .arrow { display: none; }
-  .step, .step.both { padding: 4px 8px; }
+  .step { padding: 4px 8px; }
 }
 </style>

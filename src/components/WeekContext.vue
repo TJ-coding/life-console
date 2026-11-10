@@ -44,7 +44,7 @@ const open = (id) => { ui.deadlineId = id }
       <span class="grow ellipsis"><span class="mono">{{ g.id }}</span> {{ g.title }}</span>
     </div>
     <div v-if="!dls.length && !goals.length" class="small pad">Nothing due soon — pure capacity week.</div>
-    <p class="small muted tip">Add backlog tasks that feed these. Click ✚ Backlog-only again (or the arrow) to go back to the week.</p>
+    <p class="small muted tip">Add backlog tasks that feed these. Click ① Backlog again to go back to the week.</p>
   </aside>
 </template>
 
