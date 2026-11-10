@@ -1,18 +1,27 @@
 <script setup>
-// Step ① Backlog — unassigned tasks. Drag onto a day, or hover and click a day button
-// (each shows that day's free hours). Drop a planned task here to send it back.
+// Step ① Backlog — tasks without a day. In the week view: the tasks planned for this week, then the
+// unplanned ones; drag onto a day, or hover and click a day button (each shows that day's free hours).
+// In the backlog-only view (focus) it is the "Unplanned" column of the week board, and the buttons
+// send a task to a week instead. Drop a task here to send it back.
 import { computed, ref, watch, nextTick } from 'vue'
-import { state, ui, todayISO, addDays, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, isLeaf, parentPath } from '../store'
+import { ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, parentPath, planWeek, backlogTodos, backlogFor, planWeeks, weekFree, assignToWeek, isoWeek } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
 
-defineProps({ focus: Boolean }) // ISS-16: backlog-only mode is on (header shows the way back)
+const props = defineProps({ focus: Boolean }) // ISS-16: backlog-only mode is on (header shows the way back)
 defineEmits(['focus'])
 
 const prio = ref(0)
 const open = ref(true) // collapses the backlog to header + quick-add (handy on phones)
-const list = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t) && (!prio.value || t.priority === prio.value)).sort(byPriority)) // a task with subtasks is planned through them
+// a task with subtasks is planned through them (backlogTodos keeps leaves only)
+const all = computed(() => (props.focus ? backlogTodos().filter((t) => !planWeek(t)).sort(byPriority) : backlogFor(ui.weekStart)))
+const list = computed(() => all.value.filter((t) => !prio.value || t.priority === prio.value))
+const plannedN = computed(() => (props.focus ? 0 : list.value.filter((t) => planWeek(t)).length)) // the first n rows
+const elsewhere = computed(() => (props.focus ? 0 : backlogTodos().filter((t) => planWeek(t) && planWeek(t) !== ui.weekStart).length))
+const weeks = computed(() => (props.focus ? planWeeks() : []))
+const wfree = computed(() => Object.fromEntries(weeks.value.map((w) => [w, weekFree(w).free])))
+const weekOk = (t, w) => !t.due || w <= t.due
 const total = computed(() => list.value.reduce((s, t) => s + t.timeMin / 60, 0))
 const T = computed(() => todayISO())
 const days = computed(() => [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(ui.weekStart, i)))
@@ -38,7 +47,11 @@ const hot = ref(false)
 function onDrop(e) {
   hot.value = false
   const id = e.dataTransfer.getData(TODO_MIME)
-  if (id) { updateTodo(id, { scheduled: null }); toast(`${id} → backlog`) }
+  if (!id) return
+  if (props.focus) return assignToWeek(id, null)
+  // back from a day of this week: it stays in this week's backlog (unless the week is over)
+  updateTodo(id, { scheduled: null, week: ui.weekStart >= mondayOf(T.value) ? ui.weekStart : null })
+  toast(`${id} → backlog`)
 }
 </script>
 
@@ -48,13 +61,13 @@ function onDrop(e) {
       <button class="btn sm icon-only tog" :title="open ? 'Collapse backlog' : 'Expand backlog'" @click="open = !open">
         <span class="icon sm">{{ open ? 'keyboard_arrow_up' : 'keyboard_arrow_down' }}</span>
       </button>
-      <button class="hbtn grow" :title="focus ? 'Back to the week view' : 'Backlog only: hide the day columns and show the deadlines & goals this backlog serves (ISS-16)'" @click="$emit('focus')">
+      <button class="hbtn grow" :title="focus ? 'Back to the week view' : 'Backlog by week: hide the day columns and spread the backlog over the next weeks'" @click="$emit('focus')">
         <span class="stepn mono">1</span>
         <span class="tl">
-          <span class="ttl">Backlog<template v-if="focus"> only</template></span>
+          <span class="ttl">{{ focus ? 'Unplanned' : 'Backlog' }}</span>
           <span class="mono tiny muted">{{ list.length }} tasks · {{ total.toFixed(1) }}h</span>
         </span>
-        <span class="icon sm" :class="{ info: focus }">{{ focus ? 'close_fullscreen' : 'open_in_full' }}</span>
+        <span class="icon sm" :class="{ info: focus }">{{ focus ? 'close_fullscreen' : 'calendar_view_week' }}</span>
       </button>
     </header>
     <form v-if="open" class="qa" @submit.prevent="add">
@@ -80,10 +93,11 @@ function onDrop(e) {
     </div>
 
     <div v-if="open" class="list">
-      <div
-        v-for="t in list" :key="t.id" class="card" :class="[dropClass(t), { linked: isHoverLinked(t.id), sel: ui.selectedId === t.id }]" draggable="true"
+      <template v-for="(t, i) in list" :key="t.id">
+      <div v-if="plannedN && (i === 0 || i === plannedN)" class="grp tiny upper muted mono">{{ i ? 'Unplanned' : `Planned for W${isoWeek(ui.weekStart)}` }}</div>
+      <div class="card" :class="[dropClass(t), { linked: isHoverLinked(t.id), sel: ui.selectedId === t.id }]" draggable="true"
         @dragstart="startDrag($event, t)" @dragend="endDrag" @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)"
-        @drop="dropOnRow($event, t, { unschedule: true })" @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
+        @drop="dropOnRow($event, t, { unschedule: true, week: t.week ?? null })" @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
         @click="ui.selectedId = t.id" @dblclick="ui.drawerId = t.id"
       >
         <div v-if="t.parent && parentPath(t)" class="crumb small muted ellipsis" :title="parentPath(t)">↳ {{ parentPath(t) }}</div>
@@ -96,8 +110,19 @@ function onDrop(e) {
           <Chip v-for="l in t.links" :key="l" :id="l" />
           <span v-if="t.due" class="mono muted">due {{ wd(t.due) }} {{ fmtSlash(t.due) }}</span>
         </div>
+        <!-- quick assign: one click puts it in a week (backlog-only view) -->
+        <div v-if="focus" class="quick">
+          <button
+            v-for="w in weeks" :key="w" class="qd mono" :disabled="!weekOk(t, w)"
+            :class="{ fits: wfree[w] >= t.timeMin / 60, tight: wfree[w] < t.timeMin / 60 && wfree[w] > 0, full: wfree[w] <= 0 }"
+            :title="`W${isoWeek(w)} · ${wfree[w].toFixed(1)}h free${!weekOk(t, w) ? ' · after due date' : ''}`"
+            @click.stop="assignToWeek(t.id, w)"
+          >
+            <span>W{{ isoWeek(w) }}</span><small>{{ Math.max(0, wfree[w]).toFixed(0) }}h</small>
+          </button>
+        </div>
         <!-- quick assign: one click puts it on a day -->
-        <div class="quick">
+        <div v-else class="quick">
           <button
             v-for="d in days" :key="d" class="qd mono" :disabled="!usable(t, d)"
             :class="{ fits: free[d] >= t.timeMin / 60, tight: free[d] < t.timeMin / 60 && free[d] > 0, full: free[d] <= 0, today: d === T }"
@@ -109,9 +134,13 @@ function onDrop(e) {
           <button v-if="t.timeMin >= 30" class="qd split" title="Plan: spread over days and times" @click.stop="ui.splitId = t.id"><span class="icon">call_split</span></button>
         </div>
       </div>
+      </template>
       <div v-if="!list.length" class="empty">Backlog clear ✓<br />Type above to capture a task.</div>
     </div>
-    <div v-if="open" class="foot small muted">Hover a task → click a day, or drag it onto a day. Drop here to unassign.</div>
+    <div v-if="open" class="foot small muted">
+      <template v-if="focus">Hover a task → click a week, or drag it onto a week. Drop here to unplan.</template>
+      <template v-else>Hover a task → click a day, or drag it onto a day. Drop here to unassign.<button v-if="elsewhere" class="lnk" title="Show the week board" @click="$emit('focus')">{{ elsewhere }} planned for other weeks →</button></template>
+    </div>
   </section>
 </template>
 
@@ -156,4 +185,6 @@ function onDrop(e) {
 .qd.split { flex: none; width: 26px; justify-content: center; }
 .qd.split .icon { font-size: 14px; }
 .foot { padding: 8px 12px; border-top: 1px solid var(--border); }
+.lnk { display: block; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--info); font: inherit; cursor: pointer; }
+.grp { padding: 4px 2px 0; }
 </style>

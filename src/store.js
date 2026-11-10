@@ -480,7 +480,7 @@ export const ui = reactive({
     } catch { /* ignore */ }
     return true
   })(),
-  backlogOnly: false, // Plan week: hide the day columns, show deadlines & goals beside the backlog only (ISS-16)
+  backlogOnly: false, // Plan week: hide the day columns, spread the backlog over the next weeks (ISS-16)
   hoverId: null, // todo under the pointer — highlighted in backlog, bucket and timeline at once
   planMode: (() => { try { return localStorage.getItem('life-console/plan-mode') || 'both' } catch { return 'both' } })(), // 'days' | 'both' | 'times'
   backlogFocus: 0, // bump to focus the Plan-week backlog quick-add
@@ -1318,6 +1318,45 @@ export const WORK_TO = '21:00'
 
 /** Free hours left on a day (todo estimates vs capacity). */
 export const freeHours = (date, cap = CAPACITY_H) => cap - dayLoad(date).total
+
+/* Step ① (backlog-only view): a backlog task can get a week before it gets a day. t.week is that
+   week's Monday; once the week has passed the task rolls over into the current one. */
+export const planWeek = (t) => {
+  if (!t.week) return null
+  const now = mondayOf(todayISO())
+  return t.week < now ? now : t.week
+}
+export const backlogTodos = () => state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t))
+/** The backlog the week view of `weekStart` offers: tasks planned for that week, then unplanned ones. */
+export const backlogFor = (weekStart) => backlogTodos()
+  .filter((t) => { const w = planWeek(t); return !w || w === weekStart })
+  .sort((a, b) => Number(!planWeek(a)) - Number(!planWeek(b)) || byPriority(a, b))
+/** Hours left in a week: free time on its weekdays still ahead (the weekend if none are), minus the
+   backlog already planned for it. Negative = over-planned. */
+export function weekFree(weekStart, cap = CAPACITY_H) {
+  const T = todayISO()
+  const ahead = (ids) => ids.map((i) => addDays(weekStart, i)).filter((d) => d >= T)
+  const ds = ahead([0, 1, 2, 3, 4]).length ? ahead([0, 1, 2, 3, 4]) : ahead([5, 6])
+  const planned = backlogTodos().filter((t) => planWeek(t) === weekStart).reduce((s, t) => s + (t.timeMin || 0) / 60, 0)
+  return { free: ds.reduce((s, d) => s + freeHours(d, cap), 0) - planned, planned }
+}
+/** The weeks the backlog-only view lays out as columns: from the week in the week bar (never a past one). */
+export const PLAN_WEEKS = 4
+export const planWeeks = (n = PLAN_WEEKS) => {
+  const now = mondayOf(todayISO())
+  const from = ui.weekStart < now ? now : ui.weekStart
+  return Array.from({ length: n }, (_, i) => addDays(from, i * 7))
+}
+/** Give a backlog task a week (null = back to unplanned), with Undo. */
+export function assignToWeek(id, week) {
+  const t = findTodo(id)
+  if (!t) return
+  if (isContainer(t)) { toast(`${id} has subtasks: plan those instead`); return }
+  const was = t.week ?? null
+  if ((planWeek(t) ?? null) === (week ?? null) && !t.scheduled) return
+  updateTodo(id, { week: week || null, scheduled: null })
+  toast(week ? `${id} → W${isoWeek(week)}` : `${id} → unplanned`, { label: 'Undo', run: () => updateTodo(id, { week: was }) })
+}
 
 /**
  * Step ②: put a task on a day (keeps its time only if it stays on the same day).

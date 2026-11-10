@@ -7,13 +7,13 @@ import { useRoute } from 'vue-router'
 import {
   state, ui, todayISO, addDays, wd, todosForDay, workload, CAPACITY_H, toast, autoTimebox,
   routineDone, toggleRoutine, monthGroup, toggleMonthly, suggestRebalance,
-  isLeaf, weekBalance, byPriority,
+  weekBalance, backlogFor, backlogTodos, planWeek,
 } from '../store'
 import WeekBar from '../components/WeekBar.vue'
 import DayColumn from '../components/DayColumn.vue'
 import BacklogPanel from '../components/BacklogPanel.vue'
 import BalancePanel from '../components/BalancePanel.vue'
-import WeekContext from '../components/WeekContext.vue'
+import WeekBoard from '../components/WeekBoard.vue'
 
 const route = useRoute()
 const T = computed(() => todayISO())
@@ -39,7 +39,7 @@ const weekTodos = computed(() => week.value.flatMap((d) => todosForDay(d)))
 watchEffect(() => { ui.visibleIds = weekTodos.value.map((t) => t.id) })
 
 /* ── what to do next ── */
-const backlogN = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t)).length)
+const backlogN = computed(() => backlogFor(ui.weekStart).length) // planned for this week + unplanned
 const untimed = computed(() => weekTodos.value.filter((t) => !t.done && !t.scheduled.start && t.scheduled.date >= T.value))
 const overDays = computed(() => days.value.filter((d) => workload(d) > CAPACITY_H))
 const balance = computed(() => weekBalance(ui.weekStart))
@@ -63,7 +63,7 @@ const placement = computed(() => {
   const tiers = [ahead(days.value), ahead([sat.value, sun.value])]
   const load = Object.fromEntries(week.value.map((d) => [d, workload(d)]))
   const out = Object.fromEntries(week.value.map((d) => [d, []]))
-  const backlog = state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t)).sort(byPriority)
+  const backlog = backlogFor(ui.weekStart) // this week's planned tasks get first pick, then the unplanned
   for (const t of backlog) {
     const h = (t.timeMin || 0) / 60
     for (const tier of tiers) {
@@ -85,6 +85,12 @@ const dayBalance = computed(() => (balancing.value
   : null))
 const next = computed(() => {
   if (overDays.value.length) return { icon: 'warning', cls: 'danger', text: `${overDays.value.map(wd).join(', ')} over ${CAPACITY_H}h — move or split a task`, action: 'balance' }
+  if (ui.backlogOnly) {
+    const n = backlogTodos().filter((t) => !planWeek(t)).length
+    return n
+      ? { icon: 'inventory_2', cls: 'info', text: `${n} unplanned tasks — hover one and click a week, or drag it onto a week` }
+      : { icon: 'check_circle', cls: 'ok', text: 'Every backlog task has a week' }
+  }
   if (backlogN.value) return { icon: 'inventory_2', cls: 'info', text: `${backlogN.value} backlog tasks to place — hover one and click a day, or drag it into a bucket` }
   if (untimed.value.length) return { icon: 'more_time', cls: 'warn', text: `${untimed.value.length} tasks need a time — drag them down onto the timeline, or auto time-box`, action: 'auto' }
   return { icon: 'check_circle', cls: 'ok', text: 'Week planned: every task has a day and a time' }
@@ -157,7 +163,7 @@ const print = () => window.print()
       </div>
       </template>
 
-      <WeekContext v-if="ui.backlogOnly" />
+      <WeekBoard v-if="ui.backlogOnly" />
 
       <nav class="rail" aria-label="Side panels">
         <button class="rb" :class="{ on: ui.sidePanel === 'balance' }" title="Balance & rebalance" @click="togglePanel('balance')">
@@ -210,14 +216,10 @@ const print = () => window.print()
 .next { font-weight: 600; gap: 6px; }
 .select.small { height: 24px; font-size: 11px; }
 .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 236px minmax(0, 1fr) 44px; position: relative; }
-/* backlog-only focus (ISS-16): backlog beside the deadlines & goals this backlog serves */
-.body.only { grid-template-columns: minmax(0, 1fr) 340px; }
+/* backlog-only focus (ISS-16): the unplanned backlog beside the next weeks as columns */
+.body.only { grid-template-columns: 300px minmax(0, 1fr); }
 .body.only .rail { display: none; }
-.body.only > .ctx { grid-column: 2; grid-row: 1; }
-@media (max-width: 900px) {
-  .body.only { grid-template-columns: minmax(0, 1fr); }
-  .body.only > .ctx { grid-column: 1; grid-row: 2; border-top: 1px solid var(--border); }
-}
+.body.only > .board { grid-column: 2; grid-row: 1; }
 .days { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)) minmax(130px, 0.8fr); gap: 8px; padding: 12px; overflow: auto; align-items: start; }
 .weekend { display: flex; flex-direction: column; gap: 8px; }
 /* ISS-17: all seven days on one row so the workload buckets compare side by side (after the base
@@ -255,7 +257,11 @@ const print = () => window.print()
   /* one screen at a time: the tab above picks Days (default) or Backlog, each full height */
   .body > .backlog { display: none; }
   .body.only > .backlog { display: flex; flex: 1; max-height: none; border-bottom: 0; }
-  .body.only > .ctx { display: none; } /* the week context lives on the desktop backlog-only view */
+  /* backlog-only: Unplanned and the week columns side by side, swiped like the day columns */
+  .body.only { flex-direction: row; overflow-x: auto; scroll-snap-type: x proximity; gap: 8px; }
+  .body.only > .backlog { flex: 0 0 82vw; scroll-snap-align: start; border-right: 1px solid var(--border); }
+  .body.only > .board { display: contents; }
+  .body.only > .board :deep(.wk) { flex: 0 0 82vw; scroll-snap-align: start; }
   .days { flex: 1; min-height: 0; display: flex; overflow: auto; scroll-snap-type: x proximity; padding: 10px; }
   /* ISS-22: the day column must fit its content (schedule!) — capped viewport height would clip it */
   .days :deep(.day) { flex: 0 0 82vw; width: 82vw; scroll-snap-align: start; height: 100%; overflow-y: auto; }

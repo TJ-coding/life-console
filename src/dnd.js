@@ -32,6 +32,7 @@ export function leaveRow(e, t) {
 /**
  * opts.adoptDate  — move onto the target's scheduled day (day lists)
  * opts.unschedule — clear the schedule (backlog)
+ * opts.week       — set the task's planned week (backlog-only week columns; null = unplanned)
  */
 export function dropOnRow(e, target, opts = {}) {
   if (!isTodoDrag(e)) return
@@ -44,6 +45,7 @@ export function dropOnRow(e, target, opts = {}) {
   if (!moved || id === target.id) return
   const extra = {}
   if (opts.unschedule) extra.scheduled = null
+  if ('week' in opts) extra.week = opts.week
   else if (opts.adoptDate && target.scheduled && moved.scheduled?.date !== target.scheduled.date) {
     extra.scheduled = { date: target.scheduled.date, start: null }
   }
