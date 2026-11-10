@@ -290,8 +290,9 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const LANDING_HEADERS = cfg.analyticsDashboard
     ? { ...NO_XFO, 'Content-Security-Policy': `frame-ancestors 'self' ${cfg.analyticsDashboard}` }
     : SECURITY_HEADERS
-  const analyticsTag = cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
-    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` +
+  // data-tag names the landing-page variant, so Umami can split every statistic by it (filter: Tag)
+  const analyticsTag = (variant) => cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
+    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}" data-tag="landing-${variant}"></script>` +
       // heatmap (click positions, scroll depth) and, if switched on in Umami's settings for the website, session replays of this page
       (cfg.analyticsRecorder ? `\n<script defer src="${attr(cfg.analyticsRecorder)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` : '')
     : ''
@@ -328,7 +329,20 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
 `
   }
 
-  function serveStatic(req, res, pathname) {
+  // landing-page A/B test: which page a visitor sees, kept in a cookie the app also reads (sign-in funnel per variant)
+  const LP_COOKIE = 'lc_lp'
+  const LANDING_FILES = { a: '/landing.html', b: '/landing-b.html' }
+  const LANDING_PAGES = new Set(Object.values(LANDING_FILES))
+  /** ?lp=a|b forces a variant (previews, links in posts); otherwise the remembered one; otherwise a coin flip. */
+  function landingVariant(cookies, query) {
+    const forced = query.get('lp')
+    if (LANDING_FILES[forced]) return forced
+    if (!cfg.landingAb) return 'a'
+    if (LANDING_FILES[cookies[LP_COOKIE]]) return cookies[LP_COOKIE]
+    return Math.random() < 0.5 ? 'a' : 'b'
+  }
+
+  function serveStatic(req, res, pathname, query = new URLSearchParams()) {
     let rel
     try { rel = decodeURIComponent(pathname) } catch { return send(res, 400, 'bad path') }
     if (rel === '/robots.txt') return send(res, 200, robots(), { 'Cache-Control': 'public, max-age=3600' })
@@ -337,21 +351,29 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
       if (rel === '/sitemap.xml') return send(res, 200, sitemap(), { 'Content-Type': MIME['.xml'], 'Cache-Control': 'public, max-age=3600' })
     }
     let vary = false
+    const extra = {}
     if (rel === '/' && cfg.landing) {
       // the landing page for visitors without a session (and crawlers); signed-in people get the app as before
       vary = true
-      rel = parseCookies(req.headers.cookie)[COOKIE] ? '/index.html' : '/landing.html'
-    } else if (rel === '/landing.html' && !cfg.landing) return send(res, 404, 'not found')
+      const cookies = parseCookies(req.headers.cookie)
+      if (cookies[COOKIE]) rel = '/index.html'
+      else {
+        const variant = landingVariant(cookies, query)
+        rel = LANDING_FILES[variant]
+        if (cfg.landingAb || query.get('lp')) extra['Set-Cookie'] = `${LP_COOKIE}=${variant}; Path=/; Max-Age=${90 * 86400}; SameSite=Lax${secureFor(req) ? '; Secure' : ''}`
+      }
+    } else if (LANDING_PAGES.has(rel) && !cfg.landing) return send(res, 404, 'not found')
     else if (LEGAL.has(rel)) rel += '.html' // /privacy, /terms: plain URLs for people and Google's consent screen
     else if (rel === '/' || !path.extname(rel)) rel = '/index.html' // SPA fallback (routes use #, but be safe); /app always opens the app
     const file = path.normalize(path.join(dist, rel))
     if (!file.startsWith(dist)) return send(res, 403, 'forbidden')
-    if (rel === '/landing.html' && analyticsTag) {
+    const landingPage = LANDING_PAGES.has(rel)
+    if (landingPage && analyticsTag('a')) {
       // analytics configured: the landing page with the tracker tag added (small file, read per request)
       return fs.readFile(file, 'utf8', (err, html) => {
         if (err) return send(res, 404, 'not found')
-        const body = html.replace('</head>', `${analyticsTag}\n</head>`)
-        res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), Vary: 'Cookie', 'X-LC-Page': 'landing', ...LANDING_HEADERS })
+        const body = html.replace('</head>', `${analyticsTag(rel === LANDING_FILES.b ? 'b' : 'a')}\n</head>`)
+        res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), Vary: 'Cookie', 'X-LC-Page': 'landing', ...LANDING_HEADERS, ...extra })
         res.end(req.method === 'HEAD' ? undefined : body)
       })
     }
@@ -359,10 +381,10 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
       if (err || !st.isFile()) return send(res, 404, 'not found')
       const cache = rel.startsWith('/assets/') ? 'public, max-age=31536000, immutable'
         : rel.startsWith('/media/') ? 'public, max-age=86400' : 'no-cache'
-      const headers = { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': cache, 'Accept-Ranges': 'bytes', ...(rel === '/landing.html' ? LANDING_HEADERS : SECURITY_HEADERS) }
+      const headers = { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': cache, 'Accept-Ranges': 'bytes', ...(landingPage ? LANDING_HEADERS : SECURITY_HEADERS), ...extra }
       if (rel === '/sw.js') headers['Service-Worker-Allowed'] = '/'
       if (vary) headers.Vary = 'Cookie'
-      if (rel === '/landing.html') headers['X-LC-Page'] = 'landing' // the service worker never caches it as the app shell
+      if (landingPage) headers['X-LC-Page'] = 'landing' // the service worker never caches it as the app shell
       // byte ranges: Safari won't play a <video> without them
       const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '')
       let start = 0, end = st.size - 1, status = 200
@@ -385,7 +407,7 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
     try {
       if (url.pathname.startsWith('/api/')) return await api(req, res, url)
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed')
-      return serveStatic(req, res, url.pathname)
+      return serveStatic(req, res, url.pathname, url.searchParams)
     } catch (err) {
       const status = err.status || 500
       if (status >= 500) log('[http]', req.method, url.pathname, err.stack || err.message)

@@ -45,6 +45,9 @@ export function loadConfig(over = {}) {
     // public landing page at / for visitors who aren't signed in, plus a search-engine-friendly robots.txt/sitemap.
     // Off (the default) keeps a self-hosted server private: / is the app and robots.txt asks crawlers to stay out.
     landing: bool(e.LANDING),
+    // A/B test of the landing page: on = each new visitor gets landing.html (A) or landing-b.html (B) at random,
+    // remembered in the lc_lp cookie. Off: everyone gets A; /?lp=b still previews B
+    landingAb: bool(e.LANDING_AB),
     // optional Umami analytics: the tracker script URL and the website ID. The landing page (LANDING=on) gets the tag;
     // the app loads it itself, sends screen names only, and each person can turn it off in Settings → Privacy
     analyticsScript: e.ANALYTICS_SCRIPT || '',

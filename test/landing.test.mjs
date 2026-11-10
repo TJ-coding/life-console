@@ -21,6 +21,7 @@ const quiet = () => {}
 const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-dist-'))
 fs.writeFileSync(path.join(dist, 'index.html'), '<title>APP</title>')
 fs.writeFileSync(path.join(dist, 'landing.html'), '<head><title>LANDING</title></head>')
+fs.writeFileSync(path.join(dist, 'landing-b.html'), '<head><title>LANDING-B</title></head>')
 fs.writeFileSync(path.join(dist, 'llms.txt'), '# Life Console')
 fs.mkdirSync(path.join(dist, 'media'))
 const VIDEO = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 256))
@@ -36,7 +37,7 @@ async function start(env) {
   servers.push([app, s])
   return `http://127.0.0.1:${s.address().port}`
 }
-let on, off, tracked, heat, framed
+let on, off, tracked, heat, framed, ab
 
 before(async () => {
   const admin = new pg.Client({ connectionString: ADMIN_URL })
@@ -50,6 +51,7 @@ before(async () => {
   tracked = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123' })
   heat = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123', ANALYTICS_RECORDER: '/stats/recorder.js' })
   framed = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123', ANALYTICS_DASHBOARD: 'http://umami.lan:3100/websites' })
+  ab = await start({ LANDING: 'on', LANDING_AB: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123' })
 })
 after(async () => {
   for (const [app, s] of servers) { app.close(); s.close() }
@@ -121,7 +123,7 @@ test('static files support byte ranges (Safari needs them for <video>)', async (
 })
 
 test('ANALYTICS_SCRIPT + ANALYTICS_SITE_ID: the landing page gets the tracker tag, the app and a plain landing page never do', async () => {
-  const tag = '<script defer src="/stats/lc.js" data-website-id="abc-123"></script>'
+  const tag = '<script defer src="/stats/lc.js" data-website-id="abc-123" data-tag="landing-a"></script>'
   const visitor = await get(tracked, '/')
   assert.equal(visitor.status, 200)
   assert.equal(visitor.headers.get('x-lc-page'), 'landing')
@@ -136,7 +138,7 @@ test('ANALYTICS_SCRIPT + ANALYTICS_SITE_ID: the landing page gets the tracker ta
 test('ANALYTICS_RECORDER: the heatmap recorder goes on the landing page only, never the app or /api/health', async () => {
   const rec = '<script defer src="/stats/recorder.js" data-website-id="abc-123"></script>'
   const visitor = (await get(heat, '/')).body.toString()
-  assert.ok(visitor.includes('data-website-id="abc-123"></script>\n' + rec + '\n</head>'), 'tracker first, then the recorder')
+  assert.ok(visitor.includes('data-tag="landing-a"></script>\n' + rec + '\n</head>'), 'tracker first, then the recorder')
   assert.doesNotMatch((await get(heat, '/', { Cookie: 'lc_session=abc' })).body.toString(), /recorder/)
   assert.doesNotMatch((await get(heat, '/app')).body.toString(), /recorder/)
   assert.doesNotMatch((await get(heat, '/api/health')).body.toString(), /recorder/)
@@ -158,6 +160,42 @@ test('ANALYTICS_DASHBOARD: only that origin may frame the landing page (heatmap 
     assert.equal(r.headers.get('content-security-policy'), null, p)
   }
   assert.throws(() => loadConfig({ DATABASE_URL: dbUrl, ANALYTICS_DASHBOARD: 'umami.lan' }), /ANALYTICS_DASHBOARD/)
+})
+
+test('LANDING_AB=on: a visitor gets A or B at random, keeps it via lc_lp, and Umami is tagged with the variant', async () => {
+  const seen = new Set()
+  for (let i = 0; i < 40 && seen.size < 2; i++) {
+    const r = await get(ab, '/')
+    const lp = /^lc_lp=([ab]); Path=\/; Max-Age=7776000; SameSite=Lax(; Secure)?$/.exec(r.headers.get('set-cookie'))?.[1]
+    assert.ok(lp, r.headers.get('set-cookie'))
+    assert.match(r.body.toString(), lp === 'b' ? /LANDING-B/ : /<title>LANDING<\/title>/)
+    assert.ok(r.body.toString().includes(`data-tag="landing-${lp}"`))
+    assert.equal(r.headers.get('x-lc-page'), 'landing')
+    assert.equal(r.headers.get('vary'), 'Cookie')
+    seen.add(lp)
+  }
+  assert.equal(seen.size, 2, 'both variants are served')
+  for (const v of ['a', 'b']) {
+    for (let i = 0; i < 5; i++) assert.ok((await get(ab, '/', { Cookie: `lc_lp=${v}` })).body.toString().includes(`data-tag="landing-${v}"`))
+  }
+  assert.ok((await get(ab, '/?lp=b', { Cookie: 'lc_lp=a' })).body.toString().includes('LANDING-B'), '?lp= wins over the cookie')
+  const app = await get(ab, '/', { Cookie: 'lc_session=abc; lc_lp=b' })
+  assert.match(app.body.toString(), /APP/)
+  assert.equal(app.headers.get('set-cookie'), null)
+})
+
+test('LANDING_AB off: everyone gets A without a cookie; ?lp=b previews B; no landing pages when LANDING is off', async () => {
+  for (let i = 0; i < 5; i++) {
+    const r = await get(on, '/', { Cookie: 'lc_lp=b' })
+    assert.match(r.body.toString(), /<title>LANDING<\/title>/)
+    assert.equal(r.headers.get('set-cookie'), null)
+  }
+  const preview = await get(on, '/?lp=b')
+  assert.match(preview.body.toString(), /LANDING-B/)
+  assert.match(preview.headers.get('set-cookie'), /^lc_lp=b;/)
+  assert.match((await get(on, '/?lp=zzz')).body.toString(), /<title>LANDING<\/title>/)
+  assert.equal((await get(off, '/landing-b.html')).status, 404)
+  assert.match((await get(off, '/?lp=b')).body.toString(), /APP/)
 })
 
 test('/api/health tells the app about analytics only when it is configured', async () => {
