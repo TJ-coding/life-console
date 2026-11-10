@@ -26,6 +26,7 @@ const newTaskId = ref(null) // and the task they make for it, which Plan week th
 const planRoute = () => `/strategy/${newPlanId.value ?? 'SP-01'}`
 const curPlan = () => state.plans.find((p) => p.id === router.currentRoute.value.params.planId)
 const count = (key) => curPlan()?.[key]?.length ?? 0
+const bounds = () => JSON.stringify([...(curPlan()?.psgs ?? []), ...(curPlan()?.sigs ?? [])].map((g) => g.timeBound ?? ''))
 const button = (sel, text) => [...document.querySelectorAll(sel)].find((b) => b.textContent.includes(text)) ?? null
 
 const STEPS = [
@@ -42,7 +43,8 @@ const STEPS = [
     action: { start: () => count('sigs'), done: (n) => count('sigs') > n } },
   { move: 0, route: planRoute, target: '.tree .add-task', icon: 'add_task', title: '4 · Create a task', body: 'Tap + task. Now the milestone has something you can actually do.',
     action: { start: () => state.todos.length, done: (n) => state.todos.length > n, after: () => { ui.drawerId = null; newTaskId.value = state.todos[state.todos.length - 1].id } } },
-  { move: 0, route: planRoute, target: '.flow-panel', icon: 'schema', title: '5 · Goal flow', body: 'Your plan as a flow: tasks feed milestones, milestones feed goals, goals feed the vision.' },
+  { move: 0, route: planRoute, target: '.flow-panel', hint: '.flow-panel .fn.movable', desktopOnly: true, icon: 'schema', title: '5 · Goal flow', body: 'Your plan on a timeline. Drag a goal sideways to set its date.', phoneBody: 'Your plan on a timeline. On a computer, drag a goal along it to move its date.', doneBody: 'Dates move with a drag. Red arrows warn when the order stops making sense.',
+    action: { start: () => bounds(), done: (b) => bounds() !== b } },
 
   // Distribute: Plan week
   { move: 1, route: '/week', backlog: true, target: '.backlog', icon: 'inbox', title: 'Plan week: the backlog', body: 'Your new task is waiting here for a day.' },
@@ -87,8 +89,9 @@ const phone = ref(isPhone())
 const canvas = ref(null)
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 const done = ref(false) // the current "your turn" stop has been done
+const hand = ref(null) // { left, top, dx }: the animated drag hint over a goal card
 const missing = ref(false) // this stop's target isn't on screen (e.g. a phone without the sidebar)
-const waiting = computed(() => !!step.value.action && !missing.value)
+const waiting = computed(() => !!step.value.action && !missing.value && !(phone.value && step.value.desktopOnly))
 const baseline = shallowRef(null) // what the planner looked like when a "your turn" stop began
 
 /* sparkles sit on the spotlight's edge; positions are fractions of its width/height */
@@ -102,6 +105,7 @@ async function locate() {
   cancelAnimationFrame(poll)
   clearInterval(tick)
   rect.value = null
+  hand.value = null
   done.value = false
   missing.value = false
   const s = step.value
@@ -140,10 +144,29 @@ function measure() {
   const top = Math.max(pad, r.top - pad), left = Math.max(pad, r.left - pad)
   const bottom = Math.min(vh - pad, r.bottom + pad), right = Math.min(vw - pad, r.right + pad)
   const next = { top, left, width: Math.max(40, right - left), height: Math.max(40, bottom - top) }
+  hand.value = handAt(step.value.hint, r)
   const cur = rect.value
   if (cur && ['top', 'left', 'width', 'height'].every((k) => Math.abs(cur[k] - next[k]) < 1)) return
   rect.value = next
   place()
+}
+/**
+ * Where to show the drag hint: the middle of the first movable goal card. An undated goal (in the "∞ / no end"
+ * column) swings left until its end (the card's right edge) sits between today and that column; a dated one
+ * swings toward the middle of the panel.
+ */
+function handAt(sel, panel) {
+  const el = sel && document.querySelector(sel)
+  if (!el) return null
+  const c = el.getBoundingClientRect()
+  if (c.bottom < 0 || c.top > innerHeight) return null
+  const cx = c.left + c.width / 2
+  const inf = document.querySelector('.flow-panel .inf')?.getBoundingClientRect()
+  const today = document.querySelector('.flow-panel .today')?.getBoundingClientRect()
+  let dx
+  if (inf && today && c.left >= inf.left - 4) dx = Math.min(-60, (today.left + inf.left) / 2 - c.right)
+  else { const mid = panel.left + panel.width / 2; dx = Math.abs(mid - cx) < 40 ? 90 : Math.sign(mid - cx) * Math.min(140, Math.abs(mid - cx)) }
+  return { left: cx, top: c.top + c.height / 2, dx }
 }
 /** Put the card beside the spotlight where there's room (below, above, right, left), else over its lower part. */
 async function place() {
@@ -282,6 +305,9 @@ const blockers = computed(() => {
         <span v-for="(s, k) in SPARKS" :key="k" class="tour-spark" :style="{ left: s[0] * 100 + '%', top: s[1] * 100 + '%', animationDelay: k * 0.17 + 's' }">✦</span>
       </div>
     </template>
+    <div v-if="hand && waiting && !done" class="tour-hand" :style="{ left: hand.left + 'px', top: hand.top + 'px', '--dx': hand.dx + 'px', '--w': Math.abs(hand.dx) + 'px', '--dir': Math.sign(hand.dx) }" aria-hidden="true">
+      <span class="trail"></span><span class="icon">pan_tool_alt</span>
+    </div>
     <canvas ref="canvas" class="tour-confetti"></canvas>
 
     <transition name="tour-pop" mode="out-in">
@@ -419,6 +445,33 @@ const blockers = computed(() => {
 @keyframes tour-twinkle-i { 50% { opacity: 0.2; transform: scale(0.6) rotate(45deg); } }
 .tour-count { position: absolute; top: 12px; right: 14px; }
 
+/* drag hint: a hand that grabs the card and swings it along the timeline, leaving a sparkly trail */
+.tour-hand { position: absolute; pointer-events: none; z-index: 2; }
+.tour-hand .icon {
+  position: absolute; left: -14px; top: -6px; font-size: 30px; color: #fff;
+  filter: drop-shadow(0 0 6px var(--warn)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+  animation: tour-drag 2.4s cubic-bezier(.5,0,.3,1) infinite;
+}
+.tour-hand .trail {
+  position: absolute; top: 0; left: 0; height: 3px; width: var(--w); border-radius: 3px;
+  transform-origin: 0 50%; background: linear-gradient(90deg, transparent, var(--warn), var(--accent));
+  animation: tour-trail 2.4s cubic-bezier(.5,0,.3,1) infinite;
+}
+@keyframes tour-drag {
+  0% { transform: translateX(0) scale(1); opacity: 0; }
+  12% { opacity: 1; transform: translateX(0) scale(1); }
+  22% { transform: translateX(0) scale(0.85); }
+  70% { transform: translateX(var(--dx)) scale(0.85); opacity: 1; }
+  80% { transform: translateX(var(--dx)) scale(1); opacity: 1; }
+  100% { transform: translateX(var(--dx)) scale(1); opacity: 0; }
+}
+@keyframes tour-trail {
+  0%, 22% { transform: scaleX(0); opacity: 0; }
+  30% { opacity: 0.9; }
+  70% { transform: scaleX(var(--dir)); opacity: 0.9; }
+  100% { transform: scaleX(var(--dir)); opacity: 0; }
+}
+
 @media (max-width: 640px) {
   .tour-card.centred { width: calc(100vw - 32px); }
   .tour-title { font-size: 19px; line-height: 25px; }
@@ -427,7 +480,8 @@ const blockers = computed(() => {
 }
 @media (prefers-reduced-motion: reduce) {
   .tour-ring, .tour-spark, .tour-badge, .tour-burst i, .tour-spot.act .tour-ring, .tour-wait i, .tour-moves span.on, .tour-title.shimmer, .tour-next::after { animation: none; }
-  .tour-spark, .tour-burst { display: none; }
+  .tour-spark, .tour-burst, .tour-hand .trail { display: none; }
+  .tour-hand .icon { animation: none; }
   .tour-spot, .tour-card { transition: none; }
 }
 </style>
