@@ -83,12 +83,12 @@ function auto() {
       </div>
     </header>
 
-    <div class="sec">
+    <div class="sec sec-load">
       <div class="sh tiny upper muted"><span class="n">②</span> Workload<span class="spacer"></span>{{ todos.filter((t) => t.done).length }}/{{ todos.length }} done</div>
       <WorkloadBucket :date="date" :hour-px="bucketPx" :dim-fn="filter ? dimTodo : null" :min-rows="balance?.rows" :avg="balance && balance.counts.includes(date) ? balance.avg : null" />
     </div>
 
-    <div v-if="mode !== 'days'" class="sec">
+    <div v-if="mode !== 'days'" class="sec sec-time">
       <div class="sh tiny upper muted">
         <span class="n">③</span> Schedule<span class="spacer"></span>
         <button v-if="untimed.length && !past" class="btn sm auto" :title="`Auto time-box: give ${untimed.length} untimed task(s) a time in free gaps (08:00–21:00), by priority`" @click="auto">
