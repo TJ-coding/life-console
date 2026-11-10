@@ -8,14 +8,14 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { state, ui } from '../store'
+import { state, ui, toast } from '../store'
 
 const STEPS = [
-  { kind: 'welcome', icon: 'auto_awesome', title: 'Welcome to Life Console', body: 'Three moves turn a goal into what you do next. Here they are in 30 seconds, using a small demo planner.', next: 'Show me' },
-  { move: 0, route: '/strategy/SP-01', target: '.tree', icon: 'target', title: 'Strategise: start from a goal', body: 'A plan breaks a goal into milestones. The demo is training for a half marathon: Sign up, Build the base, then the Long run.' },
-  { move: 1, route: '/week', target: '.backlog', icon: 'calendar_month', title: 'Distribute: give tasks a day', body: 'Tasks wait in the backlog until you give them a day. Each day has a 7-hour budget, so you can see when it’s too full.' },
-  { move: 2, route: '/', target: '.now-inst', icon: 'radar', title: 'Execute: do what’s on top', body: 'The NOW card shows what to do right now and how long is left. Focus opens it full screen.' },
-  { kind: 'finish', icon: 'celebration', title: 'You’re ready', body: 'Everything here is demo data, so change anything you like. You can replay this tour from Settings.', next: 'Start planning' },
+  { kind: 'welcome', icon: 'auto_awesome', title: 'Plan like a strategist', body: 'Learn the three moves that turn big goals into today’s to-do. 30 seconds.', next: 'Take a tour' },
+  { move: 0, route: '/strategy/SP-01', target: '.tree', icon: 'target', title: 'Strategise', body: 'Pick a goal. Break it into milestones.' },
+  { move: 1, route: '/week', target: '.backlog', icon: 'calendar_month', title: 'Distribute', body: 'Give each task a day, without overloading any.' },
+  { move: 2, route: '/', target: '.now-inst', icon: 'radar', title: 'Execute', body: 'Do what’s on top. Nothing else.' },
+  { kind: 'finish', icon: 'celebration', title: 'You’re ready', body: 'It’s all demo data, so play freely.', next: 'Start planning' },
 ]
 const MOVES = ['Strategise', 'Distribute', 'Execute']
 
@@ -95,6 +95,7 @@ function finish() {
 function skip() {
   state.tour = 'done'
   ui.tourOpen = false
+  toast('Take the tour anytime: Settings → Getting started')
 }
 
 /* confetti: one burst on the finish card, drawn on a canvas, gone after ~3s */
