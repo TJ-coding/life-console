@@ -161,9 +161,19 @@ HTTPS is terminated by Cloudflare in front of the tunnel. The app listens on 808
 | `push_subscriptions` | Push endpoints per user (an endpoint moves to whoever signs in on that browser) |
 | `notifications_sent` | Notification de-dup keys (pruned after 4 days) |
 | `issues` | The in-app issue log (`ISS-n` = `number`) |
-| `app_kv` | `vapid`: Web Push keys. **Losing them unsubscribes every device.** |
+| `user_activity` | `(user_id, day)`: one row per account per UTC day it made a signed-in request (API tokens don't count). Basis for usage metrics; backfilled from sign-ups, sign-ins, sessions and snapshots by its migration |
+| `app_kv` | `vapid`: Web Push keys. **Losing them unsubscribes every device.** `umami_metrics_day`: last day reported to Umami. |
 
 Every device also keeps a copy of its user's planner in the browser. Signing out removes it, and signing in as another account on the same browser starts clean.
+
+### 6.1a Usage metrics (users, active users, churn)
+
+`server/metrics.mjs` turns `user_activity` into daily numbers for UTC day *D*: `users` (not disabled), `new_users`, `dau`, `wau` (7 days), `mau` (30 days), `stickiness` (DAU/MAU %), `churned` (active in D-59…D-30 but not D-29…D), `churn_rate` (churned / that earlier MAU, %), `retained`, `resurrected` (back after 60+ days away). Computed on the server, so ad-blockers and the in-app analytics opt-out don't skew them; they're totals only.
+
+- **See them any time:** `npm run admin -- metrics` (yesterday) · `--days 30` (a table of the last 30 days) · `--day 2026-11-01`.
+- **Umami:** set `UMAMI_URL` (Umami as the app server reaches it; the public service uses `http://dokpoly.netbird.cloud:3100`). The website is `UMAMI_WEBSITE_ID`, else `ANALYTICS_SITE_ID`. Once a day (checked hourly, claimed in `app_kv` so replicas don't double-send, retried on failure) the server POSTs one `daily-metrics` event to `/api/send` with the numbers above as event data. `npm run admin -- metrics --send` sends yesterday by hand.
+- **In Umami:** *Events* shows one `daily-metrics` per day; its event data (or *Reports → Event data*) charts `mau`, `dau`, `churn_rate`, … over time. Umami goals count events and can't target a value, so track targets (e.g. MAU ≥ 100) against the `mau` property.
+- Off when `UMAMI_URL` is empty (self-hosted servers send nothing).
 
 ### 6.2 Backups
 

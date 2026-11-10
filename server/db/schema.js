@@ -5,7 +5,7 @@
 //   - additive changes only in one release (new table, new nullable/defaulted column, new index);
 //   - renames/drops are two releases: stop using it, deploy, then drop it in a later migration;
 //   - never edit a migration that has shipped; generate a new one.
-import { pgTable, text, uuid, timestamp, integer, jsonb, serial, primaryKey, index, uniqueIndex, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, text, uuid, timestamp, date, integer, jsonb, serial, primaryKey, index, uniqueIndex, boolean } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
 const ts = (name) => timestamp(name, { withTimezone: true })
@@ -114,6 +114,15 @@ export const issues = pgTable('issues', {
   updatedAt: ts('updated_at').notNull().defaultNow(),
   resolvedAt: ts('resolved_at'),
 }, (t) => [index('issues_status_idx').on(t.status)])
+
+/**
+ * One row per account per (UTC) day it used the app: the basis for usage metrics (daily/weekly/monthly
+ * active users, churn; server/metrics.mjs). Only the date is kept: no times, pages or devices.
+ */
+export const userActivity = pgTable('user_activity', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  day: date('day').notNull(),
+}, (t) => [primaryKey({ columns: [t.userId, t.day] }), index('user_activity_day_idx').on(t.day)])
 
 /** Server-wide settings that must survive redeploys (VAPID keys). */
 export const appKv = pgTable('app_kv', {

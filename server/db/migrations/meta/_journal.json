@@ -15,6 +15,13 @@
       "when": 1794056441273,
       "tag": "0001_users_google_sub",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794305287023,
+      "tag": "0002_user_activity",
+      "breakpoints": true
     }
   ]
 }

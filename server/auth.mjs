@@ -2,7 +2,7 @@
 import crypto from 'node:crypto'
 import { promisify } from 'node:util'
 import { and, eq, gt, isNull, lt, sql } from 'drizzle-orm'
-import { users, sessions, apiTokens, passwordResets } from './db/schema.js'
+import { users, sessions, apiTokens, passwordResets, userActivity } from './db/schema.js'
 
 const scrypt = promisify(crypto.scrypt)
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }
@@ -119,7 +119,19 @@ export function createAuth(db, cfg) {
     if (Date.now() - row.s.lastSeenAt.getTime() > 86400000) {
       await db.update(sessions).set({ lastSeenAt: new Date(), expiresAt: new Date(Date.now() + days * 86400000) }).where(eq(sessions.tokenHash, h))
     }
+    await markActive(row.u.id)
     return { user: row.u, via: 'session', tokenHash: h }
+  }
+
+  /** Usage metrics (metrics.mjs): note that this account used the app today (UTC), at most one write per account per day. */
+  let activeDay = ''
+  let activeSeen = new Set()
+  async function markActive(userId) {
+    const day = new Date().toISOString().slice(0, 10)
+    if (day !== activeDay) { activeDay = day; activeSeen = new Set() }
+    if (activeSeen.has(userId)) return
+    activeSeen.add(userId)
+    try { await db.insert(userActivity).values({ userId, day }).onConflictDoNothing() } catch (e) { activeSeen.delete(userId); throw e }
   }
 
   async function endSession(tokenHash) { if (tokenHash) await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)) }

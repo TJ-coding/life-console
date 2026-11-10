@@ -61,8 +61,14 @@ export function loadConfig(over = {}) {
     // optional Umami dashboard origin (e.g. http://umami.lan:3000) allowed to show the landing page in a frame: Umami
     // draws the heatmap over the live page in an iframe. Only the landing page; everything else stays unframeable
     analyticsDashboard: origin(e.ANALYTICS_DASHBOARD),
+    // daily usage metrics (users, DAU/WAU/MAU, churn) sent to Umami's API as one anonymous event (server/metrics.mjs).
+    // Off unless UMAMI_URL is set: the Umami server as this server reaches it. Website: UMAMI_WEBSITE_ID, else ANALYTICS_SITE_ID
+    umamiUrl: (e.UMAMI_URL || '').replace(/\/$/, ''),
+    umamiWebsiteId: e.UMAMI_WEBSITE_ID || e.ANALYTICS_SITE_ID || '',
+    umamiHostname: e.UMAMI_HOSTNAME || (appUrl ? new URL(appUrl).hostname : 'localhost'),
     googleTokenUrl: e.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token',
   }
+  cfg.umami = !!(cfg.umamiUrl && cfg.umamiWebsiteId)
   cfg.google = !!(cfg.googleClientId && cfg.googleClientSecret)
   if (cfg.google && !cfg.appUrl) throw new Error('GOOGLE_CLIENT_ID needs APP_URL (the redirect URL is APP_URL/api/auth/google/callback)')
   if (!cfg.passwordAuth && !cfg.google) throw new Error('AUTH_PASSWORD=off needs Google sign-in (GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET), or nobody could sign in')

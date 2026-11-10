@@ -8,6 +8,7 @@ import { createPlanner } from './planner.mjs'
 import { createPush } from './push.mjs'
 import { createIssues } from './issues.mjs'
 import { createScheduler } from './scheduler.mjs'
+import { createMetricsReporter } from './metrics.mjs'
 import { createMailer } from './mail.mjs'
 import { createGoogle } from './google.mjs'
 import { settingsOf } from './schedule.mjs'
@@ -54,6 +55,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const mailer = cfg.passwordAuth ? createMailer(cfg, log) : null
   const google = cfg.google ? createGoogle(cfg) : null
   const limit = createLimiter()
+  const metrics = createMetricsReporter({ db, pool, cfg, log })
   const scheduler = createScheduler({ db, planner, push, tickMs: cfg.tickMs, log })
   const appOrigin = cfg.appUrl ? new URL(cfg.appUrl).origin : null
   const appHost = cfg.appUrl ? new URL(cfg.appUrl).host : null
@@ -436,5 +438,6 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
   const sweep = setInterval(() => auth.purgeExpired().catch((e) => log('[auth] purge failed', e.message)), 6 * 3600000)
   sweep.unref()
 
-  return { handler, scheduler, auth, planner, push, issues, build: BUILD, close: () => { clearInterval(sweep); scheduler.stop() } }
+  metrics.start()
+  return { handler, scheduler, auth, planner, push, issues, metrics, build: BUILD, close: () => { clearInterval(sweep); scheduler.stop(); metrics.stop() } }
 }

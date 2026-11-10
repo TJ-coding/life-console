@@ -11,6 +11,9 @@
 //   create-token --email E [--name N]          API token for scripts (npm run issues): printed once
 //   revisions --email E                        planner snapshots for an account
 //   restore --email E --revision ID            put a snapshot back (the current copy is snapshotted first)
+//   metrics [--day YYYY-MM-DD] [--days N] [--send]
+//                                              users, active users (DAU/WAU/MAU) and churn (default: yesterday, UTC);
+//                                              --days N: the last N days; --send: also report that day to Umami
 //   backup [--dir D]                           pg_dump the database now (default BACKUP_DIR or ./backups)
 //   import-legacy --dir D --email E [--password P] [--force]
 //                                              move a pre-database install (/data JSON files) into an account
@@ -24,6 +27,7 @@ import { users, plannerDocs, plannerRevisions, pushSubscriptions, issues, appKv,
 import { createAuth, normEmail } from './auth.mjs'
 import { createPlanner } from './planner.mjs'
 import { issueNo, platformFromUA } from './issues.mjs'
+import { computeMetrics, sendToUmami, utcDay, addDays } from './metrics.mjs'
 
 const argv = process.argv.slice(2)
 const cmd = argv[0]
@@ -44,6 +48,18 @@ const userBy = async (email) => {
 const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return d } }
 
 const commands = {
+  async metrics() {
+    const last = opt('day') || addDays(utcDay(), -1)
+    const n = Number(opt('days') || 1)
+    const rows = []
+    for (let i = n - 1; i >= 0; i--) rows.push(await computeMetrics(pool, addDays(last, -i)))
+    console.table(rows.map(({ prev_mau, ...m }) => ({ ...m, stickiness: `${m.stickiness}%`, churn_rate: `${m.churn_rate}%` })))
+    if (has('send')) {
+      if (!cfg.umami) throw new Error('set UMAMI_URL and UMAMI_WEBSITE_ID (or ANALYTICS_SITE_ID) to send')
+      await sendToUmami(cfg, 'daily-metrics', rows[rows.length - 1])
+      console.log(`sent ${last} to ${cfg.umamiUrl}`)
+    }
+  },
   async migrate() { await runMigrations(pool, { databaseUrl: cfg.databaseUrl, backupDir: cfg.backupDir }) },
   async users() {
     const r = await db.execute(sql`select u.email, u.role, u.disabled, u.created_at, u.last_login_at, coalesce(d.version, 0) as version,
