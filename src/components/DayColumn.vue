@@ -78,8 +78,8 @@ function auto() {
         <div class="grow"><Gauge :hours="hours" horizontal /></div>
       </div>
       <div v-if="balance && delta === null" class="delta mono muted" title="Not counted in the week's average">{{ date < todayISO() ? 'past' : 'weekend' }}</div>
-      <div v-else-if="delta !== null" class="delta mono" :class="hours > CAPACITY_H ? 'danger' : delta > 1 ? 'warn' : delta < -1 ? 'room' : 'muted'" :title="`${Math.abs(delta).toFixed(1)}h ${delta >= 0 ? 'above' : 'below'} the week's average of ${balance.avg.toFixed(1)}h`">
-        <span class="icon sm">{{ delta >= 0 ? 'arrow_upward' : 'arrow_downward' }}</span>{{ delta >= 0 ? '+' : '−' }}{{ Math.abs(delta).toFixed(1) }}h <span class="muted">vs avg</span><template v-if="delta < -1 && hours <= CAPACITY_H"> · room</template>
+      <div v-else-if="delta !== null" class="delta mono" :class="hours > CAPACITY_H ? 'danger' : delta > 1 ? 'warn' : delta < -1 ? 'room' : 'muted'" :title="`${Math.abs(delta).toFixed(1)}h ${delta >= 0 ? 'above' : 'below'} this week's average of ${balance.avg.toFixed(1)}h a day${delta < -1 && hours <= CAPACITY_H ? ' · room for more' : ''}`">
+        <span class="icon sm">{{ delta >= 0 ? 'arrow_upward' : 'arrow_downward' }}</span>{{ delta >= 0 ? '+' : '−' }}{{ Math.abs(delta).toFixed(1) }}h
       </div>
     </header>
 
@@ -160,7 +160,7 @@ function auto() {
 .today .ja { color: var(--accent); }
 .md { font-size: 15px; font-weight: 700; }
 .sec { border-bottom: 1px solid var(--border); padding: 6px; }
-.delta { display: flex; align-items: center; gap: 3px; font-size: 12px; height: 18px; white-space: nowrap; overflow: hidden; }
+.delta { cursor: help; display: flex; align-items: center; gap: 3px; font-size: 12px; height: 18px; white-space: nowrap; overflow: hidden; }
 .delta .icon { font-size: 14px; }
 .delta.room { color: var(--info); }
 .pick { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 13px; text-align: left; padding: 4px 3px; border-radius: 2px; cursor: pointer; }
