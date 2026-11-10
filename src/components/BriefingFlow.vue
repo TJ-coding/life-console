@@ -5,7 +5,7 @@
 // Picking an option applies it straight away (Back / Change undo it). The last step is a recap + finish.
 //
 // step = { key, grp?, title(), why()?, tone?, days(): [dates], options(): [{ label, sim, rec?, verdict? }], stale()? }
-import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { state, wd, parseISO, MONTHS, todayISO, blocksFrom, toMin, fromMin } from '../store'
 import { simTodos, simStats, simVerdict, untimedIn, objectiveIn, applySim, windDownAt, dur } from '../review'
 import DayTimeline from './DayTimeline.vue'
@@ -79,7 +79,14 @@ function preview(sim, days) {
         ...u0.filter((id) => !u1.some((t) => t.id === id)).map((id) => ({ id, title: state.todos.find((t) => t.id === id)?.title ?? id, cls: 'gone' }))],
     }
   })
-  return { cols, stats: simStats(before, after, days), after }
+  // tasks that leave the days on screen land in a strip under them (backlog, done, another day): an arrow target
+  const was0 = new Map(before.map((t) => [t.id, t]))
+  const off = after.filter((t) => {
+    const t0 = was0.get(t.id)
+    if (!t0 || !days.includes(t0.scheduled?.date)) return false
+    return (t.done && !t0.done) || !t.scheduled || !days.includes(t.scheduled.date)
+  }).map((t) => ({ id: t.id, title: t.title, where: t.done && !was0.get(t.id).done ? '✓ Done' : !t.scheduled ? 'Backlog' : wd(t.scheduled.date) }))
+  return { cols, off, stats: simStats(before, after, days), after }
 }
 const view = computed(() => {
   if (idx.value >= n.value) return { ...preview({ patch: {}, add: [] }, props.recapDays), verdict: null }
@@ -96,7 +103,7 @@ const span = computed(() => {
 })
 // the schedule fills the window's height (no empty space under it); phones scroll instead
 const winH = ref(typeof window === 'undefined' ? 900 : window.innerHeight)
-const onResize = () => { winH.value = window.innerHeight }
+const onResize = () => { winH.value = window.innerHeight; redraw() }
 const pxh = computed(() => {
   if (typeof matchMedia === 'function' && matchMedia('(max-width: 900px)').matches) return 18
   const extra = view.value.cols.some((c) => c.untimed.length) ? 40 : 0
@@ -111,6 +118,48 @@ const good = (r) => {
   return (r.better === 'higher') === (r.bn > r.an) ? 'good' : 'bad'
 }
 const dayName = (d) => (d === todayISO() ? 'Today' : wd(d)) + ' ' + parseISO(d).getDate()
+
+/* ── arrows: from where a task was (outline / chip) to where the option puts it, drawn once blocks settle ── */
+const arena = ref(null)
+const arrows = ref([])
+const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+let arrowTimer
+function measure() {
+  const el = arena.value
+  if (!el) { arrows.value = []; return }
+  const box = el.getBoundingClientRect()
+  const rect = (n) => { const b = n.getBoundingClientRect(); return { x: b.left - box.left, y: b.top - box.top, w: b.width, h: b.height } }
+  const out = []
+  for (const d of el.querySelectorAll('.vb.pv-new[data-tid], .uc.new[data-tid]')) {
+    const id = d.dataset.tid
+    const s0 = el.querySelector(`.vb.pv-ghost[data-tid="${id}"], .uc.gone[data-tid="${id}"]`)
+    if (!s0) continue
+    const a = rect(s0), b = rect(d)
+    const ax = a.x + a.w / 2, ay = a.y + a.h / 2, bx = b.x + b.w / 2, by = b.y + b.h / 2
+    const clampX = (x, r) => Math.max(r.x + 24, Math.min(r.x + r.w - 24, x))
+    let path
+    if (d.classList.contains('vb') && s0.classList.contains('vb') && Math.abs(bx - ax) < 60) {
+      // a block moving within its day: out of the old slot's right side, curving into the new one
+      const sx = Math.min(a.x + a.w, b.x + b.w) - 18, bulge = Math.min(90, 30 + Math.abs(by - ay) / 4)
+      const ty = by > ay ? b.y - 3 : b.y + b.h + 3
+      path = `M${sx},${ay} C${sx + bulge},${ay} ${sx + bulge},${ty} ${sx - 6},${ty}`
+    } else if (Math.abs(by - ay) > Math.abs(bx - ax)) {
+      // mostly up or down (a chip under the schedule going onto it): into the nearest edge, right above / below
+      const sx = ax, sy = by < ay ? a.y - 2 : a.y + a.h + 2
+      const ex = clampX(ax, b), ty = by < ay ? b.y + b.h + 3 : b.y - 3, my = (sy + ty) / 2
+      path = `M${sx},${sy} C${sx},${my} ${ex},${my} ${ex},${ty}`
+    } else {
+      // sideways (into another day's column): an S-curve into the target's near side
+      const ex = bx > ax ? b.x - 4 : b.x + b.w + 4, sx = bx > ax ? a.x + a.w + 2 : a.x - 2, mx = (sx + ex) / 2
+      path = `M${sx},${ay} C${mx},${ay} ${mx},${by} ${ex},${by}`
+    }
+    out.push({ id, d: path })
+  }
+  arrows.value = out
+}
+function redraw() { arrows.value = []; clearTimeout(arrowTimer); arrowTimer = setTimeout(() => nextTick(measure), still ? 0 : 340) }
+watch([cur, idx, pxh], redraw)
+onMounted(redraw)
 
 /* ── keys ── */
 function onKey(e) {
@@ -187,15 +236,24 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
       </div>
 
       <section class="pv panel">
+        <div ref="arena" class="arena">
         <div class="cols" :style="{ gridTemplateColumns: `repeat(${view.cols.length}, minmax(0, 1fr))` }">
           <div v-for="c in view.cols" :key="c.date" class="dcol">
             <div class="dh mono">{{ dayName(c.date) }}</div>
             <DayTimeline :date="c.date" :blocks="c.blocks" :from="span.from" :to="span.to" :pxh="pxh" readonly :mark-fn="c.mark" :line-at="wdn" :line-label="`wind-down ${fromMin(wdn)}`" />
             <div v-if="c.untimed.length" class="ut">
               <span class="tiny upper muted">No time yet</span>
-              <span v-for="u in c.untimed" :key="u.id" class="uc" :class="[u.cls, { star: u.star }]">{{ u.title }}<span v-if="u.m" class="mono um">{{ dur(u.m) }}</span></span>
+              <span v-for="u in c.untimed" :key="u.id" :data-tid="u.id" class="uc" :class="[u.cls, { star: u.star }]">{{ u.title }}<span v-if="u.m" class="mono um">{{ dur(u.m) }}</span></span>
             </div>
           </div>
+        </div>
+        <div v-if="view.off?.length" class="off">
+          <span v-for="o in view.off" :key="o.id" :data-tid="o.id" class="uc new"><b class="mono">{{ o.where }}</b> {{ o.title }}</span>
+        </div>
+        <svg class="arrows" aria-hidden="true">
+          <defs><marker id="pv-head" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" /></marker></defs>
+          <g v-for="a in arrows" :key="a.id + a.d"><path class="ar" :d="a.d" pathLength="1" /><path class="ah" :d="a.d" marker-end="url(#pv-head)" /></g>
+        </svg>
         </div>
       </section>
     </div>
@@ -252,7 +310,24 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
 .lnk { background: none; border: 0; color: var(--muted); text-decoration: underline; font-size: 12px; cursor: pointer; padding: 0; }
 
 .pv { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.arena { position: relative; }
+.off { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
+.off .uc b { margin-right: 4px; }
 .cols { display: grid; gap: 10px; }
+.arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 6; }
+.arrows marker path { fill: var(--accent); }
+.ah { fill: none; stroke: none; }
+.ar { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--bg) 80%, transparent)); }
+@media (prefers-reduced-motion: no-preference) {
+  /* the arrow draws itself from the old place to the new one (dash trick; it ends as a solid line) */
+  .ar { stroke-dasharray: 1; stroke-dashoffset: 1; animation: pv-draw 0.42s cubic-bezier(.4,0,.2,1) forwards; }
+  .ah { opacity: 0; animation: pv-head 0.15s 0.34s ease-out forwards; }
+  .uc { transition: background-color 0.2s, color 0.2s; }
+  .uc.new { animation: pv-pop 0.3s cubic-bezier(.2,.8,.2,1); }
+}
+@keyframes pv-draw { to { stroke-dashoffset: 0; } }
+@keyframes pv-head { to { opacity: 1; } }
+@keyframes pv-pop { from { opacity: 0; transform: translateY(4px) scale(0.9); } }
 .dcol { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .dh { font-size: 12px; font-weight: 600; }
 .ut { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
@@ -283,7 +358,7 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
   .q h1 { font-size: 24px; line-height: 30px; }
   .why { font-size: 15px; }
   .opt { font-size: 15px; min-height: 48px; }
-  .bfoot { position: sticky; bottom: 0; background: var(--bg); padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); }
+  .bfoot { position: sticky; bottom: 0; z-index: 10; background: var(--bg); padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); }
   .bfoot .hint { display: none; }
   .sa, .sb { max-width: 34vw; }
   .sb { font-size: 15px; }

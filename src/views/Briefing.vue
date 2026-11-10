@@ -42,7 +42,7 @@ if (loadOf(state.todos, T) > CAPACITY_H) steps.push(overloadStep(T, N, { who: 'T
 const untimed = untimedOn(T).slice(0, 8)
 untimed.forEach((t0, i) => {
   steps.push({
-    key: 'untimed-' + t0.id, tone: 'warn', days: () => [T],
+    key: 'untimed-' + t0.id, tone: 'warn', days: () => [T, N],
     grp: `${untimed.length} task${untimed.length > 1 ? 's have' : ' has'} no time · ${i + 1} of ${untimed.length}`,
     title: () => t0.title,
     why: () => `${dur(t0.timeMin || 30)} · P${t0.priority}`,
