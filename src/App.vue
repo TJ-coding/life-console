@@ -15,6 +15,7 @@ import { useNow } from './now'
 import { sync, chooseSync } from './sync'
 import { auth } from './auth'
 import AuthScreen from './components/AuthScreen.vue'
+import TourOverlay from './components/TourOverlay.vue'
 
 const SYNC_TEXT = { outdated: 'RELOAD', choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', error: 'ERROR' }
 const SYNC_ICON = { outdated: 'system_update', choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', error: 'error' }
@@ -44,8 +45,14 @@ const clock = computed(() => {
 })
 const T = computed(() => todayISO())
 const reload = () => window.location.reload()
+
 /** Nobody signed in (or a password-reset link is open): the sign-in screen replaces the app. */
 const showAuth = computed(() => auth.status === 'signed-out' || !!auth.resetToken)
+// a new account's demo planner carries tour: 'pending'; start the tour once the first sync has settled, so an
+// existing account signing in on a new device (whose server copy has no pending tour) never sees it
+watch(() => state.tour === 'pending' && !showAuth.value && ['synced', 'local'].includes(sync.status) && !route.meta.bare, (go) => {
+  if (go) setTimeout(() => { if (state.tour === 'pending' && !showAuth.value) ui.tourOpen = true }, 600)
+}, { immediate: true })
 const openCount = computed(() => state.todos.filter((t) => !t.done && isLeaf(t)).length)
 const overdueCount = computed(() => { void ui.now.getMinutes(); return state.deadlines.filter(isOverdue).length })
 const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name === 'day' ? 'today' : route.name === 'plans' ? 'strategy' : route.name))
@@ -284,6 +291,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <BlockDialog />
     <IssueDialog />
     <SelectionBar />
+    <TourOverlay v-if="ui.tourOpen" />
     <transition name="fade">
       <div v-if="ui.toast" class="toast mono" role="status">
         <span class="toast-msg">{{ ui.toast }}</span>

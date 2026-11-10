@@ -88,7 +88,7 @@ function onKey(e) {
     <div class="pal">
       <div class="in">
         <span class="mono prompt">{{ isAdd ? '+' : '>' }}</span>
-        <input ref="input" v-model="q" class="mono" :placeholder="isAdd ? 'Read chapter 3 #UX-101 30m due:fri p2 @CASE1' : 'Type a command or search…'" @keydown="onKey" />
+        <input ref="input" v-model="q" class="mono" :placeholder="isAdd ? 'Read chapter 3 #RUN 30m due:fri p2 @BASE' : 'Type a command or search…'" @keydown="onKey" />
         <span class="kbd">ESC</span>
       </div>
       <div v-if="isAdd" class="add">
@@ -101,7 +101,7 @@ function onKey(e) {
           <span class="pc mono"><b>Day</b> {{ contextDate ?? 'inbox' }}</span>
           <Chip v-for="l in parsed.links" :key="l" :id="l" />
         </div>
-        <div class="small muted">Syntax: <span class="mono">#course @CASE1 30m due:fri p1 [L]</span> · Enter to create</div>
+        <div class="small muted">Syntax: <span class="mono">#course @BASE 30m due:fri p1 [L]</span> · Enter to create</div>
       </div>
       <div v-else class="list">
         <template v-for="(r, i) in results" :key="r.group + r.label">

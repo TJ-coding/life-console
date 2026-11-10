@@ -301,7 +301,7 @@ function quickAdd() {
             </div>
             <form class="qa" @submit.prevent="quickAdd">
               <span class="mono ok">+</span>
-              <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @CASE1 p2`" />
+              <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @BASE p2`" />
             </form>
           </div>
           <aside v-if="planning" class="bl-col" :class="{ 'drop-hot': blHot }" @dragover.prevent="blHot = true" @dragleave="blHot = false" @drop.prevent="dropOnBacklog">

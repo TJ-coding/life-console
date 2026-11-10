@@ -256,6 +256,10 @@ const reload = () => window.location.reload()
     </section>
 
     <section class="panel">
+      <div class="panel-h"><span class="icon sm">auto_awesome</span><h2>Getting started</h2></div>
+      <div class="panel-b row"><span class="grow">A 30-second tour of Strategise → Distribute → Execute.</span><button class="btn" @click="ui.tourOpen = true"><span class="icon sm">play_arrow</span>Replay the tour</button></div>
+    </section>
+    <section class="panel">
       <div class="panel-h"><span class="icon sm">palette</span><h2>Appearance</h2></div>
       <div class="panel-b row"><span class="grow">Theme: <b class="mono">{{ ui.theme }}</b></span><button class="btn" @click="toggleTheme">Toggle light / dark</button></div>
     </section>
