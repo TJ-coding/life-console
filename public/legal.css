@@ -20,7 +20,7 @@ code, kbd { font: 13px ui-monospace, Menlo, monospace; background: var(--surface
 .doc h3 { font-size: 16px; margin: 22px 0 6px; }
 .doc pre { background: var(--surface); border: 1px solid var(--border); padding: 10px 12px; overflow-x: auto; border-radius: 2px; }
 .doc pre code { border: 0; padding: 0; background: none; }
-.doc { overflow-wrap: anywhere; }
+.doc { overflow-wrap: break-word; }
 .doc pre { overflow-wrap: normal; }
 @media (min-width: 561px) { .doc table { display: block; overflow-x: auto; } }
 .doc img { max-width: 100%; height: auto; }
