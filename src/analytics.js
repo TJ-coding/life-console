@@ -50,10 +50,20 @@ export function analyticsReady(route) {
 // "open-app" click on the landing page → sign-in screen shown → "Continue with Google" → signed in (/app page views).
 const signedOutAllowed = () => config() && auth.status === 'signed-out'
 
+// Links we publish elsewhere point at /app?from=<source>, e.g. the README's "Try it now" (?from=github), so the
+// sign-in funnel shows which ones bring people in. Only these fixed names are sent; anything else is dropped.
+const SOURCES = ['github']
+export function linkSource(search = location.search) {
+  const from = new URLSearchParams(search).get('from')
+  return SOURCES.includes(from) ? from : undefined
+}
+
 /** The sign-in screen was shown. `inApp`: an in-app browser (Reddit, Instagram…) where Google refuses to sign in. */
 export function trackSignInScreen(inApp) {
   if (!signedOutAllowed()) return
-  load().then(() => window.umami?.track((p) => ({ ...p, url: '/app/sign-in', title: 'Sign in', referrer: '', data: { inApp } }))).catch(() => {})
+  const from = linkSource()
+  const data = from ? { inApp, from } : { inApp }
+  load().then(() => window.umami?.track((p) => ({ ...p, url: '/app/sign-in', title: 'Sign in', referrer: '', data }))).catch(() => {})
 }
 
 /** A button on the sign-in screen: 'signin-google', 'signin-open-browser', 'signin-copy-link', 'signin-error'. */
