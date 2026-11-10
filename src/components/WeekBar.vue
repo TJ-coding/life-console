@@ -5,12 +5,12 @@
 // each day column (workload bucket, schedule). Both lit = both shown; click one to focus it,
 // click it again to show both.
 import { computed } from 'vue'
-import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, setScheduleLock, LOCK_HELP, isLeaf, touchUI } from '../store'
+import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, setScheduleLock, LOCK_HELP, touchUI, backlogFor } from '../store'
 
 const weekEnd = computed(() => addDays(ui.weekStart, 6))
 const isThisWeek = computed(() => ui.weekStart === mondayOf(todayISO()))
 const inWeek = (d) => d >= ui.weekStart && d <= weekEnd.value
-const backlog = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t)).length)
+const backlog = computed(() => backlogFor(ui.weekStart).length) // this week's + unplanned; other weeks wait for theirs
 const assigned = computed(() => state.todos.filter((t) => !t.done && t.scheduled && inWeek(t.scheduled.date)))
 const timed = computed(() => assigned.value.filter((t) => t.scheduled.start).length)
 const pct = computed(() => (assigned.value.length ? Math.round((timed.value / assigned.value.length) * 100) : 100))
@@ -34,7 +34,7 @@ const setMode = (step) => {
     </div>
 
     <div class="flow" role="group" aria-label="Planning flow and layout">
-      <button class="step" :class="{ on: ui.backlogOnly, done: !backlog }" :aria-pressed="ui.backlogOnly" :title="ui.backlogOnly ? 'Back to the week view' : 'Backlog only: hide the day columns and show the deadlines & goals it serves'" @click="ui.backlogOnly = !ui.backlogOnly">
+      <button class="step" :class="{ on: ui.backlogOnly, done: !backlog }" :aria-pressed="ui.backlogOnly" :title="ui.backlogOnly ? 'Back to the week view' : 'Backlog by week: hide the day columns and spread the backlog over the next weeks'" @click="ui.backlogOnly = !ui.backlogOnly">
         <span class="n mono">{{ backlog ? 1 : '✓' }}</span>
         <span class="lbl"><b>Backlog</b><small class="mono">{{ backlog }} to place</small></span>
       </button>
