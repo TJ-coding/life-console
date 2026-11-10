@@ -20,30 +20,54 @@ const doneCount = () => state.todos.filter((t) => t.done).length
  * week's Backlog tab instead of Days. `action`: a "your turn" stop: start() takes a baseline, done(baseline) says
  * when the user has done it.
  */
+/* the plan the user creates in the tour (falls back to the demo plan if they skip that stop) */
+const newPlanId = ref(null)
+const newTaskId = ref(null) // and the task they make for it, which Plan week then spotlights
+const planRoute = () => `/strategy/${newPlanId.value ?? 'SP-01'}`
+const curPlan = () => state.plans.find((p) => p.id === router.currentRoute.value.params.planId)
+const count = (key) => curPlan()?.[key]?.length ?? 0
+const button = (sel, text) => [...document.querySelectorAll(sel)].find((b) => b.textContent.includes(text)) ?? null
+
 const STEPS = [
-  { kind: 'welcome', icon: 'auto_awesome', title: 'Plan like a strategist', body: 'Learn the three moves that turn big goals into today’s to-do. About a minute.', next: 'Take a tour' },
+  { kind: 'welcome', icon: 'auto_awesome', title: 'Plan like a strategist', body: 'Build your first plan, give it a week, then run your day. About two minutes.', next: 'Take a tour' },
 
-  { move: 0, route: '/strategy/SP-01', target: '.tree .node.vision', icon: 'flag', title: 'Strategise: the vision', body: 'Start with why. Everything below serves this.' },
-  { move: 0, route: '/strategy/SP-01', target: '.tree .branch', icon: 'account_tree', title: 'Goals and milestones', body: 'A goal splits into milestones. ⛓ marks what has to come first.' },
-  { move: 0, route: '/strategy/SP-01', target: () => last('.tree .add-task'), icon: 'add_task', title: 'Your turn: make it doable', body: 'Tap + task to turn a milestone into something you can do.',
-    action: { start: () => state.todos.length, done: (n) => state.todos.length > n, after: () => { ui.drawerId = null } } },
+  // Strategise: on the Strategy tab, the user builds a plan of their own
+  { move: 0, optional: true, target: '.sidebar a[href="#/strategy"]', icon: 'target', title: 'Everything starts with a strategy', body: 'Open the Strategy tab.', phoneBody: 'Your plans live on the Strategy screen.', next: 'Open Strategy',
+    action: { start: () => 0, done: () => router.currentRoute.value.path.startsWith('/strategy') }, then: '/strategy' },
+  { move: 0, route: '/strategy', target: () => document.querySelector('.plantabs .add') ?? document.querySelector('.plantabs .tab.new'), icon: 'add_circle', title: '1 · Create a strategy', body: 'Tap New plan, name it after something you want, and hit Create.',
+    action: { start: () => state.plans.length, done: (n) => state.plans.length > n, after: () => { newPlanId.value = state.plans[state.plans.length - 1].id } } },
+  { move: 0, route: planRoute, target: () => button('.tree .panel-h button', 'PSG'), icon: 'flag', title: '2 · Prioritised goals', body: 'Tap + PSG to add the goal that matters most.', doneBody: 'Click its name any time to rename it.',
+    action: { start: () => count('psgs'), done: (n) => count('psgs') > n } },
+  { move: 0, route: planRoute, target: '.tree .add-sig', icon: 'account_tree', title: '3 · Cascading goals', body: 'Tap + SIG to add a milestone. Milestones cascade up into the goal.',
+    action: { start: () => count('sigs'), done: (n) => count('sigs') > n } },
+  { move: 0, route: planRoute, target: '.tree .add-task', icon: 'add_task', title: '4 · Create a task', body: 'Tap + task. Now the milestone has something you can actually do.',
+    action: { start: () => state.todos.length, done: (n) => state.todos.length > n, after: () => { ui.drawerId = null; newTaskId.value = state.todos[state.todos.length - 1].id } } },
+  { move: 0, route: planRoute, target: '.flow-panel', icon: 'schema', title: '5 · Goal flow', body: 'Your plan as a flow: tasks feed milestones, milestones feed goals, goals feed the vision.' },
 
-  { move: 1, route: '/week', backlog: true, target: '.backlog', icon: 'inbox', title: 'Distribute: the backlog', body: 'Every task waits here until it gets a day.' },
+  // Distribute: Plan week
+  { move: 1, route: '/week', backlog: true, target: '.backlog', icon: 'inbox', title: 'Plan week: the backlog', body: 'Your new task is waiting here for a day.' },
   { move: 1, route: '/week', backlog: true, target: () => firstBacklogRow(), icon: 'event', title: 'Your turn: pick a day', body: 'Tap a day under this task. The small number is that day’s free hours.', phoneBody: 'Tap a week for this task. Plan the exact day later.',
     action: { start: () => { const ids = backlogIds(); ui.selectedId = firstBacklogId(); return ids }, done: (ids) => ids.some((id) => { const t = state.todos.find((x) => x.id === id); return t && (t.scheduled || t.week) }) } },
   { move: 1, route: '/week', target: '.days .day.today .sec-load', icon: 'battery_5_bar', title: 'Every day has a budget', body: '7 hours of work, max. Red means the day is too full.' },
   { move: 1, route: '/week', target: '.days .day.today .sec-time', icon: 'schedule', title: 'Then give it a time', body: 'Drag a task onto the schedule, or tap ⚡ to fit it in for you.' },
 
-  { move: 2, route: '/', target: '.now-inst', icon: 'radar', title: 'Execute: what now?', body: 'What to do right now, and how long is left.' },
+  // Execute: Command Center
+  { move: 2, route: '/', target: '.now-inst', icon: 'radar', title: 'Command Center: what now?', body: 'What to do right now, and how long is left.' },
   { move: 2, route: '/', target: '.todo-panel', icon: 'task_alt', title: 'Your turn: tick one off', body: 'Finished something today? Tick it. That’s the whole job.',
     action: { start: () => doneCount(), done: (n) => doneCount() > n } },
   { move: 2, route: '/', target: '.now-inst a[href="#/focus"]', icon: 'center_focus_strong', title: 'Focus mode', body: 'One tap hides everything else.' },
 
-  { kind: 'finish', icon: 'celebration', title: 'You’re ready', body: 'Strategise, distribute, execute. It’s all demo data, so play freely.', next: 'Start planning' },
+  { kind: 'finish', icon: 'celebration', title: 'You’re ready', body: 'Strategise, distribute, execute. Your plan is saved; the rest is demo data, so play freely.', next: 'Start planning' },
 ]
 const MOVES = ['Strategise', 'Distribute', 'Execute']
 
 function last(sel) { const all = document.querySelectorAll(sel); return all[all.length - 1] ?? null }
+/** The backlog row to plan: the task made in the tour if it's there, else the first one. */
+function firstBacklogRow() {
+  const rows = [...document.querySelectorAll('.backlog .list .card, .backlog .trow')]
+  const mine = newTaskId.value && state.todos.find((t) => t.id === newTaskId.value)
+  return (mine && rows.find((r) => r.textContent.includes(mine.title))) ?? rows[0] ?? null
+}
 function firstBacklogId() {
   const el = firstBacklogRow()
   if (!el) return null
@@ -51,7 +75,6 @@ function firstBacklogId() {
   const text = el.textContent ?? ''
   return state.todos.filter((t) => !t.scheduled && !t.done && isLeaf(t) && text.includes(t.title)).sort((a, b) => b.title.length - a.title.length)[0]?.id ?? null
 }
-function firstBacklogRow() { return document.querySelector('.backlog .list .card, .backlog .trow') }
 
 const router = useRouter()
 const i = ref(0)
@@ -64,6 +87,8 @@ const phone = ref(isPhone())
 const canvas = ref(null)
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 const done = ref(false) // the current "your turn" stop has been done
+const missing = ref(false) // this stop's target isn't on screen (e.g. a phone without the sidebar)
+const waiting = computed(() => !!step.value.action && !missing.value)
 const baseline = shallowRef(null) // what the planner looked like when a "your turn" stop began
 
 /* sparkles sit on the spotlight's edge; positions are fractions of its width/height */
@@ -78,12 +103,16 @@ async function locate() {
   clearInterval(tick)
   rect.value = null
   done.value = false
+  missing.value = false
   const s = step.value
   if (isPhone()) ui.backlogOnly = !!s.backlog
   else if (s.route === '/week') ui.backlogOnly = false
   if (s.route === '/week' && ui.planMode === 'days') ui.planMode = 'both'
   if (!s.target) return place()
-  if (router.currentRoute.value.path !== s.route) await router.push(s.route)
+  const route = typeof s.route === 'function' ? s.route() : s.route
+  if (route && router.currentRoute.value.path !== route) await router.push(route)
+  const visible = (el) => el && el.getBoundingClientRect().height > 0
+  if (s.optional && !visible(targetEl())) { missing.value = true; return place() } // e.g. no sidebar on phones
   const t0 = performance.now()
   const find = () => {
     const el = targetEl()
@@ -98,7 +127,7 @@ async function locate() {
         tick = setInterval(measure, 300) // follow layout changes (a task added, a drawer opening)
       }, reduced ? 0 : 350)
     } else if (performance.now() - t0 < 2500) poll = requestAnimationFrame(find)
-    else place() // the element never showed up: still show the card, centred
+    else { missing.value = true; place() } // the element never showed up: centred card with a Next button
   }
   find()
 }
@@ -146,8 +175,10 @@ watch(() => step.value.action && baseline.value !== null && !done.value && step.
   setTimeout(() => { if (done.value) go(i.value + 1) }, reduced ? 600 : 1300)
 })
 
-function go(n) {
+async function go(n) {
   if (n < 0) return
+  const then = step.value.then // a stop can send the user somewhere when they press Next instead of doing it
+  if (n > i.value && then && !router.currentRoute.value.path.startsWith(then)) await router.push(then)
   if (n >= STEPS.length) return finish()
   baseline.value = null
   i.value = n
@@ -205,7 +236,7 @@ watch(i, async () => {
 
 /* the tour owns the keyboard while it's open (no app shortcuts underneath), except on "your turn" stops */
 function onKey(e) {
-  if (step.value.action) { if (e.key === 'Escape' && !e.target.closest?.('input, textarea')) skip(); return }
+  if (waiting.value) { if (e.key === 'Escape' && !e.target.closest?.('input, textarea')) skip(); return }
   e.stopImmediatePropagation()
   if (e.key === 'Escape') { e.preventDefault(); skip() }
   else if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); go(i.value + 1) }
@@ -235,7 +266,7 @@ const blockers = computed(() => {
     { top: px(r.top + r.height), left: 0, right: 0, bottom: 0 },
     { top: px(r.top), left: 0, width: px(r.left), height: px(r.height) },
     { top: px(r.top), left: px(r.left + r.width), right: 0, height: px(r.height) },
-    ...(step.value.action && !done.value ? [] : [spotStyle.value]),
+    ...(waiting.value && !done.value ? [] : [spotStyle.value]),
   ]
 })
 </script>
@@ -246,7 +277,7 @@ const blockers = computed(() => {
     <div v-if="!rect" class="tour-scrim"></div>
     <template v-else>
       <div v-for="(b, k) in blockers" :key="k" class="tour-block" :style="b"></div>
-      <div class="tour-spot" :class="{ act: step.action && !done }" :style="spotStyle">
+      <div class="tour-spot" :class="{ act: waiting && !done }" :style="spotStyle">
         <span class="tour-ring"></span>
         <span v-for="(s, k) in SPARKS" :key="k" class="tour-spark" :style="{ left: s[0] * 100 + '%', top: s[1] * 100 + '%', animationDelay: k * 0.17 + 's' }">✦</span>
       </div>
@@ -254,7 +285,7 @@ const blockers = computed(() => {
     <canvas ref="canvas" class="tour-confetti"></canvas>
 
     <transition name="tour-pop" mode="out-in">
-      <div :key="i + (done ? '-ok' : '')" ref="cardEl" class="tour-card" :class="[step.kind ?? 'move', { centred: !rect, sheet: phone && rect, act: step.action }]" :style="rect && !phone ? cardPos : null">
+      <div :key="i + (done ? '-ok' : '')" ref="cardEl" class="tour-card" :class="[step.kind ?? 'move', { centred: !rect, sheet: phone && rect, act: waiting }]" :style="rect && !phone ? cardPos : null">
         <div class="tour-badge" :class="{ ok: done }"><span class="icon">{{ done ? 'check' : step.icon }}</span>
           <span v-if="!rect || done" class="tour-burst" aria-hidden="true"><i v-for="k in 8" :key="k" :style="{ '--a': k * 45 + 'deg' }"></i></span>
         </div>
@@ -263,14 +294,13 @@ const blockers = computed(() => {
         </div>
         <h2 class="tour-title" :class="{ shimmer: !rect || done }">{{ done ? 'Nice!' : step.title }}</h2>
         <p v-if="!done" class="tour-body">{{ body }}</p>
+        <p v-else-if="step.doneBody" class="tour-body">{{ step.doneBody }}</p>
+        <div v-if="waiting && !done" class="tour-wait mono small">waiting for you <i>✦</i></div>
         <div v-if="!done" class="tour-actions">
           <button v-if="step.kind !== 'finish'" class="btn ghost" @click="skip">Skip tour</button>
           <span class="spacer"></span>
           <button v-if="i > 0 && step.kind !== 'finish'" class="btn" @click="go(i - 1)">Back</button>
-          <template v-if="step.action">
-            <span class="tour-wait mono small">waiting for you <i>✦</i></span>
-            <button class="btn ghost" title="Skip this step" @click="go(i + 1)">Skip step</button>
-          </template>
+          <button v-if="waiting" class="btn ghost" title="Skip this step" @click="go(i + 1)">Skip step</button>
           <button v-else class="btn primary tour-next" @click="go(i + 1)">{{ step.next ?? 'Next' }}<span class="icon sm">{{ step.kind === 'finish' ? 'rocket_launch' : 'arrow_forward' }}</span></button>
         </div>
         <div v-if="step.move !== undefined" class="tour-count mono tiny muted">{{ i }} / {{ STEPS.length - 2 }}</div>
