@@ -110,7 +110,7 @@ export function simStats(before, after, days) {
     const l0 = loadOf(before, date), l1 = loadOf(after, date)
     const label = date === todayISO() ? 'Today' : wd(date)
     // load: red only when over capacity, green when a choice brings it back under
-    if (Math.abs(l0 - l1) > 1e-3 || l1 > CAPACITY_H) rows.push({ k: `${label} · tasks`, a: Math.abs(l0 - l1) > 1e-3 ? fmtH(l0) : `${fmtH(l1)} / ${CAPACITY_H}h`, b: `${fmtH(l1)} / ${CAPACITY_H}h`, an: l0, bn: l1, bad: l1 > CAPACITY_H, good: l0 > CAPACITY_H && l1 <= CAPACITY_H })
+    if (Math.abs(l0 - l1) > 1e-3 || (l1 > CAPACITY_H && date === days[0])) rows.push({ k: `${label} · tasks`, a: Math.abs(l0 - l1) > 1e-3 ? fmtH(l0) : `${fmtH(l1)} / ${CAPACITY_H}h`, b: `${fmtH(l1)} / ${CAPACITY_H}h`, an: l0, bn: l1, bad: l1 > CAPACITY_H, good: l0 > CAPACITY_H && l1 <= CAPACITY_H })
     const u0 = untimedIn(before, date).length, u1 = untimedIn(after, date).length
     if (u0 !== u1) rows.push({ k: `${label} · no time yet`, a: u0, b: u1, an: u0, bn: u1, better: 'lower' })
     const end = (todos) => Math.max(0, ...blocksFrom(date, todos).filter((b) => b.kind === 'todo' && !b.done).map((b) => toMin(b.end)))
@@ -126,16 +126,18 @@ export function simStats(before, after, days) {
   return rows
 }
 /** One plain line on what a choice leads to, with a tone (ok / warn / danger / ''). */
-export function simVerdict(after, days) {
+export function simVerdict(after, days, before = state.todos) {
   const wdn = windDownAt()
   for (const date of days) {
+    // only the day the step is about, or a day this choice makes heavier, can turn the verdict red
+    if (date !== days[0] && loadOf(after, date) <= loadOf(before, date) + 1e-6) continue
     const label = date === todayISO() ? 'Today' : wd(date)
     const over = loadOf(after, date) - CAPACITY_H
     if (over > 1e-3) return [`${label} is ${over.toFixed(1)}h over capacity.`, 'danger']
     const late = blocksFrom(date, after).filter((b) => b.kind === 'todo' && !b.done && toMin(b.end) > wdn)
     if (late.length) return [`${label} runs past your ${fromMin(wdn)} wind-down.`, 'warn']
   }
-  return [days.length > 1 ? 'Both days fit.' : 'The day fits.', 'ok']
+  return [days.length > 1 && loadOf(after, days[1]) > loadOf(before, days[1]) + 1e-6 ? 'Both days fit.' : `${days[0] === todayISO() ? 'Today' : wd(days[0])} fits.`, 'ok']
 }
 export const tomorrowOf = (date) => addDays(date, 1)
 

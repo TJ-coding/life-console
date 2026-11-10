@@ -50,7 +50,7 @@ function pomos(b) {
     </div>
     <div
       v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b) }, markFn ? markFn(b) : '', { moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b), linked: isHoverLinked(b.todoId) }]"
-      :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!readonly && !ui.scheduleLock"
+      :style="style(b)" :data-tid="b.todoId || null" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!readonly && !ui.scheduleLock"
       @dragstart="!readonly && ed.dragStartBlock($event, b)" @dragend="!readonly && ed.dragEnd($event)" @click="!readonly && openBlock($event, b)" @contextmenu.prevent="!readonly && toggleBlockSel(b)"
       @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null"
     >
@@ -79,6 +79,14 @@ function pomos(b) {
 .vb { cursor: grab; }
 /* preview mode (Briefing / Debrief) */
 .ro .vb { cursor: default; min-height: 17px; }
+/* options morph: a block glides to the time the option gives it (same key across options) */
+@media (prefers-reduced-motion: no-preference) {
+  .ro .vb { transition: top 0.32s cubic-bezier(.2,.8,.2,1), height 0.32s cubic-bezier(.2,.8,.2,1), left 0.32s cubic-bezier(.2,.8,.2,1), width 0.32s cubic-bezier(.2,.8,.2,1), background-color 0.2s; }
+  .ro .vb.pv-new { animation: pv-in 0.32s cubic-bezier(.2,.8,.2,1); }
+  .ro .vb.pv-ghost { animation: pv-fade 0.25s ease-out; }
+}
+@keyframes pv-in { from { opacity: 0; transform: scale(0.92); } }
+@keyframes pv-fade { from { opacity: 0; } }
 .wline { position: absolute; left: 28px; right: 0; border-top: 2px solid color-mix(in srgb, var(--danger) 55%, transparent); z-index: 1; pointer-events: none; }
 .wline span { position: absolute; right: 2px; top: 1px; font-size: 9px; color: var(--danger); }
 .vb.pv-new { background: var(--accent); color: var(--on-accent); outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); z-index: 3; }
