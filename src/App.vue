@@ -87,7 +87,7 @@ function onKey(e) {
     else if (ui.palette) ui.palette = false
     else if (ui.drawerId) ui.drawerId = null
     else if (ui.selBlocks.length) clearBlockSel()
-    else if (route.name === 'focus') router.push('/')
+    else if (['focus', 'briefing', 'debrief'].includes(route.name)) router.push('/')
     else ui.selectedId = null
     return
   }
@@ -213,7 +213,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     </aside>
 
     <div class="main">
-      <header class="topbar">
+      <header v-if="!route.meta.sheet" class="topbar">
         <button class="btn icon-only side-toggle" :title="sideOpen ? 'Hide the left menu' : 'Show the left menu'" @click="toggleSide"><span class="icon sm">{{ sideIcon }}</span></button>
         <div class="crumb mono">
           <span class="muted">{{ route.meta.screen ?? 'S-??' }}</span>
@@ -245,14 +245,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <router-view />
       </main>
 
-      <nav class="tabbar" aria-label="Main">
+      <nav v-if="!route.meta.sheet" class="tabbar" aria-label="Main">
         <router-link v-for="t in TABS" :key="t.key" :to="t.to" class="tab" :class="{ on: activeKey === t.key }">
           <span class="icon">{{ t.icon }}</span><span>{{ t.label }}</span>
           <i v-if="t.key === 'deadlines' && overdueCount" class="tabbadge">{{ overdueCount }}</i>
         </router-link>
       </nav>
 
-      <footer class="statusbar mono">
+      <footer v-if="!route.meta.sheet" class="statusbar mono">
         <span><span class="kbd">⌘K</span> Command</span>
         <span><span class="kbd">N</span> New todo</span>
         <span><span class="kbd">S</span> Stamp</span>
