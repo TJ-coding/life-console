@@ -37,7 +37,7 @@ function start(t) {
 
       <div class="clock">
         <div v-if="current" class="readout"><span class="inst-big mono">{{ fmtClock(progress.remaining) }}</span><span class="muted">left</span></div>
-        <div v-else class="readout"><span class="inst-big mono muted">{{ fmtClock(gap) }}</span><span class="muted">left</span></div>
+        <div v-else class="readout"><span class="inst-big mono">{{ fmtClock(gap) }}</span><span class="muted">left</span></div>
         <div class="actions">
           <button v-if="current?.kind === 'todo'" class="btn primary" @click="toggleTodo(current.todoId)"><span class="icon sm">check</span>Done <span class="kbd">X</span></button>
           <router-link to="/focus" class="btn"><span class="icon sm">center_focus_strong</span>Focus <span class="kbd">F</span></router-link>
@@ -94,6 +94,9 @@ function start(t) {
 .title .until-w { color: var(--muted); font-weight: 400; }
 .title { font: 600 30px/36px Inter, sans-serif; letter-spacing: -0.015em; }
 .now-inst .inst-big { font-size: 48px; line-height: 50px; }
+/* free: "Free until 18:00" and the countdown are the two facts, so same size; Focus sits beside the clock */
+.free .title { font-size: 48px; line-height: 50px; font-weight: 700; letter-spacing: -0.02em; }
+.free .clock { flex-direction: row; align-items: center; gap: 16px; }
 .meta { gap: 10px; font-size: 14px; flex-wrap: wrap; }
 .big-bar { height: 8px; }
 .busy .big-bar > i { background: var(--c); }
@@ -117,6 +120,7 @@ function start(t) {
   .actions .kbd { display: none; }
   .title { font-size: 24px; line-height: 30px; }
   .now-inst .inst-big { font-size: 34px; line-height: 38px; }
+  .free .title { font-size: 34px; line-height: 38px; }
   .next-row { font-size: 15px; }
   .upnext { flex-wrap: wrap; row-gap: 6px; }
   .un-open { flex-basis: calc(100% - 70px); }
