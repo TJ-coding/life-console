@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/docs-pages.mjs",
     "preview": "vite preview",
     "start": "node server/server.mjs",
     "dev:server": "node --env-file-if-exists=.env server/server.mjs",
@@ -19,6 +19,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
     "drizzle-kit": "^0.31.11",
+    "marked": "^18.2.0",
     "vite": "^6.0.7",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
