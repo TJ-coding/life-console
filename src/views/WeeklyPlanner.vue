@@ -216,8 +216,8 @@ const print = () => window.print()
 .next { font-weight: 600; gap: 6px; }
 .select.small { height: 24px; font-size: 11px; }
 .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 236px minmax(0, 1fr) 44px; position: relative; }
-/* backlog-only focus (ISS-16): the unplanned backlog beside the next weeks as columns */
-.body.only { grid-template-columns: 300px minmax(0, 1fr); }
+/* backlog-only focus (ISS-16): the unplanned backlog beside the next weeks, stacked as rows */
+.body.only { grid-template-columns: 340px minmax(0, 1fr); }
 .body.only .rail { display: none; }
 .body.only > .board { grid-column: 2; grid-row: 1; }
 .days { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)) minmax(130px, 0.8fr); gap: 8px; padding: 12px; overflow: auto; align-items: start; }
@@ -257,11 +257,10 @@ const print = () => window.print()
   /* one screen at a time: the tab above picks Days (default) or Backlog, each full height */
   .body > .backlog { display: none; }
   .body.only > .backlog { display: flex; flex: 1; max-height: none; border-bottom: 0; }
-  /* backlog-only: Unplanned and the week columns side by side, swiped like the day columns */
-  .body.only { flex-direction: row; overflow-x: auto; scroll-snap-type: x proximity; gap: 8px; }
-  .body.only > .backlog { flex: 0 0 82vw; scroll-snap-align: start; border-right: 1px solid var(--border); }
-  .body.only > .board { display: contents; }
-  .body.only > .board :deep(.wk) { flex: 0 0 82vw; scroll-snap-align: start; }
+  /* backlog-only: Unplanned on top (capped), the weeks stacked below it */
+  .body.only { overflow-y: auto; }
+  .body.only > .backlog { flex: none; max-height: 55vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  .body.only > .board { flex: none; overflow: visible; }
   .days { flex: 1; min-height: 0; display: flex; overflow: auto; scroll-snap-type: x proximity; padding: 10px; }
   /* ISS-22: the day column must fit its content (schedule!) — capped viewport height would clip it */
   .days :deep(.day) { flex: 0 0 82vw; width: 82vw; scroll-snap-align: start; height: 100%; overflow-y: auto; }
