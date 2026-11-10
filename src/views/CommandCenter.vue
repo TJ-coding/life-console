@@ -150,8 +150,15 @@ function listDropCapture(e) {
 }
 /** Dropping a day task on the backlog column sends it back (Undo in the toast). */
 const blHot = ref(false)
+const btnHot = ref(false)
+/** The Backlog button takes drops too, so a task can go back without opening the column first. */
+function overBacklogBtn(e) {
+  if (!e.dataTransfer.types.includes(TODO_MIME)) return
+  e.preventDefault()
+  btnHot.value = true
+}
 function dropOnBacklog(e) {
-  blHot.value = false
+  blHot.value = btnHot.value = false
   const t = findTodo(e.dataTransfer.getData(TODO_MIME))
   if (!t?.scheduled) return
   const prev = { ...t.scheduled }
@@ -250,7 +257,7 @@ function quickAdd() {
           <h2><router-link to="/todos" class="title-link">{{ isToday ? 'Left today' : `Todos · ${wd(T)}` }}</router-link></h2>
           <span class="mono small muted">{{ pending.length }} open · {{ fmtH(remainingMin) }} left</span>
           <span class="spacer"></span>
-          <button v-if="T >= today" class="btn sm plan-btn" :class="{ active: planning }" :aria-pressed="planning" :title="planning ? 'Hide the backlog' : `Show the backlog beside the list: drag or click tasks into ${isToday ? 'today' : wd(T)}`" @click="planning = !planning">
+          <button v-if="T >= today" class="btn sm plan-btn" :class="{ active: planning, 'drop-hot': btnHot }" :aria-pressed="planning" :title="planning ? 'Hide the backlog · drop a task here to send it back' : `Show the backlog beside the list: drag or click tasks into ${isToday ? 'today' : wd(T)} · drop a task here to send it back`" @click="planning = !planning" @dragover="overBacklogBtn" @dragleave="btnHot = false" @drop.prevent="dropOnBacklog">
             <span class="icon sm">inventory_2</span>Backlog<span v-if="backlog.length" class="mono n">{{ backlog.length }}</span>
           </button>
           <button v-if="done.length" class="btn sm ghost-btn" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }} {{ done.length }} done</button>
@@ -401,6 +408,7 @@ function quickAdd() {
 .tp-body.split .tp-main { flex: 3 1 0; }
 .bl-col { display: flex; flex-direction: column; flex: 2 1 0; min-width: 220px; border-left: 1px solid var(--border); background: var(--surface-2); }
 .bl-col.drop-hot { box-shadow: inset 0 0 0 1px var(--accent); }
+.plan-btn.drop-hot { box-shadow: 0 0 0 1px var(--accent); }
 .bl-h { display: flex; align-items: center; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--border); }
 .bl-list { flex: 1 1 0; min-height: 140px; overflow: auto; }
 .bl-row { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 10px 6px 6px; border-bottom: 1px solid var(--border); font-size: 15px; cursor: grab; }
