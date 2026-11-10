@@ -8,7 +8,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { state, ui, toast, todayISO, isLeaf } from '../store'
+import { state, ui, toast, todayISO, isLeaf, workload, CAPACITY_H, addDays, mondayOf, diffDays } from '../store'
 
 const isPhone = () => innerWidth <= 640
 const T = () => todayISO()
@@ -27,6 +27,16 @@ const planRoute = () => `/strategy/${newPlanId.value ?? 'SP-01'}`
 const curPlan = () => state.plans.find((p) => p.id === router.currentRoute.value.params.planId)
 const count = (key) => curPlan()?.[key]?.length ?? 0
 const bounds = () => JSON.stringify([...(curPlan()?.psgs ?? []), ...(curPlan()?.sigs ?? [])].map((g) => g.timeBound ?? ''))
+/* Plan week: the over-full day (the demo's tomorrow) and the lightest day left this week to move work to */
+const weekLeft = () => { const T = todayISO(), M = mondayOf(T); return [0, 1, 2, 3, 4, 5, 6].map((k) => addDays(M, k)).filter((d) => diffDays(T, d) >= 0) }
+const heavyDay = () => weekLeft().find((d) => workload(d) > CAPACITY_H) ?? null
+const lightDay = (not) => weekLeft().filter((d) => d !== not).sort((a, b) => workload(a) - workload(b))[0] ?? null
+const dayEl = (d, part = '') => (d ? document.querySelector(`.days .day[data-date="${d}"]${part ? ' ' + part : ''}`) : null)
+let heavyAtStart = null // remembered so the check still knows which day it was once it's levelled
+const timedCount = () => state.todos.filter((t) => t.scheduled?.start).length
+const mid = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + Math.min(r.height, 60) / 2 } }
+/** A drag hint from one element to another: { x, y, dx, dy } in viewport px. */
+const dragHint = (from, to) => { if (!from || !to) return null; const a = mid(from), b = mid(to); return { x: a.x, y: a.y, dx: b.x - a.x, dy: b.y - a.y } }
 const button = (sel, text) => [...document.querySelectorAll(sel)].find((b) => b.textContent.includes(text)) ?? null
 
 const STEPS = [
@@ -46,12 +56,19 @@ const STEPS = [
   { move: 0, route: planRoute, target: '.flow-panel', hint: '.flow-panel .fn.movable', desktopOnly: true, icon: 'schema', title: '5 · Goal flow', body: 'Your plan on a timeline. Drag a goal sideways to set its date.', phoneBody: 'Your plan on a timeline. On a computer, drag a goal along it to move its date.', doneBody: 'Dates move with a drag. Red arrows warn when the order stops making sense.',
     action: { start: () => bounds(), done: (b) => bounds() !== b } },
 
-  // Distribute: Plan week
-  { move: 1, route: '/week', backlog: true, target: '.backlog', icon: 'inbox', title: 'Plan week: the backlog', body: 'Your new task is waiting here for a day.' },
-  { move: 1, route: '/week', backlog: true, target: () => firstBacklogRow(), icon: 'event', title: 'Your turn: pick a day', body: 'Tap a day under this task. The small number is that day’s free hours.', phoneBody: 'Tap a week for this task. Plan the exact day later.',
+  // Distribute: Plan week. Drag and drop, levelling the load (平準化), then planning a day
+  { move: 1, route: '/week', backlog: true, target: '.backlog', icon: 'inbox', title: 'Plan week: the backlog', body: 'Your new task waits here. Tasks stay in the backlog until they get a day.' },
+  { move: 1, route: '/week', backlog: true, target: () => [firstBacklogRow(), dayEl(lightDay(), '.sec-load')], hint: () => dragHint(firstBacklogRow(), dayEl(lightDay(), '.sec-load')),
+    icon: 'move_item', title: 'Your turn: drag it onto a day', body: 'Drag your task into a day’s bucket. Its estimate fills that day. Tapping a day button works too.', phoneBody: 'Tap a week for this task. Plan the exact day later.',
     action: { start: () => { const ids = backlogIds(); ui.selectedId = firstBacklogId(); return ids }, done: (ids) => ids.some((id) => { const t = state.todos.find((x) => x.id === id); return t && (t.scheduled || t.week) }) } },
-  { move: 1, route: '/week', target: '.days .day.today .sec-load', icon: 'battery_5_bar', title: 'Every day has a budget', body: '7 hours of work, max. Red means the day is too full.' },
-  { move: 1, route: '/week', target: '.days .day.today .sec-time', icon: 'schedule', title: 'Then give it a time', body: 'Drag a task onto the schedule, or tap ⚡ to fit it in for you.' },
+  { move: 1, route: '/week', planMode: 'days', target: '.days', icon: 'balance', title: '平準化: level the load', body: 'Heijunka: give every day about the same amount. A steady week beats one heroic day and a crash. The avg line marks the week’s average; work above 7h turns red.' },
+  { move: 1, route: '/week', planMode: 'days', target: () => (isPhone() ? dayEl(heavyDay(), '.sec-out') : [dayEl(heavyAtStart ?? heavyDay()), dayEl(lightDay(heavyAtStart ?? heavyDay()), '.sec-load')]),
+    hint: () => (isPhone() ? null : dragHint(dayEl(heavyDay(), '.card.block'), dayEl(lightDay(heavyDay()), '.sec-load'))),
+    icon: 'swap_horiz', title: 'Your turn: level the week', body: 'Tomorrow is over 7 hours. Drag one of its tasks to a lighter day, or tap a Move out suggestion.', phoneBody: 'Tomorrow is over 7 hours. Tap a Move out suggestion to send a task to a lighter day.', doneBody: 'Levelled. That’s 平準化.',
+    action: { start: () => { heavyAtStart = heavyDay(); return heavyAtStart }, done: (d) => !!d && workload(d) <= CAPACITY_H } },
+  { move: 1, route: '/week', target: () => dayEl(todayISO()), hint: () => (isPhone() ? null : dragHint(dayEl(todayISO(), '.card.block.untimed'), [...(dayEl(todayISO())?.querySelectorAll('.vt .hr') ?? [])].find((h) => h.textContent.trim() === '19'))),
+    icon: 'schedule', title: 'Your turn: plan the day', body: 'Drag a task from the bucket down onto the schedule to give it a time, or tap ⚡ to fit them all in.', phoneBody: 'Tap ⚡ to fit today’s tasks into your free time.', doneBody: 'Your day has a plan.',
+    action: { start: () => timedCount(), done: (n) => timedCount() > n } },
 
   // Execute: Command Center
   { move: 2, route: '/', target: '.now-inst', icon: 'radar', title: 'Command Center: what now?', body: 'What to do right now, and how long is left.' },
@@ -102,7 +119,8 @@ const baseline = shallowRef(null) // what the planner looked like when a "your t
 /* sparkles sit on the spotlight's edge; positions are fractions of its width/height */
 const SPARKS = [[0, 0.2], [0.15, 0], [0.55, 0], [0.9, 0], [1, 0.35], [1, 0.8], [0.8, 1], [0.4, 1], [0.05, 1], [0, 0.65]]
 
-const targetEl = () => { const t = step.value.target; return !t ? null : typeof t === 'function' ? t() : document.querySelector(t) }
+const targetEls = () => { const t = step.value.target; const v = !t ? null : typeof t === 'function' ? t() : document.querySelector(t); return [].concat(v ?? []).filter(Boolean) }
+const targetEl = () => targetEls()[0] ?? null
 
 let poll = 0
 let tick = 0
@@ -115,7 +133,7 @@ async function locate() {
   const s = step.value
   if (isPhone()) ui.backlogOnly = !!s.backlog
   else if (s.route === '/week') ui.backlogOnly = false
-  if (s.route === '/week' && ui.planMode === 'days') ui.planMode = 'both'
+  if (s.route === '/week') ui.planMode = s.planMode ?? 'both' // ② Assign day shows the average line and Move out; the others need the schedule
   if (!s.target) return centre()
   const route = typeof s.route === 'function' ? s.route() : s.route
   if (route && router.currentRoute.value.path !== route) await router.push(route)
@@ -143,16 +161,18 @@ function centre() {
   place()
 }
 function measure() {
-  const el = targetEl()
-  if (!el) return
+  const els = targetEls()
+  if (!els.length) return
   centred.value = false
-  const r = el.getBoundingClientRect()
+  const rs = els.map((e) => e.getBoundingClientRect())
+  const r = { left: Math.min(...rs.map((q) => q.left)), top: Math.min(...rs.map((q) => q.top)), right: Math.max(...rs.map((q) => q.right)), bottom: Math.max(...rs.map((q) => q.bottom)) }
+  r.width = r.right - r.left; r.height = r.bottom - r.top
   const pad = 8
   const vw = innerWidth, vh = innerHeight
   const top = Math.max(pad, r.top - pad), left = Math.max(pad, r.left - pad)
   const bottom = Math.min(vh - pad, r.bottom + pad), right = Math.min(vw - pad, r.right + pad)
   const next = { top, left, width: Math.max(40, right - left), height: Math.max(40, bottom - top) }
-  hand.value = handAt(step.value.hint, r)
+  hand.value = typeof step.value.hint === 'function' ? step.value.hint() : handAt(step.value.hint, r)
   const cur = rect.value
   if (cur && ['top', 'left', 'width', 'height'].every((k) => Math.abs(cur[k] - next[k]) < 1)) return
   rect.value = next
@@ -174,7 +194,7 @@ function handAt(sel, panel) {
   let dx
   if (inf && today && c.left >= inf.left - 4) dx = Math.min(-60, (today.left + inf.left) / 2 - c.right)
   else { const mid = panel.left + panel.width / 2; dx = Math.abs(mid - cx) < 40 ? 90 : Math.sign(mid - cx) * Math.min(140, Math.abs(mid - cx)) }
-  return { left: cx, top: c.top + c.height / 2, dx }
+  return { x: cx, y: c.top + c.height / 2, dx, dy: 0 }
 }
 /**
  * Put the card beside the spotlight where there's room (below, above, right, left), else over its lower part;
@@ -194,7 +214,7 @@ async function place() {
   const clampY = (y) => Math.min(vh - h - 12, Math.max(12, y))
   let p
   if (centred.value) p = { top: (vh - h) / 2, left: (vw - w) / 2 }
-  else if (phone.value) p = { top: vh - h - 12, left: 12 }
+  else if (phone.value) p = { top: r.top + r.height / 2 > vh * 0.55 && r.top > h + 24 ? 12 : vh - h - 12, left: 12 } // a sheet at the bottom, or at the top when the spotlight is down there
   else if (r.top + r.height + gap + h < vh) p = { top: r.top + r.height + gap, left: clampX(r.left) }
   else if (r.top - gap - h > 0) p = { top: r.top - gap - h, left: clampX(r.left) }
   else if (r.left + r.width + gap + w < vw) p = { top: clampY(r.top + 24), left: r.left + r.width + gap }
@@ -243,7 +263,9 @@ function skip() {
   close()
   toast('Take the tour anytime: Settings → Getting started')
 }
+const startMode = ui.planMode // Plan week's layout before the tour switched it around
 function close() {
+  ui.planMode = startMode
   state.tour = 'done'
   ui.tourOpen = false
   ui.selectedId = null
@@ -331,7 +353,7 @@ const blockers = computed(() => {
       <span class="tour-ring"></span>
       <span v-for="(s, k) in SPARKS" :key="k" class="tour-spark" :style="{ left: s[0] * 100 + '%', top: s[1] * 100 + '%', animationDelay: k * 0.17 + 's' }">✦</span>
     </div>
-    <div v-if="hand && waiting && !done" class="tour-hand" :style="{ left: hand.left + 'px', top: hand.top + 'px', '--dx': hand.dx + 'px', '--w': Math.abs(hand.dx) + 'px', '--dir': Math.sign(hand.dx) }" aria-hidden="true">
+    <div v-if="hand && waiting && !done" class="tour-hand" :style="{ left: hand.x + 'px', top: hand.y + 'px', '--dx': hand.dx + 'px', '--dy': hand.dy + 'px', '--w': Math.hypot(hand.dx, hand.dy) + 'px', '--ang': Math.atan2(hand.dy, hand.dx) + 'rad' }" aria-hidden="true">
       <span class="trail"></span><span class="icon">pan_tool_alt</span>
     </div>
     <canvas ref="canvas" class="tour-confetti"></canvas>
@@ -486,22 +508,22 @@ const blockers = computed(() => {
 }
 .tour-hand .trail {
   position: absolute; top: 0; left: 0; height: 3px; width: var(--w); border-radius: 3px;
-  transform-origin: 0 50%; background: linear-gradient(90deg, transparent, var(--warn), var(--accent));
+  transform-origin: 0 50%; rotate: var(--ang); background: linear-gradient(90deg, transparent, var(--warn), var(--accent));
   animation: tour-trail 2.4s cubic-bezier(.5,0,.3,1) infinite;
 }
 @keyframes tour-drag {
-  0% { transform: translateX(0) scale(1); opacity: 0; }
-  12% { opacity: 1; transform: translateX(0) scale(1); }
-  22% { transform: translateX(0) scale(0.85); }
-  70% { transform: translateX(var(--dx)) scale(0.85); opacity: 1; }
-  80% { transform: translateX(var(--dx)) scale(1); opacity: 1; }
-  100% { transform: translateX(var(--dx)) scale(1); opacity: 0; }
+  0% { transform: translate(0, 0) scale(1); opacity: 0; }
+  12% { opacity: 1; transform: translate(0, 0) scale(1); }
+  22% { transform: translate(0, 0) scale(0.85); }
+  70% { transform: translate(var(--dx), var(--dy)) scale(0.85); opacity: 1; }
+  80% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; }
 }
 @keyframes tour-trail {
   0%, 22% { transform: scaleX(0); opacity: 0; }
   30% { opacity: 0.9; }
-  70% { transform: scaleX(var(--dir)); opacity: 0.9; }
-  100% { transform: scaleX(var(--dir)); opacity: 0; }
+  70% { transform: scaleX(1); opacity: 0.9; }
+  100% { transform: scaleX(1); opacity: 0; }
 }
 
 @media (max-width: 640px) {

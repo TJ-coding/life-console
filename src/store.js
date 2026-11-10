@@ -98,8 +98,8 @@ export function categoryOf(todo) {
 /* ───────────── seed data (relative to the current week) ─────────────
  * The demo planner a new account starts with, kept small on purpose so a first look isn't overwhelming:
  * someone with a day job training for a half marathon. One plan (vision → goal → three milestones,
- * one depending on another), a few tasks for today and this week, three in the backlog waiting for a
- * day, and two deadlines. It shows Strategise → Distribute → Execute and nothing else.
+ * one depending on another), a few tasks for today and this week, an over-full tomorrow (for the tour's
+ * lesson in levelling the load), three in the backlog waiting for a day, and two deadlines. It shows Strategise → Distribute → Execute and nothing else.
  * Dates are relative to today, so it always looks current.
  */
 function seed() {
@@ -128,6 +128,7 @@ function seed() {
   for (let i = 0; i < 5; i++) week.push([i, '09:00', '17:00', 'Work', 'experiment', null])
   const timeBlocks = week.map(([i, s, e, title, cat, link]) => block(D(i), s, e, title, cat, link))
 
+  const H = diffDays(R(1), D(6)) >= 0 ? R(1) : null // tomorrow, if it's still this week
   const todos = [
     /* ── today ── */
     todo('T-101', 'Register for the half marathon', { vital: 'Entry fee + pick-up date', timeMin: 15, lsd: 'L', priority: 1, scheduled: on(T, '18:30'), links: ['REG', 'DL-1'] }),
@@ -137,6 +138,13 @@ function seed() {
     /* ── later this week ── */
     todo('T-104', 'Buy new running shoes', { timeMin: 45, lsd: 'L', priority: 2, links: ['BASE'], ...wk(3) }),
     todo('T-105', 'Call Mum and Dad', { timeMin: 30, lsd: 'D', priority: 3, ...wk(6) }),
+
+    /* ── tomorrow is over-full (7.5h of chores on a workday): the tour's lesson in levelling the week ── */
+    ...(H ? [
+      todo('T-109', 'Batch-cook lunches for the week', { timeMin: 120, lsd: 'D', priority: 3, scheduled: on(H) }),
+      todo('T-110', 'Sort out the tax paperwork', { timeMin: 150, lsd: 'L', priority: 2, scheduled: on(H) }),
+      todo('T-111', 'Clear out the garage', { timeMin: 180, lsd: 'D', priority: 4, scheduled: on(H) }),
+    ] : []),
 
     /* ── backlog: no day yet ── */
     todo('T-106', 'Write a 12-week training plan', { timeMin: 45, lsd: 'D', priority: 2, links: ['LONG'] }),
