@@ -1,13 +1,14 @@
 <script setup>
 // Step ① Backlog — tasks without a day. In the week view: the tasks planned for this week, then the
 // unplanned ones; drag onto a day, or hover and click a day button (each shows that day's free hours).
-// In the backlog-only view (focus) it is the "Unplanned" column of the week board, and the buttons
-// send a task to a week instead. Drop a task here to send it back.
+// In the backlog-only view (focus) the list becomes the week board (WeekBoard): Unplanned on top,
+// then the next weeks, with week buttons instead of day buttons. Drop a task here to send it back.
 import { computed, ref, watch, nextTick } from 'vue'
-import { ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, parentPath, planWeek, backlogTodos, backlogFor, planWeeks, weekFree, assignToWeek, isoWeek } from '../store'
+import { ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, parentPath, planWeek, backlogTodos, backlogFor, isoWeek } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
+import WeekBoard from './WeekBoard.vue'
 
 const props = defineProps({ focus: Boolean }) // ISS-16: backlog-only mode is on (header shows the way back)
 defineEmits(['focus'])
@@ -19,9 +20,6 @@ const all = computed(() => (props.focus ? backlogTodos().filter((t) => !planWeek
 const list = computed(() => all.value.filter((t) => !prio.value || t.priority === prio.value))
 const plannedN = computed(() => (props.focus ? 0 : list.value.filter((t) => planWeek(t)).length)) // the first n rows
 const elsewhere = computed(() => (props.focus ? 0 : backlogTodos().filter((t) => planWeek(t) && planWeek(t) !== ui.weekStart).length))
-const weeks = computed(() => (props.focus ? planWeeks() : []))
-const wfree = computed(() => Object.fromEntries(weeks.value.map((w) => [w, weekFree(w).free])))
-const weekOk = (t, w) => !t.due || w <= t.due
 const total = computed(() => list.value.reduce((s, t) => s + t.timeMin / 60, 0))
 const T = computed(() => todayISO())
 const days = computed(() => [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(ui.weekStart, i)))
@@ -47,8 +45,7 @@ const hot = ref(false)
 function onDrop(e) {
   hot.value = false
   const id = e.dataTransfer.getData(TODO_MIME)
-  if (!id) return
-  if (props.focus) return assignToWeek(id, null)
+  if (!id || props.focus) return // by week: each section of the board takes its own drops
   // back from a day of this week: it stays in this week's backlog (unless the week is over)
   updateTodo(id, { scheduled: null, week: ui.weekStart >= mondayOf(T.value) ? ui.weekStart : null })
   toast(`${id} → backlog`)
@@ -64,8 +61,8 @@ function onDrop(e) {
       <button class="hbtn grow" :title="focus ? 'Back to the week view' : 'Backlog by week: hide the day columns and spread the backlog over the next weeks'" @click="$emit('focus')">
         <span class="stepn mono">1</span>
         <span class="tl">
-          <span class="ttl">{{ focus ? 'Unplanned' : 'Backlog' }}</span>
-          <span class="mono tiny muted">{{ list.length }} tasks · {{ total.toFixed(1) }}h</span>
+          <span class="ttl">Backlog<template v-if="focus"> by week</template></span>
+          <span class="mono tiny muted">{{ focus ? `${list.length} unplanned · ${total.toFixed(1)}h` : `${list.length} tasks · ${total.toFixed(1)}h` }}</span>
         </span>
         <span class="icon sm" :class="{ info: focus }">{{ focus ? 'close_fullscreen' : 'calendar_view_week' }}</span>
       </button>
@@ -92,7 +89,8 @@ function onDrop(e) {
       <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: prio === p }" @click="prio = p">P{{ p }}</button>
     </div>
 
-    <div v-if="open" class="list">
+    <WeekBoard v-if="open && focus" :prio="prio" />
+    <div v-else-if="open" class="list">
       <template v-for="(t, i) in list" :key="t.id">
       <div v-if="plannedN && (i === 0 || i === plannedN)" class="grp tiny upper muted mono">{{ i ? 'Unplanned' : `Planned for W${isoWeek(ui.weekStart)}` }}</div>
       <div class="card" :class="[dropClass(t), { linked: isHoverLinked(t.id), sel: ui.selectedId === t.id }]" draggable="true"
@@ -110,19 +108,8 @@ function onDrop(e) {
           <Chip v-for="l in t.links" :key="l" :id="l" />
           <span v-if="t.due" class="mono muted">due {{ wd(t.due) }} {{ fmtSlash(t.due) }}</span>
         </div>
-        <!-- quick assign: one click puts it in a week (backlog-only view) -->
-        <div v-if="focus" class="quick">
-          <button
-            v-for="w in weeks" :key="w" class="qd mono" :disabled="!weekOk(t, w)"
-            :class="{ fits: wfree[w] >= t.timeMin / 60, tight: wfree[w] < t.timeMin / 60 && wfree[w] > 0, full: wfree[w] <= 0 }"
-            :title="`W${isoWeek(w)} · ${wfree[w].toFixed(1)}h free${!weekOk(t, w) ? ' · after due date' : ''}`"
-            @click.stop="assignToWeek(t.id, w)"
-          >
-            <span>W{{ isoWeek(w) }}</span><small>{{ Math.max(0, wfree[w]).toFixed(0) }}h</small>
-          </button>
-        </div>
         <!-- quick assign: one click puts it on a day -->
-        <div v-else class="quick">
+        <div class="quick">
           <button
             v-for="d in days" :key="d" class="qd mono" :disabled="!usable(t, d)"
             :class="{ fits: free[d] >= t.timeMin / 60, tight: free[d] < t.timeMin / 60 && free[d] > 0, full: free[d] <= 0, today: d === T }"
@@ -138,7 +125,7 @@ function onDrop(e) {
       <div v-if="!list.length" class="empty">Backlog clear ✓<br />Type above to capture a task.</div>
     </div>
     <div v-if="open" class="foot small muted">
-      <template v-if="focus">Hover a task → click a week, or drag it onto a week. Drop here to unplan.</template>
+      <template v-if="focus">Put tasks into a week so ② Assign day only shows that week's share. Hover a task → click a week, or drag it onto one.</template>
       <template v-else>Hover a task → click a day, or drag it onto a day. Drop here to unassign.<button v-if="elsewhere" class="lnk" title="Show the week board" @click="$emit('focus')">{{ elsewhere }} planned for other weeks →</button></template>
     </div>
   </section>
@@ -146,6 +133,7 @@ function onDrop(e) {
 
 <style scoped>
 .backlog.only { border-right: 0; }
+.backlog.only .qa, .backlog.only .preview { max-width: 720px; }
 .crumb { font-size: 11px; margin-bottom: 2px; }
 .backlog { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-right: 1px solid var(--border); }
 .bh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
