@@ -1,7 +1,7 @@
 <script setup>
 // S-90 · Settings — install on phone, notifications, sync, appearance, data.
 import { computed, onMounted, ref } from 'vue'
-import { state, ui, toggleTheme, resetDemo, toast, normalizeState } from '../store'
+import { state, ui, toggleTheme, resetDemo, clearPlanner, toast, normalizeState } from '../store'
 import { sync, pull, deviceName, setDeviceName } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
 import { rhythm, wallMin } from '../../server/pomodoro.mjs'
@@ -50,6 +50,10 @@ function importJson(e) {
       toast('Data imported')
     } catch { toast('Invalid JSON file') }
   })
+}
+function startEmpty() {
+  const undo = clearPlanner()
+  toast('Planner emptied', { label: 'Undo', run: undo })
 }
 function reset() { if (confirm('Reset all data to the demo seed? (This also replaces the synced copy on the server.)')) { resetDemo(); toast('Demo data restored') } }
 
@@ -286,6 +290,7 @@ const reload = () => window.location.reload()
           <button class="btn" @click="exportJson"><span class="icon sm">download</span>Export JSON</button>
           <label class="btn"><span class="icon sm">upload</span>Import JSON<input type="file" accept="application/json" hidden @change="importJson" /></label>
           <span class="spacer"></span>
+          <button class="btn danger-ghost" title="Delete everything in the planner and start with nothing (settings are kept)" @click="startEmpty"><span class="icon sm">delete_sweep</span>Start empty</button>
           <button class="btn danger-ghost" @click="reset"><span class="icon sm">restart_alt</span>Reset demo data</button>
         </div>
       </div>
