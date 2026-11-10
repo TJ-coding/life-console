@@ -1,24 +1,12 @@
 <script setup>
 // Week balance: verdict, rebalance suggestions and hours by goal (side panel of the planner).
 import { computed } from 'vue'
-import { allPsgs, allSigs, state, ui, addDays, wd, fmtSlash, CAPACITY_H, dayLoad, suggestRebalance, todosForDay, updateTodo, toast, isPsgNo } from '../store'
+import { allPsgs, allSigs, ui, addDays, wd, fmtSlash, weekBalance, BALANCE_LEVEL, suggestRebalance, todosForDay, updateTodo, toast, isPsgNo } from '../store'
 
-const days = computed(() => [0, 1, 2, 3, 4].map((i) => addDays(ui.weekStart, i)))
 const all = computed(() => [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(ui.weekStart, i)))
-const loads = computed(() => days.value.map((d) => dayLoad(d).total))
-const stats = computed(() => {
-  const wk = loads.value
-  const spread = Math.max(...wk) - Math.min(...wk)
-  const over = days.value.filter((d, i) => wk[i] > CAPACITY_H)
-  const level = over.length || spread > 3 ? 'unbalanced' : spread > 1.5 ? 'uneven' : 'balanced'
-  return { avg: wk.reduce((a, b) => a + b, 0) / 5, spread, over, level, free: wk.reduce((s, v) => s + Math.max(0, CAPACITY_H - v), 0) }
-})
-const LEVEL = {
-  balanced: { icon: 'check_circle', label: 'Balanced', cls: 'ok' },
-  uneven: { icon: 'error', label: 'Uneven', cls: 'warn' },
-  unbalanced: { icon: 'warning', label: 'Unbalanced', cls: 'danger' },
-}
-const suggestions = computed(() => suggestRebalance(days.value))
+const stats = computed(() => weekBalance(ui.weekStart))
+const LEVEL = BALANCE_LEVEL
+const suggestions = computed(() => suggestRebalance(stats.value.days))
 function apply(s) {
   updateTodo(s.todo.id, { scheduled: { date: s.to, start: null } })
   toast(`${s.todo.id} → ${wd(s.to)} ${fmtSlash(s.to)}`)
