@@ -41,15 +41,21 @@ export async function computeMetrics(pool, day) {
   }
 }
 
-/** One Umami event: POST /api/send. Umami ignores requests whose User-Agent looks like a bot, hence a browser-like one. */
+// Umami silently drops (200 {"beep":"boop"}) anything its isbot check flags, and isbot flags any non-browser
+// suffix (even "Mozilla/5.0 (X11; Linux x86_64) Foo/1.0"), so this must read as a plain desktop Chrome.
+export const UMAMI_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+
+/** One Umami event: POST /api/send. Throws if Umami didn't record it. */
 export async function sendToUmami(cfg, name, data) {
   const r = await fetch(`${cfg.umamiUrl}/api/send`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) LifeConsoleServer/1.0' },
+    headers: { 'Content-Type': 'application/json', 'User-Agent': UMAMI_UA },
     body: JSON.stringify({ type: 'event', payload: { website: cfg.umamiWebsiteId, hostname: cfg.umamiHostname, url: '/server/metrics', title: 'Server metrics', language: 'en', screen: '0x0', referrer: '', name, data } }),
     signal: AbortSignal.timeout(10000),
   })
   if (!r.ok) throw new Error(`Umami answered HTTP ${r.status}`)
+  const body = await r.text()
+  if (body.includes('boop')) throw new Error('Umami took this for a bot and dropped it')
 }
 
 /**

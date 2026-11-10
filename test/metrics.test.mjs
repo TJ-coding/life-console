@@ -22,6 +22,7 @@ before(async () => {
     req.on('data', (c) => { b += c })
     req.on('end', () => {
       if (s.fail) { res.writeHead(500); return res.end() }
+      if (s.boop) { res.writeHead(200); return res.end('{"beep":"boop"}') } // Umami's reply to a suspected bot
       s.got.push({ path: req.url, ua: req.headers['user-agent'], body: JSON.parse(b) })
       res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{}')
     })
@@ -86,13 +87,18 @@ test('the daily report goes to Umami once per day, and retries after a failure',
   assert.equal(await s.app.metrics.report(now), null)
   assert.equal(s.got.length, 0)
   s.fail = false
+  s.boop = true
+  assert.equal(await s.app.metrics.report(now), null, 'a silent bot drop counts as a failure')
+  s.boop = false
   const m = await s.app.metrics.report(now)
   assert.equal(m.day, '2026-06-30')
   assert.equal(await s.app.metrics.report(now), null, 'already sent today')
   assert.equal(s.got.length, 1)
   const { path, ua, body } = s.got[0]
   assert.equal(path, '/api/send')
-  assert.match(ua, /^Mozilla\//, 'Umami drops bot-like user agents')
+  const { isbot } = await import('isbot').catch(() => ({}))
+  assert.match(ua, /Chrome\/\d/, 'Umami drops bot-like user agents')
+  if (isbot) assert.equal(isbot(ua), false)
   assert.equal(body.type, 'event')
   assert.equal(body.payload.website, 'site-1')
   assert.equal(body.payload.hostname, 'lc.test')
