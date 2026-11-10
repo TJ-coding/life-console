@@ -33,6 +33,11 @@ const heavyDay = () => weekLeft().find((d) => workload(d) > CAPACITY_H) ?? null
 const lightDay = (not) => weekLeft().filter((d) => d !== not).sort((a, b) => workload(a) - workload(b))[0] ?? null
 const dayEl = (d, part = '') => (d ? document.querySelector(`.days .day[data-date="${d}"]${part ? ' ' + part : ''}`) : null)
 let heavyAtStart = null // remembered so the check still knows which day it was once it's levelled
+const lvDay = () => heavyAtStart ?? heavyDay()
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const dayName = (d) => (d ? DAYS[new Date(`${d}T12:00:00`).getDay()] : '')
+/** the over-full day's load as a meter in the card: red over the 7h limit, green once levelled */
+const loadMeter = () => { const d = lvDay(); return d && { label: dayName(d), value: workload(d), max: CAPACITY_H } }
 const timedCount = () => state.todos.filter((t) => t.scheduled?.start).length
 const mid = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + Math.min(r.height, 60) / 2 } }
 /** A drag hint from one element to another: { x, y, dx, dy } in viewport px. */
@@ -56,15 +61,20 @@ const STEPS = [
   { move: 0, route: planRoute, target: '.flow-panel', hint: '.flow-panel .fn.movable', desktopOnly: true, icon: 'schema', title: '5 · Goal flow', body: 'Your plan on a timeline. Drag a goal sideways to set its date.', phoneBody: 'Your plan on a timeline. On a computer, drag a goal along it to move its date.', doneBody: 'Dates move with a drag. Red arrows warn when the order stops making sense.',
     action: { start: () => bounds(), done: (b) => bounds() !== b } },
 
-  // Distribute: Plan week. Drag and drop, levelling the load (平準化), then planning a day
+  // Distribute: Plan week. Drag and drop, levelling the load (heijunka), then planning a day
   { move: 1, route: '/week', backlog: true, target: '.backlog', icon: 'inbox', title: 'Plan week: the backlog', body: 'Your new task waits here. Tasks stay in the backlog until they get a day.' },
   { move: 1, route: '/week', backlog: true, target: () => [firstBacklogRow(), dayEl(lightDay(), '.sec-load')], hint: () => dragHint(firstBacklogRow(), dayEl(lightDay(), '.sec-load')),
     icon: 'move_item', title: 'Your turn: drag it onto a day', body: 'Drag your task into a day’s bucket. Its estimate fills that day. Tapping a day button works too.', phoneBody: 'Tap a week for this task. Plan the exact day later.',
     action: { start: () => { const ids = backlogIds(); ui.selectedId = firstBacklogId(); return ids }, done: (ids) => ids.some((id) => { const t = state.todos.find((x) => x.id === id); return t && (t.scheduled || t.week) }) } },
-  { move: 1, route: '/week', planMode: 'days', target: '.days', icon: 'balance', title: '平準化: level the load', body: 'Heijunka: give every day about the same amount. A steady week beats one heroic day and a crash. The avg line marks the week’s average; work above 7h turns red.' },
-  { move: 1, route: '/week', planMode: 'days', target: () => (isPhone() ? dayEl(heavyDay(), '.sec-out') : [dayEl(heavyAtStart ?? heavyDay()), dayEl(lightDay(heavyAtStart ?? heavyDay()), '.sec-load')]),
-    hint: () => (isPhone() ? null : dragHint(dayEl(heavyDay(), '.card.block'), dayEl(lightDay(heavyDay()), '.sec-load'))),
-    icon: 'swap_horiz', title: 'Your turn: level the week', body: 'Tomorrow is over 7 hours. Drag one of its tasks to a lighter day, or tap a Move out suggestion.', phoneBody: 'Tomorrow is over 7 hours. Tap a Move out suggestion to send a task to a lighter day.', doneBody: 'Levelled. That’s 平準化.',
+  { move: 1, route: '/week', planMode: 'days', target: '.days', icon: 'balance', title: 'Heijunka: level the load', body: 'Give every day about the same amount of work. A steady week beats one heroic day followed by a crash.' },
+  { move: 1, route: '/week', planMode: 'days', skipIf: () => !lvDay(), target: () => [dayEl(lvDay(), '.dh'), dayEl(lvDay(), '.sec-load')], meter: loadMeter, icon: 'speed', title: 'How to read a day',
+    body: () => `${dayName(lvDay())} has ${workload(lvDay()).toFixed(1)}h of tasks. Over the 7-hour limit the number turns red with ⚠, and work spills above the 7h line. The arrow shows how far it is above the week’s average.` },
+  { move: 1, route: '/week', planMode: 'days', skipIf: () => !lvDay(), target: () => (isPhone() ? dayEl(lvDay(), '.sec-out') ?? dayEl(lvDay(), '.dh') : [dayEl(lvDay()), dayEl(lightDay(lvDay()), '.sec-load')]),
+    hint: () => (isPhone() ? null : dragHint(dayEl(lvDay(), '.card.block'), dayEl(lightDay(lvDay()), '.sec-load'))), meter: loadMeter,
+    icon: 'swap_horiz', title: 'Your turn: level the week',
+    body: () => `Drag one of ${dayName(lvDay())}’s tasks onto ${dayName(lightDay(lvDay()))}, or tap a task under Move out at the bottom of ${dayName(lvDay())}. Done when the meter below turns green.`,
+    phoneBody: () => `Tap a task under Move out to send it to a lighter day. Done when the meter below turns green.`,
+    doneBody: () => `${dayName(lvDay())} is back under 7 hours. That’s levelling.`,
     action: { start: () => { heavyAtStart = heavyDay(); return heavyAtStart }, done: (d) => !!d && workload(d) <= CAPACITY_H } },
   { move: 1, route: '/week', target: () => dayEl(todayISO()), hint: () => (isPhone() ? null : dragHint(dayEl(todayISO(), '.card.block.untimed'), [...(dayEl(todayISO())?.querySelectorAll('.vt .hr') ?? [])].find((h) => h.textContent.trim() === '19'))),
     icon: 'schedule', title: 'Your turn: plan the day', body: 'Drag a task from the bucket down onto the schedule to give it a time, or tap ⚡ to fit them all in.', phoneBody: 'Tap ⚡ to fit today’s tasks into your free time.', doneBody: 'Your day has a plan.',
@@ -98,7 +108,10 @@ function firstBacklogId() {
 const router = useRouter()
 const i = ref(0)
 const step = computed(() => STEPS[i.value])
-const body = computed(() => (isPhone() && step.value.phoneBody) || step.value.body)
+const val = (v) => (typeof v === 'function' ? v() : v)
+const body = computed(() => val((isPhone() && step.value.phoneBody) || step.value.body))
+const doneBody = computed(() => val(step.value.doneBody))
+const meter = computed(() => { const m = step.value.meter?.(); return m ? { ...m, ok: m.value <= m.max, scale: Math.max(m.max + 1, m.value) } : null })
 const centreBox = () => ({ top: innerHeight / 2, left: innerWidth / 2, width: 0, height: 0 })
 /* the spotlight's box in viewport px. On the centred cards it shrinks to a point mid-screen (its shadow still dims
    everything), so moving between any two stops is one continuous glide */
@@ -253,6 +266,8 @@ async function go(n) {
   if (n > i.value && then && !router.currentRoute.value.path.startsWith(then)) await router.push(then)
   if (n >= STEPS.length) return finish()
   baseline.value = null
+  const dir = n > i.value ? 1 : -1
+  while (STEPS[n]?.skipIf?.() && n > 0 && n < STEPS.length - 1) n += dir
   await morph(() => { i.value = n })
   place() // the new content's size, at the old spot until the next target is found
 }
@@ -368,7 +383,12 @@ const blockers = computed(() => {
         </div>
         <h2 class="tour-title" :class="{ shimmer: centred || done }">{{ done ? 'Nice!' : step.title }}</h2>
         <p v-if="!done" class="tour-body">{{ body }}</p>
-        <p v-else-if="step.doneBody" class="tour-body">{{ step.doneBody }}</p>
+        <p v-else-if="doneBody" class="tour-body">{{ doneBody }}</p>
+        <div v-if="meter" class="tour-meter" :class="{ ok: meter.ok }" :title="`${meter.label}: ${meter.value.toFixed(1)}h of a ${meter.max}h limit`">
+          <span class="mono small">{{ meter.label.slice(0, 3).toUpperCase() }}</span>
+          <div class="tm-bar"><i :style="{ width: (meter.value / meter.scale) * 100 + '%' }"></i><b :style="{ left: (meter.max / meter.scale) * 100 + '%' }"></b></div>
+          <span class="mono small tm-val">{{ meter.value.toFixed(1) }}/{{ meter.max }}h <span class="icon sm">{{ meter.ok ? 'check_circle' : 'warning' }}</span></span>
+        </div>
         <div v-if="waiting && !done" class="tour-wait mono small">waiting for you <i>✦</i></div>
         <div v-if="!done" class="tour-actions">
           <button v-if="step.kind !== 'finish'" class="btn ghost" @click="skip">Skip tour</button>
@@ -525,6 +545,16 @@ const blockers = computed(() => {
   70% { transform: scaleX(1); opacity: 0.9; }
   100% { transform: scaleX(1); opacity: 0; }
 }
+
+/* a live load meter (the over-full day while it's levelled): red over the limit, green at or under it */
+.tour-meter { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--danger) 50%, var(--border)); background: color-mix(in srgb, var(--danger) 8%, transparent); transition: border-color 0.4s, background 0.4s; }
+.tour-meter.ok { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tm-bar { position: relative; flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); }
+.tm-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--danger); transition: width 0.6s cubic-bezier(.2,.8,.2,1), background 0.4s; }
+.tour-meter.ok .tm-bar i { background: var(--accent); }
+.tm-bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); opacity: 0.7; }
+.tm-val { display: flex; align-items: center; gap: 4px; color: var(--danger); white-space: nowrap; }
+.tour-meter.ok .tm-val { color: var(--accent); }
 
 @media (max-width: 640px) {
   .tour-title { font-size: 19px; line-height: 25px; }
