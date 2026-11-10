@@ -300,6 +300,10 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       // heatmap (click positions, scroll depth) and, if switched on in Umami's settings for the website, session replays of this page
       (cfg.analyticsRecorder ? `\n<script defer src="${attr(cfg.analyticsRecorder)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` : '')
     : ''
+  // the docs pages: page views only (tag "docs"), never the heatmap or replays
+  const docsTag = () => cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
+    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}" data-tag="docs"></script>`
+    : ''
   /** robots.txt: crawlers may index the landing page only where it's on; a private server asks them to stay out. */
   const robots = () => cfg.landing
     ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /app\n\nSitemap: ${site}/sitemap.xml\n`
@@ -397,6 +401,14 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
         let body = html.replaceAll('<!--stars-->', starText())
         if (tag) body = body.replace('</head>', `${tag}\n</head>`)
         res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), Vary: 'Cookie', 'X-LC-Page': 'landing', ...LANDING_HEADERS, ...extra })
+        res.end(req.method === 'HEAD' ? undefined : body)
+      })
+    }
+    if (DOCS.has(rel.slice(0, -5)) && docsTag()) {
+      return fs.readFile(file, 'utf8', (err, html) => {
+        if (err) return send(res, 404, 'not found')
+        const body = html.replace('</head>', `${docsTag()}\n</head>`)
+        res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), 'X-LC-Page': 'page', ...SECURITY_HEADERS })
         res.end(req.method === 'HEAD' ? undefined : body)
       })
     }
