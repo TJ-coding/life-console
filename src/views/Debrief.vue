@@ -1,112 +1,110 @@
 <script setup>
-// S-03 Debrief: the post-race debrief, one card per question. In order: how did today go against its
-// objective (result)? where does each unfinished task go (unfinished; Next stays locked until each has a
-// place)? which deadline looms with nothing scheduled (threats ahead)? is tomorrow set up, and is today
-// signed off (sign-off)? Before 04:00 it debriefs the previous day.
-import { computed } from 'vue'
+// S-03 Debrief: after the day, one decision at a time, each previewed on tomorrow's real schedule.
+// Questions, in order: where does each unfinished task go? which deadline looms with nothing scheduled
+// from tomorrow on? do tomorrow's tasks have times? what is tomorrow's one thing? Then sign off.
+// Before 04:00 it debriefs the previous day. The set of steps is fixed when the screen opens.
 import { useRouter } from 'vue-router'
-import { ui, todayISO, addDays, todosForDay, isLeaf, blocksForDay, toMin, autoTimebox, toggleTodo, unscheduleTodo, toast, wd } from '../store'
-import { effDue, countdown, urgency } from '../glance'
-import { threats, coverFor, untimedOn, objectiveOf, addTaskFor, toNextDay, allToNextDay, dur } from '../review'
-import MissionCards from '../components/MissionCards.vue'
+import { state, ui, todayISO, addDays, wd, todosForDay, isLeaf, CAPACITY_H } from '../store'
+import { effDue, countdown, minsTo } from '../glance'
+import { threats, coverFor, untimedOn, openIn, objectiveIn, freeSlot, timeboxSim, deadlineTaskSim, objectiveSim, noSim, overloadStep, fitsWith, loadOf, dur } from '../review'
+import BriefingFlow from '../components/BriefingFlow.vue'
 import Stamps from '../components/Stamps.vue'
 
 const router = useRouter()
-const D = computed(() => { void ui.now; return ui.now.getHours() < 4 ? addDays(todayISO(), -1) : todayISO() })
-const next = computed(() => addDays(D.value, 1))
+const D = ui.now.getHours() < 4 ? addDays(todayISO(), -1) : todayISO()
+const N = addDays(D, 1)
+const move = (id, scheduled) => ({ patch: { [id]: { scheduled } }, add: [] })
+const live = (id) => state.todos.find((t) => t.id === id)
 
-const tasks = computed(() => todosForDay(D.value).filter(isLeaf))
-const done = computed(() => tasks.value.filter((t) => t.done))
-const notDone = computed(() => tasks.value.filter((t) => !t.done))
-const doneMin = computed(() => done.value.reduce((s, t) => s + (t.timeMin || 0), 0))
-const objective = computed(() => objectiveOf(D.value))
+const steps = []
 
-// fixed when the debrief opens: deadlines looming before the end of the day after tomorrow
-const threatList = threats((24 - ui.now.getHours()) + 48, addDays(D.value, 1)).slice(0, 4)
-const cards = [
-  { key: 'result', label: 'RESULT', tone: tasks.value.length && !notDone.value.length ? 'ok' : undefined },
-  notDone.value.length && { key: 'unfinished', label: 'UNFINISHED', tone: 'warn' },
-  threatList.length && { key: 'ahead', label: 'THREATS AHEAD', tone: 'danger' },
-  { key: 'signoff', label: 'SIGN-OFF' },
-].filter(Boolean)
-const blocked = computed(() => ({ unfinished: notDone.value.length ? `${notDone.value.length} left to place` : '' }))
+/* unfinished tasks */
+const notDone = todosForDay(D).filter((t) => isLeaf(t) && !t.done).slice(0, 10)
+notDone.forEach((t0, i) => {
+  steps.push({
+    key: 'left-' + t0.id, tone: 'warn', days: () => [N],
+    grp: `${notDone.length} unfinished · ${i + 1} of ${notDone.length}`,
+    title: () => t0.title,
+    why: () => `${dur(t0.timeMin || 30)} · P${t0.priority}`,
+    stale: () => { const t = live(t0.id); return !t || t.done || t.scheduled?.date !== D ? 'It has a place now.' : null },
+    options: () => {
+      const s = freeSlot(state.todos, N, t0.timeMin || 30)
+      const fits = fitsWith(move(t0.id, { date: N, start: null }), N)
+      return [
+        s && { label: `${wd(N)} at ${s}`, sim: move(t0.id, { date: N, start: s }), rec: fits },
+        { label: `${wd(N)}, no time yet`, sim: move(t0.id, { date: N, start: null }), rec: fits && !s },
+        { label: 'Back to the backlog', sim: move(t0.id, null), rec: !fits, verdict: ['Off the days. Plan week gives it a day later.', ''] },
+        { label: 'It’s actually done', sim: { patch: { [t0.id]: { done: true } }, add: [] }, verdict: ['Ticked off.', 'ok'] },
+      ].filter(Boolean)
+    },
+  })
+})
 
-const covered = (d) => coverFor(d, next.value)[0] ?? null
-/** due before tomorrow starts: nothing to schedule any more, only to finish or re-date */
-const tonight = (d) => effDue(d).slice(0, 10) < next.value
-const tomorrow = computed(() => todosForDay(next.value).filter((t) => !t.done && isLeaf(t)))
-const untimedNext = computed(() => untimedOn(next.value))
-const firstNext = computed(() => blocksForDay(next.value).sort((a, b) => toMin(a.start) - toMin(b.start))[0] ?? null)
+/* tomorrow over capacity (unfinished tasks moved there count too) */
+if (loadOf(state.todos, N) > CAPACITY_H || notDone.length) steps.push(overloadStep(N, addDays(N, 1)))
 
-function markDone(t) {
-  toggleTodo(t.id)
-  toast(`${t.id} done`, { label: 'Undo', run: () => toggleTodo(t.id) })
+/* deadlines before the end of the day after tomorrow with nothing scheduled from tomorrow on */
+// (one due before tomorrow can't be scheduled any more: it stays on the Command Center)
+for (const d of threats((24 - ui.now.getHours()) + 48, N).filter((x) => effDue(x).slice(0, 10) >= N).slice(0, 3)) {
+  steps.push({
+    key: 'threat-' + d.id, tone: 'danger', days: () => [N],
+    title: () => d.title,
+    why: () => `${minsTo(effDue(d)) < 0 ? 'Overdue' : `Due in ${countdown(effDue(d))}`} · nothing scheduled for it from ${wd(N)}`,
+    stale: () => (coverFor(d, N).length ? 'A task for it is on the list now.' : null),
+    options: () => {
+      const s = freeSlot(state.todos, N, 30)
+      return [
+        s && { label: `Work on it ${wd(N)} at ${s} (30m)`, sim: deadlineTaskSim(d, N, s), rec: true },
+        { label: 'Leave it', sim: noSim(), verdict: ['Nothing works towards it yet.', 'danger'] },
+      ].filter(Boolean)
+    },
+  })
 }
-function timebox() {
-  const r = autoTimebox(next.value)
-  toast(r.unplaced.length ? `Time-boxed ${r.placed.length}; ${r.unplaced.length} didn't fit 08:00–21:00` : `Time-boxed ${r.placed.length} task${r.placed.length === 1 ? '' : 's'}`)
+
+/* tomorrow's tasks without a time (unfinished ones moved there count too) */
+if (untimedOn(N).length || notDone.length) {
+  steps.push({
+    key: 'timebox', days: () => [N],
+    title: () => { const k = untimedOn(N).length; return `${k} task${k === 1 ? '' : 's'} on ${wd(N)} ${k === 1 ? 'has' : 'have'} no time` },
+    why: () => 'Give them times now and tomorrow starts without a decision.',
+    stale: () => (untimedOn(N).length ? null : `Every task on ${wd(N)} has a time.`),
+    options: () => {
+      const { sim, placed } = timeboxSim(noSim(), N)
+      const left = untimedOn(N).length - placed.length
+      return [
+        placed.length && { label: `Time-box ${placed.length === untimedOn(N).length ? 'them' : `${placed.length} of them`} (08:00–21:00)`, sim, rec: true, verdict: left ? [`${left} didn't fit between 08:00 and 21:00.`, 'warn'] : undefined },
+        { label: 'Leave them untimed', sim: noSim(), verdict: ['Tomorrow’s briefing asks again.', ''] },
+      ].filter(Boolean)
+    },
+  })
 }
+
+/* tomorrow's one thing */
+steps.push({
+  key: 'objective', days: () => [N],
+  title: () => `What does ${wd(N)} start with?`,
+  why: () => 'The one thing that has to happen. It becomes the day’s objective (P1, top of the list).',
+  stale: () => (openIn(state.todos, N).length < 2 ? (openIn(state.todos, N).length ? `Only one task on ${wd(N)}.` : `Nothing on ${wd(N)} yet.`) : null),
+  options: () => {
+    const cur = objectiveIn(state.todos, N)
+    return openIn(state.todos, N).slice(0, 4).map((t) => ({
+      label: t.title, sim: t.id === cur?.id ? noSim() : objectiveSim(t), rec: t.id === cur?.id,
+      verdict: [`${dur(t.timeMin || 30)} · ${t.scheduled.start ? `at ${t.scheduled.start}` : 'no time yet'}`, ''],
+    }))
+  },
+})
 </script>
 
 <template>
-  <MissionCards title="Debrief" :date="D" action="Done" :cards="cards" :blocked="blocked" @done="router.push('/')">
-    <template #result>
-      <template v-if="tasks.length">
-        <div class="hero">{{ done.length }}/{{ tasks.length }} <small>tasks done<template v-if="doneMin"> · {{ dur(doneMin) }}</template></small></div>
-        <div v-if="objective" class="rows">
-          <div class="r">
-            <span class="k mono muted">OBJ</span><span class="n">{{ objective.title }}</span>
-            <span class="mono" :class="objective.done ? 'ok-mark' : 'warn'">{{ objective.done ? '✓ done' : '✗ not done' }}</span>
-          </div>
-        </div>
-      </template>
-      <h2 v-else class="head">No tasks were on {{ wd(D) }}'s list</h2>
+  <BriefingFlow title="Debrief" :date="D" finish="Done" :steps="steps" :recap-days="[N]" @done="router.push('/')">
+    <template #recap>
+      <div class="so"><span class="tiny upper muted">Sign off {{ wd(D) }}</span><Stamps :date="D" :size="44" /></div>
     </template>
-
-    <template #unfinished>
-      <template v-if="notDone.length">
-        <h2 class="head">{{ notDone.length }} unfinished. Where do they go?</h2>
-        <div class="rows">
-          <div v-for="t in notDone" :key="t.id" class="r">
-            <span class="n">{{ t.title }}</span>
-            <button class="btn sm" @click="toNextDay(t, D)">{{ wd(next) }}</button>
-            <button class="btn sm" @click="unscheduleTodo(t.id, 'day')">Backlog</button>
-            <button class="btn sm" @click="markDone(t)">Done</button>
-          </div>
-        </div>
-        <div v-if="notDone.length > 1" class="acts"><button class="btn" @click="allToNextDay(notDone, D)">Move all {{ notDone.length }} to {{ wd(next) }}</button></div>
-      </template>
-      <p v-else class="clear"><span class="icon sm">check</span>Every task has a place.</p>
-    </template>
-
-    <template #ahead>
-      <h2 class="head">Due soon, nothing scheduled for it</h2>
-      <div class="rows">
-        <div v-for="d in threatList" :key="d.id" class="r" :class="{ muted: covered(d) }">
-          <span class="k mono" :class="covered(d) ? '' : urgency(effDue(d)) !== 'ok' ? urgency(effDue(d)) : ''">{{ countdown(effDue(d)) }}</span>
-          <span class="n">{{ d.title }}</span>
-          <span v-if="covered(d)" class="d">✓ {{ covered(d).id }} on {{ wd(covered(d).scheduled.date) }}</span>
-          <button v-else-if="tonight(d)" class="btn sm" @click="ui.deadlineId = d.id">Edit deadline</button>
-          <button v-else class="btn sm" @click="addTaskFor(d, next)">Add for {{ wd(next) }}</button>
-        </div>
-      </div>
-    </template>
-
-    <template #signoff>
-      <h2 class="head">Tomorrow: {{ tomorrow.length }} task{{ tomorrow.length === 1 ? '' : 's' }}<template v-if="untimedNext.length">, {{ untimedNext.length }} untimed</template></h2>
-      <div v-if="firstNext" class="rows">
-        <div class="r"><span class="k mono warn">{{ firstNext.start }}</span><span class="n">{{ firstNext.title }}</span><span class="d">first block</span></div>
-      </div>
-      <div v-if="untimedNext.length" class="acts acts-top"><button class="btn" @click="timebox"><span class="icon sm">auto_awesome</span>Auto time-box {{ wd(next) }}</button></div>
-      <div class="stamp-row"><Stamps :date="D" :size="48" /></div>
-    </template>
-  </MissionCards>
+  </BriefingFlow>
 </template>
 
 <style scoped>
-.ok-mark { color: var(--accent); }
-.acts-top { margin-top: 0; }
-.stamp-row { padding-top: 6px; }
+.so { display: flex; flex-direction: column; gap: 8px; }
 /* the owner finds dashed outlines ugly: solid rings here */
-.stamp-row :deep(.stamp) { border-style: solid; }
+.so :deep(.stamp) { border-style: solid; }
 </style>

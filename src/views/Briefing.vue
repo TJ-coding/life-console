@@ -1,135 +1,84 @@
 <script setup>
-// S-02 Briefing: the pre-race briefing, one card per thing that needs the driver before the start.
-// Questions, in order: what needs me before I start (situation)? which deadline could hit me with
-// nothing scheduled for it (threat)? which of today's tasks have no time (unscheduled)? is today
-// over capacity (overload)? which milestones are late (goals)? what's first, and what's the objective (go)?
-// Cards appear only when they have something to report; SITUATION and GO always do.
-import { computed } from 'vue'
+// S-02 Briefing: before the day starts, one decision at a time, each previewed on the real schedule.
+// Questions, in order: which deadline could hit me with nothing scheduled for it (threat)? does today fit
+// (overload)? where does each task without a time go (unscheduled)? what is the one thing today (objective)?
+// Only the steps that apply are asked; the set is fixed when the screen opens.
 import { useRouter } from 'vue-router'
-import { ui, todayISO, workload, CAPACITY_H, autoTimebox, toast, wd } from '../store'
-import { useNow, fmtClock } from '../now'
-import { effDue, bigCountdown, countdown, minsTo } from '../glance'
-import { threats, coverFor, untimedOn, overBy, lateSigs, objectiveOf, addTaskFor, shedLoad, dur } from '../review'
-import MissionCards from '../components/MissionCards.vue'
+import { state, todayISO, addDays, wd, toMin, fromMin, CAPACITY_H } from '../store'
+import { effDue, countdown, minsTo } from '../glance'
+import { threats, coverFor, untimedOn, loadOf, openIn, objectiveIn, freeSlot, deadlineTaskSim, objectiveSim, noSim, overloadStep, dur } from '../review'
+import BriefingFlow from '../components/BriefingFlow.vue'
 
 const router = useRouter()
-const n = useNow()
-const T = n.T
+const T = todayISO()
+const N = addDays(T, 1)
+const move = (id, scheduled) => ({ patch: { [id]: { scheduled } }, add: [] })
+const live = (id) => state.todos.find((t) => t.id === id)
 
-// what needed attention when the briefing opened: these cards stay put while you fix them
-const threatList = threats(72).slice(0, 3)
-const had = { untimed: untimedOn(T.value).length > 0, over: overBy(T.value) > 0, goals: lateSigs().length > 0 }
-const cards = [
-  { key: 'situation', label: 'SITUATION' },
-  ...threatList.map((d) => ({ key: `threat-${d.id}`, label: 'THREAT', tone: 'danger' })),
-  had.untimed && { key: 'untimed', label: 'UNSCHEDULED', tone: 'warn' },
-  had.over && { key: 'over', label: 'OVERLOAD', tone: 'warn' },
-  had.goals && { key: 'goals', label: 'GOALS BEHIND', tone: 'warn' },
-  { key: 'go', label: 'GO', tone: 'ok' },
-].filter(Boolean)
-cards[0].tone = cards.length > 2 ? 'warn' : 'ok'
+const steps = []
 
-const untimed = computed(() => untimedOn(T.value))
-const load = computed(() => workload(T.value))
-const late = computed(() => lateSigs())
-const objective = computed(() => objectiveOf(T.value))
-const covered = (d) => coverFor(d)[0] ?? null
-const overdue = (d) => minsTo(effDue(d)) < 0
-
-/** Situation lines: open items first (!), fixed ones turn into a quiet ✓. */
-const items = computed(() => [
-  ...threatList.map((d) => covered(d)
-    ? { ok: true, text: `${d.title}: ${covered(d).id} scheduled` }
-    : { text: `${d.title} ${overdue(d) ? 'overdue' : `due in ${countdown(effDue(d))}`}, nothing scheduled` }),
-  had.untimed && (untimed.value.length ? { text: `${untimed.value.length} task${untimed.value.length > 1 ? 's' : ''} today ${untimed.value.length > 1 ? 'have' : 'has'} no start time` } : { ok: true, text: 'Every task has a time' }),
-  had.over && (overBy(T.value) > 0 ? { text: `Today is over capacity: ${load.value.toFixed(1)}h / ${CAPACITY_H}h` } : { ok: true, text: 'Today fits' }),
-  had.goals && (late.value.length ? { text: `${late.value.length} milestone${late.value.length > 1 ? 's' : ''} past ${late.value.length > 1 ? 'their' : 'its'} time bound` } : { ok: true, text: 'Goals on track' }),
-].filter(Boolean))
-const open = computed(() => items.value.filter((x) => !x.ok).length)
-
-function timebox() {
-  const r = autoTimebox(T.value)
-  toast(r.unplaced.length ? `Time-boxed ${r.placed.length}; ${r.unplaced.length} didn't fit 08:00–21:00` : `Time-boxed ${r.placed.length} task${r.placed.length === 1 ? '' : 's'}`)
+/* deadlines within 3 days that nothing on the list works towards */
+for (const d of threats(72).slice(0, 3)) {
+  steps.push({
+    key: 'threat-' + d.id, tone: 'danger', days: () => [T, N],
+    title: () => d.title,
+    why: () => `${minsTo(effDue(d)) < 0 ? 'Overdue' : `Due in ${countdown(effDue(d))}`} · nothing scheduled for it`,
+    stale: () => (coverFor(d).length ? 'A task for it is on the list now.' : null),
+    options: () => {
+      const s1 = freeSlot(state.todos, T, 30), s2 = freeSlot(state.todos, N, 30)
+      return [
+        s1 && { label: `Work on it today at ${s1} (30m)`, sim: deadlineTaskSim(d, T, s1), rec: true },
+        s2 && { label: `Work on it ${wd(N)} at ${s2} (30m)`, sim: deadlineTaskSim(d, N, s2), rec: !s1 },
+        { label: 'Leave it', sim: noSim(), verdict: ['Nothing works towards it yet.', 'danger'] },
+      ].filter(Boolean)
+    },
+  })
 }
-const openGoal = (g) => router.push({ path: `/strategy/${g.plan.id}`, query: { goal: g.sig.no } })
+
+/* today over capacity */
+if (loadOf(state.todos, T) > CAPACITY_H) steps.push(overloadStep(T, N, { who: 'Today' }))
+
+/* today's tasks with no time */
+const untimed = untimedOn(T).slice(0, 8)
+untimed.forEach((t0, i) => {
+  steps.push({
+    key: 'untimed-' + t0.id, tone: 'warn', days: () => [T],
+    grp: `${untimed.length} task${untimed.length > 1 ? 's have' : ' has'} no time · ${i + 1} of ${untimed.length}`,
+    title: () => t0.title,
+    why: () => `${dur(t0.timeMin || 30)} · P${t0.priority}`,
+    stale: () => { const t = live(t0.id); return !t || t.done || t.scheduled?.date !== T || t.scheduled.start ? 'It has a place now.' : null },
+    options: () => {
+      const m = t0.timeMin || 30
+      const s1 = freeSlot(state.todos, T, m)
+      const s2 = s1 ? freeSlot(state.todos, T, m, fromMin(toMin(s1) + Math.max(60, m))) : null
+      return [
+        s1 && { label: `Today at ${s1}`, sim: move(t0.id, { date: T, start: s1 }), rec: true },
+        s2 && { label: `Today at ${s2}`, sim: move(t0.id, { date: T, start: s2 }) },
+        { label: `${wd(N)}, no time yet`, sim: move(t0.id, { date: N, start: null }), rec: !s1, verdict: [`Off today. ${wd(N)}'s briefing asks again.`, ''] },
+        { label: 'Back to the backlog', sim: move(t0.id, null), verdict: ['Off the day. Plan week gives it a day later.', ''] },
+      ].filter(Boolean)
+    },
+  })
+})
+
+/* the one thing */
+if (openIn(state.todos, T).length > 1) {
+  steps.push({
+    key: 'objective', days: () => [T],
+    title: () => 'Pick the one thing for today',
+    why: () => 'If only one task gets done, which? It becomes the day’s objective (P1, top of the list).',
+    stale: () => (openIn(state.todos, T).length < 2 ? 'Only one task left today.' : null),
+    options: () => {
+      const cur = objectiveIn(state.todos, T)
+      return openIn(state.todos, T).slice(0, 4).map((t) => ({
+        label: t.title, sim: t.id === cur?.id ? noSim() : objectiveSim(t), rec: t.id === cur?.id,
+        verdict: [`${dur(t.timeMin || 30)} · ${t.scheduled.start ? `at ${t.scheduled.start}` : 'no time yet'}`, ''],
+      }))
+    },
+  })
+}
 </script>
 
 <template>
-  <MissionCards title="Briefing" :date="T" action="Start day" :cards="cards" @done="router.push('/')">
-    <template #situation>
-      <h2 class="head">{{ open ? `${open} item${open > 1 ? 's' : ''} before you start` : 'All clear' }}</h2>
-      <div class="rows big">
-        <div v-for="(x, k) in items" :key="k" class="r" :class="{ muted: x.ok }">
-          <span class="k mark mono" :class="x.ok ? '' : 'warn'">{{ x.ok ? '✓' : '!' }}</span><span class="n">{{ x.text }}</span>
-        </div>
-      </div>
-      <p v-if="!items.length" class="say muted">No deadline threats, every task has a time, and today fits.</p>
-    </template>
-
-    <template v-for="d in threatList" :key="d.id" #[`threat-${d.id}`]>
-      <h2 class="head">{{ d.title }}</h2>
-      <div class="hero" :class="covered(d) ? '' : 'danger'">{{ bigCountdown(effDue(d)) }} <small>{{ overdue(d) ? 'overdue' : 'left' }}</small></div>
-      <p v-if="covered(d)" class="clear"><span class="icon sm">check</span>{{ covered(d).title }} is on {{ wd(covered(d).scheduled.date) }}'s list.</p>
-      <p v-else class="say">No task is scheduled for it before then.</p>
-      <div class="acts">
-        <button v-if="!covered(d)" class="btn primary" @click="addTaskFor(d, T)"><span class="icon sm">add</span>Add a task for today</button>
-        <button class="btn" @click="ui.deadlineId = d.id">Edit deadline</button>
-      </div>
-    </template>
-
-    <template #untimed>
-      <template v-if="untimed.length">
-        <h2 class="head">{{ untimed.length }} task{{ untimed.length > 1 ? 's have' : ' has' }} no start time</h2>
-        <div class="rows">
-          <div v-for="t in untimed" :key="t.id" class="r"><span class="k mono muted">P{{ t.priority }}</span><span class="n">{{ t.title }}</span><span class="d mono">{{ dur(t.timeMin || 30) }}</span></div>
-        </div>
-        <div class="acts"><button class="btn primary" @click="timebox"><span class="icon sm">auto_awesome</span>Auto time-box</button></div>
-      </template>
-      <p v-else class="clear"><span class="icon sm">check</span>Every task today has a start time.</p>
-    </template>
-
-    <template #over>
-      <h2 class="head">Today is over capacity</h2>
-      <div class="hero" :class="overBy(T) > 0 ? 'warn' : ''">{{ load.toFixed(1) }}h <small>/ {{ CAPACITY_H }}h of tasks</small></div>
-      <template v-if="overBy(T) > 0">
-        <p class="say">{{ untimed.length ? 'Move the lowest-priority untimed tasks to tomorrow until today fits.' : 'Every task has a time; move one in Plan week.' }}</p>
-        <div class="acts">
-          <button v-if="untimed.length" class="btn primary" @click="shedLoad(T)">Move to tomorrow until it fits</button>
-          <button v-else class="btn" @click="router.push('/week')">Open Plan week</button>
-        </div>
-      </template>
-      <p v-else class="clear"><span class="icon sm">check</span>Today fits.</p>
-    </template>
-
-    <template #goals>
-      <template v-if="late.length">
-        <h2 class="head">{{ late.length }} milestone{{ late.length > 1 ? 's' : '' }} behind</h2>
-        <div class="rows">
-          <div v-for="g in late.slice(0, 5)" :key="g.sig.no" class="r">
-            <span class="k mono warn">{{ g.days }}d</span><span class="n">{{ g.sig.no }} · {{ g.sig.name }}</span>
-            <button class="btn sm" @click="openGoal(g)">Open</button>
-          </div>
-        </div>
-        <p class="say muted">Move its time bound, or add a task for it today.</p>
-      </template>
-      <p v-else class="clear"><span class="icon sm">check</span>Goals on track.</p>
-    </template>
-
-    <template #go>
-      <template v-if="n.current.value">
-        <div class="say muted">Now</div>
-        <h2 class="head">{{ n.current.value.title }}</h2>
-        <div class="hero">{{ fmtClock(n.progress.value.remaining) }} <small>left</small></div>
-      </template>
-      <template v-else-if="n.next.value">
-        <div class="say muted">First · {{ n.next.value.start }}</div>
-        <h2 class="head">{{ n.next.value.title }}</h2>
-        <div class="hero">{{ fmtClock(n.untilNext.value) }} <small>to the start</small></div>
-      </template>
-      <h2 v-else class="head">No more blocks today</h2>
-      <div v-if="objective" class="rows">
-        <div class="r"><span class="k mono muted">OBJ</span><span class="n">{{ objective.title }}</span><span class="d mono">{{ dur(objective.timeMin || 30) }}</span></div>
-      </div>
-    </template>
-  </MissionCards>
+  <BriefingFlow title="Briefing" :date="T" finish="Start day" :steps="steps" :recap-days="[T]" @done="router.push('/')" />
 </template>
