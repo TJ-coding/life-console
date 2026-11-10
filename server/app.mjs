@@ -19,7 +19,7 @@ const MIME = {
   '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4', '.xml': 'application/xml; charset=utf-8',
 }
 const LEGAL = new Set(['/privacy', '/terms'])
-const LANDING_DATE = '2026-11-07' // sitemap <lastmod> for the landing page: bump when it changes
+const LANDING_DATE = '2026-11-10' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
 function send(res, status, body, headers = {}) {
