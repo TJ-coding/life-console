@@ -160,7 +160,7 @@ function auto() {
 .today .ja { color: var(--accent); }
 .md { font-size: 15px; font-weight: 700; }
 .sec { border-bottom: 1px solid var(--border); padding: 6px; }
-.delta { cursor: help; display: flex; align-items: center; gap: 3px; font-size: 12px; height: 18px; white-space: nowrap; overflow: hidden; }
+.delta { display: flex; align-items: center; gap: 3px; font-size: 12px; height: 18px; white-space: nowrap; overflow: hidden; }
 .delta .icon { font-size: 14px; }
 .delta.room { color: var(--info); }
 .pick { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 13px; text-align: left; padding: 4px 3px; border-radius: 2px; cursor: pointer; }
