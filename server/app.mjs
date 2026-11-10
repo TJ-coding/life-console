@@ -342,6 +342,20 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
     return Math.random() < 0.5 ? 'a' : 'b'
   }
 
+  // GitHub star count for the landing pages' Star button: fetched by the server at most hourly, never per visitor
+  const stars = { n: null, at: 0 }
+  async function refreshStars() {
+    if (!cfg.landing || !cfg.githubRepo || Date.now() - stars.at < 3600e3) return
+    stars.at = Date.now()
+    try {
+      const r = await fetch(`${cfg.githubApi}/repos/${cfg.githubRepo}`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'life-console' }, signal: AbortSignal.timeout(5000) })
+      const n = r.ok ? (await r.json()).stargazers_count : null
+      if (Number.isInteger(n)) stars.n = n
+    } catch { /* keep the last count; the button shows none until one arrives */ }
+  }
+  refreshStars()
+  const starText = () => stars.n == null ? '' : stars.n >= 1000 ? `${(stars.n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(stars.n)
+
   function serveStatic(req, res, pathname, query = new URLSearchParams()) {
     let rel
     try { rel = decodeURIComponent(pathname) } catch { return send(res, 400, 'bad path') }
@@ -368,11 +382,14 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
     const file = path.normalize(path.join(dist, rel))
     if (!file.startsWith(dist)) return send(res, 403, 'forbidden')
     const landingPage = LANDING_PAGES.has(rel)
-    if (landingPage && analyticsTag('a')) {
-      // analytics configured: the landing page with the tracker tag added (small file, read per request)
+    if (landingPage) {
+      // small file, read per request: the GitHub star count filled in, plus the tracker tag when analytics is configured
+      refreshStars()
       return fs.readFile(file, 'utf8', (err, html) => {
         if (err) return send(res, 404, 'not found')
-        const body = html.replace('</head>', `${analyticsTag(rel === LANDING_FILES.b ? 'b' : 'a')}\n</head>`)
+        const tag = analyticsTag(rel === LANDING_FILES.b ? 'b' : 'a')
+        let body = html.replaceAll('<!--stars-->', starText())
+        if (tag) body = body.replace('</head>', `${tag}\n</head>`)
         res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), Vary: 'Cookie', 'X-LC-Page': 'landing', ...LANDING_HEADERS, ...extra })
         res.end(req.method === 'HEAD' ? undefined : body)
       })

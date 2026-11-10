@@ -48,6 +48,10 @@ export function loadConfig(over = {}) {
     // A/B test of the landing page: on = each new visitor gets landing.html (A) or landing-b.html (B) at random,
     // remembered in the lc_lp cookie. Off: everyone gets A; /?lp=b still previews B
     landingAb: bool(e.LANDING_AB),
+    // the GitHub repository whose star count the landing pages show (fetched hourly by the server, so visitors'
+    // browsers never contact GitHub). Empty = no count
+    githubRepo: 'GITHUB_REPO' in e ? e.GITHUB_REPO : 'TJ-coding/life-console',
+    githubApi: e.GITHUB_API || 'https://api.github.com', // overridable for tests
     // optional Umami analytics: the tracker script URL and the website ID. The landing page (LANDING=on) gets the tag;
     // the app loads it itself, sends screen names only, and each person can turn it off in Settings → Privacy
     analyticsScript: e.ANALYTICS_SCRIPT || '',

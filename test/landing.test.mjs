@@ -21,7 +21,7 @@ const quiet = () => {}
 const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-dist-'))
 fs.writeFileSync(path.join(dist, 'index.html'), '<title>APP</title>')
 fs.writeFileSync(path.join(dist, 'landing.html'), '<head><title>LANDING</title></head>')
-fs.writeFileSync(path.join(dist, 'landing-b.html'), '<head><title>LANDING-B</title></head>')
+fs.writeFileSync(path.join(dist, 'landing-b.html'), '<head><title>LANDING-B</title></head><b class="stars"><!--stars--></b>')
 fs.writeFileSync(path.join(dist, 'llms.txt'), '# Life Console')
 fs.mkdirSync(path.join(dist, 'media'))
 const VIDEO = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 256))
@@ -30,7 +30,7 @@ fs.writeFileSync(path.join(dist, 'media', 'clip.mp4'), VIDEO)
 let conn
 const servers = []
 async function start(env) {
-  const cfg = loadConfig({ DATABASE_URL: dbUrl, PUSH_DRY_RUN: '1', APP_URL: 'https://lc.test', ADMIN_EMAILS: '', DIST: dist, ...env })
+  const cfg = loadConfig({ DATABASE_URL: dbUrl, PUSH_DRY_RUN: '1', APP_URL: 'https://lc.test', ADMIN_EMAILS: '', DIST: dist, GITHUB_REPO: '', ...env })
   const app = await createApp({ cfg, db: conn.db, pool: conn.pool, log: quiet })
   const s = http.createServer(app.handler)
   await new Promise((r) => s.listen(0, '127.0.0.1', r))
@@ -196,6 +196,24 @@ test('LANDING_AB off: everyone gets A without a cookie; ?lp=b previews B; no lan
   assert.match((await get(on, '/?lp=zzz')).body.toString(), /<title>LANDING<\/title>/)
   assert.equal((await get(off, '/landing-b.html')).status, 404)
   assert.match((await get(off, '/?lp=b')).body.toString(), /APP/)
+})
+
+test('GITHUB_REPO: the landing page shows the star count, fetched by the server; none while it is unknown', async () => {
+  let calls = 0
+  const gh = http.createServer((req, res) => {
+    calls++
+    assert.equal(req.url, '/repos/me/repo')
+    res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ stargazers_count: 1234 }))
+  })
+  await new Promise((r) => gh.listen(0, '127.0.0.1', r))
+  try {
+    const base = await start({ LANDING: 'on', GITHUB_REPO: 'me/repo', GITHUB_API: `http://127.0.0.1:${gh.address().port}` })
+    let body = ''
+    for (let i = 0; i < 50 && !body.includes('1.2k'); i++) { body = (await get(base, '/?lp=b')).body.toString(); await new Promise((r) => setTimeout(r, 20)) }
+    assert.ok(body.includes('<b class="stars">1.2k</b>'), body)
+    assert.equal(calls, 1, 'fetched once, not per visitor')
+  } finally { gh.close() }
+  assert.ok((await get(on, '/?lp=b')).body.toString().includes('<b class="stars"></b>'), 'no repo: an empty count')
 })
 
 test('/api/health tells the app about analytics only when it is configured', async () => {
