@@ -9,8 +9,9 @@ import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, CAPACITY_H,
   diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, nextCheckDate, activePlans,
   updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash, setScheduleLock, LOCK_HELP, touchUI,
-  isLeaf, byPriority,
+  isLeaf, byPriority, findTodo,
 } from '../store'
+import { TODO_MIME, startDrag, endDrag } from '../dnd'
 import Prio from '../components/Prio.vue'
 import Timeline24 from '../components/Timeline24.vue'
 import TodoRow from '../components/TodoRow.vue'
@@ -123,18 +124,39 @@ function dropOnTimeline(id, start) {
   toast(`${id} → ${start}`)
 }
 function dropOnList(e) {
-  const id = e.dataTransfer.getData('text/x-todo')
-  if (id) updateTodo(id, { scheduled: { date: T.value, start: null } })
+  const t = findTodo(e.dataTransfer.getData(TODO_MIME))
+  if (!t || t.scheduled?.date === T.value) return
+  if (!t.scheduled) pull(t) // from the backlog column: toast with Undo
+  else updateTodo(t.id, { scheduled: { date: T.value, start: null } })
 }
 /* ── plan the day: pull tasks from the backlog into this day's list, one click each ── */
-const planning = ref(false)
+const planning = ref(false) // the backlog column beside the day's list
 watch(T, () => { planning.value = false })
-const listEl = ref(null)
-const blHead = ref(null)
-/** Opening the backlog scrolls the list to it, so a long day doesn't hide it. */
-function togglePlanning() {
-  planning.value = !planning.value
-  if (planning.value) nextTick(() => { if (listEl.value && blHead.value) listEl.value.scrollTop = blHead.value.offsetTop })
+/** A backlog task dropped anywhere on the list (rows included) just joins the day: no reorder, no
+ *  priority change. Capture phase, so the rows' own reorder handlers never see it. */
+const fromBacklog = () => { const t = ui.dragId && findTodo(ui.dragId); return t && !t.scheduled ? t : null }
+function listDragOverCapture(e) {
+  if (!fromBacklog()) return
+  e.preventDefault()
+  e.stopPropagation()
+}
+function listDropCapture(e) {
+  const t = fromBacklog()
+  if (!t) return
+  e.preventDefault()
+  e.stopPropagation()
+  endDrag()
+  pull(t)
+}
+/** Dropping a day task on the backlog column sends it back (Undo in the toast). */
+const blHot = ref(false)
+function dropOnBacklog(e) {
+  blHot.value = false
+  const t = findTodo(e.dataTransfer.getData(TODO_MIME))
+  if (!t?.scheduled) return
+  const prev = { ...t.scheduled }
+  updateTodo(t.id, { scheduled: null })
+  toast(`${t.id} back to the backlog`, { label: 'Undo', run: () => updateTodo(t.id, { scheduled: prev }) })
 }
 const backlog = computed(() => state.todos.filter((t) => !t.done && !t.scheduled && isLeaf(t)).sort(byPriority))
 const backlogMin = computed(() => backlog.value.reduce((s, t) => s + (t.timeMin || 0), 0))
@@ -228,7 +250,7 @@ function quickAdd() {
           <h2><router-link to="/todos" class="title-link">{{ isToday ? 'Left today' : `Todos · ${wd(T)}` }}</router-link></h2>
           <span class="mono small muted">{{ pending.length }} open · {{ fmtH(remainingMin) }} left</span>
           <span class="spacer"></span>
-          <button v-if="T >= today" class="btn sm plan-btn" :class="{ active: planning }" :title="planning ? 'Close the backlog' : `Pull tasks from the backlog into ${isToday ? 'today' : wd(T)}`" @click="togglePlanning">
+          <button v-if="T >= today" class="btn sm plan-btn" :class="{ active: planning }" :title="planning ? 'Close the backlog' : `Backlog beside the list: drag or click tasks into ${isToday ? 'today' : wd(T)}`" @click="planning = !planning">
             <span class="icon sm">{{ planning ? 'check' : 'inventory_2' }}</span>{{ planning ? 'Done' : 'Backlog' }}<span v-if="!planning && backlog.length" class="mono muted">{{ backlog.length }}</span>
           </button>
           <button v-if="done.length" class="btn sm ghost-btn" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }} {{ done.length }} done</button>
@@ -240,28 +262,38 @@ function quickAdd() {
             </span>
           </span>
         </div>
-        <div ref="listEl" class="list" :class="{ planning }" @dragover.prevent @drop.prevent="dropOnList">
-          <TodoRow v-for="t in pending" :key="t.id" :todo="t" compact adopt-date show-start show-prio removable :show-links="false" @remove="removeTodo" />
-          <template v-if="showDone">
-            <TodoRow v-for="t in done" :key="t.id" :todo="t" compact adopt-date show-start show-prio removable :show-links="false" @remove="removeTodo" />
-          </template>
-          <div v-if="!pending.length && !planning" class="empty">{{ todos.length ? 'All done for the day.' : 'Nothing planned. Add one below or pull from the backlog.' }}</div>
-          <template v-if="planning">
-            <div ref="blHead" class="bl-h tiny upper muted"><span>From backlog · click to add</span><span class="mono">{{ backlog.length }} · {{ fmtH(backlogMin) }}</span></div>
-            <button v-for="t in backlog" :key="t.id" class="bl-row" :title="`Add ${t.id} to ${isToday ? 'today' : wd(T)}`" @click="pull(t)">
-              <span class="icon sm add">add</span>
-              <Prio :p="t.priority" />
-              <span class="ellipsis grow">{{ t.title }}</span>
-              <span v-if="t.due" class="mono small" :class="t.due <= T ? 'warn' : 'muted'">due {{ relDay(t.due, T).toLowerCase() }}</span>
-              <span class="mono small muted">{{ t.timeMin }}m</span>
-            </button>
-            <div v-if="!backlog.length" class="empty">Backlog clear ✓</div>
-          </template>
+        <div class="tp-body" :class="{ split: planning }">
+          <div class="tp-main">
+            <div class="list" @dragover.capture="listDragOverCapture" @drop.capture="listDropCapture" @dragover.prevent @drop.prevent="dropOnList">
+              <TodoRow v-for="t in pending" :key="t.id" :todo="t" compact adopt-date show-start show-prio removable :show-links="false" @remove="removeTodo" />
+              <template v-if="showDone">
+                <TodoRow v-for="t in done" :key="t.id" :todo="t" compact adopt-date show-start show-prio removable :show-links="false" @remove="removeTodo" />
+              </template>
+              <div v-if="!pending.length" class="empty">{{ todos.length ? 'All done for the day.' : planning ? 'Drag tasks here from the backlog.' : 'Nothing planned. Add one below or pull from the backlog.' }}</div>
+            </div>
+            <form class="qa" @submit.prevent="quickAdd">
+              <span class="mono ok">+</span>
+              <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @CASE1 p2`" />
+            </form>
+          </div>
+          <aside v-if="planning" class="bl-col" :class="{ 'drop-hot': blHot }" @dragover.prevent="blHot = true" @dragleave="blHot = false" @drop.prevent="dropOnBacklog">
+            <div class="bl-h tiny upper muted"><span>Backlog</span><span class="mono">{{ backlog.length }} · {{ fmtH(backlogMin) }}</span></div>
+            <div class="bl-list">
+              <div
+                v-for="t in backlog" :key="t.id" class="bl-row" :class="{ dragging: ui.dragId === t.id }" draggable="true" role="button" tabindex="0"
+                :title="`Drag into the list or onto the schedule, or click to add ${t.id} to ${isToday ? 'today' : wd(T)}`"
+                @dragstart="startDrag($event, t)" @dragend="endDrag" @click="pull(t)" @keydown.enter="pull(t)"
+              >
+                <span class="icon sm grip">drag_indicator</span>
+                <Prio :p="t.priority" />
+                <span class="ellipsis grow">{{ t.title }}</span>
+                <span v-if="t.due" class="mono small due" :class="t.due <= T ? 'warn' : 'muted'">{{ relDay(t.due, T).toLowerCase() }}</span>
+                <span class="mono small muted">{{ t.timeMin }}m</span>
+              </div>
+              <div v-if="!backlog.length" class="empty">Backlog clear ✓</div>
+            </div>
+          </aside>
         </div>
-        <form class="qa" @submit.prevent="quickAdd">
-          <span class="mono ok">+</span>
-          <input v-model="quick" class="input ghost mono grow" :placeholder="`Add to ${isToday ? 'today' : wd(T) + ' ' + fmtSlash(T)}: Review notes 20m @CASE1 p2`" />
-        </form>
       </section>
 
       </div>
@@ -334,7 +366,9 @@ function quickAdd() {
 .todo-panel { min-width: 0; }
 /* vertical layout: Left today stretches to the bottom of the column; the add line stays at its foot */
 .vert .todo-panel { flex: 1 1 auto; }
+.vert .todo-panel .tp-body { flex: 1 1 auto; }
 .vert .todo-panel .list { flex: 1 1 0; max-height: none; min-height: 140px; }
+.day:not(.vert) .bl-list { max-height: 420px; }
 .vctrl { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
 .vscroll.z-S :deep(.vb) { font-size: 11px; line-height: 13px; padding: 1px 6px; }
 .vscroll.z-S :deep(.vb .t) { font-size: 10px; }
@@ -355,14 +389,22 @@ function quickAdd() {
 .qa { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
 .qa input { font-size: 14px; }
 .ghost-btn { color: var(--muted); }
-/* plan the day: backlog rows under the day's list */
+/* plan the day: the backlog as a column beside the day's list */
 .plan-btn { gap: 4px; }
 .plan-btn.active { border-color: var(--accent); color: var(--accent); }
-.bl-h { display: flex; justify-content: space-between; padding: 10px 12px 4px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
-.bl-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; padding: 6px 12px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
-.bl-row:hover { background: var(--surface-2); }
-.bl-row:hover .grow, .bl-row:hover .add { color: var(--accent); }
-.bl-row .add { color: var(--muted); }
+.tp-body { display: flex; min-height: 0; }
+.tp-main { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; }
+.tp-body.split .tp-main { flex: 3 1 0; }
+.bl-col { display: flex; flex-direction: column; flex: 2 1 0; min-width: 220px; border-left: 1px solid var(--border); background: var(--surface-2); }
+.bl-col.drop-hot { box-shadow: inset 0 0 0 1px var(--accent); }
+.bl-h { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.bl-list { flex: 1 1 0; min-height: 140px; overflow: auto; }
+.bl-row { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 10px 6px 6px; border-bottom: 1px solid var(--border); font-size: 15px; cursor: grab; }
+.bl-row:hover { background: var(--surface); }
+.bl-row:hover .grow { color: var(--accent); }
+.bl-row.dragging { opacity: 0.4; }
+.bl-row .grip { color: var(--muted); font-size: 18px; }
+.bl-row .due { flex: none; }
 .bl-row .prio { font-size: 12px; padding: 1px 5px; }
 /* telemetry strip */
 .telemetry { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px 18px; padding: 8px 14px; color: var(--text); font-size: 12px; }
@@ -386,7 +428,10 @@ a.tm:hover { color: var(--accent); }
   .dl-row .when { display: none; }
   .todo-panel .panel-h { flex-wrap: wrap; row-gap: 6px; }
   .todo-panel .panel-h > * { white-space: nowrap; }
-  .todo-panel .list.planning { min-height: 55vh; }
+  /* no room side by side: the backlog stacks under the day's list */
+  .tp-body.split { flex-direction: column; }
+  .bl-col { min-width: 0; border-left: 0; border-top: 1px solid var(--border); }
+  .bl-list { flex: none; max-height: 50vh; }
   .vscroll, .vert .vscroll { flex: none; height: 420px; }
 }
 </style>
