@@ -19,10 +19,9 @@ function start(t) {
   <section class="panel inst now-inst" :class="current ? 'busy cat-' + current.category : 'free'">
     <div class="now-grid">
       <div class="what">
-        <div class="inst-lbl">
-          <span v-if="current" class="tag mono"><span class="pulse"></span>NOW</span>
-          <span v-if="current" class="mono muted range">{{ current.start }}–{{ current.end }}</span>
-          <span v-else class="muted range ellipsis" :title="next ? `${next.start} ${next.title}` : null">until <b class="mono until">{{ next ? next.start : 'end of day' }}</b></span>
+        <div v-if="current" class="inst-lbl">
+          <span class="tag mono"><span class="pulse"></span>NOW</span>
+          <span class="mono muted range">{{ current.start }}–{{ current.end }}</span>
         </div>
         <template v-if="current">
           <div class="title clamp2">{{ current.title }}</div>
@@ -32,7 +31,7 @@ function start(t) {
           </button>
         </template>
         <template v-else>
-          <div class="title">Free</div>
+          <div class="title" :title="next ? `${next.start} ${next.title}` : null">Free <span class="until-w">until</span> <span v-if="next" class="mono until">{{ next.start }}</span><span v-else class="until-w">end of day</span></div>
         </template>
       </div>
 
@@ -80,6 +79,7 @@ function start(t) {
 .now-inst.busy { border-left-color: var(--c); background: color-mix(in srgb, var(--c) 5%, var(--surface)); }
 .now-inst.free { border-left-color: var(--muted); }
 .now-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; }
+.free .now-grid { align-items: center; }
 .what { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .clock { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
 .readout { display: flex; align-items: baseline; gap: 8px; }
@@ -90,8 +90,8 @@ function start(t) {
 .pulse { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: pulse 1.6s infinite; }
 @keyframes pulse { 50% { opacity: 0.2; } }
 .range { font-size: 13px; min-width: 0; }
-.free .range { font-size: 15px; }
-.range .until { color: var(--warn); font-weight: 600; }
+.title .until { color: var(--warn); }
+.title .until-w { color: var(--muted); font-weight: 400; }
 .title { font: 600 30px/36px Inter, sans-serif; letter-spacing: -0.015em; }
 .now-inst .inst-big { font-size: 48px; line-height: 50px; }
 .meta { gap: 10px; font-size: 14px; flex-wrap: wrap; }
