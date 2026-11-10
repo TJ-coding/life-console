@@ -9,7 +9,7 @@ import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, CAPACITY_H,
   diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, nextCheckDate, activePlans,
   updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash, setScheduleLock, LOCK_HELP, touchUI,
-  isLeaf, byPriority, findTodo,
+  isLeaf, byPriority, findTodo, unscheduleTodo, deleteBlock,
 } from '../store'
 import { TODO_MIME, startDrag, endDrag } from '../dnd'
 import Prio from '../components/Prio.vue'
@@ -135,18 +135,33 @@ watch(T, () => { planning.value = false })
 /** A backlog task dropped anywhere on the list (rows included) just joins the day: no reorder, no
  *  priority change. Capture phase, so the rows' own reorder handlers never see it. */
 const fromBacklog = () => { const t = ui.dragId && findTodo(ui.dragId); return t && !t.scheduled ? t : null }
+/** A timeline item dragged onto the list leaves the timeline but stays on this day's list: a task
+ *  just loses its start time; a fixed block becomes a task for the day. Undo in the toast. */
+const fromTimeline = () => ui.dragBlock && !ui.dragBlock.group ? ui.dragBlock : null
 function listDragOverCapture(e) {
-  if (!fromBacklog()) return
+  if (!fromBacklog() && !fromTimeline()) return
   e.preventDefault()
   e.stopPropagation()
 }
 function listDropCapture(e) {
   const t = fromBacklog()
-  if (!t) return
+  const d = !t && fromTimeline()
+  if (!t && !d) return
   e.preventDefault()
   e.stopPropagation()
   endDrag()
-  pull(t)
+  ui.dragBlock = null
+  if (t) return pull(t)
+  if (d.kind === 'todo') {
+    const x = findTodo(d.id)
+    if (x?.scheduled?.date === T.value) return unscheduleTodo(d.id, 'time')
+    updateTodo(d.id, { scheduled: { date: T.value, start: null } }) // a block from another day's timeline
+    return toast(`${d.id} → ${isToday.value ? 'today' : wd(T.value)}`)
+  }
+  const copy = deleteBlock(d.id)
+  if (!copy) return
+  const nt = addTodo({ title: copy.title || 'Untitled', timeMin: Math.max(5, toMin(copy.end) - toMin(copy.start)), links: copy.link ? [copy.link] : [], scheduled: { date: T.value, start: null } })
+  toast(`${copy.title || 'Block'} → ${nt.id} on ${isToday.value ? "today's" : wd(T.value) + "'s"} list`, { label: 'Undo', run: () => { deleteTodo(nt.id); state.timeBlocks.push(copy) } })
 }
 /** Dropping a day task on the backlog column sends it back (Undo in the toast). */
 const blHot = ref(false)
