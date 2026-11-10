@@ -62,7 +62,7 @@ function auto() {
 </script>
 
 <template>
-  <div class="day panel" :class="{ today: isToday, past }">
+  <div class="day panel" :class="{ today: isToday, past }" :data-date="date">
     <header class="dh" role="link" tabindex="0" :title="`Open ${wd(date)} ${fmtSlash(date)} in day view`" @click="openDay" @keydown.enter="openDay">
       <div class="row">
         <span class="ja">{{ wdJa(date) }}</span>
@@ -123,7 +123,7 @@ function auto() {
       <div v-if="!deadlines.length && !adding" class="small muted pad">—</div>
     </div>
 
-    <div v-if="moveOut.length" class="sec">
+    <div v-if="moveOut.length" class="sec sec-out">
       <div class="sh tiny upper danger">Move out<span class="spacer"></span><span class="mono">{{ (hours - CAPACITY_H).toFixed(1) }}h over</span></div>
       <button v-for="s in moveOut" :key="s.todo.id" class="pick" :title="`Move ${s.todo.title} to ${wd(s.to)} ${fmtSlash(s.to)}`" @click="moveTo(s)" @mouseenter="ui.hoverId = s.todo.id" @mouseleave="ui.hoverId = null">
         <span class="ellipsis grow">{{ s.todo.title }}</span><span class="mono to">→ {{ wd(s.to) }}</span>
