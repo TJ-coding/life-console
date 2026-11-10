@@ -162,7 +162,7 @@ const dayName = computed(() => {
         </div>
         <label class="field">
           <span>Linked records</span>
-          <input v-model.lazy="linksText" class="input mono" placeholder="CASE1, UX-101" />
+          <input v-model.lazy="linksText" class="input mono" placeholder="BASE, RUN" />
           <small class="tiny muted">Remove: ✕ on a chip, or delete the number here</small>
         </label>
         <div class="row wrap">

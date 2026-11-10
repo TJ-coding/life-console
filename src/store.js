@@ -96,11 +96,11 @@ export function categoryOf(todo) {
 }
 
 /* ───────────── seed data (relative to the current week) ─────────────
- * The demo planner a new account starts with: someone with a day job who is switching careers into
- * UX design through an online course, training for a half marathon, saving for a trip to Japan,
- * and has paused learning Spanish. Everything links up the way real use does: tasks → goals,
- * deadlines and the course; goals → dependency chains; deadlines with an earlier personal target;
- * split pomodoro sittings; a task with subtasks. Dates are relative to today, so it always looks current.
+ * The demo planner a new account starts with, kept small on purpose so a first look isn't overwhelming:
+ * someone with a day job training for a half marathon. One plan (vision → goal → three milestones,
+ * one depending on another), a few tasks for today and this week, three in the backlog waiting for a
+ * day, and two deadlines. It shows Strategise → Distribute → Execute and nothing else.
+ * Dates are relative to today, so it always looks current.
  */
 function seed() {
   const T = todayISO()
@@ -116,171 +116,51 @@ function seed() {
   const on = (date, start = null) => ({ date, start })
   /** a task planned for weekday i: done if that day has passed */
   const wk = (i, o = {}) => ({ scheduled: on(D(i), o.start ?? null), done: past(D(i)), ...o })
-  const at = (date, t) => new Date(`${date}T${t}:00`).toISOString()
 
-  /* ── fixed calendar: the day job, the course's live classes, runs, a weekly review ── */
+  /* ── fixed calendar: the day job and three runs a week ── */
   const block = (date, start, end, title, category, link = null) => ({ id: `B-${date}-${start}`, date, start, end, title, category, link })
   const week = [
     // [weekday, start, end, title, category, link]
-    [0, '06:45', '07:30', 'Easy run · 5 km', 'kaizen', 'BASE'],
-    [2, '06:45', '07:30', 'Easy run · 6 km', 'kaizen', 'BASE'],
-    [4, '06:45', '07:30', 'Easy run · 5 km', 'kaizen', 'BASE'],
-    [1, '18:00', '19:00', 'UX-101 live class', 'academic', 'UX-101'],
-    [3, '18:00', '19:00', 'UX-101 live class', 'academic', 'UX-101'],
-    [2, '18:00', '18:45', 'Coffee chat with a product designer', 'research', 'NET'],
-    [5, '09:00', '10:45', 'Long run · 14 km', 'kaizen', 'BASE'],
-    [6, '18:00', '18:30', 'Weekly review', 'kaizen', 'KZ-02'],
+    [0, '07:00', '07:45', 'Easy run · 5 km', 'kaizen', 'BASE'],
+    [2, '07:00', '07:45', 'Easy run · 5 km', 'kaizen', 'BASE'],
+    [5, '09:00', '10:30', 'Long run · 12 km', 'kaizen', 'BASE'],
   ]
-  for (let i = 0; i < 5; i++) week.push([i, '09:00', '12:30', 'Work', 'experiment', null], [i, '13:30', '17:30', 'Work', 'experiment', null])
+  for (let i = 0; i < 5; i++) week.push([i, '09:00', '17:00', 'Work', 'experiment', null])
   const timeBlocks = week.map(([i, s, e, title, cat, link]) => block(D(i), s, e, title, cat, link))
-
-  /* lectures follow the class blocks */
-  const lectures = week.filter((b) => b[5] === 'UX-101').map(([i, s], k) => {
-    const d = D(i)
-    return { id: `L-UX-101-${k + 7}`, course: 'UX-101', title: ['Usability testing', 'Clickable prototypes'][k], no: k + 7, date: d, time: s, readAhead: past(d), attended: past(d), cheatSheet: false }
-  })
-
-  /* sign-offs: earlier days stamped, today half-way */
-  const signOffs = {}
-  for (let i = 0; i < 7; i++) {
-    const d = D(i)
-    const n = diffDays(d, T)
-    if (n > 0) signOffs[d] = [at(d, '06:35'), at(d, '08:50'), at(d, '17:40'), n > 1 || i % 2 ? at(d, '22:30') : null]
-  }
-  signOffs[T] = [at(T, '06:40'), at(T, '08:55'), null, null]
-
-  /* sleep for the last week: drifting late mid-week, back on track today */
-  const SLEEP = [['23:30', '06:30'], ['23:05', '06:30'], ['00:15', '06:40'], ['23:20', '06:30'], ['22:50', '06:25'], ['23:45', '08:00'], ['23:00', '06:35']]
-  const sleep = {}
-  SLEEP.forEach(([bed, wake], k) => { sleep[R(k - 6)] = { bed, bedTarget: '23:00', wake, wakeTarget: '06:30', targetMin: 450 } })
 
   const todos = [
     /* ── today ── */
-    todo('T-101', 'Case study: write the research section', { vital: 'Interview quotes → 3 key insights', timeMin: 50, pomo: true, lsd: 'D', priority: 1, due: R(3), scheduled: on(T, '19:30'), links: ['CASE1', 'DL-3'], split: { group: 'T-101' }, notes: '## Insights so far\n- People give up at the shopping-list step\n- Nobody trusts the "15 min" prep times\n- Photos matter more than ratings' }),
-    todo('T-102', 'Case study: write the research section', { vital: 'Interview quotes → 3 key insights', timeMin: 50, pomo: true, lsd: 'D', priority: 1, due: R(3), scheduled: on(R(1), '19:30'), links: ['CASE1', 'DL-3'], split: { group: 'T-101' }, order: 1000.001 }),
-    todo('T-103', 'UX-101 Assignment 3: summarise 5 interviews', { vital: 'Affinity map + top 3 user needs', timeMin: 50, pomo: true, lsd: 'L', priority: 1, scheduled: on(T, '07:45'), links: ['UX-101', 'DL-1'] }),
-    todo('T-104', 'Pay the credit card bill', { timeMin: 10, lsd: 'L', priority: 1, scheduled: on(T, '20:45'), links: ['DL-2'] }),
-    todo('T-105', 'Book a dentist check-up', { timeMin: 10, lsd: 'L', priority: 2, scheduled: on(T, '12:35') }),
-    todo('T-106', 'Compare flight prices on 3 sites', { vital: 'Under 900 return, max one stop', timeMin: 20, lsd: 'L', priority: 2, scheduled: on(T), links: ['FLY', 'DL-6'] }),
-    todo('T-107', 'Groceries for the next 3 days', { timeMin: 40, lsd: 'L', priority: 3, scheduled: on(T), links: ['KZ-03'] }),
-    todo('T-108', 'Cancel the streaming service I never use', { timeMin: 10, lsd: 'L', priority: 2, done: true, scheduled: on(T), links: ['CUT'] }),
-    todo('T-109', '10-minute stretch', { timeMin: 10, lsd: 'D', priority: 4, scheduled: on(T), links: ['KZ-01'] }),
+    todo('T-101', 'Register for the half marathon', { vital: 'Entry fee + pick-up date', timeMin: 15, lsd: 'L', priority: 1, scheduled: on(T, '18:30'), links: ['REG', 'DL-1'] }),
+    todo('T-102', 'Pay the credit card bill', { timeMin: 10, lsd: 'L', priority: 1, scheduled: on(T), links: ['DL-2'] }),
+    todo('T-103', 'Groceries for the next 3 days', { timeMin: 40, lsd: 'L', priority: 3, scheduled: on(T) }),
 
-    /* ── the rest of this week ── */
-    todo('T-110', 'Plan this week\'s meals', { timeMin: 20, lsd: 'L', priority: 4, links: ['KZ-03'], ...wk(0) }),
-    todo('T-111', 'UX-101 Module 6 quiz', { timeMin: 30, lsd: 'S', priority: 2, links: ['UX-101', 'MOD'], ...wk(0) }),
-    todo('T-112', 'User interviews #4 and #5', { vital: 'Record with permission', timeMin: 60, lsd: 'D', priority: 1, links: ['UX-101', 'DL-1'], ...wk(1) }),
-    todo('T-113', 'Laundry + change the bedsheets', { timeMin: 30, lsd: 'L', priority: 4, links: ['KZ-03'], ...wk(1) }),
-    todo('T-114', 'Sketch 3 onboarding flows', { timeMin: 45, lsd: 'D', priority: 2, links: ['CASE1'], ...wk(1) }),
-    todo('T-115', 'Questions for the coffee chat', { vital: 'How did you land your first UX role?', timeMin: 15, lsd: 'S', priority: 2, links: ['NET'], ...wk(2) }),
-    todo('T-116', 'Move 300 into the trip account', { timeMin: 5, lsd: 'L', priority: 2, links: ['AUTO'], ...wk(2) }),
-    todo('T-117', 'Draft the usability test plan', { timeMin: 40, lsd: 'S', priority: 2, links: ['CAP'], ...wk(3) }),
-    todo('T-118', 'Call the bank about the card fee', { timeMin: 15, lsd: 'L', priority: 3, ...wk(3) }),
-    todo('T-119', 'Weekly money check', { timeMin: 15, lsd: 'D', priority: 3, links: ['KZ-02'], ...wk(4) }),
-    todo('T-150', 'Share interview notes on the course forum', { timeMin: 15, lsd: 'L', priority: 3, links: ['UX-101'], ...wk(4) }),
-    todo('T-151', 'Farmers market + batch cooking', { timeMin: 90, lsd: 'D', priority: 4, links: ['KZ-03'], ...wk(5) }),
-    todo('T-152', 'Call Mum and Dad', { timeMin: 30, lsd: 'D', priority: 3, ...wk(6) }),
+    /* ── later this week ── */
+    todo('T-104', 'Buy new running shoes', { timeMin: 45, lsd: 'L', priority: 2, links: ['BASE'], ...wk(3) }),
+    todo('T-105', 'Call Mum and Dad', { timeMin: 30, lsd: 'D', priority: 3, ...wk(6) }),
 
-    /* ── portfolio website: a task with subtasks; its estimate is the budget ── */
-    todo('T-120', 'Portfolio website', { vital: 'Live before the mentor review', timeMin: 360, lsd: 'D', priority: 1, due: R(20), links: ['SITE'] }),
-    todo('T-121', 'Pick a template', { timeMin: 45, lsd: 'L', priority: 1, due: R(20), links: ['SITE'], parent: 'T-120', done: true }),
-    todo('T-122', 'Write the About page', { vital: 'Why I\'m switching, in 120 words', timeMin: 60, lsd: 'D', priority: 1, due: R(20), links: ['SITE'], parent: 'T-120', scheduled: on(R(2)) }),
-    todo('T-123', 'Buy a domain', { timeMin: 15, lsd: 'L', priority: 2, due: R(20), links: ['SITE'], parent: 'T-120' }),
-    todo('T-124', 'Add case study 1', { timeMin: 150, lsd: 'D', priority: 1, due: R(20), links: ['SITE', 'CASE1'], parent: 'T-120' }),
-    todo('T-125', 'Ask 2 friends to try it on their phones', { timeMin: 30, lsd: 'S', priority: 2, due: R(20), links: ['SITE'], parent: 'T-120' }),
-
-    /* ── backlog ── */
-    todo('T-130', 'Update LinkedIn headline and summary', { timeMin: 30, lsd: 'S', priority: 2, links: ['NET'] }),
-    todo('T-131', 'Cover letter template', { timeMin: 45, lsd: 'D', priority: 3, links: ['APPLY'] }),
-    todo('T-132', 'Register for the half marathon', { vital: 'Entry fee + pick-up date', timeMin: 15, lsd: 'L', priority: 2, links: ['RUN', 'DL-5'] }),
-    todo('T-133', 'Replace running shoes (600 km)', { timeMin: 30, lsd: 'L', priority: 4, links: ['RUN'] }),
-    todo('T-134', 'Passport photos + renewal form', { timeMin: 30, lsd: 'L', priority: 2, links: ['PASS', 'DL-7'] }),
-    todo('T-135', 'Tax return: gather receipts', { timeMin: 45, lsd: 'L', priority: 2, links: ['DL-4'] }),
-    todo('T-136', 'Back up phone photos', { timeMin: 20, lsd: 'L', priority: 4, links: ['KZ-03'] }),
-    todo('T-137', 'Fix the wobbly desk chair', { timeMin: 20, lsd: 'L', priority: 5 }),
+    /* ── backlog: no day yet ── */
+    todo('T-106', 'Write a 12-week training plan', { timeMin: 45, lsd: 'D', priority: 2, links: ['LONG'] }),
+    todo('T-107', 'Book a dentist check-up', { timeMin: 10, lsd: 'L', priority: 3 }),
+    todo('T-108', 'Back up phone photos', { timeMin: 20, lsd: 'L', priority: 4 }),
   ]
 
+  /* ── one plan: a goal, three milestones, one depending on another ── */
   const plans = [
     {
-      id: 'SP-01', planNo: 'SP-01', title: 'Career switch to UX design', status: 'active', health: 'On-track',
-      intent: 'Move from marketing into a UX design role within a year, without quitting before I have an offer.',
-      vision: 'Doing work I\'m proud to show people',
+      id: 'SP-01', planNo: 'SP-01', title: 'Half marathon in spring', status: 'active', health: 'On-track',
+      intent: 'Get fit enough to run a half marathon, training around a full-time job.',
+      vision: 'Cross the finish line feeling strong',
       psgs: [
-        { no: 'PORT', name: '🎨 A portfolio people remember', priority: 1, indicators: '3 case studies on a live site', timeBound: R(60), status: 'doing', boundLocked: true },
-        { no: 'COURSE', name: '📚 Finish the UX certificate', priority: 2, indicators: 'All 8 modules + capstone passed', timeBound: R(45), status: 'doing' },
-        { no: 'JOB', name: '💼 Land a UX role', priority: 3, indicators: 'A signed offer', timeBound: R(150), status: 'open' },
+        { no: 'RUN', name: '🏃 Finish a half marathon', priority: 1, indicators: 'Finish in under 2 hours', timeBound: R(63), status: 'doing' },
       ],
       sigs: [
-        { no: 'MOD', psg: 'COURSE', name: 'Modules 1–6', priority: 1, criteria: 'Every quiz at 80% or more', timeBound: R(-2), status: 'done', pct: 100, deps: [] },
-        { no: 'CAP', psg: 'COURSE', name: 'Capstone project', priority: 1, criteria: 'Usability test with 5 people', timeBound: R(40), status: 'doing', pct: 30, deps: ['MOD'], boundLocked: true },
-        { no: 'CASE1', psg: 'PORT', name: 'Case study 1: recipe app', priority: 1, criteria: 'Problem → research → design → results', timeBound: R(10), status: 'doing', pct: 60, deps: [] },
-        { no: 'CASE2', psg: 'PORT', name: 'Case study 2: the capstone', priority: 2, criteria: 'Written up with test results', timeBound: R(50), status: 'open', pct: 0, deps: ['CAP'] },
-        { no: 'SITE', psg: 'PORT', name: 'Portfolio website', priority: 2, criteria: 'Live on my own domain', timeBound: R(20), status: 'doing', pct: 15, deps: ['CASE1'] },
-        { no: 'NET', psg: 'JOB', name: 'Meet designers', priority: 2, criteria: '10 coffee chats', timeBound: R(90), status: 'doing', pct: 30, deps: [] },
-        { no: 'APPLY', psg: 'JOB', name: 'Applications', priority: 1, criteria: '20 tailored applications', timeBound: R(120), status: 'open', pct: 0, deps: ['PORT'] },
-      ],
-      checkEveryDays: 7,
-      checkLog: [
-        { date: R(-14), reminder: true, checked: true, updated: true },
-        { date: R(-7), reminder: true, checked: true, updated: false },
-      ],
-      events: [
-        { sym: '◆', event: 'Mentor portfolio review', date: R(4) },
-        { sym: '▲', event: 'Capstone demo day', date: R(40) },
-        { sym: '■', event: 'Start applying', date: R(60) },
-      ],
-    },
-    {
-      id: 'SP-02', planNo: 'SP-02', title: 'Health & Energy', status: 'active', health: 'On-track',
-      intent: 'Feel fit and rested enough that evenings are for my goals, not the sofa.',
-      vision: 'Energy left over at the end of the day',
-      psgs: [
-        { no: 'RUN', name: '🏃 Run a half marathon', priority: 1, indicators: 'Finish in under 2 hours', timeBound: R(63), status: 'doing', boundLocked: true },
-        { no: 'SLEEP', name: '😴 Sleep 7½ hours', priority: 2, indicators: 'Lights out by 23:00 most nights', timeBound: 'Continuous', status: 'doing' },
-      ],
-      sigs: [
-        { no: 'BASE', psg: 'RUN', name: 'Build the base', priority: 1, criteria: '30 km a week for 3 weeks', timeBound: R(21), status: 'doing', pct: 60, deps: [] },
+        { no: 'REG', psg: 'RUN', name: 'Sign up', priority: 1, criteria: 'Entry confirmed', timeBound: R(7), status: 'open', pct: 0, deps: [] },
+        { no: 'BASE', psg: 'RUN', name: 'Build the base', priority: 1, criteria: '20 km a week for 3 weeks', timeBound: R(21), status: 'doing', pct: 40, deps: [] },
         { no: 'LONG', psg: 'RUN', name: 'Long run 18 km', priority: 2, criteria: 'Comfortably, without walking', timeBound: R(49), status: 'open', pct: 0, deps: ['BASE'] },
-        { no: 'BED', psg: 'SLEEP', name: 'Phone out of the bedroom', priority: 1, criteria: '6 nights out of 7', timeBound: 'Continuous', status: 'doing', pct: 55, deps: [] },
-        { no: 'CAFF', psg: 'SLEEP', name: 'No coffee after 2 pm', priority: 3, criteria: 'Logged every day', timeBound: 'Continuous', status: 'doing', pct: 80, deps: [] },
       ],
       checkEveryDays: 7,
-      checkLog: [{ date: R(-4), reminder: true, checked: true, updated: true }],
-      events: [{ sym: '■', event: 'Race day', date: R(63) }],
-    },
-    {
-      id: 'SP-03', planNo: 'SP-03', title: 'Japan trip in spring', status: 'active', health: 'Needs attention',
-      intent: 'Two weeks in Japan next spring, paid for in cash before I go.',
-      vision: 'Cherry blossoms, no credit card debt',
-      psgs: [
-        { no: 'FUND', name: '💰 Save 3,000 for the trip', priority: 1, indicators: '3,000 in the trip account', timeBound: R(120), status: 'doing' },
-        { no: 'TRIP', name: '✈️ Two weeks in Japan', priority: 2, indicators: 'Flights and stays booked', timeBound: R(150), status: 'open' },
-      ],
-      sigs: [
-        { no: 'AUTO', psg: 'FUND', name: 'Automatic saving', priority: 1, criteria: '300 moved on every payday', timeBound: 'Continuous', status: 'doing', pct: 40, deps: [] },
-        { no: 'CUT', psg: 'FUND', name: 'Cut subscriptions', priority: 2, criteria: 'Save 40 a month', timeBound: R(7), status: 'doing', pct: 50, deps: [] },
-        { no: 'FLY', psg: 'TRIP', name: 'Flights booked', priority: 1, criteria: 'Under 900 return', timeBound: R(6), status: 'open', pct: 0, deps: [] },
-        { no: 'PASS', psg: 'TRIP', name: 'Passport renewed', priority: 1, criteria: 'New passport in hand', timeBound: R(30), status: 'doing', pct: 20, deps: [] },
-        { no: 'STAY', psg: 'TRIP', name: 'Itinerary + places to stay', priority: 2, criteria: 'Tokyo → Kyoto → Osaka, all booked', timeBound: R(90), status: 'open', pct: 0, deps: ['FLY', 'PASS'] },
-      ],
-      checkEveryDays: 14,
-      checkLog: [{ date: R(-10), reminder: true, checked: true, updated: true }],
-      events: [{ sym: '▲', event: 'Fare sale ends', date: R(6) }, { sym: '■', event: 'Fly to Tokyo', date: R(150) }],
-    },
-    {
-      id: 'SP-04', planNo: 'SP-04', title: 'Learn Spanish', status: 'paused', health: 'Paused until the course ends',
-      intent: 'Chat with my partner\'s family without switching to English.',
-      vision: 'Relaxed conversations in Spanish',
-      psgs: [
-        { no: 'SPAN', name: '🗣️ Hold a 30-minute conversation', priority: 1, indicators: 'A full dinner in Spanish', timeBound: R(240), status: 'open' },
-      ],
-      sigs: [
-        { no: 'DAILY', psg: 'SPAN', name: 'Daily practice', priority: 1, criteria: '10 minutes a day, 100-day streak', timeBound: R(180), status: 'doing', pct: 35, deps: [] },
-        { no: 'TALK', psg: 'SPAN', name: 'Conversation class', priority: 2, criteria: 'One class a week for 3 months', timeBound: R(220), status: 'open', pct: 0, deps: ['DAILY'] },
-      ],
-      checkEveryDays: 30,
       checkLog: [],
-      events: [],
+      events: [{ sym: '■', event: 'Race day', date: R(63) }],
     },
   ]
 
@@ -290,31 +170,23 @@ function seed() {
     todos,
     timeBlocks,
     deadlines: [
-      { id: 'DL-1', title: 'UX-101 Assignment 3: user interviews', vital: 'Affinity map + summary PDF', due: `${R(1)}T23:59`, internal: T, source: 'UX-101', done: false, priority: 1 },
-      { id: 'DL-2', title: 'Credit card payment', vital: 'Pay in full to avoid interest', due: `${T}T23:59`, internal: '', source: 'FUND', done: false, priority: 1 },
-      { id: 'DL-3', title: 'Send case study draft to mentor', vital: 'Before the portfolio review', due: `${R(3)}T20:00`, internal: R(2), source: 'CASE1', done: false, priority: 1 },
-      { id: 'DL-4', title: 'Tax return', vital: 'Receipts + payslips', due: `${R(20)}T23:59`, internal: R(14), source: '', done: false, priority: 2 },
-      { id: 'DL-5', title: 'Half-marathon entries close', vital: 'Entry fee + pick-up date', due: `${R(9)}T23:59`, internal: R(7), source: 'RUN', done: false, priority: 2 },
-      { id: 'DL-6', title: 'Flight fare sale ends', vital: 'Under 900 return', due: `${R(6)}T23:59`, internal: R(4), source: 'FLY', done: false, priority: 2 },
-      { id: 'DL-7', title: 'Passport renewal application', vital: 'Photos + old passport', due: `${R(30)}T17:00`, internal: R(21), source: 'PASS', done: false, priority: 3 },
-      { id: 'DL-8', title: 'Grandma\'s birthday card', vital: '', due: `${D(1)}T12:00`, internal: '', source: '', done: past(D(1)), priority: 2 },
+      { id: 'DL-1', title: 'Half-marathon entries close', vital: 'Entry fee + pick-up date', due: `${R(9)}T23:59`, internal: R(7), source: 'RUN', done: false, priority: 1 },
+      { id: 'DL-2', title: 'Credit card payment', vital: 'Pay in full', due: `${T}T23:59`, internal: '', source: '', done: false, priority: 1 },
     ],
     plans,
-    routines: [
-      'Make the bed', 'Clear the desk', 'Dishes', 'Laundry', 'Take out the bins', 'Vacuum', 'Water the plants',
-      'Clear the inbox', 'Back up the laptop', 'Tidy the fridge', 'Charge watch & earbuds', 'Meal prep',
-    ],
-    routineLog: { [M]: [0, 1, 2, 3, 4, 6, 7, 10] },
-    monthlyGroups: { A: ['Clean the bathroom', 'Descale the kettle'], B: ['Sort the wardrobe', 'Wash the running kit'], C: ['Clean the oven', 'Change the bedsheets'] },
+    routines: ['Make the bed', 'Dishes', 'Laundry'],
+    routineLog: {},
+    monthlyGroups: { A: ['Clean the bathroom'], B: ['Sort the wardrobe'], C: ['Change the bedsheets'] },
     monthlyLog: {},
-    signOffs,
-    notes: { [T]: 'Interview 4 gave up on recipe apps at the shopping-list step. Lead the case study with that.' },
-    sleep,
-    caffeine: { [T]: [{ t: '07:30', what: 'Coffee', mg: 95 }, { t: '11:00', what: 'Tea', mg: 45 }] },
+    signOffs: {},
+    notes: {},
+    sleep: {},
+    caffeine: {},
     caffeineCutoff: '14:00',
     caffeineLimit: 300,
-    lectures,
-    reviews: [{ id: 'RV-1', title: 'Monthly budget review', date: R(1) }],
+    lectures: [],
+    reviews: [],
+    tour: 'pending', // a new account sees the first-run tour (TourOverlay.vue); 'done' once finished or skipped
   }
 }
 
@@ -462,6 +334,7 @@ export const touchUI = typeof matchMedia === 'function' && matchMedia('(pointer:
 
 export const ui = reactive({
   now: new Date(),
+  tourOpen: false, // the first-run tour (TourOverlay.vue) is showing
   palette: false,
   paletteMode: 'cmd', // 'cmd' | 'add'
   drawerId: null,
