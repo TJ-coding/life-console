@@ -250,8 +250,8 @@ function quickAdd() {
           <h2><router-link to="/todos" class="title-link">{{ isToday ? 'Left today' : `Todos · ${wd(T)}` }}</router-link></h2>
           <span class="mono small muted">{{ pending.length }} open · {{ fmtH(remainingMin) }} left</span>
           <span class="spacer"></span>
-          <button v-if="T >= today" class="btn sm plan-btn" :class="{ active: planning }" :title="planning ? 'Close the backlog' : `Backlog beside the list: drag or click tasks into ${isToday ? 'today' : wd(T)}`" @click="planning = !planning">
-            <span class="icon sm">{{ planning ? 'check' : 'inventory_2' }}</span>{{ planning ? 'Done' : 'Backlog' }}<span v-if="!planning && backlog.length" class="mono muted">{{ backlog.length }}</span>
+          <button v-if="T >= today" class="btn sm plan-btn" :class="{ active: planning }" :aria-pressed="planning" :title="planning ? 'Hide the backlog' : `Show the backlog beside the list: drag or click tasks into ${isToday ? 'today' : wd(T)}`" @click="planning = !planning">
+            <span class="icon sm">inventory_2</span>Backlog<span v-if="backlog.length" class="mono n">{{ backlog.length }}</span>
           </button>
           <button v-if="done.length" class="btn sm ghost-btn" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }} {{ done.length }} done</button>
           <span class="load" :title="`Workload: ${hours.toFixed(1)}h planned of ${CAPACITY_H}h (${fmtH(doneMin)} done)`">
@@ -277,7 +277,7 @@ function quickAdd() {
             </form>
           </div>
           <aside v-if="planning" class="bl-col" :class="{ 'drop-hot': blHot }" @dragover.prevent="blHot = true" @dragleave="blHot = false" @drop.prevent="dropOnBacklog">
-            <div class="bl-h tiny upper muted"><span>Backlog</span><span class="mono">{{ backlog.length }} · {{ fmtH(backlogMin) }}</span></div>
+            <div class="bl-h tiny upper muted"><span class="grow">Backlog</span><span class="mono">{{ backlog.length }} · {{ fmtH(backlogMin) }}</span><button class="bl-x" title="Hide the backlog" aria-label="Hide the backlog" @click="planning = false"><span class="icon sm">close</span></button></div>
             <div class="bl-list">
               <div
                 v-for="t in backlog" :key="t.id" class="bl-row" :class="{ dragging: ui.dragId === t.id }" draggable="true" role="button" tabindex="0"
@@ -391,13 +391,17 @@ function quickAdd() {
 .ghost-btn { color: var(--muted); }
 /* plan the day: the backlog as a column beside the day's list */
 .plan-btn { gap: 4px; }
-.plan-btn.active { border-color: var(--accent); color: var(--accent); }
+.plan-btn.active { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.plan-btn .n { color: var(--muted); }
+.plan-btn.active .n { color: inherit; }
+.bl-x { display: flex; border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0; margin-left: 8px; }
+.bl-x:hover { color: var(--text); }
 .tp-body { display: flex; min-height: 0; }
 .tp-main { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; }
 .tp-body.split .tp-main { flex: 3 1 0; }
 .bl-col { display: flex; flex-direction: column; flex: 2 1 0; min-width: 220px; border-left: 1px solid var(--border); background: var(--surface-2); }
 .bl-col.drop-hot { box-shadow: inset 0 0 0 1px var(--accent); }
-.bl-h { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.bl-h { display: flex; align-items: center; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--border); }
 .bl-list { flex: 1 1 0; min-height: 140px; overflow: auto; }
 .bl-row { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 10px 6px 6px; border-bottom: 1px solid var(--border); font-size: 15px; cursor: grab; }
 .bl-row:hover { background: var(--surface); }
