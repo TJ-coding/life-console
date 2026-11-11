@@ -110,19 +110,19 @@ export function simStats(before, after, days) {
     const l0 = loadOf(before, date), l1 = loadOf(after, date)
     const label = date === todayISO() ? 'Today' : wd(date)
     // load: red only when over capacity, green when a choice brings it back under
-    if (Math.abs(l0 - l1) > 1e-3 || (l1 > CAPACITY_H && date === days[0])) rows.push({ k: `${label} · tasks`, a: Math.abs(l0 - l1) > 1e-3 ? fmtH(l0) : `${fmtH(l1)} / ${CAPACITY_H}h`, b: `${fmtH(l1)} / ${CAPACITY_H}h`, an: l0, bn: l1, bad: l1 > CAPACITY_H, good: l0 > CAPACITY_H && l1 <= CAPACITY_H })
+    if (Math.abs(l0 - l1) > 1e-3 || (l1 > CAPACITY_H && date === days[0])) rows.push({ anchor: { day: date, kind: 'load' }, k: `${label} · tasks`, a: Math.abs(l0 - l1) > 1e-3 ? fmtH(l0) : `${fmtH(l1)} / ${CAPACITY_H}h`, b: `${fmtH(l1)} / ${CAPACITY_H}h`, an: l0, bn: l1, bad: l1 > CAPACITY_H, good: l0 > CAPACITY_H && l1 <= CAPACITY_H })
     const u0 = untimedIn(before, date).length, u1 = untimedIn(after, date).length
-    if (u0 !== u1) rows.push({ k: `${label} · no time yet`, a: u0, b: u1, an: u0, bn: u1, better: 'lower' })
+    if (u0 !== u1) rows.push({ anchor: { day: date, kind: 'untimed' }, k: `${label} · no time yet`, a: u0, b: u1, an: u0, bn: u1, better: 'lower' })
     const end = (todos) => Math.max(0, ...blocksFrom(date, todos).filter((b) => b.kind === 'todo' && !b.done).map((b) => toMin(b.end)))
     const e0 = end(before), e1 = end(after)
-    if (e0 !== e1 && (e0 > wdn || e1 > wdn)) rows.push({ k: `${label} · last task ends`, a: e0 ? fromMin(e0) : '—', b: fromMin(e1), an: e0, bn: e1, better: 'lower', bad: e1 > wdn })
+    if (e0 !== e1 && (e0 > wdn || e1 > wdn)) rows.push({ anchor: { day: date, kind: 'end' }, k: `${label} · last task ends`, a: e0 ? fromMin(e0) : '—', b: fromMin(e1), an: e0, bn: e1, better: 'lower', bad: e1 > wdn })
     const o0 = objectiveIn(before, date), o1 = objectiveIn(after, date)
-    if (o0?.id !== o1?.id && o1) rows.push({ k: `${label} · objective`, a: o0?.title ?? '—', b: o1.title })
+    if (o0?.id !== o1?.id && o1) rows.push({ anchor: { day: date, kind: 'objective' }, k: `${label} · objective`, a: o0?.title ?? '—', b: o1.title })
   }
   const bl = (todos) => todos.filter((t) => !t.done && isLeaf(t) && !t.scheduled).length
-  if (bl(before) !== bl(after)) rows.push({ k: 'Backlog', a: bl(before), b: bl(after), an: bl(before), bn: bl(after) })
+  if (bl(before) !== bl(after)) rows.push({ anchor: { kind: 'off' }, k: 'Backlog', a: bl(before), b: bl(after), an: bl(before), bn: bl(after) })
   const dn = (todos) => todos.filter((t) => t.done).length
-  if (dn(after) > dn(before)) rows.push({ k: 'Done', a: dn(before), b: dn(after), an: dn(before), bn: dn(after), better: 'higher' })
+  if (dn(after) > dn(before)) rows.push({ anchor: { kind: 'off' }, k: 'Done', a: dn(before), b: dn(after), an: dn(before), bn: dn(after), better: 'higher' })
   return rows
 }
 /** One plain line on what a choice leads to, with a tone (ok / warn / danger / ''). */
