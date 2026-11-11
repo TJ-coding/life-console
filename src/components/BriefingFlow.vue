@@ -88,17 +88,34 @@ function preview(sim, days) {
   }).map((t) => ({ id: t.id, title: t.title, where: t.done && !was0.get(t.id).done ? '✓ Done' : !t.scheduled ? 'Backlog' : wd(t.scheduled.date) }))
   return { cols, off, stats: simStats(before, after, days), after }
 }
+/** The days an option touches (where its tasks are now and where they'd go); the step's own day if it changes nothing.
+ *  Returned with the step's day first (verdicts and results are about it); columns are drawn in date order. */
+function daysFor(s, sim) {
+  const own = s.days()[0], set = new Set()
+  for (const [id, f] of Object.entries(sim?.patch ?? {})) {
+    const t0 = state.todos.find((t) => t.id === id)
+    if (t0?.scheduled?.date) set.add(t0.scheduled.date)
+    if (f.scheduled?.date) set.add(f.scheduled.date)
+  }
+  for (const a of sim?.add ?? []) if (a.scheduled?.date) set.add(a.scheduled.date)
+  if (!set.size) set.add(own)
+  return [...set].sort((a, b) => (b === own) - (a === own) || a.localeCompare(b))
+}
 const view = computed(() => {
   if (idx.value >= n.value) return { ...preview({ patch: {}, add: [] }, props.recapDays), verdict: null }
-  const s = step.value, days = s.days()
+  const s = step.value
   const o = opts.value[cur.value]
+  const days = daysFor(s, o?.sim)
   const p = preview(o?.sim ?? { patch: {}, add: [] }, days)
+  p.cols.sort((x, y) => x.date.localeCompare(y.date))
   // results: only what the step is about (another day's untimed / objective changes are incidental), at most four
+  const aboutObjective = Object.values(o?.sim?.patch ?? {}).some((f) => 'priority' in f)
   const stats = p.stats.filter((r) => !(r.anchor?.day && r.anchor.day !== days[0] && ['untimed', 'objective'].includes(r.anchor.kind)))
+    .filter((r) => r.anchor?.kind !== 'objective' || aboutObjective)
     .sort((x, y) => (good(y) === 'bad') - (good(x) === 'bad')).slice(0, 4)
   return { ...p, stats, verdict: o ? (o.verdict ?? simVerdict(p.after, days)) : null }
 })
-const tones = computed(() => opts.value.map((o) => (o.verdict ?? simVerdict(simTodos(o.sim), step.value.days()))[1]))
+const tones = computed(() => opts.value.map((o) => (o.verdict ?? simVerdict(simTodos(o.sim), daysFor(step.value, o.sim)))[1]))
 const span = computed(() => {
   const all = view.value.cols.flatMap((c) => c.blocks)
   const lo = Math.min(7, ...all.map((b) => Math.floor(toMin(b.start) / 60)))
