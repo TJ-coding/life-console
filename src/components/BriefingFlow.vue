@@ -93,7 +93,10 @@ const view = computed(() => {
   const s = step.value, days = s.days()
   const o = opts.value[cur.value]
   const p = preview(o?.sim ?? { patch: {}, add: [] }, days)
-  return { ...p, verdict: o ? (o.verdict ?? simVerdict(p.after, days)) : null }
+  // results: only what the step is about (another day's untimed / objective changes are incidental), at most four
+  const stats = p.stats.filter((r) => !(r.anchor?.day && r.anchor.day !== days[0] && ['untimed', 'objective'].includes(r.anchor.kind)))
+    .sort((x, y) => (good(y) === 'bad') - (good(x) === 'bad')).slice(0, 4)
+  return { ...p, stats, verdict: o ? (o.verdict ?? simVerdict(p.after, days)) : null }
 })
 const tones = computed(() => opts.value.map((o) => (o.verdict ?? simVerdict(simTodos(o.sim), step.value.days()))[1]))
 const span = computed(() => {
@@ -119,45 +122,91 @@ const good = (r) => {
 }
 const dayName = (d) => (d === todayISO() ? 'Today' : wd(d)) + ' ' + parseISO(d).getDate()
 
-/* ── arrows: from where a task was (outline / chip) to where the option puts it, drawn once blocks settle ── */
-const arena = ref(null)
-const arrows = ref([])
+/* ── wires (loadout-screen style), drawn once blocks settle, in the order things happen:
+   1. the option → the block (or chip) it moves  2. where the task was → where it goes
+   3. each thing that changes (block, chip strip, backlog tag) → its result callout on the right ── */
+const stage = ref(null)
+const wires = ref([])
 const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
-let arrowTimer
+let wireTimer
+const tone = (r) => ({ good: 'ok', bad: 'danger' })[good(r)] ?? ''
+const chipOf = (t) => ({ ok: 'OK', warn: 'CHECK', danger: 'PROBLEM' })[t] ?? 'NOTE'
 function measure() {
-  const el = arena.value
-  if (!el) { arrows.value = []; return }
+  const el = stage.value
+  if (!el) { wires.value = []; return }
   const box = el.getBoundingClientRect()
-  const rect = (n) => { const b = n.getBoundingClientRect(); return { x: b.left - box.left, y: b.top - box.top, w: b.width, h: b.height } }
+  const rect = (node) => { const b = node.getBoundingClientRect(); return { x: b.left - box.left, y: b.top - box.top, w: b.width, h: b.height, r: b.right - box.left, cy: b.top - box.top + b.height / 2 } }
   const out = []
-  for (const d of el.querySelectorAll('.vb.pv-new[data-tid], .uc.new[data-tid]')) {
+  // 2. moves: old place → new place
+  for (const d of el.querySelectorAll('.pv .vb.pv-new[data-tid], .pv .uc.new[data-tid]')) {
     const id = d.dataset.tid
-    const s0 = el.querySelector(`.vb.pv-ghost[data-tid="${id}"], .uc.gone[data-tid="${id}"]`)
+    const s0 = el.querySelector(`.pv .vb.pv-ghost[data-tid="${id}"], .pv .uc.gone[data-tid="${id}"]`)
     if (!s0) continue
     const a = rect(s0), b = rect(d)
-    const ax = a.x + a.w / 2, ay = a.y + a.h / 2, bx = b.x + b.w / 2, by = b.y + b.h / 2
+    const ax = a.x + a.w / 2, ay = a.cy, bx = b.x + b.w / 2, by = b.cy
     const clampX = (x, r) => Math.max(r.x + 24, Math.min(r.x + r.w - 24, x))
     let path
     if (d.classList.contains('vb') && s0.classList.contains('vb') && Math.abs(bx - ax) < 60) {
-      // a block moving within its day: out of the old slot's right side, curving into the new one
-      const sx = Math.min(a.x + a.w, b.x + b.w) - 18, bulge = Math.min(90, 30 + Math.abs(by - ay) / 4)
+      const sx = Math.min(a.r, b.r) - 18, bulge = Math.min(90, 30 + Math.abs(by - ay) / 4)
       const ty = by > ay ? b.y - 3 : b.y + b.h + 3
       path = `M${sx},${ay} C${sx + bulge},${ay} ${sx + bulge},${ty} ${sx - 6},${ty}`
     } else if (Math.abs(by - ay) > Math.abs(bx - ax)) {
-      // mostly up or down (a chip under the schedule going onto it): into the nearest edge, right above / below
       const sx = ax, sy = by < ay ? a.y - 2 : a.y + a.h + 2
       const ex = clampX(ax, b), ty = by < ay ? b.y + b.h + 3 : b.y - 3, my = (sy + ty) / 2
       path = `M${sx},${sy} C${sx},${my} ${ex},${my} ${ex},${ty}`
     } else {
-      // sideways (into another day's column): an S-curve into the target's near side
-      const ex = bx > ax ? b.x - 4 : b.x + b.w + 4, sx = bx > ax ? a.x + a.w + 2 : a.x - 2, mx = (sx + ex) / 2
+      const ex = bx > ax ? b.x - 4 : b.r + 4, sx = bx > ax ? a.r + 2 : a.x - 2, mx = (sx + ex) / 2
       path = `M${sx},${ay} C${mx},${ay} ${mx},${by} ${ex},${by}`
     }
-    out.push({ id, d: path })
+    out.push({ key: 'mv-' + id, cls: 'mv', d: path, delay: 0.18 })
   }
-  arrows.value = out
+  // 1. the option → what it acts on (first match in priority order, not document order)
+  const pv = el.querySelector('.pv'), optEl = el.querySelector('.opt.cur')
+  const pick = (...sels) => { for (const q of sels) { const n0 = el.querySelector(q); if (n0) return n0 } return null }
+  const target = pick('.pv .vb.pv-new', '.pv .uc.new', '.pv .vb.pv-star', '.pv .uc.star', '.pv .dh')
+  if (!pv) { wires.value = out; return }
+  const p = rect(pv)
+  let topK = 0, botK = 0
+  const topY = () => p.y + 5 + topK++ * 4, botY = () => p.y + p.h - 5 - botK++ * 4
+  /** How a wire reaches an element inside the schedule: via the band above or below the columns, dropping into its edge. */
+  const port = (node) => {
+    const r = rect(node)
+    if (node.classList.contains('dh')) return { x: r.x + 64, y: r.cy, band: topY() }
+    if (node.closest('.off')) return { x: r.r + 3, y: r.cy, band: null }
+    const lower = r.cy > p.y + p.h / 2
+    const x = Math.max(r.x + 14, Math.min(r.r - 14, node.classList.contains('vb') ? r.x + r.w * 0.72 : r.x + r.w / 2))
+    return lower ? { x, y: r.y + r.h + 3, band: botY() } : { x, y: r.y - 3, band: topY() }
+  }
+  if (optEl && target) {
+    const o = rect(optEl), t = rect(target), left = p.x - 14
+    const inFirstCol = target.classList.contains('vb') && t.x < p.x + 120
+    let d
+    if (inFirstCol) d = `M${o.r - 4},${o.cy} H${left} V${t.cy} H${t.x + 4}`
+    else { const q = port(target); d = q.band == null ? `M${o.r - 4},${o.cy} H${left} V${p.y + p.h + 8} H${q.x + 30} V${q.y} H${q.x}` : `M${o.r - 4},${o.cy} H${left} V${q.band} H${q.x} V${q.y}` }
+    out.push({ key: 'ow', cls: 'ow', d, delay: 0 })
+  }
+  // 3. what changed → its callout (out through a band, down a bus right of the schedule, into the box)
+  const anchorFor = (a) => {
+    if (!a || a.kind === 'verdict') return target
+    if (a.kind === 'off') return el.querySelector('.pv .off .uc')
+    const col = el.querySelector(`.pv .dcol[data-day="${a.day}"]`)
+    if (!col) return null
+    if (a.kind === 'untimed') return col.querySelector('.ut') ?? col.querySelector('.dh')
+    if (a.kind === 'objective') return col.querySelector('.vb.pv-star') ?? col.querySelector('.uc.star') ?? col.querySelector('.dh')
+    return col.querySelector('.dh')
+  }
+  el.querySelectorAll('.results .co').forEach((co, i) => {
+    const k = co.dataset.co
+    const an = anchorFor(k === 'v' ? { kind: 'verdict' } : view.value.stats[+k]?.anchor)
+    if (!an) return
+    const c = rect(co), bus = p.r + 10 + (i % 5) * 6, ex = c.x - 3, ey = c.y + 18
+    const q = port(an)
+    const d = q.band == null ? `M${q.x},${q.y} H${bus} V${ey} H${ex}` : `M${q.x},${q.y} V${q.band} H${bus} V${ey} H${ex}`
+    out.push({ key: 'cw-' + k, cls: 'cw', d, delay: 0.32 + i * 0.07, dot: [q.x, q.y] })
+  })
+  wires.value = out
 }
-function redraw() { arrows.value = []; clearTimeout(arrowTimer); arrowTimer = setTimeout(() => nextTick(measure), still ? 0 : 340) }
+function redraw() { wires.value = []; clearTimeout(wireTimer); wireTimer = setTimeout(() => nextTick(measure), still ? 0 : 340) }
 watch([cur, idx, pxh], redraw)
 onMounted(redraw)
 
@@ -192,7 +241,7 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
       </div>
     </header>
 
-    <div class="stage">
+    <div ref="stage" class="stage" :class="{ recap: !step }">
       <div class="left">
         <template v-if="step">
           <div class="q">
@@ -207,18 +256,6 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
               <span v-if="o.rec" class="sug mono">SUGGESTED</span>
               <span class="dot" :class="tones[k]"></span>
             </button>
-          </div>
-        <div v-if="view.stats.length" class="spec">
-            <div v-for="r in view.stats" :key="r.k" class="sr">
-              <span class="sk mono">{{ r.k }}</span>
-              <span class="sa mono">{{ String(r.a) === String(r.b) ? '' : r.a }}</span>
-              <span class="sar mono" :class="good(r)">{{ arrow(r) }}</span>
-              <span class="sb mono" :class="good(r)">{{ r.b }}</span>
-            </div>
-          </div>
-          <div v-if="view.verdict && step" class="verdict">
-            <span class="tiny upper muted">If you pick · {{ opts[cur]?.label }}</span>
-            <span class="vt" :class="view.verdict[1]">{{ view.verdict[0] }}</span>
           </div>
         </template>
         <template v-else>
@@ -236,9 +273,9 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
       </div>
 
       <section class="pv panel">
-        <div ref="arena" class="arena">
+        <div class="arena">
         <div class="cols" :style="{ gridTemplateColumns: `repeat(${view.cols.length}, minmax(0, 1fr))` }">
-          <div v-for="c in view.cols" :key="c.date" class="dcol">
+          <div v-for="c in view.cols" :key="c.date" class="dcol" :data-day="c.date">
             <div class="dh mono">{{ dayName(c.date) }}</div>
             <DayTimeline :date="c.date" :blocks="c.blocks" :from="span.from" :to="span.to" :pxh="pxh" readonly :mark-fn="c.mark" :line-at="wdn" :line-label="`wind-down ${fromMin(wdn)}`" />
             <div v-if="c.untimed.length" class="ut">
@@ -250,12 +287,32 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
         <div v-if="view.off?.length" class="off">
           <span v-for="o in view.off" :key="o.id" :data-tid="o.id" class="uc new"><b class="mono">{{ o.where }}</b> {{ o.title }}</span>
         </div>
-        <svg class="arrows" aria-hidden="true">
-          <defs><marker id="pv-head" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" /></marker></defs>
-          <g v-for="a in arrows" :key="a.id + a.d"><path class="ar" :d="a.d" pathLength="1" /><path class="ah" :d="a.d" marker-end="url(#pv-head)" /></g>
-        </svg>
         </div>
       </section>
+
+      <aside v-if="step && !stale" :key="`${idx}-${cur}`" class="results">
+        <span class="tiny upper muted rh">If you pick · {{ opts[cur]?.label }}</span>
+        <div v-if="view.verdict" class="co big" :class="'t-' + (view.verdict[1] || 'n')" data-co="v" style="animation-delay: 0.62s">
+          <span class="chip-t mono">{{ chipOf(view.verdict[1]) }}</span>
+          <span class="cv">{{ view.verdict[0] }}</span>
+        </div>
+        <div v-for="(r, i) in view.stats" :key="r.k" class="co" :class="'t-' + (tone(r) || 'n')" :data-co="i" :style="{ animationDelay: `${0.7 + i * 0.07}s` }">
+          <span class="ck mono">{{ r.k }}</span>
+          <span class="cval mono"><span v-if="String(r.a) !== String(r.b)" class="ca">{{ r.a }}</span><span v-if="String(r.a) !== String(r.b)" class="car">{{ arrow(r) }}</span><b>{{ r.b }}</b></span>
+        </div>
+      </aside>
+
+      <svg class="wires" aria-hidden="true">
+        <defs>
+          <marker id="pv-head" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="hd-mv" d="M0,0 L10,5 L0,10 z" /></marker>
+          <marker id="pv-wire" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="hd-w" d="M0,0 L10,5 L0,10 z" /></marker>
+        </defs>
+        <g v-for="w in wires" :key="w.key + w.d" :class="w.cls" :style="{ '--d': w.delay + 's' }">
+          <circle v-if="w.dot" class="wd" :cx="w.dot[0]" :cy="w.dot[1]" r="3" />
+          <path class="ln" :d="w.d" pathLength="1" />
+          <path class="hd" :d="w.d" :marker-end="w.cls === 'mv' ? 'url(#pv-head)' : 'url(#pv-wire)'" />
+        </g>
+      </svg>
     </div>
 
     <footer class="bfoot">
@@ -281,9 +338,9 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
 .rail i.t-danger:not(.on):not(.past) { background: color-mix(in srgb, var(--danger) 45%, transparent); }
 .rail i.t-warn:not(.on):not(.past) { background: color-mix(in srgb, var(--warn) 45%, transparent); }
 
-.stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 32px; align-items: start; flex: 1 0 auto; }
+.stage { position: relative; display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.3fr) minmax(220px, 300px); gap: 44px; align-items: start; flex: 1 0 auto; }
+.stage.recap { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); }
 .left { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-.left .spec { margin-top: 4px; }
 .q { display: flex; flex-direction: column; gap: 8px; }
 .grp { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .q h1 { margin: 0; font: 600 32px/38px Inter, sans-serif; text-wrap: balance; }
@@ -314,20 +371,45 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
 .off { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
 .off .uc b { margin-right: 4px; }
 .cols { display: grid; gap: 10px; }
-.arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 6; }
-.arrows marker path { fill: var(--accent); }
-.ah { fill: none; stroke: none; }
-.ar { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--bg) 80%, transparent)); }
+.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 6; }
+.wires .ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.wires .hd { fill: none; stroke: none; }
+.wires .mv .ln { stroke: var(--accent); stroke-width: 2.5; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--bg) 80%, transparent)); }
+.hd-mv { fill: var(--accent); }
+.wires .ow .ln, .wires .cw .ln { stroke: var(--info); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--info) 45%, transparent)); }
+.hd-w { fill: var(--info); }
+.wires .wd { fill: var(--info); }
 @media (prefers-reduced-motion: no-preference) {
-  /* the arrow draws itself from the old place to the new one (dash trick; it ends as a solid line) */
-  .ar { stroke-dasharray: 1; stroke-dashoffset: 1; animation: pv-draw 0.42s cubic-bezier(.4,0,.2,1) forwards; }
-  .ah { opacity: 0; animation: pv-head 0.15s 0.34s ease-out forwards; }
+  /* each wire draws itself (dash trick; it ends as a solid line), then its arrowhead appears */
+  .wires .ln { stroke-dasharray: 1; stroke-dashoffset: 1; animation: pv-draw 0.34s cubic-bezier(.4,0,.2,1) var(--d) forwards; }
+  .wires .hd, .wires .wd { opacity: 0; animation: pv-head 0.12s calc(var(--d) + 0.3s) ease-out forwards; }
+  .wires .wd { animation-delay: var(--d); }
   .uc { transition: background-color 0.2s, color 0.2s; }
   .uc.new { animation: pv-pop 0.3s cubic-bezier(.2,.8,.2,1); }
+  .co { opacity: 0; animation: co-in 0.22s ease-out forwards; }
 }
 @keyframes pv-draw { to { stroke-dashoffset: 0; } }
 @keyframes pv-head { to { opacity: 1; } }
 @keyframes pv-pop { from { opacity: 0; transform: translateY(4px) scale(0.9); } }
+@keyframes co-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+
+/* result callouts (right column): a box per thing that changes, glowing in its status colour */
+.results { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding-top: 4px; }
+.rh { padding-bottom: 2px; }
+.co { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--info) 55%, var(--border)); border-radius: 3px; background: color-mix(in srgb, var(--info) 6%, var(--surface)); }
+.co.t-ok { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 30%, transparent); }
+.co.t-danger { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); box-shadow: 0 0 14px color-mix(in srgb, var(--danger) 32%, transparent); }
+.co.t-warn { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, var(--surface)); box-shadow: 0 0 14px color-mix(in srgb, var(--warn) 28%, transparent); }
+.ck { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.cval { display: flex; align-items: baseline; gap: 8px; font-size: 13px; min-width: 0; }
+.cval .ca { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+.cval b { font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.t-ok .cval b, .t-ok .car { color: var(--accent); } .t-danger .cval b, .t-danger .car { color: var(--danger); }
+.co.big { gap: 6px; padding: 12px 14px; }
+.chip-t { align-self: flex-start; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; padding: 1px 6px; border-radius: 2px; border: 1px solid currentColor; color: var(--info); }
+.t-ok .chip-t { color: var(--accent); } .t-danger .chip-t { color: var(--danger); } .t-warn .chip-t { color: var(--warn); }
+.cv { font-size: 17px; line-height: 23px; }
+.t-ok .cv { color: var(--accent); } .t-danger .cv { color: var(--danger); } .t-warn .cv { color: var(--warn); }
 .dcol { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .dh { font-size: 12px; font-weight: 600; }
 .ut { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
@@ -337,16 +419,6 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
 .uc.gone { text-decoration: line-through; color: var(--muted); background: none; }
 .uc.star { outline: 2px solid var(--warn); }
 
-.spec { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
-.sr { display: grid; grid-template-columns: minmax(0, 1fr) auto 16px auto; gap: 10px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--border); }
-.sk { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.sa { font-size: 13px; color: var(--muted); text-align: right; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sar { font-size: 13px; text-align: center; }
-.sb { font-size: 17px; font-weight: 700; text-align: right; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.good { color: var(--accent); } .bad { color: var(--danger); }
-.verdict { display: flex; flex-direction: column; gap: 3px; }
-.verdict .vt { font-size: 18px; line-height: 24px; }
-.verdict .vt.ok { color: var(--accent); } .verdict .vt.warn { color: var(--warn); } .verdict .vt.danger { color: var(--danger); }
 
 .bfoot { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border); padding-top: 12px; }
 .bfoot .hint { font-size: 11px; }
@@ -354,7 +426,9 @@ watch(() => props.steps.length, (v) => { if (idx.value > v) idx.value = v })
 .bfoot .btn:disabled { opacity: 0.35; cursor: default; }
 @media (max-width: 900px) {
   .bf { padding: 14px 12px 0; gap: 14px; }
-  .stage { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .stage, .stage.recap { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .wires .ow, .wires .cw { display: none; }
+  .results { order: 3; }
   .q h1 { font-size: 24px; line-height: 30px; }
   .why { font-size: 15px; }
   .opt { font-size: 15px; min-height: 48px; }
