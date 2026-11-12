@@ -6,7 +6,7 @@ All of them run the published image `ghcr.io/tj-coding/life-console` (linux/amd6
 
 - **No `updater` service.** Stores update apps themselves, and most of them forbid mounting the Docker socket. `UPDATE_CHECK=off` hides the in-app update notice for the same reason.
 - **A pinned release** (`0.1.0`, or `0.1` where the store auto-updates within a release line) instead of `latest`.
-- **The store generates the database password** where it can (Dokploy, CapRover, Cosmos, Umbrel). CasaOS can't, so it uses a fixed password on the app's private network.
+- **The store generates the database password** where it can (Dokploy, CapRover, Cosmos, Umbrel). CasaOS can't, and its PR scanner (SonarCloud) rejects hard-coded passwords, so there the database uses trust auth: it publishes no ports and only the app's private network can reach it.
 
 The first account created on a new install becomes the admin; every package says so after install.
 
