@@ -185,7 +185,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   <div v-else class="app" :class="{ bare: route.meta.bare, 'side-hidden': !sideOpen }">
     <aside v-if="!route.meta.bare" class="sidebar">
       <div class="brand">
-        <span class="logo"><span class="icon">radar</span></span>
+        <img class="logo" src="/icons/brand-96.png" alt="" width="34" height="34" />
         <div>
           <div class="name">LIFE CONSOLE</div>
           <div class="mono tiny muted">OP-DECK // v0.1 prototype</div>
@@ -320,7 +320,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .nowpill.free .nowtag { color: var(--accent); border-color: var(--accent); }
 .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px 10px; gap: 12px; min-height: 0; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 6px 10px; border-bottom: 1px solid var(--border); }
-.logo { width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 4px; display: flex; align-items: center; justify-content: center; color: var(--accent); background: var(--surface-2); }
+.logo { width: 34px; height: 34px; flex: none; border: 1px solid var(--border); border-radius: 4px; }
 .name { font-weight: 700; letter-spacing: 0.02em; }
 .exec { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; color: var(--accent); cursor: pointer; font-size: 12px; }
 .exec:hover { border-color: var(--accent); }

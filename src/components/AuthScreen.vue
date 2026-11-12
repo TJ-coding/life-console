@@ -61,11 +61,8 @@ async function submit() {
 
 <template>
   <div class="auth-page">
+    <img class="auth-hero" src="/media/logo-tile.webp" width="760" height="609" alt="Life Console logo: a white-haired figure with a halo and a white cat" decoding="async" />
     <form ref="card" class="auth-card panel" @submit.prevent="submit">
-      <div class="auth-brand">
-        <span class="auth-logo"><span class="icon">radar</span></span>
-        <div><div class="auth-name">LIFE CONSOLE</div><div class="mono tiny muted">your planning console</div></div>
-      </div>
       <h1>{{ TITLES[mode] }}</h1>
 
       <div v-if="inApp && auth.google" class="inapp" role="note">
@@ -116,9 +113,9 @@ async function submit() {
 <style scoped>
 .auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--bg); }
 .auth-card { width: 100%; max-width: 400px; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
-.auth-brand { display: flex; align-items: center; gap: 10px; }
-.auth-logo { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--accent); color: var(--accent); border-radius: 2px; }
-.auth-name { font: 700 13px/16px 'JetBrains Mono', monospace; letter-spacing: 0.08em; }
+/* the full logo above the card: on its dark tile, so it reads in the light theme too */
+.auth-hero { display: block; width: 200px; max-width: 60vw; height: auto; margin: 0 auto 16px; }
+.auth-page { flex-direction: column; }
 h1 { margin: 4px 0 0; font: 600 22px/28px Inter, sans-serif; }
 .big-in { height: 40px; font-size: 15px; padding: 0 10px; }
 .auth-go { height: 40px; font-size: 15px; justify-content: center; }
