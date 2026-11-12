@@ -1,6 +1,6 @@
-<p align="center"><img src="public/media/logo-tile.webp" alt="Life Console logo: a white-haired figure with a halo and a white cat" width="360"></p>
-
 # Life Console
+
+<p align="center"><img src="public/media/logo-tile.webp" alt="Life Console logo: a white-haired figure with a halo and a white cat" width="360"></p>
 
 **Know what to do right now.** An open-source, keyboard-first planner for your week, your deadlines and your goals. Use it free at [life-console.dev](https://life-console.dev), or run it on your own server.
 
