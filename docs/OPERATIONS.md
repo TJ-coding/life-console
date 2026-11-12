@@ -82,7 +82,7 @@ git switch main && git merge --ff-only feature/my-change && git push origin main
 GitHub Actions then runs:
 
 1. **test** (every push and PR): `npm ci`; checks that the committed migrations match `schema.js`; runs the API tests against Postgres 17; runs `npm run build`.
-2. **image**: `docker build`, then a compose **upgrade test**. It starts the *previous* release (`:latest` from GHCR), creates an account and a planner, rolls this build onto the same database, and checks the data survived and the app, manifest, push key, backups and CLI all work. On `main` the image is then pushed as `:latest` and `:sha-<short>`.
+2. **image**: `docker build` (with `--build-arg LC_BUILD_SHA=<commit>`: self-hosted servers compare it with `main` to show admins *Update available*, see `server/updates.mjs`, so **an image only counts as released once `:sha-<short>` is on GHCR**), then a compose **upgrade test**. It starts the *previous* release (`:latest` from GHCR), creates an account and a planner, rolls this build onto the same database, and checks the data survived and the app, manifest, push key, backups and CLI all work. On `main` the image is then pushed as `:latest` and `:sha-<short>`.
 3. **deploy** (main only): triggers Dokploy (`compose.deploy` if `DOKPLOY_COMPOSE_ID` is set, else `application.deploy`) and waits for `done`. It joins NetBird first when `NETBIRD_SETUP_KEY` is set. It's skipped while `DOKPLOY_URL` is unset.
 
 | Name | Type | Value |
@@ -135,6 +135,8 @@ curl -s http://dokpoly.netbird.cloud/api/health      # "build" names the deploye
 | Auto deploy | Off (GitHub Actions triggers deploys) |
 
 HTTPS is terminated by Cloudflare in front of the tunnel. The app listens on 8080 as a non-root user.
+
+Dokploy builds from source, so this instance has no `LC_BUILD_SHA` and shows no update notice (Settings → Server updates says *unknown build*). **Set `LC_UPDATER=0` in Dokploy's environment** so the compose file's `updater` service (which mounts the Docker socket) isn't started here. Dokploy deploys this instance, and without a build commit the app would never ask the updater for anything anyway.
 
 ### 5.2 Cloudflare (`tj-coding.uk` zone)
 

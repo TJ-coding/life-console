@@ -76,6 +76,16 @@ Here's what happens on each update:
 2. The app goes live once `/api/health` passes. Expect a few seconds of downtime while the container restarts. The app works offline and syncs when the server is back, so nobody loses edits.
 3. Open tabs show "Life Console was updated — Reload". An old tab can never overwrite data that newer code has upgraded: the server refuses writes with an older data schema.
 
+**Update notices:** admins see *A newer Life Console is out* at the top of the app, and the changes in **Settings → Server updates**. Every 6 hours the server asks GitHub which commits came after its own build, and asks the image registry which of them have a published image, so it only announces versions you can actually pull. Nothing about your server or its users is sent: only the commit hash, in the URL. Set `UPDATE_CHECK=off` to stop it. Images you build yourself (`--build`) don't know their commit, so they get no notice.
+
+**Auto-update (on by default):** the compose file includes a small `updater` service. When a new version is published, the app asks it to install that version (within a few hours of release). The updater runs the same `docker compose pull` and `docker compose up -d` as above, in the folder with your `docker-compose.yml`. Expect a few seconds of downtime, with the usual backup before any migration. If an update fails, the old version keeps running, Settings shows the output, and that version isn't retried automatically.
+
+- **Turn auto-update off:** untick *Install updates automatically* in Settings → Server updates (an admin's choice; it's kept in the `updates` volume). `AUTO_UPDATE=off` in `.env` sets the starting value. With auto-update off, admins still get the notice and an **Update now** button.
+- **Turn the updater off altogether:** set `LC_UPDATER=0` in `.env`, then run `docker compose up -d --remove-orphans`. You update with the commands above.
+- **Installs from before the updater existed:** download the newest `docker-compose.yml`, then run `docker compose pull && docker compose up -d` once.
+
+The updater needs the Docker socket (`/var/run/docker.sock`), and access to it is root access on that machine. That's why it runs in its own container. The app never gets the socket. The app and the updater share only a small volume: the app can leave a request there, and the updater's command is fixed, so a compromised app can't make it run anything else. It doesn't apply to a pinned `LC_VERSION` (edit `.env` instead), or to setups that don't use this compose file, such as Portainer stacks, Kubernetes or Dokploy. Those get the notice and update the way they usually do.
+
 **Roll back:** set `LC_VERSION=sha-<previous>` in `.env` and run `docker compose up -d`. Database migrations are additive, so an older app version keeps working on a newer database (see *Database migrations* in [OPERATIONS.md](OPERATIONS.md)). If you ever need the database itself back, restore the pre-migration dump (section 6).
 
 ## 5. Admin tasks
