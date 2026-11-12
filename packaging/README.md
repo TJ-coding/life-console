@@ -96,16 +96,17 @@ Keep this table current: it's the list of stores to update on every release.
 
 | Store | Submitted | Pull request | Status (2026-11-13) | Store's copy of the package |
 |---|---|---|---|---|
-| Portainer templates (Lissy93) | 2026-11-13 | row in `sources.csv` (see below) | Template lives in this repo and is fetched nightly, so updates need no PR | `packaging/portainer/` (here) |
+| Portainer templates (Lissy93) | 2026-11-13 | [Lissy93/portainer-templates#177](https://github.com/lissy93/portainer-templates/pull/177) | Open; adds a `sources.csv` row. The template lives in this repo and is fetched nightly, so updates need no PR | `packaging/portainer/` (here) |
 | Dokploy | 2026-11-13 | [Dokploy/templates#1321](https://github.com/Dokploy/templates/pull/1321) | Open; all checks pass; tested on Dokploy v0.29.0 | `blueprints/life-console/` |
 | Cosmos | 2026-11-13 | [azukaar/cosmos-servapps-official#342](https://github.com/azukaar/cosmos-servapps-official/pull/342) | Open; validator clean | `servapps/LifeConsole/` |
+| Easypanel | 2026-11-13 | [easypanel-io/templates#1722](https://github.com/easypanel-io/templates/pull/1722) | Open; preview deploy awaits maintainer approval; not yet run in their playground | `templates/life-console/` |
 | CasaOS | 2026-11-13 | [IceWhaleTech/CasaOS-AppStore#1148](https://github.com/IceWhaleTech/CasaOS-AppStore/pull/1148) | Open; validate + SonarCloud pass | `Apps/LifeConsole/` |
 
 When a PR merges or closes, update its row. When a new store accepts the app, add a row.
 
 Not listed yet: Umbrel (needs a device test), Unraid (needs a template repo), Railway, PikaPods, Elestio, TrueNAS (owner steps), CapRover (needs 1,000+ stars or 10,000+ downloads), awesome-selfhosted (from 13 March 2027).
 
-Submitting needs a fork under TJ-coding: the forks are `TJ-coding/dokploy-templates` (named so because `TJ-coding/templates` already exists), `TJ-coding/cosmos-servapps-official` and `TJ-coding/CasaOS-AppStore`. Pushes of screenshots can fail with HTTP 400; `git config http.postBuffer 157286400` fixes it.
+Submitting needs a fork under TJ-coding: the forks are `TJ-coding/dokploy-templates` and `TJ-coding/easypanel-templates` (named so because `TJ-coding/templates` already exists), `TJ-coding/cosmos-servapps-official`, `TJ-coding/CasaOS-AppStore` and `TJ-coding/portainer-templates`. Directory listings (AlternativeTo, selfh.st, pwastore.io, OpenAlternative…) are tracked in the owner's listings notes, not here. Pushes of screenshots can fail with HTTP 400; `git config http.postBuffer 157286400` fixes it.
 
 ## When a new version is released
 
@@ -116,6 +117,7 @@ Submitting needs a fork under TJ-coding: the forks are `TJ-coding/dokploy-templa
 |---|---|---|
 | Dokploy | `dokploy/life-console/docker-compose.yml`, `meta.json` | image tag `0.1.0` → `X.Y.Z`; `"version"` |
 | Portainer | `portainer/docker-compose.yml` | nothing: it runs `latest`, and Lissy93/portainer-templates re-fetches the template nightly |
+| Easypanel | `templates/life-console/meta.yaml` (in the store) | `appServiceImage` default tag; add a `changeLog` entry |
 | Cosmos | `cosmos/LifeConsole/cosmos-compose.json` | nothing within `0.1.x` (follows `0.1` and auto-updates); on a new minor, image tag `0.1` → `X.Y` |
 | CasaOS | `casaos/LifeConsole/docker-compose.yml` | image tag; `x-casaos.version`, `update_at`, `release_notes` |
 | Umbrel | `umbrel/life-console/docker-compose.yml`, `umbrel-app.yml` | image tag **and** digest (`docker buildx imagetools inspect ghcr.io/tj-coding/life-console:X.Y.Z`); `version`, `releaseNotes` |
