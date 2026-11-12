@@ -3,7 +3,10 @@
   "title": "Life Console",
   "name": "life-console",
   "description": "Keyboard-first planner that shows what to do right now: time-block your week, count down deadlines and link tasks to goals.",
-  "categories": ["Productivity", "Tools"],
+  "categories": [
+    "Productivity",
+    "Tools"
+  ],
   "platform": "linux",
   "restart_policy": "unless-stopped",
   "logo": "https://raw.githubusercontent.com/TJ-coding/life-console/main/packaging/assets/icon-512.png",
@@ -26,15 +29,7 @@
       "name": "APP_URL",
       "label": "Public address (optional)",
       "description": "The address people use, e.g. https://planner.example.com. Used for links in emails and secure cookies over https."
-    },
-    {
-      "name": "SIGNUPS",
-      "label": "Sign-ups",
-      "select": [
-        { "text": "Open: anyone who can reach it can create an account", "value": "open", "default": true },
-        { "text": "Off: no new accounts", "value": "off" }
-      ]
     }
   ],
-  "note": "Set a <b>database password</b> before you deploy (<code>openssl rand -hex 32</code> makes a good one); the stack won't start without it. Then open <code>http://&lt;your-host&gt;:8080</code> and create your account: the first one becomes the admin. Update with Stacks → life-console → <i>Pull and redeploy</i>. Docs: <a href=\"https://life-console.dev/docs/self-hosting\" target=\"_blank\">life-console.dev/docs/self-hosting</a>"
+  "note": "Set a <b>database password</b> before you deploy (<code>openssl rand -hex 32</code> makes a good one); the stack won't start without it. Then open <code>http://&lt;your-host&gt;:&lt;Web UI port&gt;</code> (the port you chose above, 8080 by default) and create your account: it becomes the admin. Sign-ups start closed, so nobody else can create an account until you open them in <b>Settings → Sign-ups</b>. Update with Stacks → life-console → <i>Pull and redeploy</i>. Docs: <a href=\"https://life-console.dev/docs/self-hosting\" target=\"_blank\">life-console.dev/docs/self-hosting</a>"
 }

@@ -9,6 +9,14 @@ const origin = (v) => {
   if (!u || !/^https?:$/.test(u.protocol)) throw new Error(`ANALYTICS_DASHBOARD must be an http(s) URL, got ${JSON.stringify(v)}`)
   return u.origin
 }
+/** SIGNUPS: open (also unset, on, true, yes, 1) or closed (closed, off, false, no, 0). Anything else is a mistake,
+ *  and a mistake must not leave sign-ups open: it reads as closed, and `signupsUnknown` keeps the value for a warning. */
+const SIGNUPS_OPEN = ['', 'open', 'on', 'true', 'yes', '1']
+const SIGNUPS_CLOSED = ['closed', 'off', 'false', 'no', '0']
+const signupsOf = (v) => {
+  const s = String(v ?? '').trim().toLowerCase()
+  return { signups: SIGNUPS_OPEN.includes(s) ? 'open' : 'closed', signupsUnknown: SIGNUPS_OPEN.includes(s) || SIGNUPS_CLOSED.includes(s) ? '' : String(v) }
+}
 const num = (v, d) => (Number.isFinite(Number(v)) && v !== '' && v !== undefined ? Number(v) : d)
 
 export function loadConfig(over = {}) {
@@ -25,7 +33,7 @@ export function loadConfig(over = {}) {
     vapidSubject: e.VAPID_SUBJECT || (appUrl.startsWith('https://') ? appUrl : 'mailto:admin@localhost'), // web-push needs https: or mailto:
     vapidPublicKey: e.VAPID_PUBLIC_KEY || '',
     vapidPrivateKey: e.VAPID_PRIVATE_KEY || '',
-    signups: (e.SIGNUPS || 'open').toLowerCase() === 'closed' ? 'closed' : 'open',
+    ...signupsOf(e.SIGNUPS), // the default; an admin can open or close sign-ups in Settings (server/signups.mjs)
     adminEmails: (e.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
     sessionDays: num(e.SESSION_DAYS, 90),
     cookieSecure: bool(e.COOKIE_SECURE, appUrl.startsWith('https://')),
