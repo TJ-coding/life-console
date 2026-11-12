@@ -257,10 +257,13 @@ h1 { font: 700 clamp(34px, 5.4vw, 60px)/1.06 var(--sans); letter-spacing: -.03em
 @keyframes blink { 50% { opacity: 0; } }
 /* the logo sits beside the headline on wide screens and above it, smaller, on narrow ones */
 .hero-intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 400px); gap: 48px; align-items: center; }
-.hero-logo { width: 100%; border-radius: 16px; border: 1px solid var(--rule); }
+/* the logo's background is the dark page colour, so on the dark theme it sits on the page with no frame;
+   the light theme shows it as a dark rounded tile */
+.hero-logo { width: 100%; }
+@media (prefers-color-scheme: light) { .hero-logo { border-radius: 16px; } }
 @media (max-width: 860px) {
   .hero-intro { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .hero-logo { order: -1; width: 220px; border-radius: 12px; }
+  .hero-logo { order: -1; width: 220px; }
 }
 .hero .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 46ch; margin: 0 0 28px; }
 .ctas { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
