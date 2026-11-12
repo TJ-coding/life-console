@@ -24,19 +24,6 @@ services:
         target: /backups
     networks:
       - life-console-network
-    x-casaos:
-      ports:
-        - container: "8080"
-          description:
-            en_US: Web UI
-      envs:
-        - container: SIGNUPS
-          description:
-            en_US: "open: anyone who can reach the app can create an account (the first becomes admin); off: no new accounts"
-      volumes:
-        - container: /backups
-          description:
-            en_US: Database dumps taken before each upgrade
 
   life-console-db:
     image: postgres:17-alpine
@@ -52,11 +39,6 @@ services:
         target: /var/lib/postgresql/data
     networks:
       - life-console-network
-    x-casaos:
-      volumes:
-        - container: /var/lib/postgresql/data
-          description:
-            en_US: PostgreSQL data
 
 networks:
   life-console-network:
@@ -106,6 +88,9 @@ x-casaos:
   title:
     en_US: Life Console
   version: "0.1.0"
+  update_at: "2026-11-13"
+  release_notes:
+    en_US: First release in the CasaOS App Store.
   website: "https://life-console.dev"
   repo: "https://github.com/TJ-coding/life-console"
   support: "https://github.com/TJ-coding/life-console/issues"
