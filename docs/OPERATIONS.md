@@ -21,6 +21,8 @@ Where Life Console is hosted, how code gets from a commit to the live site, wher
 | Dokploy panel | http://dokpoly.netbird.cloud:3000 (NetBird only) → project **Life Console** |
 | Data | PostgreSQL (`db` service of the compose stack, volume `db`); dumps in the `backups` volume |
 
+> **Which stack is which (2026-11-13):** `life-console-stack` (below) is the **test instance**, life-console.tj-coding.uk; the **public service**, life-console.dev, is `life-console-public` (composeId `-jt4y2jcvoTE601CoLvZh`, see the table above). Deploy each one by its own composeId.
+>
 > **Status (2026-11-07):** cut over. Production runs the compose service **`life-console-stack`** (Dokploy `appName` `life-console-stack-vkaqq8`, composeId `qM_iz40YcC1ORWTr81gnY`, containers `life-console-stack-vkaqq8-{app,db,backup}-1`, network `life-console-stack-vkaqq8_default`). The old application `life-console` (`life-console-ulreqw`) is **stopped, not deleted**, and its volume `life-console-data` is kept. Backups of it are in `/root/life-console-backups/` on the server and in `~/Downloads/Templates/life-console-backups/` on the owner's Mac. Still to do: remove Cloudflare Access (§5.2).
 
 ---
@@ -83,7 +85,7 @@ GitHub Actions then runs:
 
 1. **test** (every push and PR): `npm ci`; checks that the committed migrations match `schema.js`; runs the API tests against Postgres 17; runs `npm run build`.
 2. **image**: `docker build` (with `--build-arg LC_BUILD_SHA=<commit>`: self-hosted servers compare it with `main` to show admins *Update available*, see `server/updates.mjs`, so **an image only counts as released once `:sha-<short>` is on GHCR**), then a compose **upgrade test**. It starts the *previous* release (`:latest` from GHCR), creates an account and a planner, rolls this build onto the same database, and checks the data survived and the app, manifest, push key, backups and CLI all work. On `main` the image is then pushed as `:latest` and `:sha-<short>`.
-3. **deploy** (main only): triggers Dokploy (`compose.deploy` if `DOKPLOY_COMPOSE_ID` is set, else `application.deploy`) and waits for `done`. It joins NetBird first when `NETBIRD_SETUP_KEY` is set. It's skipped while `DOKPLOY_URL` is unset.
+3. **deploy** (main only): triggers Dokploy (`compose.deploy` if `DOKPLOY_COMPOSE_ID` is set, else `application.deploy`) and waits for `done`. It joins NetBird first when `NETBIRD_SETUP_KEY` is set. It's skipped while `DOKPLOY_URL` is unset. **Today it deploys nothing:** `NETBIRD_SETUP_KEY` isn't set, so the job only prints a notice and still shows as succeeded, and `DOKPLOY_COMPOSE_ID` names the **test instance**, not the public service. Deploy both by hand (§4.3): the test instance first, then the public service.
 
 | Name | Type | Value |
 |---|---|---|
