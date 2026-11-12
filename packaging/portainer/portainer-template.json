@@ -1,0 +1,40 @@
+{
+  "type": 3,
+  "title": "Life Console",
+  "name": "life-console",
+  "description": "Keyboard-first planner that shows what to do right now: time-block your week, count down deadlines and link tasks to goals.",
+  "categories": ["Productivity", "Tools"],
+  "platform": "linux",
+  "restart_policy": "unless-stopped",
+  "logo": "https://raw.githubusercontent.com/TJ-coding/life-console/main/packaging/assets/icon-512.png",
+  "repository": {
+    "url": "https://github.com/TJ-coding/life-console",
+    "stackfile": "packaging/portainer/docker-compose.yml"
+  },
+  "env": [
+    {
+      "name": "POSTGRES_PASSWORD",
+      "label": "Database password (required)",
+      "description": "Any long random string, e.g. the output of: openssl rand -hex 32"
+    },
+    {
+      "name": "LC_PORT",
+      "label": "Web UI port",
+      "default": "8080"
+    },
+    {
+      "name": "APP_URL",
+      "label": "Public address (optional)",
+      "description": "The address people use, e.g. https://planner.example.com. Used for links in emails and secure cookies over https."
+    },
+    {
+      "name": "SIGNUPS",
+      "label": "Sign-ups",
+      "select": [
+        { "text": "Open: anyone who can reach it can create an account", "value": "open", "default": true },
+        { "text": "Off: no new accounts", "value": "off" }
+      ]
+    }
+  ],
+  "note": "Set a <b>database password</b> before you deploy (<code>openssl rand -hex 32</code> makes a good one); the stack won't start without it. Then open <code>http://&lt;your-host&gt;:8080</code> and create your account: the first one becomes the admin. Update with Stacks → life-console → <i>Pull and redeploy</i>. Docs: <a href=\"https://life-console.dev/docs/self-hosting\" target=\"_blank\">life-console.dev/docs/self-hosting</a>"
+}

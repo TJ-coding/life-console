@@ -96,6 +96,7 @@ Keep this table current: it's the list of stores to update on every release.
 
 | Store | Submitted | Pull request | Status (2026-11-13) | Store's copy of the package |
 |---|---|---|---|---|
+| Portainer templates (Lissy93) | 2026-11-13 | row in `sources.csv` (see below) | Template lives in this repo and is fetched nightly, so updates need no PR | `packaging/portainer/` (here) |
 | Dokploy | 2026-11-13 | [Dokploy/templates#1321](https://github.com/Dokploy/templates/pull/1321) | Open; all checks pass; tested on Dokploy v0.29.0 | `blueprints/life-console/` |
 | Cosmos | 2026-11-13 | [azukaar/cosmos-servapps-official#342](https://github.com/azukaar/cosmos-servapps-official/pull/342) | Open; validator clean | `servapps/LifeConsole/` |
 | CasaOS | 2026-11-13 | [IceWhaleTech/CasaOS-AppStore#1148](https://github.com/IceWhaleTech/CasaOS-AppStore/pull/1148) | Open; validate + SonarCloud pass | `Apps/LifeConsole/` |
@@ -114,6 +115,7 @@ Submitting needs a fork under TJ-coding: the forks are `TJ-coding/dokploy-templa
 | Store | Files | What to change |
 |---|---|---|
 | Dokploy | `dokploy/life-console/docker-compose.yml`, `meta.json` | image tag `0.1.0` → `X.Y.Z`; `"version"` |
+| Portainer | `portainer/docker-compose.yml` | nothing: it runs `latest`, and Lissy93/portainer-templates re-fetches the template nightly |
 | Cosmos | `cosmos/LifeConsole/cosmos-compose.json` | nothing within `0.1.x` (follows `0.1` and auto-updates); on a new minor, image tag `0.1` → `X.Y` |
 | CasaOS | `casaos/LifeConsole/docker-compose.yml` | image tag; `x-casaos.version`, `update_at`, `release_notes` |
 | Umbrel | `umbrel/life-console/docker-compose.yml`, `umbrel-app.yml` | image tag **and** digest (`docker buildx imagetools inspect ghcr.io/tj-coding/life-console:X.Y.Z`); `version`, `releaseNotes` |
