@@ -70,22 +70,7 @@ async function submit() {
 
 <template>
   <div class="auth-page">
-    <!-- the pitch: the logo's figure faces right, toward the sign-in card -->
-    <section class="auth-pitch">
-      <img class="auth-hero" src="/media/logo-tile.webp" width="760" height="609" alt="Life Console logo: a white-haired figure with a halo and a white cat" decoding="async" fetchpriority="high" />
-      <div class="pitch-text">
-        <p class="kicker mono">Military-grade planning for your own goals</p>
-        <p class="headline">Know what to do right now.</p>
-        <p class="lede">Life Console turns your goals into a week plan, and your week plan into the next thing to do.</p>
-      </div>
-    </section>
-    <ul class="perks">
-      <li><span class="icon sm">radar</span><span><b>Today at a glance</b> — the current block counting down, and what's next.</span></li>
-      <li><span class="icon sm">calendar_month</span><span><b>Plan the week in three moves</b> — drag tasks onto days and level the load.</span></li>
-      <li><span class="icon sm">alarm</span><span><b>Deadlines as time left</b>, not dates, so nothing sneaks up on you.</span></li>
-      <li><span class="icon sm">lock_open</span><span><b>Free and open source.</b> Works offline, installs on your phone, syncs your devices.</span></li>
-    </ul>
-
+    <img class="auth-hero" src="/media/logo-tile.webp" width="760" height="609" alt="Life Console logo: a white-haired figure with a halo and a white cat" decoding="async" fetchpriority="high" />
     <form ref="card" class="auth-card panel" @submit.prevent="submit">
       <h1>{{ TITLES[mode] }}</h1>
 
@@ -140,29 +125,9 @@ async function submit() {
 </template>
 
 <style scoped>
-/* phone: logo + headline, then the card (the thing to do), then the perks; desktop: pitch left, card right */
-.auth-page { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 400px); grid-template-areas: 'pitch' 'card' 'perks'; justify-content: center; align-content: center; gap: 20px; padding: 20px 16px 32px; background: var(--bg); }
-.auth-pitch { grid-area: pitch; text-align: center; }
-.auth-card { grid-area: card; }
-.perks { grid-area: perks; }
-.auth-hero { display: block; width: 132px; height: auto; margin: 0 auto 12px; }
-.kicker { display: none; margin: 0 0 8px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
-.headline { margin: 0; font: 700 26px/1.15 Inter, sans-serif; color: var(--text); text-wrap: balance; }
-.lede { margin: 8px 0 0; font-size: 15px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
-.perks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.perks li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.45; color: var(--muted); }
-.perks b { color: var(--text); font-weight: 600; }
-.perks .icon { color: var(--accent); margin-top: 1px; flex: none; }
-@media (min-width: 880px) {
-  .auth-page { grid-template-columns: minmax(0, 460px) 400px; grid-template-rows: auto auto; grid-template-areas: 'pitch card' 'perks card'; column-gap: 64px; row-gap: 24px; align-items: start; padding: 40px 32px; }
-  .auth-pitch { text-align: left; align-self: end; }
-  .auth-hero { width: 220px; margin: 0 0 20px; }
-  .kicker { display: block; }
-  .headline { font-size: 38px; }
-  .lede { font-size: 17px; }
-  .auth-card { align-self: center; }
-}
-.auth-card { width: 100%; max-width: 400px; padding: 22px; display: flex; flex-direction: column; gap: 14px; justify-self: center; }
+.auth-page { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 20px 16px 32px; background: var(--bg); }
+.auth-hero { display: block; width: 200px; max-width: 55vw; height: auto; }
+.auth-card { width: 100%; max-width: 400px; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
 h1 { margin: 4px 0 0; font: 600 22px/28px Inter, sans-serif; }
 .big-in { height: 40px; font-size: 15px; padding: 0 10px; }
 .auth-go { height: 40px; font-size: 15px; justify-content: center; }
