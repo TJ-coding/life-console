@@ -1,0 +1,32 @@
+manifestVersion: 1
+id: life-console
+name: Life Console
+tagline: Keyboard-first planner that shows what to do right now
+category: productivity
+version: "0.1.0"
+port: 8370
+description: >-
+  Life Console answers one question all day: what should I be doing right now? The Command Center shows the current time block with a live countdown, the task to work on, what comes next and the next deadline.
+
+
+  Plan the week in three moves: move tasks from a backlog into a daily workload budget, then onto that day's timeline. Auto time-box fills free gaps by priority. Deadlines show as live countdowns, and strategic plans break a vision into goals and milestones that each task can link to.
+
+
+  It is keyboard-first, with a command palette, single-key shortcuts and one-line quick-add that parses estimates, due dates, priorities and goal links. It supports multiple accounts, works offline and installs on phones.
+
+
+  The first account you create becomes the admin.
+developer: TJ-coding
+website: https://life-console.dev
+submitter: TJ-coding
+submission: ""
+repo: https://github.com/TJ-coding/life-console
+support: https://github.com/TJ-coding/life-console/issues
+gallery: []
+releaseNotes: ""
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+storage:
+  dataRoot: data

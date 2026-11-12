@@ -1,0 +1,61 @@
+captainVersion: 4
+services:
+    $$cap_appname:
+        image: ghcr.io/tj-coding/life-console:$$cap_lc_version
+        restart: always
+        environment:
+            DATABASE_URL: postgres://lifeconsole:$$cap_db_pass@srv-captain--$$cap_appname-db:5432/lifeconsole
+            APP_URL: http://$$cap_appname.$$cap_root_domain
+            TRUST_PROXY: '1'
+            SIGNUPS: open
+            AUTH_PASSWORD: 'on'
+            UPDATE_CHECK: 'off'
+            BACKUP_DIR: /backups
+        volumes:
+            - $$cap_appname-backups:/backups
+        depends_on:
+            - $$cap_appname-db
+        caproverExtra:
+            containerHttpPort: '8080'
+    $$cap_appname-db:
+        image: postgres:$$cap_postgres_version
+        restart: always
+        environment:
+            POSTGRES_USER: lifeconsole
+            POSTGRES_PASSWORD: $$cap_db_pass
+            POSTGRES_DB: lifeconsole
+        volumes:
+            - $$cap_appname-db-data:/var/lib/postgresql/data
+        caproverExtra:
+            notExposeAsWebApp: 'true'
+caproverOneClickApp:
+    variables:
+        - id: $$cap_lc_version
+          label: Life Console version
+          defaultValue: '0.1.0'
+          description: Image tag. Releases are listed at https://github.com/TJ-coding/life-console/releases
+          validRegex: /^([^\s^\/])+$/
+        - id: $$cap_postgres_version
+          label: PostgreSQL version
+          defaultValue: '17-alpine'
+          description: Use PostgreSQL 17 or older; the app's backups use the version 17 client.
+          validRegex: /^([^\s^\/])+$/
+        - id: $$cap_db_pass
+          label: Database password
+          defaultValue: $$cap_gen_random_hex(32)
+          validRegex: /^([a-zA-Z0-9])+$/
+    instructions:
+        start: >-
+            Life Console is a keyboard-first planner: time-block your week from a backlog, count down deadlines
+            and link each task to the goal it serves. This installs the app and a PostgreSQL database.
+        end: >-
+            Life Console is starting at http://$$cap_appname.$$cap_root_domain (it migrates the database on first start, which takes a few seconds).
+
+
+            The first account you create becomes the admin. Turn on HTTPS for the app in CapRover, then change APP_URL to the https:// address,
+            so sign-in cookies are marked secure and phones can receive push reminders.
+            To stop others signing up, set SIGNUPS to off.
+    displayName: Life Console
+    isOfficial: true
+    description: Keyboard-first planner that shows what to do right now. Time-block your week, count down deadlines and link tasks to goals.
+    documentation: https://life-console.dev/docs/self-hosting

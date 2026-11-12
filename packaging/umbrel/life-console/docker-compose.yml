@@ -1,0 +1,33 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: life-console_app_1
+      APP_PORT: 8080
+
+  app:
+    image: ghcr.io/tj-coding/life-console:0.1.0@sha256:1973e9d8178d0c3167f806ac727ab16d93229b83266e5adc4b10c8d0ae786dc8
+    user: "1000:1000"
+    restart: on-failure
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: "postgres://lifeconsole:${APP_LIFE_CONSOLE_DB_PASSWORD}@life-console_db_1:5432/lifeconsole"
+      SIGNUPS: "open"
+      AUTH_PASSWORD: "on"
+      UPDATE_CHECK: "off"
+      BACKUP_DIR: /backups
+    volumes:
+      - ${APP_DATA_DIR}/data/backups:/backups
+
+  db:
+    image: postgres:17-alpine@sha256:e5d2edd28b1f8d40a0a6c0c9cdc545b19b56a0d5d88f94bc11a97d970d4700d0
+    user: "1000:1000"
+    restart: on-failure
+    environment:
+      POSTGRES_USER: lifeconsole
+      POSTGRES_PASSWORD: ${APP_LIFE_CONSOLE_DB_PASSWORD}
+      POSTGRES_DB: lifeconsole
+    volumes:
+      - ${APP_DATA_DIR}/data/db:/var/lib/postgresql/data

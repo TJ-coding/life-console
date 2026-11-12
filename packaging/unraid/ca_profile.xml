@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<Maintainer>
+  <Profile>Templates for Life Console, an open-source, keyboard-first planner for time-blocking, deadlines and goals.</Profile>
+  <Icon>https://raw.githubusercontent.com/TJ-coding/life-console/main/packaging/unraid/icon.png</Icon>
+  <WebPage>https://life-console.dev</WebPage>
+  <GitHub>https://github.com/TJ-coding/life-console</GitHub>
+</Maintainer>

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>life-console</Name>
+  <Repository>ghcr.io/tj-coding/life-console:0.1</Repository>
+  <Registry>https://github.com/TJ-coding/life-console/pkgs/container/life-console</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <ExtraParams>--user 99:100</ExtraParams>
+  <Support>https://github.com/TJ-coding/life-console/issues</Support>
+  <Project>https://life-console.dev</Project>
+  <Overview>Keyboard-first planner that shows what to do right now: the current time block with a live countdown, a week planner (backlog, daily budget, timeline), deadlines as countdowns and goals that tasks link to. Multi-user, works offline, installs on phones.&#xD;
+&#xD;
+Needs PostgreSQL (version 17 or older): install a PostgreSQL 17 container first, create a database and user for Life Console, and put its address in Database URL. The first account you create becomes the admin.</Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/TJ-coding/life-console/main/packaging/unraid/templates/life-console.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/TJ-coding/life-console/main/packaging/unraid/icon.png</Icon>
+  <Config Name="Web UI port" Target="8080" Default="8080" Mode="tcp" Description="Port for the web interface" Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Database URL" Target="DATABASE_URL" Default="postgres://lifeconsole:CHANGE_ME@IP_OF_POSTGRES:5432/lifeconsole" Mode="" Description="PostgreSQL connection string: postgres://user:password@host:5432/database" Type="Variable" Display="always" Required="true" Mask="true">postgres://lifeconsole:CHANGE_ME@IP_OF_POSTGRES:5432/lifeconsole</Config>
+  <Config Name="Public address" Target="APP_URL" Default="" Mode="" Description="Optional: the address people use, e.g. https://planner.example.com (links in emails; secure cookies over https)" Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Sign-ups" Target="SIGNUPS" Default="open|off" Mode="" Description="open: anyone who can reach the app can create an account; off: no new accounts" Type="Variable" Display="always" Required="true" Mask="false">open</Config>
+  <Config Name="Update notices" Target="UPDATE_CHECK" Default="off|on" Mode="" Description="Tell admins about newer builds (update through Unraid either way)" Type="Variable" Display="advanced" Required="false" Mask="false">off</Config>
+  <Config Name="Backups" Target="/backups" Default="/mnt/user/appdata/life-console/backups" Mode="rw" Description="Database dumps taken before each upgrade" Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/life-console/backups</Config>
+</Container>
