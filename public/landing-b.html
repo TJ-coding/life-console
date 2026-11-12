@@ -305,6 +305,16 @@ h1 { font: 700 clamp(34px, 5.4vw, 60px)/1.06 var(--sans); letter-spacing: -.03em
 .method li:not(:last-child)::after { content: '→'; margin: 0 16px; color: var(--muted); font-weight: 400; }
 @media (max-width: 520px) { .method { flex-direction: column; gap: 10px; } .method li:not(:last-child)::after { content: none; } }
 .hero .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 46ch; margin: 0 0 28px; }
+/* closing call to action: the logo on the left faces right, toward the line and the Try it now button.
+   Its background is transparent, so it sits on any dark section; the light theme puts it on a dark rounded tile */
+.closer { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 40px; align-items: center; margin-top: 48px; }
+.closer-logo { width: 100%; }
+@media (prefers-color-scheme: light) { .closer-logo { border-radius: 14px; background: #0e1116; } }
+.closer-line { font: 700 clamp(26px, 3.4vw, 38px)/1.15 var(--sans); letter-spacing: -.02em; margin: 0 0 20px; }
+@media (max-width: 760px) {
+  .closer { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .closer-logo { width: 220px; }
+}
 .ctas { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .ctas .bmc { display: block; line-height: 0; border-radius: 6px; }
 .ctas .bmc img { height: 41px; width: auto; border-radius: 6px; }
@@ -725,10 +735,16 @@ footer a { color: var(--muted); }
         <details><summary>Does it work on my phone and offline?</summary><p>Yes. It installs from the browser on Android, iPhone and desktop, keeps working offline, and syncs when you're back online.</p></details>
         <details><summary>Does it support Pomodoro?</summary><p>Yes. With Pomodoro on (25-minute work, 5-minute short and 15-minute long breaks by default), plans move in whole pomodoros and the breaks are laid out on the timeline.</p></details>
       </div>
-      <div class="ctas" style="margin-top:48px">
-        <a class="btn primary big" href="/app" data-umami-event="open-app" data-umami-event-place="end">Try it now</a>
-        <a class="btn" href="https://github.com/TJ-coding/life-console" rel="noopener" data-umami-event="github" data-umami-event-place="end">★ Star on GitHub</a>
-        <a class="bmc" href="https://buymeacoffee.com/tjcoding" rel="noopener" data-umami-event="coffee" data-umami-event-place="end"><img src="/media/bmc-button.png" alt="Buy me a coffee" width="146" height="41" /></a>
+      <div class="closer">
+        <img class="closer-logo" src="/media/logo.webp" width="760" height="609" alt="Life Console logo: a white-haired figure with a halo and a white cat" loading="lazy" decoding="async" />
+        <div>
+          <p class="closer-line">Know what to do right now.</p>
+          <div class="ctas">
+            <a class="btn primary big" href="/app" data-umami-event="open-app" data-umami-event-place="end">Try it now</a>
+            <a class="btn" href="https://github.com/TJ-coding/life-console" rel="noopener" data-umami-event="github" data-umami-event-place="end">★ Star on GitHub</a>
+            <a class="bmc" href="https://buymeacoffee.com/tjcoding" rel="noopener" data-umami-event="coffee" data-umami-event-place="end"><img src="/media/bmc-button.png" alt="Buy me a coffee" width="146" height="41" /></a>
+          </div>
+        </div>
       </div>
     </div>
   </section>
