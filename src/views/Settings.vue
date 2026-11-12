@@ -1,7 +1,7 @@
 <script setup>
 // S-90 · Settings — install on phone, notifications, sync, appearance, data.
 import { computed, onMounted, ref } from 'vue'
-import { state, ui, toggleTheme, resetDemo, clearPlanner, toast, normalizeState } from '../store'
+import { state, ui, toggleTheme, setAccent, ACCENTS, resetDemo, clearPlanner, toast, normalizeState } from '../store'
 import { sync, pull, deviceName, setDeviceName } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
 import { rhythm, wallMin } from '../../server/pomodoro.mjs'
@@ -338,6 +338,9 @@ const reload = () => window.location.reload()
     <section class="panel">
       <div class="panel-h"><span class="icon sm">palette</span><h2>Appearance</h2></div>
       <div class="panel-b row"><span class="grow">Theme: <b class="mono">{{ ui.theme }}</b></span><button class="btn" @click="toggleTheme">Toggle light / dark</button></div>
+      <div class="panel-b row"><span class="grow">Accent colour</span>
+        <button v-for="a in ACCENTS" :key="a" class="btn" :class="{ active: ui.accent === a }" :aria-pressed="ui.accent === a" @click="setAccent(a)"><span class="swatch" :class="a"></span>{{ a === 'cyan' ? 'Cyan (default)' : 'Green' }}</button>
+      </div>
     </section>
     <section v-if="analyticsAvailable()" class="panel">
       <div class="panel-h"><span class="icon sm">shield</span><h2>Privacy</h2><span class="spacer"></span><span class="tiny muted">applies to all your devices</span></div>
@@ -396,4 +399,7 @@ const reload = () => window.location.reload()
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 700px) { .steps, .grid { grid-template-columns: 1fr; } }
+.swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.swatch.cyan { background: #2bd4e6; }
+.swatch.green { background: #3fb68b; }
 </style>

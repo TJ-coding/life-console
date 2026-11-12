@@ -42,6 +42,9 @@
   --cat-kaizen: #eda100;
   color-scheme: light;
 }
+/* accent colour (Settings → Appearance): cyan from the logo is the default; green is the original */
+:root[data-accent='green'] { --accent: #3fb68b; }
+:root[data-theme='light'][data-accent='green'] { --accent: #1e8a63; }
 
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }

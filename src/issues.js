@@ -57,6 +57,7 @@ function context() {
     app: appMode(),
     viewport: `${window.innerWidth}×${window.innerHeight}`,
     theme: ui.theme,
+    accent: ui.accent,
     build,
     selectedId: ui.selectedId ?? '',
     userAgent: navigator.userAgent,
