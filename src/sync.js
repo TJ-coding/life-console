@@ -121,7 +121,7 @@ function fail(err) {
 }
 
 const GUEST_MSG = 'Not signed in — your planner is saved in this browser only'
-/** "Try it without an account" on the sign-in screen: open the app on this browser's planner, no syncing. */
+/** "Try the demo" on the sign-in screen: open the app on this browser's planner, no syncing. */
 export function enterGuest() {
   startGuest()
   sync.status = 'guest'

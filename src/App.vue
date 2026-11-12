@@ -247,8 +247,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </div>
         <div v-if="sync.status === 'guest'" class="banner guest">
           <span class="icon sm">person_off</span>
-          <span class="grow">You're trying Life Console without an account<span class="muted"> · this planner is saved in this browser only</span></span>
-          <button class="btn sm primary" @click="leaveGuest">Sign in to keep it</button>
+          <span class="grow">You're in the demo<span class="muted"> · changes stay in this browser</span></span>
+          <button class="btn sm primary" @click="leaveGuest">Sign up to keep it</button>
         </div>
         <div v-if="sync.status === 'signed-out'" class="banner">
           <span class="icon sm">lock</span>Your sign-in expired, so changes aren't syncing.

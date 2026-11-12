@@ -77,7 +77,7 @@ export function trackSignInScreen(inApp, fromGuest = false) {
   load().then(() => window.umami?.track((p) => ({ ...p, url: '/app/sign-in', title: 'Sign in', referrer: '', data }))).catch(() => {})
 }
 
-/** A button on the sign-in screen: 'signin-google', 'signin-open-browser', 'signin-copy-link', 'signin-error', 'signin-guest' (try it without an account), 'signin-guest-back'. */
+/** A button on the sign-in screen: 'signin-google', 'signin-open-browser', 'signin-copy-link', 'signin-error', 'signin-guest' (Try the demo), 'signin-guest-back'. */
 export function trackSignInEvent(name, data = {}) {
   if (!signedOutAllowed()) return
   data = withVariant(data)

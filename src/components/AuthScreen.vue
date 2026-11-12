@@ -36,7 +36,7 @@ function google() {
   setTimeout(signInWithGoogle, 150) // let the event leave before the page navigates away
 }
 
-// "Try it without an account": the demo planner opens right away in this browser, and signing in later keeps it.
+// "Try the demo": the demo planner opens right away in this browser, and signing in later keeps it.
 // Only where someone could go on to make an account (a closed server has no use for it), and not mid password reset.
 const canTry = computed(() => auth.signups === 'open' && !auth.resetToken && (mode.value === 'signin' || mode.value === 'signup'))
 function tryIt() {
@@ -88,8 +88,6 @@ async function submit() {
 
     <form ref="card" class="auth-card panel" @submit.prevent="submit">
       <h1>{{ TITLES[mode] }}</h1>
-      <p v-if="auth.wasGuest && (mode === 'signin' || mode === 'signup')" class="small muted sub">Sign in and the planner you made in this browser comes with you.</p>
-      <p v-else-if="mode === 'signin' && auth.google && !auth.password" class="small muted sub">One click with Google. No password to make, nothing to install.</p>
 
       <div v-if="inApp && auth.google" class="inapp" role="note">
         <p><b>Open this page in your browser to sign in.</b> Google doesn't allow sign-in inside an app's built-in browser.</p>
@@ -103,7 +101,6 @@ async function submit() {
           <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
           Continue with Google
         </button>
-        <p v-if="auth.google && !auth.password" class="tiny muted">New here? Continuing with Google creates your account. Life Console never sees or stores a password.</p>
         <div v-if="auth.google && auth.password" class="auth-or tiny muted"><span>or with email</span></div>
       </template>
 
@@ -132,11 +129,10 @@ async function submit() {
       </template>
       <p v-else-if="error" class="auth-msg danger" role="alert">{{ error }}</p>
       <div v-if="canTry" class="try">
-        <div class="auth-or tiny muted"><span>{{ auth.wasGuest ? 'or' : 'not ready to sign in?' }}</span></div>
+        <div class="auth-or tiny muted"><span>or</span></div>
         <button type="button" class="btn try-btn" @click="tryIt">
-          <span class="icon sm">{{ auth.wasGuest ? 'arrow_back' : 'play_arrow' }}</span>{{ auth.wasGuest ? 'Back to my planner' : 'Try it without an account' }}
+          <span class="icon sm">{{ auth.wasGuest ? 'arrow_back' : 'play_arrow' }}</span>{{ auth.wasGuest ? 'Back to my planner' : 'Try the demo' }}
         </button>
-        <p v-if="!auth.wasGuest" class="tiny muted">Opens a sample planner right away. It stays in this browser until you sign in, then it's yours to keep.</p>
       </div>
       <p class="auth-legal tiny muted">By continuing you agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </form>
@@ -168,7 +164,6 @@ async function submit() {
 }
 .auth-card { width: 100%; max-width: 400px; padding: 22px; display: flex; flex-direction: column; gap: 14px; justify-self: center; }
 h1 { margin: 4px 0 0; font: 600 22px/28px Inter, sans-serif; }
-.sub { margin: -8px 0 0; }
 .big-in { height: 40px; font-size: 15px; padding: 0 10px; }
 .auth-go { height: 40px; font-size: 15px; justify-content: center; }
 .auth-go:disabled { opacity: 0.6; }
@@ -183,7 +178,6 @@ h1 { margin: 4px 0 0; font: 600 22px/28px Inter, sans-serif; }
 .google-btn { height: 44px; display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: 2px; border: 1px solid var(--border); background: #fff; color: #1f1f1f; font: 600 15px/1 Inter, sans-serif; cursor: pointer; }
 .google-btn:hover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
 .try { display: flex; flex-direction: column; gap: 10px; }
-.try p { margin: 0; }
 .try-btn { height: 40px; justify-content: center; font: 500 15px/1 Inter, sans-serif; border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); color: var(--text); }
 .try-btn .icon { color: var(--accent); }
 .auth-legal { margin: 0; border-top: 1px solid var(--border); padding-top: 10px; }
