@@ -1,6 +1,8 @@
 # Life Console: one image for the app (default) and the backup job (`node server/backup.mjs`).
 # ---- build the front end ----
-FROM node:22-alpine AS build
+# on the build machine's own platform: the output (static files) is the same for every target, and it skips
+# emulating the Vite build for arm64
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund

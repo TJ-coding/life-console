@@ -1,6 +1,8 @@
 # Every push / PR: tests against a real PostgreSQL, build, and a smoke test of the full compose stack,
 # including an UPGRADE test (previous release → this build on the same database).
-# On main: publish the image to GHCR (ghcr.io/<owner>/life-console:latest and :sha-<short>), then deploy.
+# On main: publish the image to GHCR for linux/amd64 and linux/arm64 (ghcr.io/<owner>/life-console:latest and
+# :sha-<short>), then deploy. On a release tag vX.Y.Z: give that commit's published image the tags X.Y.Z and X.Y
+# (no rebuild; app stores pin these).
 #
 # Deploy target (repository variables/secrets; the deploy job is skipped until they're set):
 #   DOKPLOY_URL (var)  ·  DOKPLOY_COMPOSE_ID (var, preferred) or DOKPLOY_APPLICATION_ID (var)
@@ -10,6 +12,7 @@ name: build-and-deploy
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -77,13 +80,32 @@ jobs:
           LC_IMAGE=life-console LC_VERSION=ci docker compose exec -T app node server/cli.mjs users | grep -q ci@example.com
           docker compose logs app | tail -20
           docker compose down -v
-      - name: Publish to GHCR
+      - name: Set up QEMU (arm64 image)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Buildx
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: docker/setup-buildx-action@v3
+      - name: Publish to GHCR (amd64 + arm64)
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           SHA=sha-$(git rev-parse --short=7 HEAD)
-          for t in latest "$SHA"; do docker tag life-console:ci "$IMAGE:$t"; docker push "$IMAGE:$t"; done
-          echo "Published $IMAGE:$SHA" >> "$GITHUB_STEP_SUMMARY"
+          docker buildx build --platform linux/amd64,linux/arm64 --push \
+            --build-arg LC_BUILD_SHA=${{ github.sha }} \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            -t "$IMAGE:latest" -t "$IMAGE:$SHA" .
+          echo "Published $IMAGE:$SHA (linux/amd64, linux/arm64)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Release tags (vX.Y.Z → X.Y.Z and X.Y on the image main already published)
+        if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          SHA=sha-$(git rev-parse --short=7 HEAD)
+          V=${GITHUB_REF_NAME#v}; MINOR=${V%.*}
+          docker buildx imagetools inspect "$IMAGE:$SHA" >/dev/null || { echo "::error::$IMAGE:$SHA isn't published: tag a commit that main has built"; exit 1; }
+          docker buildx imagetools create -t "$IMAGE:$V" -t "$IMAGE:$MINOR" "$IMAGE:$SHA"
+          echo "Tagged $IMAGE:$SHA as $V and $MINOR" >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     needs: image
