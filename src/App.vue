@@ -12,14 +12,14 @@ import IssueDialog from './components/IssueDialog.vue'
 import SelectionBar from './components/SelectionBar.vue'
 import { issues, openIssueDialog, openCount as openIssueCount } from './issues'
 import { useNow } from './now'
-import { sync, chooseSync } from './sync'
+import { sync, chooseSync, leaveGuest } from './sync'
 import { auth } from './auth'
 import { serverUpdate, showBanner as showUpdate, dismissBanner as dismissUpdate } from './updates'
 import AuthScreen from './components/AuthScreen.vue'
 import TourOverlay from './components/TourOverlay.vue'
 
-const SYNC_TEXT = { outdated: 'RELOAD', choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', error: 'ERROR' }
-const SYNC_ICON = { outdated: 'system_update', choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', error: 'error' }
+const SYNC_TEXT = { outdated: 'RELOAD', choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', guest: 'GUEST', error: 'ERROR' }
+const SYNC_ICON = { outdated: 'system_update', choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', guest: 'person_off', error: 'error' }
 const TABS = [
   { to: '/', icon: 'radar', label: 'Today', key: 'today' },
   { to: '/week', icon: 'calendar_month', label: 'Plan', key: 'week' },
@@ -47,11 +47,11 @@ const clock = computed(() => {
 const T = computed(() => todayISO())
 const reload = () => window.location.reload()
 
-/** Nobody signed in (or a password-reset link is open): the sign-in screen replaces the app. */
-const showAuth = computed(() => auth.status === 'signed-out' || !!auth.resetToken)
+/** Nobody signed in (or a password-reset link is open): the sign-in screen replaces the app, unless they chose to try it first. */
+const showAuth = computed(() => (auth.status === 'signed-out' && !auth.guest) || !!auth.resetToken)
 // a new account's demo planner carries tour: 'pending'; start the tour once the first sync has settled, so an
 // existing account signing in on a new device (whose server copy has no pending tour) never sees it
-watch(() => state.tour === 'pending' && !showAuth.value && ['synced', 'local'].includes(sync.status) && !route.meta.bare, (go) => {
+watch(() => state.tour === 'pending' && !showAuth.value && ['synced', 'local', 'guest'].includes(sync.status) && !route.meta.bare, (go) => {
   if (go) setTimeout(() => { if (state.tour === 'pending' && !showAuth.value) ui.tourOpen = true }, 600)
 }, { immediate: true })
 const openCount = computed(() => state.todos.filter((t) => !t.done && isLeaf(t)).length)
@@ -245,6 +245,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <router-link class="btn sm primary" to="/settings#updates" @click="dismissUpdate">{{ serverUpdate.info.canApply ? 'Update' : 'How to update' }}</router-link>
           <button class="btn sm icon-only" title="Hide until the next version" @click="dismissUpdate"><span class="icon sm">close</span></button>
         </div>
+        <div v-if="sync.status === 'guest'" class="banner guest">
+          <span class="icon sm">person_off</span>
+          <span class="grow">You're trying Life Console without an account<span class="muted"> · this planner is saved in this browser only</span></span>
+          <button class="btn sm primary" @click="leaveGuest">Sign in to keep it</button>
+        </div>
         <div v-if="sync.status === 'signed-out'" class="banner">
           <span class="icon sm">lock</span>Your sign-in expired, so changes aren't syncing.
           <button class="btn sm" @click="reload">Reload to sign in</button>
@@ -360,6 +365,7 @@ nav { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
 .synclink { color: inherit; }
 .synclink:hover .muted { color: var(--text); }
 .banner.update { background: color-mix(in srgb, var(--info) 12%, var(--surface)); border-bottom-color: var(--info); }
+.banner.guest { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-bottom-color: var(--accent); flex-wrap: wrap; }
 .banner { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: color-mix(in srgb, var(--danger) 12%, var(--surface)); border-bottom: 1px solid var(--danger); color: var(--text); font-size: 12px; }
 .tabbar { display: none; }
 /* phone: bottom tab bar instead of the sidebar; respect the notch / home indicator */

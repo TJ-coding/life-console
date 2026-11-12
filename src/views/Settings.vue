@@ -2,7 +2,7 @@
 // S-90 · Settings — install on phone, notifications, sync, appearance, data.
 import { computed, onMounted, ref } from 'vue'
 import { state, ui, toggleTheme, setAccent, ACCENTS, resetDemo, clearPlanner, toast, normalizeState } from '../store'
-import { sync, pull, deviceName, setDeviceName } from '../sync'
+import { sync, pull, deviceName, setDeviceName, leaveGuest } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
 import { rhythm, wallMin } from '../../server/pomodoro.mjs'
 import { auth, signOut, changePassword, deleteAccount, rename } from '../auth'
@@ -99,7 +99,7 @@ const KINDS = [
   { key: 'wellbeing', label: 'Wellbeing', desc: 'Caffeine cutoff warning and a wind-down reminder before bedtime.' },
   { key: 'pomodoro', label: 'Pomodoro switches', desc: 'In a pomodoro sitting: “Break” when each pomodoro ends and “Back to work” when the break is over.' },
 ]
-const SYNC_LABEL = { outdated: 'Update needed', choose: 'Choose copy', starting: 'Connecting…', local: 'Local only', syncing: 'Saving…', synced: 'Synced', offline: 'Offline', 'signed-out': 'Signed out', error: 'Error' }
+const SYNC_LABEL = { outdated: 'Update needed', choose: 'Choose copy', starting: 'Connecting…', local: 'Local only', syncing: 'Saving…', synced: 'Synced', offline: 'Offline', 'signed-out': 'Signed out', guest: 'Not signed in', error: 'Error' }
 const fmtTime = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—')
 const isThis = (d) => d.endpoint === push.endpoint
 const reload = () => window.location.reload()
@@ -323,13 +323,14 @@ const reload = () => window.location.reload()
     <!-- sync -->
     <section class="panel">
       <div class="panel-h"><span class="icon sm">sync</span><h2>Sync</h2><span class="spacer"></span>
-        <span class="chip" :class="{ goal: sync.status === 'synced', plan: ['offline', 'syncing'].includes(sync.status), risk: ['signed-out', 'error'].includes(sync.status) }">{{ SYNC_LABEL[sync.status] }}</span></div>
+        <span class="chip" :class="{ goal: sync.status === 'synced', plan: ['offline', 'syncing'].includes(sync.status), risk: ['signed-out', 'guest', 'error'].includes(sync.status) }">{{ SYNC_LABEL[sync.status] }}</span></div>
       <div class="panel-b col small">
         <div class="row"><span class="muted">Server version</span><b class="mono">v{{ sync.version }}</b><span class="spacer"></span><span class="muted">last sync</span><b class="mono">{{ fmtTime(sync.lastSync) }}</b></div>
         <p v-if="sync.message" :class="sync.status === 'signed-out' || sync.status === 'error' ? 'danger' : 'muted'">{{ sync.message }}</p>
         <div class="row">
           <button class="btn" :disabled="sync.status === 'local'" @click="pull"><span class="icon sm">refresh</span>Sync now</button>
           <button v-if="sync.status === 'signed-out'" class="btn primary" @click="reload">Reload to sign in</button>
+          <button v-if="sync.status === 'guest'" class="btn primary" @click="leaveGuest">Sign in to keep this planner</button>
         </div>
         <p class="tiny muted">Every change is saved to the server within a couple of seconds and shows up on your other devices. If two devices edit at once, both edits are merged (a clash on the same field goes to the newest edit), and the server keeps hourly snapshots of your planner.</p>
       </div>

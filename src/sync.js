@@ -9,7 +9,7 @@
 import { reactive, watch, nextTick } from 'vue'
 import { state, normalizeState, toast, hadLocalData, migrateDoc, SCHEMA_VERSION } from './store'
 import { merge3 } from './merge'
-import { auth, bindUser } from './auth'
+import { auth, bindUser, startGuest, endGuest } from './auth'
 
 const K = { base: 'life-console/sync-base', version: 'life-console/sync-version', dirty: 'life-console/sync-dirty', edited: 'life-console/sync-edited', device: 'life-console/device' }
 const ls = {
@@ -18,7 +18,7 @@ const ls = {
 }
 
 export const sync = reactive({
-  status: 'starting', // starting | choose | local | syncing | synced | offline | signed-out | error
+  status: 'starting', // starting | choose | local | syncing | synced | offline | signed-out | guest | error
   outdated: false, // a newer app version is deployed (or the server holds a newer data schema): reload
   pending: null, // server copy awaiting the user's choice (first sync of a device that has its own data)
   version: Number(ls.get(K.version)) || 0,
@@ -43,7 +43,7 @@ let busy = false
 
 class AuthError extends Error {}
 /** Not syncing in these states (no server, waiting for a choice, outdated code, signed out). */
-const SKIP = ['local', 'choose', 'outdated', 'signed-out']
+const SKIP = ['local', 'choose', 'outdated', 'signed-out', 'guest']
 /** This tab's build = its hashed entry script (matches the server's `build` when up to date). */
 const MY_BUILD = (document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src') || '').split('/').pop() || 'dev'
 const checkBuild = (h) => { if (h?.build && MY_BUILD !== 'dev' && h.build !== 'dev' && h.build !== MY_BUILD) sync.outdated = true }
@@ -105,6 +105,12 @@ async function applyRemote(remote) {
   applying = false
 }
 function fail(err) {
+  if (err instanceof AuthError && auth.guest && !err.proxy) {
+    sync.status = 'guest' // trying it without an account: nothing to sync until they sign in
+    sync.message = GUEST_MSG
+    auth.status = 'signed-out'
+    return
+  }
   if (err instanceof AuthError) {
     sync.status = 'signed-out'
     sync.message = err.proxy ? 'Sign-in expired — reload to sign in again' : 'Signed out — sign in to sync'
@@ -112,6 +118,20 @@ function fail(err) {
   }
   else if (!navigator.onLine || err instanceof TypeError) { sync.status = 'offline'; sync.message = 'Offline — changes are kept and will sync' }
   else { sync.status = 'error'; sync.message = err.message }
+}
+
+const GUEST_MSG = 'Not signed in — your planner is saved in this browser only'
+/** "Try it without an account" on the sign-in screen: open the app on this browser's planner, no syncing. */
+export function enterGuest() {
+  startGuest()
+  sync.status = 'guest'
+  sync.message = GUEST_MSG
+}
+/** Leave guest mode for the sign-in screen (to keep the planner in an account). */
+export function leaveGuest() {
+  endGuest()
+  sync.status = 'signed-out'
+  sync.message = ''
 }
 
 async function pushNow(force = false) {

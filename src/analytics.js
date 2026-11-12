@@ -66,15 +66,18 @@ export function landingVariant(cookie = typeof document === 'undefined' ? '' : d
 }
 const withVariant = (data) => { const lp = landingVariant(); return lp ? { ...data, lp } : data }
 
-/** The sign-in screen was shown. `inApp`: an in-app browser (Reddit, Instagram…) where Google refuses to sign in. */
-export function trackSignInScreen(inApp) {
+/**
+ * The sign-in screen was shown. `inApp`: an in-app browser (Reddit, Instagram…) where Google refuses to sign in.
+ * `fromGuest`: they tried the app without an account first and came back to keep their planner.
+ */
+export function trackSignInScreen(inApp, fromGuest = false) {
   if (!signedOutAllowed()) return
   const from = linkSource()
-  const data = withVariant(from ? { inApp, from } : { inApp })
+  const data = withVariant({ inApp, ...(from && { from }), ...(fromGuest && { fromGuest }) })
   load().then(() => window.umami?.track((p) => ({ ...p, url: '/app/sign-in', title: 'Sign in', referrer: '', data }))).catch(() => {})
 }
 
-/** A button on the sign-in screen: 'signin-google', 'signin-open-browser', 'signin-copy-link', 'signin-error'. */
+/** A button on the sign-in screen: 'signin-google', 'signin-open-browser', 'signin-copy-link', 'signin-error', 'signin-guest' (try it without an account), 'signin-guest-back'. */
 export function trackSignInEvent(name, data = {}) {
   if (!signedOutAllowed()) return
   data = withVariant(data)

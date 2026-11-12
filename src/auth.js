@@ -3,6 +3,7 @@
 import { reactive } from 'vue'
 
 const USER_KEY = 'life-console/user'
+const GUEST_KEY = 'life-console/guest' // '1': trying the app without an account (planner kept in this browser only)
 /** Everything that belongs to the signed-in person's planner (UI preferences are kept). */
 const DATA_KEYS = ['life-console/v1', 'life-console/sync-base', 'life-console/sync-version', 'life-console/sync-dirty', 'life-console/sync-edited', 'life-console/issue-queue', 'life-console/last-plan']
 const ls = {
@@ -29,6 +30,8 @@ export const auth = reactive({
   analytics: null, // { script, siteId }: this server collects anonymous usage statistics (see analytics.js)
   error: errorFromHash(),
   resetToken: resetFromHash(), // from a password-reset email link (#/reset/<token>)
+  guest: ls.get(GUEST_KEY) === '1', // signed out but trying the app anyway; the sign-in screen steps aside
+  wasGuest: false, // came back to the sign-in screen from guest mode (to keep that planner)
 })
 export const isAdmin = () => auth.user?.role === 'admin'
 
@@ -55,6 +58,7 @@ export function wipeLocalData() {
  */
 export function bindUser(user) {
   auth.user = user
+  if (auth.guest) { auth.guest = false; ls.del(GUEST_KEY) } // the guest planner in this browser becomes the account's
   auth.status = 'signed-in'
   const prev = ls.get(USER_KEY)
   if (prev && prev !== user.id) {
@@ -72,6 +76,14 @@ async function finish(data) {
   if (auth.resetToken) { auth.resetToken = null; history.replaceState(null, '', '#/') }
   await onSignedIn()
 }
+
+/**
+ * Try the app without an account: the demo planner lives in this browser until the person signs in, then
+ * the first sync carries it into the account (a new account takes it as is; an existing one asks which to keep).
+ */
+export function startGuest() { auth.guest = true; ls.set(GUEST_KEY, '1') }
+/** Back to the sign-in screen from guest mode, to save the planner to an account. */
+export function endGuest() { auth.guest = false; auth.wasGuest = true; ls.del(GUEST_KEY) }
 
 /** Full-page redirect: the server sends the browser to Google and back to #/ signed in (or with auth_error). */
 export const signInWithGoogle = () => { location.href = '/api/auth/google/start' }
