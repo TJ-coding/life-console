@@ -7,7 +7,7 @@
   --border: #2a323d;
   --text: #e6edf3;
   --muted: #8b96a3;
-  --accent: #3fb68b;
+  --accent: #2bd4e6; /* logo cyan (was green #3fb68b) */
   --info: #4c9aff;
   --warn: #e3b341;
   --danger: #f25f5c;
@@ -28,7 +28,7 @@
   --border: #d9dde2;
   --text: #1a1f24;
   --muted: #5f6b77;
-  --accent: #1e8a63;
+  --accent: #0a7d8c; /* darker logo cyan for contrast on white (was #1e8a63) */
   --info: #2563eb;
   --warn: #b7791f;
   --danger: #c53030;
