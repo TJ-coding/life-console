@@ -12,10 +12,10 @@ The first account created on a new install becomes the admin; every package says
 
 ## Before any submission: the release must exist
 
-The packages pin `0.1.0`. That image tag is created by CI when the release tag is pushed (`.github/workflows/deploy.yml`, "Release tags"):
+The packages pin `0.1.0` ([released](https://github.com/TJ-coding/life-console/releases/tag/v0.1.0) 2026-11-13). CI creates the image tags when a release tag is pushed (`.github/workflows/deploy.yml`, "Release tags"). For the next release, tag a commit that main has already built, using its **full** commit hash (GitHub rejects short ones):
 
 ```bash
-gh release create v0.1.0 --target b17cd77 --title "Life Console 0.1.0" --generate-notes
+gh release create v0.1.1 --repo TJ-coding/life-console --target <full commit hash> --title "Life Console 0.1.1" --generate-notes
 ```
 
 Check it worked: `docker buildx imagetools inspect ghcr.io/tj-coding/life-console:0.1.0` lists `linux/amd64` and `linux/arm64`.
