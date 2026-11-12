@@ -7,6 +7,8 @@ import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush,
 import { rhythm, wallMin } from '../../server/pomodoro.mjs'
 import { auth, signOut, changePassword, deleteAccount, rename } from '../auth'
 import { analyticsAvailable } from '../analytics'
+import { serverUpdate, loadUpdate, checkUpdate, applyUpdate, setAutoUpdate } from '../updates'
+import { useRoute } from 'vue-router'
 
 /* ── account ── */
 const acctName = ref(auth.user?.name ?? '')
@@ -28,6 +30,22 @@ async function removeAccount() {
   if (!confirm(`Delete the account ${auth.user?.email} and its whole planner on the server? This can't be undone. Export your data first if you want a copy.`)) return
   try { await (hasPw.value ? deleteAccount(delPw.value) : deleteAccount(undefined, delPw.value)) } catch (e) { toast(e.message) }
 }
+
+/* ── server updates (admins) ── */
+const route = useRoute()
+const upd = computed(() => serverUpdate.info)
+const updPanel = ref(null)
+onMounted(async () => {
+  await loadUpdate()
+  if (route.hash === '#updates') updPanel.value?.scrollIntoView({ block: 'start' })
+})
+const fmtDay = (d) => (d ? new Date(d).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '—')
+function updateNow() {
+  if (!confirm(`Update this server to ${upd.value.latest.tag}?\n\nThe app restarts on the new version: a few seconds offline for everyone (the app keeps working and syncs after). If the database needs a migration, a backup is taken first.`)) return
+  applyUpdate()
+}
+const copy = async (text) => { try { await navigator.clipboard.writeText(text); toast('Copied') } catch { toast('Copy failed: select the text instead') } }
+const UPDATE_CMD = 'docker compose pull && docker compose up -d'
 
 /* ── data ── */
 function exportJson() {
@@ -126,6 +144,60 @@ const reload = () => window.location.reload()
           </form>
         </details>
         <p class="tiny muted"><a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a> · <a href="/terms" target="_blank" rel="noopener">Terms of Service</a></p>
+      </div>
+    </section>
+    <section v-if="auth.user?.role === 'admin' && upd && upd.reason !== 'off'" id="updates" ref="updPanel" class="panel">
+      <div class="panel-h"><span class="icon sm">system_update</span><h2>Server updates</h2><span class="spacer"></span>
+        <span v-if="!upd.enabled" class="chip kaizen">UNKNOWN BUILD</span>
+        <span v-else-if="upd.available" class="chip plan">UPDATE AVAILABLE</span>
+        <span v-else-if="upd.checkedAt && !upd.error" class="chip goal">UP TO DATE</span></div>
+      <div class="panel-b col small">
+        <p v-if="!upd.enabled" class="muted">Update notices work with the published images (<span class="mono">{{ upd.current.image }}</span>): this server was built from source, so it can't tell which version it runs. Update it the way you built it (for example <span class="mono">git pull && docker compose up -d --build</span>).</p>
+        <template v-else>
+          <div class="row wrap">
+            <span class="muted">Running</span><b class="mono">{{ upd.current.sha }}</b><span v-if="upd.pinned" class="tiny muted mono">pinned: LC_VERSION={{ upd.current.version }}</span>
+            <template v-if="upd.available"><span class="muted">· latest</span><b class="mono">{{ upd.latest.tag }}</b><span class="tiny muted">{{ fmtDay(upd.latest.date) }}</span></template>
+            <span class="spacer"></span>
+            <span class="tiny muted">checked {{ upd.checkedAt ? fmtTime(upd.checkedAt) : 'not yet' }}</span>
+            <button class="btn sm" :disabled="serverUpdate.busy" @click="checkUpdate"><span class="icon sm">refresh</span>Check now</button>
+          </div>
+          <p v-if="upd.error" class="danger">Couldn't check for updates: {{ upd.error }}</p>
+          <label v-if="upd.updater.present && !upd.pinned" class="kind">
+            <input type="checkbox" :checked="upd.autoUpdate" @change="setAutoUpdate($event.target.checked)" />
+            <div><b>Install updates automatically</b><div class="small muted">Within a few hours of a new version being published, this server pulls it and restarts (a few seconds offline; the app keeps working and syncs after). A database backup is taken before any migration. If an update fails, the server stays on its version and doesn't retry that one.</div></div>
+          </label>
+
+          <template v-if="upd.available">
+            <div class="changes">
+              <div class="tiny muted upper">What's new · {{ upd.changes.length || upd.behind }} change{{ (upd.changes.length || upd.behind) === 1 ? '' : 's' }}</div>
+              <ul><li v-for="c in upd.changes" :key="c.sha"><span class="mono tiny muted">{{ c.sha }}</span> {{ c.title }}</li></ul>
+            </div>
+
+            <div v-if="serverUpdate.busy && upd.updater.state" class="row"><span class="icon sm spin">sync</span><b>Updating…</b><span class="muted">pulling the new image and restarting. This page reloads when the new version answers.</span></div>
+            <div v-else-if="upd.canApply" class="row wrap">
+              <button class="btn primary" @click="updateNow"><span class="icon sm">download</span>Update now</button>
+              <span class="tiny muted">Pulls {{ upd.latest.tag }} and restarts the app (a few seconds offline). Database migrations run automatically, after a backup.</span>
+            </div>
+            <template v-else-if="upd.pinned">
+              <p>This server is pinned to a version. To update, set <span class="mono">LC_VERSION={{ upd.latest.tag }}</span> (or <span class="mono">latest</span>) in <span class="mono">.env</span>, then run:</p>
+              <div class="cmd row"><code class="mono grow">docker compose up -d</code><button class="btn sm" @click="copy('docker compose up -d')"><span class="icon sm">content_copy</span>Copy</button></div>
+            </template>
+            <template v-else>
+              <p>On the server, in the folder with <span class="mono">docker-compose.yml</span>, run:</p>
+              <div class="cmd row"><code class="mono grow">{{ UPDATE_CMD }}</code><button class="btn sm" @click="copy(UPDATE_CMD)"><span class="icon sm">content_copy</span>Copy</button></div>
+              <details class="phone-help">
+                <summary>Update automatically, or with one click from here</summary>
+                <p class="tiny">Run the <b>updater</b> service: take the newest <a href="https://github.com/TJ-coding/life-console/blob/main/docker-compose.yml" target="_blank" rel="noopener">docker-compose.yml</a> (and remove <span class="mono">LC_UPDATER=0</span> from <span class="mono">.env</span> if it's there), then run the command above once. From then on this server can update itself automatically, or when you press Update here. The updater is a small separate container with access to Docker; it only ever pulls and restarts Life Console, and only when the app asks. <a href="/docs/self-hosting#4-updating" target="_blank" rel="noopener">Details</a></p>
+              </details>
+            </template>
+          </template>
+
+          <p v-if="serverUpdate.error" class="danger">{{ serverUpdate.error }}</p>
+          <details v-if="upd.updater.state === 'failed' && upd.updater.log" class="phone-help" :open="!!serverUpdate.error">
+            <summary class="danger">Last update failed {{ upd.updater.at ? fmtTime(upd.updater.at) : '' }}</summary>
+            <pre class="log mono tiny">{{ upd.updater.log }}</pre>
+          </details>
+        </template>
       </div>
     </section>
     <!-- install -->
@@ -317,5 +389,11 @@ const reload = () => window.location.reload()
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .acct-btn { align-self: flex-end; }
 .danger { color: var(--danger); }
+.changes ul { margin: 4px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow: auto; }
+.cmd { gap: 8px; border: 1px solid var(--border); border-radius: 2px; padding: 6px 6px 6px 10px; background: var(--surface-2); }
+.cmd code { overflow-x: auto; white-space: nowrap; }
+.log { margin: 0; max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 700px) { .steps, .grid { grid-template-columns: 1fr; } }
 </style>

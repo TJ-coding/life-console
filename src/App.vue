@@ -14,6 +14,7 @@ import { issues, openIssueDialog, openCount as openIssueCount } from './issues'
 import { useNow } from './now'
 import { sync, chooseSync } from './sync'
 import { auth } from './auth'
+import { serverUpdate, showBanner as showUpdate, dismissBanner as dismissUpdate } from './updates'
 import AuthScreen from './components/AuthScreen.vue'
 import TourOverlay from './components/TourOverlay.vue'
 
@@ -237,6 +238,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <span class="icon sm">system_update</span>
           {{ sync.status === 'outdated' ? 'Your data was saved by a newer version of Life Console. Reload to continue syncing.' : 'Life Console was updated.' }}
           <button class="btn sm primary" @click="reload">Reload</button>
+        </div>
+        <div v-else-if="showUpdate()" class="banner update">
+          <span class="icon sm">new_releases</span>
+          <span class="grow">A newer Life Console is out for this server<span class="muted"> · {{ serverUpdate.info.changes.length || serverUpdate.info.behind }} change{{ (serverUpdate.info.changes.length || serverUpdate.info.behind) === 1 ? '' : 's' }} · <span class="mono">{{ serverUpdate.info.current.sha }} → {{ serverUpdate.info.latest.tag }}</span></span></span>
+          <router-link class="btn sm primary" to="/settings#updates" @click="dismissUpdate">{{ serverUpdate.info.canApply ? 'Update' : 'How to update' }}</router-link>
+          <button class="btn sm icon-only" title="Hide until the next version" @click="dismissUpdate"><span class="icon sm">close</span></button>
         </div>
         <div v-if="sync.status === 'signed-out'" class="banner">
           <span class="icon sm">lock</span>Your sign-in expired, so changes aren't syncing.

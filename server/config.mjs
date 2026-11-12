@@ -67,6 +67,19 @@ export function loadConfig(over = {}) {
     umamiWebsiteId: e.UMAMI_WEBSITE_ID || e.ANALYTICS_SITE_ID || '',
     umamiHostname: e.UMAMI_HOSTNAME || (appUrl ? new URL(appUrl).hostname : 'localhost'),
     googleTokenUrl: e.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token',
+    // update notices for admins (server/updates.mjs): this build's commit (baked into published images by CI),
+    // compared with GITHUB_REPO's main branch every UPDATE_CHECK_HOURS. Off with UPDATE_CHECK=off
+    updateCheck: bool(e.UPDATE_CHECK, true),
+    updateCheckHours: num(e.UPDATE_CHECK_HOURS, 6),
+    updateBranch: e.UPDATE_BRANCH || 'main',
+    buildSha: (e.LC_BUILD_SHA || '').trim().toLowerCase(),
+    lcImage: e.LC_IMAGE || 'ghcr.io/tj-coding/life-console', // what `docker compose pull` fetches (to check a build is published)
+    lcVersion: e.LC_VERSION || '', // the tag compose runs; anything but latest = pinned, so the button can't update it
+    registryUrl: e.REGISTRY_URL || '', // overridable for tests; normally derived from LC_IMAGE
+    // the folder shared with the optional `updater` service (one-click updates); empty = no button
+    updateDir: e.UPDATE_DIR || '',
+    // auto-update's default (admins can switch it in Settings → Server updates); acts only while the updater runs
+    autoUpdate: bool(e.AUTO_UPDATE, true),
   }
   cfg.umami = !!(cfg.umamiUrl && cfg.umamiWebsiteId)
   cfg.google = !!(cfg.googleClientId && cfg.googleClientSecret)

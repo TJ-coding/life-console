@@ -9,6 +9,7 @@ import { createPush } from './push.mjs'
 import { createIssues } from './issues.mjs'
 import { createScheduler } from './scheduler.mjs'
 import { createMetricsReporter } from './metrics.mjs'
+import { createUpdates } from './updates.mjs'
 import { createMailer } from './mail.mjs'
 import { createGoogle } from './google.mjs'
 import { settingsOf } from './schedule.mjs'
@@ -58,6 +59,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const google = cfg.google ? createGoogle(cfg) : null
   const limit = createLimiter()
   const metrics = createMetricsReporter({ db, pool, cfg, log })
+  const updates = createUpdates({ cfg, log })
   const scheduler = createScheduler({ db, planner, push, tickMs: cfg.tickMs, log })
   const appOrigin = cfg.appUrl ? new URL(cfg.appUrl).origin : null
   const appHost = cfg.appUrl ? new URL(cfg.appUrl).host : null
@@ -82,6 +84,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     if (!/^application\/json\b/i.test(req.headers['content-type'] || '')) throw httpError(415, 'send application/json')
   }
 
+  const adminOnly = (user) => { if (user.role !== 'admin') throw httpError(403, 'admins only') }
   const noPasswords = () => { if (!cfg.passwordAuth) throw httpError(403, 'Password sign-in is turned off on this server — continue with Google') }
   const redirect = (res, location, cookies = []) => { res.writeHead(302, { Location: location, 'Cache-Control': 'no-store', 'Set-Cookie': cookies, ...SECURITY_HEADERS }); res.end() }
 
@@ -265,6 +268,25 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         })
         return r.ok ? send(res, 200, { ok: true, version: r.version }) : send(res, 404, { error: 'todo not found' })
       }
+
+      case 'GET /api/admin/update':
+        adminOnly(user)
+        return send(res, 200, updates.status())
+      case 'PATCH /api/admin/update': {
+        adminOnly(user)
+        const b = await body(req)
+        if (typeof b.autoUpdate !== 'boolean') throw httpError(400, 'autoUpdate (true or false) required')
+        return send(res, 200, updates.setAutoUpdate(b.autoUpdate))
+      }
+      case 'POST /api/admin/update/check':
+        adminOnly(user)
+        limit(`updatecheck:${uid}`, 20, 3600000)
+        await updates.check()
+        return send(res, 200, updates.status())
+      case 'POST /api/admin/update/apply':
+        adminOnly(user)
+        limit(`updateapply:${uid}`, 10, 3600000)
+        return send(res, 202, updates.apply())
 
       case 'GET /api/issues':
         return send(res, 200, await issues.list(user, { status: url.searchParams.get('status'), screen: url.searchParams.get('screen'), platform: url.searchParams.get('platform') }))
@@ -456,5 +478,6 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
   sweep.unref()
 
   metrics.start()
-  return { handler, scheduler, auth, planner, push, issues, metrics, build: BUILD, close: () => { clearInterval(sweep); scheduler.stop(); metrics.stop() } }
+  updates.start()
+  return { handler, scheduler, auth, planner, push, issues, metrics, updates, build: BUILD, close: () => { clearInterval(sweep); scheduler.stop(); metrics.stop(); updates.stop() } }
 }

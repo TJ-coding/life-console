@@ -261,6 +261,19 @@ test('change password signs other devices out; delete account removes everything
   assert.equal((await alice('GET', '/api/issues')).body.find((i) => i.title === 'bob idea').reporter, '', 'issues outlive their reporter')
 })
 
+test('server updates: admins only', async () => {
+  const carol = client()
+  assert.equal((await carol('POST', '/api/auth/signup', { email: 'carol@example.com', password: 'carol password' })).status, 201)
+  assert.equal((await carol('GET', '/api/admin/update')).status, 403)
+  assert.equal((await carol('POST', '/api/admin/update/apply', {})).status, 403)
+  assert.equal((await carol('PATCH', '/api/admin/update', { autoUpdate: false })).status, 403)
+  assert.equal((await alice('PATCH', '/api/admin/update', { autoUpdate: 'no' })).status, 400)
+  const r = await alice('GET', '/api/admin/update')
+  assert.equal(r.status, 200)
+  assert.equal(r.body.reason, 'unknown-build', 'a build without LC_BUILD_SHA never checks')
+  assert.equal((await alice('POST', '/api/admin/update/apply', {})).status, 409, 'no updater on this server')
+})
+
 test('login is rate limited', async () => {
   const c = client()
   let last

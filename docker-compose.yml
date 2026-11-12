@@ -4,6 +4,8 @@
 #   docker compose up -d      # → http://localhost:8080 (the first account you create is the admin)
 #
 # Update:   docker compose pull && docker compose up -d     (migrations run automatically, after a backup)
+#           The `updater` service does this for you: new versions install themselves (auto-update, switchable in
+#           Settings → Server updates), or with the "Update now" button. LC_UPDATER=0 in .env turns the updater off.
 # Pin/roll back the app: set LC_VERSION in .env (e.g. sha-1a2b3c4) and `docker compose up -d`.
 # Full guide: docs/SELF_HOSTING.md
 name: life-console
@@ -55,11 +57,18 @@ services:
       MAIL_FROM: ${MAIL_FROM:-Life Console <no-reply@localhost>}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
       BACKUP_DIR: /backups
+      # update notices for admins: compares this image's commit with GitHub (UPDATE_CHECK=off stops it)
+      UPDATE_CHECK: ${UPDATE_CHECK:-on}
+      LC_IMAGE: ${LC_IMAGE:-ghcr.io/tj-coding/life-console}
+      LC_VERSION: ${LC_VERSION:-latest}
+      UPDATE_DIR: /updates
+      AUTO_UPDATE: ${AUTO_UPDATE:-on} # the default of the auto-update switch in Settings → Server updates
     ports:
       # host port; "127.0.0.1:18080" keeps it local when a reverse proxy on the same Docker network serves it
       - "${LC_PORT:-8080}:8080"
     volumes:
       - backups:/backups
+      - updates:/updates
     stop_grace_period: 15s
 
   backup:
@@ -78,6 +87,45 @@ services:
       - backups:/backups
     healthcheck: { disable: true }
 
+  # Updates from inside the app: auto-update (on by default, switchable in Settings → Server updates) and the
+  # "Update now" button. LC_UPDATER=0 in .env turns this service off (then update with the commands above).
+  # It holds the Docker socket (root on this host), so it's its own container that does exactly one thing: when the
+  # app leaves an update request in the shared `updates` volume, it runs, in this folder (mounted read-only),
+  #   docker compose pull app backup && docker compose up -d --wait app backup
+  # The app never gets the socket, and can't make the updater run anything else.
+  updater:
+    image: docker:cli
+    scale: ${LC_UPDATER:-1}
+    restart: unless-stopped
+    depends_on: [app] # the app creates the shared volume first, owned by its user
+    working_dir: /project
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/project:ro
+      - updates:/updates
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        chown 1000:1000 /updates 2>/dev/null
+        # the same compose project this container belongs to (even if it was started with -p <name>)
+        export COMPOSE_PROJECT_NAME="$$(docker inspect "$$(hostname)" --format '{{ index .Config.Labels "com.docker.compose.project" }}')"
+        [ -n "$$COMPOSE_PROJECT_NAME" ] || { echo "updater: can't tell which compose project this is"; sleep 60; exit 1; }
+        echo "updater: watching for update requests from the app (project $$COMPOSE_PROJECT_NAME)"
+        while :; do
+          echo "{\"at\":$$(date +%s)}" > /updates/updater.json
+          if mv /updates/request /updates/request.taken 2>/dev/null; then
+            echo "{\"state\":\"running\",\"at\":$$(date +%s)}" > /updates/status.json
+            echo "$$(date -u '+%F %T') pulling the new image" > /updates/status.log
+            if { docker compose pull app backup && docker compose up -d --no-build --wait --wait-timeout 300 app backup; } >> /updates/status.log 2>&1
+            then result=done; else result=failed; fi
+            echo "{\"state\":\"$$result\",\"at\":$$(date +%s)}" > /updates/status.json
+            echo "update $$result:"; tail -n 20 /updates/status.log
+          fi
+          sleep 5
+        done
+    healthcheck: { disable: true }
+
 volumes:
   db:
   backups:
+  updates:

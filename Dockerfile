@@ -18,7 +18,11 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY server ./server
 COPY --from=build /app/dist ./dist
-RUN mkdir -p /backups && chown node:node /backups
+# /updates: shared with the optional `updater` service (one-click updates, see docker-compose.yml)
+RUN mkdir -p /backups /updates && chown node:node /backups /updates
+# the commit this image was built from (CI passes it): admins are told when a newer build is published
+ARG LC_BUILD_SHA=""
+ENV LC_BUILD_SHA=$LC_BUILD_SHA
 USER node
 EXPOSE 8080
 # orchestrators (Swarm/Dokploy, compose) only route to a healthy container; /api/health also checks the database
