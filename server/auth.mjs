@@ -38,7 +38,8 @@ export function checkPassword(pw) {
 
 export const publicUser = (u) => u && { id: u.id, email: u.email, name: u.name, role: u.role, createdAt: u.createdAt, hasPassword: !!u.passwordHash, google: !!u.googleSub }
 
-export function createAuth(db, cfg) {
+/** `signups` (server/signups.mjs) decides who may create an account; without it (the CLI), SIGNUPS alone does. */
+export function createAuth(db, cfg, signups = null) {
   const days = cfg.sessionDays
   const cookieAttrs = (maxAge, secure = cfg.cookieSecure) => `Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`
 
@@ -77,7 +78,7 @@ export function createAuth(db, cfg) {
       if (u) [u] = await db.update(users).set({ googleSub: sub, updatedAt: new Date() }).where(eq(users.id, u.id)).returning()
     }
     if (!u) {
-      if (cfg.signups === 'closed') throw httpError(403, 'Sign-ups are closed on this server')
+      if (signups ? !(await signups.allows(email)) : cfg.signups === 'closed') throw httpError(403, 'Sign-ups are closed on this server')
       ;[u] = await db.insert(users).values({ email, name, passwordHash: '', googleSub: sub, role: await roleFor(email) }).returning()
       u.created = true
     }

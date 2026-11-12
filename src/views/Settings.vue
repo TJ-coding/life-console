@@ -8,6 +8,7 @@ import { rhythm, wallMin } from '../../server/pomodoro.mjs'
 import { auth, signOut, changePassword, deleteAccount, rename } from '../auth'
 import { analyticsAvailable } from '../analytics'
 import { serverUpdate, loadUpdate, checkUpdate, applyUpdate, setAutoUpdate } from '../updates'
+import { signupsAdmin, loadSignups, setSignups } from '../signups'
 import { useRoute } from 'vue-router'
 
 /* ── account ── */
@@ -36,9 +37,11 @@ const route = useRoute()
 const upd = computed(() => serverUpdate.info)
 const updPanel = ref(null)
 onMounted(async () => {
+  loadSignups()
   await loadUpdate()
   if (route.hash === '#updates') updPanel.value?.scrollIntoView({ block: 'start' })
 })
+const sgn = computed(() => signupsAdmin.info)
 const fmtDay = (d) => (d ? new Date(d).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '—')
 function updateNow() {
   if (!confirm(`Update this server to ${upd.value.latest.tag}?\n\nThe app restarts on the new version: a few seconds offline for everyone (the app keeps working and syncs after). If the database needs a migration, a backup is taken first.`)) return
@@ -144,6 +147,19 @@ const reload = () => window.location.reload()
           </form>
         </details>
         <p class="tiny muted"><a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a> · <a href="/terms" target="_blank" rel="noopener">Terms of Service</a></p>
+      </div>
+    </section>
+    <section v-if="auth.user?.role === 'admin' && sgn" id="signups" class="panel">
+      <div class="panel-h"><span class="icon sm">person_add</span><h2>Sign-ups</h2><span class="spacer"></span>
+        <span class="chip" :class="sgn.mode === 'open' ? 'plan' : 'goal'">{{ sgn.mode === 'open' ? 'OPEN' : 'CLOSED' }}</span></div>
+      <div class="panel-b col small">
+        <label class="kind">
+          <input type="checkbox" :checked="sgn.mode === 'open'" :disabled="signupsAdmin.busy" @change="setSignups($event.target.checked ? 'open' : 'closed')" />
+          <div><b>Let new people create accounts</b><div class="small muted">On: anyone who can reach this server can sign up. Off: only existing accounts can sign in; to add someone, open sign-ups for a moment or use the admin CLI (<span class="mono">create-user</span>). Only admins see this.</div></div>
+        </label>
+        <div v-if="sgn.source === 'admin'" class="tiny muted row wrap"><span>Set here {{ fmtDay(sgn.changedAt) }} · the server's default (<span class="mono">SIGNUPS</span>) is {{ sgn.defaultMode }}</span><button class="btn sm" :disabled="signupsAdmin.busy" @click="setSignups(null)">Use the default</button></div>
+        <p v-else class="tiny muted">Following the server's default (<span class="mono">SIGNUPS={{ sgn.defaultMode }}</span>). Changing it here overrides that until you reset it.</p>
+        <p v-if="signupsAdmin.error" class="danger">{{ signupsAdmin.error }}</p>
       </div>
     </section>
     <section v-if="auth.user?.role === 'admin' && upd && upd.reason !== 'off'" id="updates" ref="updPanel" class="panel">

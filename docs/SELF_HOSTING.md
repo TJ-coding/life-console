@@ -13,7 +13,7 @@ sed -i.bak "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" 
 docker compose up -d
 ```
 
-Open **http://localhost:8080** and create an account. **The first account is the admin**, unless `ADMIN_EMAILS` is set, in which case only those emails are. After that, set `SIGNUPS=closed` in `.env` (then `docker compose up -d`) if nobody else should sign up.
+Open **http://localhost:8080** and create an account. **The first account is the admin**, unless `ADMIN_EMAILS` is set, in which case only those emails are. The first account can always be created, even with `SIGNUPS=closed`, so you can start closed. Afterwards an admin opens or closes sign-ups in **Settings → Sign-ups**.
 
 The images are prebuilt (`ghcr.io/tj-coding/life-console`). To build from source instead, run `docker compose up -d --build`.
 
@@ -36,7 +36,7 @@ All the settings are in [`.env.example`](../.env.example), with comments. These 
 |---|---|---|
 | `POSTGRES_PASSWORD` | (required) | Database password. Use letters and digits only, because it goes into a URL. |
 | `APP_URL` | `http://localhost:8080` | The public address. It's used in reset emails, the cookie `Secure` flag and the origin check. |
-| `SIGNUPS` | `open` | `closed`: only the admin CLI can create accounts. |
+| `SIGNUPS` | `open` | The default for new sign-ups: `open`, or `closed` (also `off`, `false`, `no`, `0`). Any other value counts as `closed` and is logged. With sign-ups closed, only the first account on an empty server (with `ADMIN_EMAILS` set: only those emails) and the admin CLI can create accounts. Admins can override this in **Settings → Sign-ups**. |
 | `ADMIN_EMAILS` | none | Emails that are always admin. |
 | `SMTP_URL`, `MAIL_FROM` | none | Turns on "Forgot password?" emails. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | none | Turns on "Continue with Google" (see below). |

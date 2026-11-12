@@ -12,6 +12,7 @@ import { createMetricsReporter } from './metrics.mjs'
 import { createUpdates } from './updates.mjs'
 import { createMailer } from './mail.mjs'
 import { createGoogle } from './google.mjs'
+import { createSignups } from './signups.mjs'
 import { settingsOf } from './schedule.mjs'
 
 const MIME = {
@@ -51,7 +52,9 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   let BUILD = 'dev' // the content-hashed entry script names the deployed front-end build
   try { BUILD = (fs.readFileSync(path.join(dist, 'index.html'), 'utf8').match(/assets\/(index-[\w-]+\.js)/) || [])[1] || 'dev' } catch { /* no dist yet */ }
 
-  const auth = createAuth(db, cfg)
+  const signups = createSignups(db, cfg)
+  const auth = createAuth(db, cfg, signups)
+  if (cfg.signupsUnknown) log(`[config] SIGNUPS=${JSON.stringify(cfg.signupsUnknown)} isn't open or closed: sign-ups are closed (an admin can open them in Settings)`)
   const planner = createPlanner(db, cfg)
   const push = await createPush(db, cfg, log)
   const issues = createIssues(db)
@@ -99,7 +102,8 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       case 'GET /api/health': {
         let dbOk = true
         try { await db.execute(sql`select 1`) } catch { dbOk = false }
-        return send(res, dbOk ? 200 : 503, { ok: dbOk, build: BUILD, time: new Date().toISOString(), auth: { signups: cfg.signups, passwordReset: !!mailer, password: cfg.passwordAuth, google: !!google }, ...(cfg.analyticsScript && cfg.analyticsSiteId ? { analytics: { script: cfg.analyticsScript, siteId: cfg.analyticsSiteId } } : {}) })
+        const signupMode = dbOk ? await signups.publicMode().catch(() => cfg.signups) : cfg.signups
+        return send(res, dbOk ? 200 : 503, { ok: dbOk, build: BUILD, time: new Date().toISOString(), auth: { signups: signupMode, passwordReset: !!mailer, password: cfg.passwordAuth, google: !!google }, ...(cfg.analyticsScript && cfg.analyticsSiteId ? { analytics: { script: cfg.analyticsScript, siteId: cfg.analyticsSiteId } } : {}) })
       }
       case 'GET /api/auth/google/start': {
         if (!google) throw httpError(404, 'Google sign-in is not set up on this server')
@@ -122,8 +126,8 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       case 'POST /api/auth/signup': {
         noPasswords()
         limit(`signup:${ip(req)}`, 10, 3600000)
-        if (cfg.signups === 'closed') throw httpError(403, 'Sign-ups are closed on this server')
         const b = await body(req)
+        if (!(await signups.allows(normEmail(b.email)))) throw httpError(403, 'Sign-ups are closed on this server')
         const u = await auth.createUser({ email: b.email, password: b.password, name: b.name })
         log(`[auth] new account ${u.role === 'admin' ? '(admin) ' : ''}${u.id.slice(0, 8)}`)
         return signedIn(res, u, req, 201)
@@ -267,6 +271,18 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
           },
         })
         return r.ok ? send(res, 200, { ok: true, version: r.version }) : send(res, 404, { error: 'todo not found' })
+      }
+
+      case 'GET /api/admin/signups':
+        adminOnly(user)
+        return send(res, 200, await signups.status())
+      case 'PATCH /api/admin/signups': {
+        adminOnly(user)
+        const b = await body(req)
+        if (!['open', 'closed', null].includes(b.mode)) throw httpError(400, "mode must be 'open', 'closed', or null (back to the SIGNUPS default)")
+        const st = await signups.set(b.mode, user.id)
+        log(`[admin] sign-ups ${b.mode ?? `back to the default (${cfg.signups})`} by ${uid.slice(0, 8)}`)
+        return send(res, 200, st)
       }
 
       case 'GET /api/admin/update':
