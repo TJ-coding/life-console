@@ -1,5 +1,7 @@
 # App-store packages
 
+> **Releasing a new version?** See [Where Life Console is listed](#where-life-console-is-listed) and [When a new version is released](#when-a-new-version-is-released): every store listed there needs an update PR.
+
 Ready-made listings of Life Console for self-hosting platforms' app stores. Each folder holds the files that platform's store expects, in its layout, so submitting means copying a folder into a fork of the store's repository and opening a pull request.
 
 All of them run the published image `ghcr.io/tj-coding/life-console` (linux/amd64 and linux/arm64) with PostgreSQL 17, and differ from the repo's own `docker-compose.yml` in three ways:
@@ -88,6 +90,34 @@ Unraid templates are one container each, so users install PostgreSQL 17 separate
 - **PikaPods / Elestio:** email them (PikaPods: the address on pikapods.com; Elestio: their Discord or support) with the repo, the image, and that it's one app container + PostgreSQL.
 - **TrueNAS:** post a Feature Request in the TrueNAS community forum (Problem/Justification, Impact, User Story). If the team approves, they'll ask for a PR to `truenas/apps`.
 
+## Where Life Console is listed
+
+Keep this table current: it's the list of stores to update on every release.
+
+| Store | Submitted | Pull request | Status (2026-11-13) | Store's copy of the package |
+|---|---|---|---|---|
+| Dokploy | 2026-11-13 | [Dokploy/templates#1321](https://github.com/Dokploy/templates/pull/1321) | Open; all checks pass; tested on Dokploy v0.29.0 | `blueprints/life-console/` |
+| Cosmos | 2026-11-13 | [azukaar/cosmos-servapps-official#342](https://github.com/azukaar/cosmos-servapps-official/pull/342) | Open; validator clean | `servapps/LifeConsole/` |
+| CasaOS | 2026-11-13 | [IceWhaleTech/CasaOS-AppStore#1148](https://github.com/IceWhaleTech/CasaOS-AppStore/pull/1148) | Open; validate + SonarCloud pass | `Apps/LifeConsole/` |
+
+When a PR merges or closes, update its row. When a new store accepts the app, add a row.
+
+Not listed yet: Umbrel (needs a device test), Unraid (needs a template repo), Railway, PikaPods, Elestio, TrueNAS (owner steps), CapRover (needs 1,000+ stars or 10,000+ downloads), awesome-selfhosted (from 13 March 2027).
+
+Submitting needs a fork under TJ-coding: the forks are `TJ-coding/dokploy-templates` (named so because `TJ-coding/templates` already exists), `TJ-coding/cosmos-servapps-official` and `TJ-coding/CasaOS-AppStore`. Pushes of screenshots can fail with HTTP 400; `git config http.postBuffer 157286400` fixes it.
+
 ## When a new version is released
 
-Bump the version in each package: `dokploy/…/docker-compose.yml` and `meta.json`, the CapRover default, CasaOS `image` and `version`, Umbrel `version` and the `image` tag + digest, and the Unraid `Repository` if it pins a patch. Cosmos and Unraid follow `0.1` on their own until a `0.2` release. Then open an update PR in each store.
+1. **Release:** `gh release create vX.Y.Z --repo TJ-coding/life-console --target <full commit hash> --generate-notes`, on a commit main has already built. CI tags the image `X.Y.Z` and `X.Y`.
+2. **Update this folder**, then open an update PR in every store listed above (and Umbrel/Unraid once they're listed):
+
+| Store | Files | What to change |
+|---|---|---|
+| Dokploy | `dokploy/life-console/docker-compose.yml`, `meta.json` | image tag `0.1.0` → `X.Y.Z`; `"version"` |
+| Cosmos | `cosmos/LifeConsole/cosmos-compose.json` | nothing within `0.1.x` (follows `0.1` and auto-updates); on a new minor, image tag `0.1` → `X.Y` |
+| CasaOS | `casaos/LifeConsole/docker-compose.yml` | image tag; `x-casaos.version`, `update_at`, `release_notes` |
+| Umbrel | `umbrel/life-console/docker-compose.yml`, `umbrel-app.yml` | image tag **and** digest (`docker buildx imagetools inspect ghcr.io/tj-coding/life-console:X.Y.Z`); `version`, `releaseNotes` |
+| Unraid | `unraid/templates/life-console.xml` | nothing within `0.1.x`; on a new minor, `Repository` tag `0.1` → `X.Y` |
+| CapRover | `caprover/life-console.yml` | `$$cap_lc_version` default (if ever listed) |
+
+3. **Database changes:** if the release needs a newer PostgreSQL, bump `postgres:17-alpine` in every package too (and the Umbrel digest), and say so in each PR.
