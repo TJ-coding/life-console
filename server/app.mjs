@@ -23,7 +23,7 @@ const MIME = {
 const LEGAL = new Set(['/privacy', '/terms'])
 const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
 const DOCS_DATE = '2026-11-10' // sitemap <lastmod> for the docs pages: bump when they change
-const LANDING_DATE = '2026-11-10' // sitemap <lastmod> for the landing page: bump when it changes
+const LANDING_DATE = '2026-11-13' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
 function send(res, status, body, headers = {}) {
