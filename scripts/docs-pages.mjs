@@ -62,7 +62,8 @@ export function renderDoc(slug, md) {
 <meta property="og:description" content="${esc(page.description)}" />
 <meta property="og:url" content="${SITE}/docs/${slug}" />
 <meta property="og:image" content="${SITE}/media/og.png" />
-<link rel="icon" href="/icons/icon-192.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <link rel="stylesheet" href="/legal.css" />
 </head>
 <body>

@@ -1,5 +1,5 @@
 // Life Console service worker: offline app shell + Web Push notifications.
-const CACHE = 'life-console-v1'
+const CACHE = 'life-console-v2' // v2: new icons
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png']
 
 self.addEventListener('install', (e) => {

@@ -362,6 +362,9 @@ export function clearPlanner() {
 /* ───────────── transient UI state ───────────── */
 let savedTheme = 'dark'
 try { savedTheme = localStorage.getItem('life-console/theme') || 'dark' } catch { /* ignore */ }
+export const ACCENTS = ['cyan', 'green'] // cyan (the logo's) is the default
+let savedAccent = 'cyan'
+try { savedAccent = ACCENTS.includes(localStorage.getItem('life-console/accent')) ? localStorage.getItem('life-console/accent') : 'cyan' } catch { /* ignore */ }
 /** Phones/tablets: the schedule lock (ISS-14) guards against accidental drags while scrolling.
  *  With a mouse there's no such risk, so the lock is off and its padlock buttons are hidden. */
 export const touchUI = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
@@ -400,12 +403,19 @@ export const ui = reactive({
   toast: '',
   toastAction: null,
   theme: savedTheme,
+  accent: savedAccent,
 })
 setInterval(() => { ui.now = new Date() }, 1000)
 
 export function applyTheme() {
   document.documentElement.dataset.theme = ui.theme
-  try { localStorage.setItem('life-console/theme', ui.theme) } catch { /* ignore */ }
+  document.documentElement.dataset.accent = ui.accent
+  try { localStorage.setItem('life-console/theme', ui.theme); localStorage.setItem('life-console/accent', ui.accent) } catch { /* ignore */ }
+}
+export function setAccent(a) {
+  if (!ACCENTS.includes(a)) return
+  ui.accent = a
+  applyTheme()
 }
 export function toggleTheme() {
   ui.theme = ui.theme === 'dark' ? 'light' : 'dark'
