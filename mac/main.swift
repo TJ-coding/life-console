@@ -644,11 +644,11 @@ struct HUD: View {
       .help("Click: Focus mode · Drag: move · Double-click: back to the corner")
       .padding(HUD.inset)                       // transparent margin so the close button can sit on the corner
       .overlay(alignment: .topLeading) {
-        // one-click hide on the pill's top-left corner, like a macOS notification; shown on hover
+        // one-click hide on the pill's top-left corner, like a macOS notification; shown on hover; a fixed size whatever the widget size
         if hover {
           Button { m.showHUD = false } label: {
-            Image(systemName: "xmark").font(.system(size: 8 * max(1, z), weight: .bold)).foregroundColor(K.text)
-              .frame(width: 16 * max(1, z), height: 16 * max(1, z)).background(Circle().fill(K.surface2)).overlay(Circle().stroke(K.border, lineWidth: 1))
+            Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundColor(K.text)
+              .frame(width: 16, height: 16).background(Circle().fill(K.surface2)).overlay(Circle().stroke(K.border, lineWidth: 1))
               .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
           }.buttonStyle(.plain).help("Hide (bring it back from the menu-bar panel → Show headline)")
         }
