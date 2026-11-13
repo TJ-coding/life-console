@@ -44,7 +44,7 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
       <!-- ISS-25: one countdown; in a pomodoro sitting, click it to switch between the break and the whole block -->
       <button v-if="pomoPhase" class="countdown mono toggle" :class="pomoPhase.phase" :title="readout.title" @click="toggleClockMode">{{ fmtClock(readout.sec) }}<span class="muted pomo-n">POMODORO {{ pomoPhase.n }}/{{ pomoPhase.of }}<template v-if="pomoPhase.phase === 'break'"> · BREAK</template></span></button>
       <div v-else class="countdown mono">{{ fmtClock(readout.sec) }} <span class="muted">{{ readout.label }}</span></div>
-      <PomoBar v-if="current.pomo" :segs="current.pomo" :elapsed="progress.elapsed" :outline="readout?.piece" />
+      <button v-if="current.pomo" class="bar-toggle" :title="readout?.title" @click="toggleClockMode"><PomoBar :segs="current.pomo" :elapsed="progress.elapsed" :outline="readout?.piece" /></button>
       <div v-else class="bar big"><i :style="{ width: progress.pct + '%' }"></i></div>
       <div class="row mono small muted"><span>START {{ current.start }}</span><span class="spacer"></span><span>elapsed {{ fmtDur(progress.elapsed) }} / {{ fmtDur(progress.total) }}</span><span class="spacer"></span><span>END {{ current.end }}</span></div>
       <div v-if="suggestion" class="do">
@@ -108,6 +108,8 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
 </template>
 
 <style scoped>
+/* the pomodoro bar switches the clock too (ISS-25) */
+.bar-toggle { display: block; width: 100%; border: 0; padding: 4px 0; margin: -4px 0; background: transparent; cursor: pointer; }
 .focus { max-width: 1040px; margin: 0 auto; padding: 32px 24px 48px; display: flex; flex-direction: column; gap: 22px; }
 .fhead { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 18px; }
 .date { font-size: 34px; line-height: 42px; font-weight: 700; margin-top: 8px; }

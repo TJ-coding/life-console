@@ -64,7 +64,7 @@ function start(t) {
       </div>
     </div>
 
-    <PomoBar v-if="current?.pomo" :segs="current.pomo" :elapsed="progress.elapsed" :outline="readout?.piece" />
+    <button v-if="current?.pomo" class="bar-toggle" :title="readout?.title" @click="toggleClockMode"><PomoBar :segs="current.pomo" :elapsed="progress.elapsed" :outline="readout?.piece" /></button>
     <div v-else-if="current" class="bar big-bar"><i :style="{ width: progress.pct + '%' }"></i></div>
 
     <!-- free: the todo you could start, as the bottom line (only the next block's start time is in the label row, so "next" is said once) -->
@@ -95,6 +95,8 @@ function start(t) {
 </template>
 
 <style scoped>
+/* the pomodoro bar switches the clock too (ISS-25) */
+.bar-toggle { display: block; width: 100%; border: 0; padding: 4px 0; margin: -4px 0; background: transparent; cursor: pointer; }
 .now-inst { gap: 12px; padding: 16px 20px; border-left: 3px solid var(--accent); }
 .now-inst.busy { border-left-color: var(--c); background: color-mix(in srgb, var(--c) 5%, var(--surface)); }
 .now-inst.free { border-left-color: var(--muted); }
