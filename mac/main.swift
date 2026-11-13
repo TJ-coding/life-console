@@ -204,7 +204,6 @@ final class Model: ObservableObject {
   @Published var hudTagClickable = defaults.object(forKey: "hudTagClickable") as? Bool ?? true { didSet { defaults.set(hudTagClickable, forKey: "hudTagClickable"); onChange?() } }
   /** Pointer over the widget while click-through is on (the window gets no hover events then): shows the ×. */
   @Published var hudPointerOver = false
-  @Published var hudPointerOnTag = false   // click-through: the tag is under the pointer (it brightens: "this you can click")
   var onChange: (() -> Void)?
 
   var url: String { (defaults.string(forKey: "url") ?? Model.defaultServer).trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) }
@@ -675,7 +674,6 @@ struct HUD: View {
       VStack(alignment: .leading, spacing: 0) {
         HStack(spacing: 8 * z) {
           box(tag, z, width: col, fg: busy ? .white : free ? tagColor : K.muted, fill: busy ? K.stamp : K.surface, stroke: tagColor)
-            .brightness(m.hudPointerOnTag ? 0.18 : 0)
           Text(bar.title).font(.system(size: 13 * z, weight: .medium)).foregroundColor(K.text)
             .lineLimit(1).truncationMode(.tail).frame(maxWidth: 320 * z, alignment: .leading)
           if !bar.longMeta.isEmpty {
@@ -1060,7 +1058,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
       if let l = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] e in self?.pointerMoved(); return e }) { mouseMonitors.append(l) }
     } else if !watch && !mouseMonitors.isEmpty {
       mouseMonitors.forEach(NSEvent.removeMonitor); mouseMonitors = []
-      overClose = false; if model.hudPointerOver { model.hudPointerOver = false }; if model.hudPointerOnTag { model.hudPointerOnTag = false }
+      overClose = false; if model.hudPointerOver { model.hudPointerOver = false }
     }
     hud.ignoresMouseEvents = model.hudClickThrough && !overClose
   }
@@ -1076,7 +1074,6 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
       let z = CGFloat(model.hudScale)
       onTag = NSRect(x: f.minX + HUD.inset, y: f.maxY - HUD.inset - 30 * z, width: 8 * z + HUD.columnWidth(model, n), height: 30 * z).contains(p)
     }
-    if model.hudPointerOnTag != onTag { model.hudPointerOnTag = onTag }
     let c = close.contains(p) || onTag
     if c != overClose { overClose = c; hud.ignoresMouseEvents = model.hudClickThrough && !c }
   }
