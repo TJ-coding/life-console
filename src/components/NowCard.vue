@@ -54,7 +54,7 @@ function start(t) {
 
       <div class="clock">
         <!-- ISS-25: one countdown; in a pomodoro sitting, click it to switch between the break and the whole block -->
-        <button v-if="current && pomoPhase" class="readout toggle" :class="pomoPhase.phase" :title="readout.title" @click="toggleClockMode"><span class="inst-big mono">{{ fmtClock(readout.sec) }}</span><span class="what-time muted"><span class="icon sm">{{ readout.icon }}</span>{{ readout.label }}</span></button>
+        <button v-if="current && pomoPhase" class="readout toggle" :class="pomoPhase.phase" :title="readout.title" @click="toggleClockMode"><span class="inst-big mono">{{ fmtClock(readout.sec) }}</span></button>
         <div v-else-if="current" class="readout"><span class="inst-big mono">{{ fmtClock(readout.sec) }}</span><span class="muted">{{ readout.label }}</span></div>
         <div v-else class="readout"><span class="inst-big mono">{{ fmtClock(gap) }}</span><span class="muted">left</span></div>
         <div class="actions">
@@ -64,7 +64,7 @@ function start(t) {
       </div>
     </div>
 
-    <PomoBar v-if="current?.pomo" :segs="current.pomo" :elapsed="progress.elapsed" />
+    <PomoBar v-if="current?.pomo" :segs="current.pomo" :elapsed="progress.elapsed" :outline="readout?.piece" />
     <div v-else-if="current" class="bar big-bar"><i :style="{ width: progress.pct + '%' }"></i></div>
 
     <!-- free: the todo you could start, as the bottom line (only the next block's start time is in the label row, so "next" is said once) -->
@@ -119,8 +119,6 @@ function start(t) {
 .vital { font-size: 16px; line-height: 24px; font-weight: 600; }
 .notes-text { font-size: 15px; line-height: 23px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9.6em; overflow: auto; color: var(--text); }
 .readout.toggle { border: 0; padding: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
-.what-time { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; }
-.readout.toggle:hover .what-time { color: var(--text); }
 .readout.toggle.break .inst-big { color: var(--accent); }
 .title .until { color: var(--warn); }
 .title .until-w { color: var(--muted); font-weight: 400; }

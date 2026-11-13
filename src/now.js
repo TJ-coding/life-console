@@ -67,18 +67,16 @@ export function useNow() {
     }
     return null
   })
-  /** The big clock for the current block. In a pomodoro sitting it follows clockMode, with a small icon + word
-   *  saying which time it is: to the break, back to work, or to the end of the block. */
+  /** The big clock for the current block. In a pomodoro sitting it follows clockMode (no label): `piece` =
+   *  it counts to the end of this pomodoro / break, which the bar outlines; otherwise to the end of the block. */
   const readout = computed(() => {
     const p = progress.value
     if (!p) return null
     const ph = pomoPhase.value
-    if (!ph) return { sec: p.remaining, label: 'left', icon: null, title: null }
-    if (clockMode.value === 'block') return { sec: p.remaining, label: 'to end', icon: 'flag', title: 'Time left in the whole block · click for the time to the next break' }
-    const other = ' · click for the time left in the whole block'
-    if (ph.phase === 'break') return { sec: ph.left, label: 'to work', icon: 'play_arrow', title: 'Break: time until work resumes' + other }
-    if (ph.last) return { sec: ph.left, label: 'to end', icon: 'flag', title: `Last pomodoro (${ph.n}/${ph.of}): no break after it` + other }
-    return { sec: ph.left, label: 'to break', icon: 'coffee', title: `Pomodoro ${ph.n}/${ph.of}: time until the ${ph.brk}m break` + other }
+    if (!ph) return { sec: p.remaining, label: 'left', piece: false, title: null }
+    if (clockMode.value === 'block') return { sec: p.remaining, label: '', piece: false, title: 'Time left in the whole block · click for the current pomodoro' }
+    const what = ph.phase === 'break' ? 'Break: time until work resumes' : ph.last ? `Last pomodoro (${ph.n}/${ph.of}): no break after it` : `Pomodoro ${ph.n}/${ph.of}: time until the ${ph.brk}m break`
+    return { sec: ph.left, label: '', piece: true, title: `${what} · click for the whole block` }
   })
   const untilNext = computed(() => (next.value ? toMin(next.value.start) * 60 - nowSec.value : null))
   /** Free seconds from now until the next block (or end of day). */

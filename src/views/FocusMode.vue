@@ -42,9 +42,9 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
       </div>
       <h1>{{ current.title }}</h1>
       <!-- ISS-25: one countdown; in a pomodoro sitting, click it to switch between the break and the whole block -->
-      <button v-if="pomoPhase" class="countdown mono toggle" :class="pomoPhase.phase" :title="readout.title" @click="toggleClockMode">{{ fmtClock(readout.sec) }} <span class="what-time muted"><span class="icon">{{ readout.icon }}</span>{{ readout.label }}</span><span class="muted pomo-n">POMODORO {{ pomoPhase.n }}/{{ pomoPhase.of }}<template v-if="pomoPhase.phase === 'break'"> · BREAK</template></span></button>
+      <button v-if="pomoPhase" class="countdown mono toggle" :class="pomoPhase.phase" :title="readout.title" @click="toggleClockMode">{{ fmtClock(readout.sec) }}<span class="muted pomo-n">POMODORO {{ pomoPhase.n }}/{{ pomoPhase.of }}<template v-if="pomoPhase.phase === 'break'"> · BREAK</template></span></button>
       <div v-else class="countdown mono">{{ fmtClock(readout.sec) }} <span class="muted">{{ readout.label }}</span></div>
-      <PomoBar v-if="current.pomo" :segs="current.pomo" :elapsed="progress.elapsed" />
+      <PomoBar v-if="current.pomo" :segs="current.pomo" :elapsed="progress.elapsed" :outline="readout?.piece" />
       <div v-else class="bar big"><i :style="{ width: progress.pct + '%' }"></i></div>
       <div class="row mono small muted"><span>START {{ current.start }}</span><span class="spacer"></span><span>elapsed {{ fmtDur(progress.elapsed) }} / {{ fmtDur(progress.total) }}</span><span class="spacer"></span><span>END {{ current.end }}</span></div>
       <div v-if="suggestion" class="do">
@@ -115,8 +115,7 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
 .countdown.toggle { border: 0; padding: 0; background: transparent; font: inherit; font-size: 44px; line-height: 48px; font-weight: 700; color: var(--text); text-align: left; cursor: pointer; }
 .countdown.toggle.break { color: var(--accent); }
 .pomo-n { margin-left: 14px; font-size: 16px; font-weight: 500; }
-.what-time { display: inline-flex; align-items: center; gap: 4px; font-size: 16px; font-weight: 500; vertical-align: middle; }
-.countdown.toggle:hover .what-time { color: var(--text); }
+
 .hero { padding: 26px 30px; gap: 14px; border-left: 4px solid var(--c, var(--accent)); }
 .hero.free { border-left-color: var(--muted); }
 .hero h1 { margin: 0; font: 700 32px/40px 'JetBrains Mono', monospace; letter-spacing: -0.02em; }
