@@ -625,33 +625,54 @@ struct HUD: View {
       let bar = n.bar, z = CGFloat(m.hudScale)   // every size below scales with Widget Size
       let busy = bar.mode == .busy, free = bar.mode == .free
       let tagColor = busy ? K.stamp : bar.plan ? K.info : free ? K.accent : K.border
-      VStack(alignment: .trailing, spacing: 4 * z) {
-      HStack(spacing: 8 * z) {
-        Text(busy ? "NOW" : bar.plan ? "PLAN" : free ? "NEXT" : "IDLE").font(.system(size: 10 * z, weight: .bold, design: .monospaced)).tracking(0.6 * z)
-          .foregroundColor(busy ? .white : free ? tagColor : K.muted)
-          .padding(.horizontal, 6 * z).padding(.vertical, 2 * z)
-          .background(RoundedRectangle(cornerRadius: 2 * z).fill(busy ? K.stamp : K.surface))
-          .overlay(RoundedRectangle(cornerRadius: 2 * z).stroke(tagColor, lineWidth: 1))
-        Text(bar.title).font(.system(size: 13 * z, weight: .medium)).foregroundColor(K.text)
-          .lineLimit(1).truncationMode(.tail).frame(maxWidth: 320 * z, alignment: .leading)
-        if !bar.longMeta.isEmpty {
-          Text(bar.longMeta).font(.system(size: 11 * z, weight: .medium, design: .monospaced)).foregroundColor(K.muted).lineLimit(1).frame(maxWidth: 160 * z)
+      let tag = busy ? "NOW" : bar.plan ? "PLAN" : free ? "NEXT" : "IDLE"
+      let shown = m.hudDeadlines > 0 ? Array(n.deadlines.prefix(m.hudDeadlines)) : []
+      let times = shown.map { $0.mins <= 0 ? "LATE" : countdown($0.mins) }
+      // one column for the tag and the deadline times, so their boxes line up and every title starts at one edge
+      let col = HUD.boxWidth([tag] + times, z)
+      // one card: the headline, then (Settings → Deadlines) the closest deadlines in the same boxes and type
+      VStack(alignment: .leading, spacing: 0) {
+        HStack(spacing: 8 * z) {
+          box(tag, z, width: col, fg: busy ? .white : free ? tagColor : K.muted, fill: busy ? K.stamp : K.surface, stroke: tagColor)
+          Text(bar.title).font(.system(size: 13 * z, weight: .medium)).foregroundColor(K.text)
+            .lineLimit(1).truncationMode(.tail).frame(maxWidth: 320 * z, alignment: .leading)
+          if !bar.longMeta.isEmpty {
+            Text(bar.longMeta).font(.system(size: 11 * z, weight: .medium, design: .monospaced)).foregroundColor(K.muted).lineLimit(1).frame(maxWidth: 160 * z)
+          }
+        }
+        .fixedSize(horizontal: true, vertical: false)   // the title gets its full width (capped above), not what's left over
+        .padding(.leading, 4 * z).padding(.trailing, 10 * z).frame(height: 30 * z)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .bottomLeading) {
+          if busy { GeometryReader { g in Rectangle().fill(K.accent).frame(width: g.size.width * n.progress, height: 2 * z).frame(maxHeight: .infinity, alignment: .bottom) } }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { m.resetHUD() }
+        .onTapGesture(perform: open)
+        .help("Click: Focus mode · Drag: move · Double-click: back to the corner")
+        if !shown.isEmpty {
+          Rectangle().fill(K.border).frame(height: 1)
+          VStack(alignment: .leading, spacing: 5 * z) {
+            ForEach(Array(shown.enumerated()), id: \.element.id) { i, d in
+              // glance.js colours: red ≤ 12 h or overdue, amber ≤ 48 h, else green; overdue is filled like NOW
+              let c = d.mins <= 720 ? K.danger : d.mins <= 2880 ? K.warn : K.accent
+              HStack(spacing: 8 * z) {
+                box(times[i], z, width: col, fg: d.mins <= 0 ? .white : c, fill: d.mins <= 0 ? K.stamp : K.surface, stroke: d.mins <= 0 ? K.stamp : c)
+                Text(d.title).font(.system(size: 12.5 * z)).foregroundColor(K.text).lineLimit(1).truncationMode(.tail)
+                  .frame(maxWidth: 320 * z, alignment: .leading)
+              }
+            }
+          }
+          .padding(.leading, 4 * z).padding(.trailing, 10 * z).padding(.vertical, 7 * z)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .contentShape(Rectangle()).onTapGesture { m.onDeadlines?() }
+          .help("Click: the Deadlines page")
         }
       }
-      .padding(.leading, 4 * z).padding(.trailing, 10 * z).frame(height: 30 * z)
-      .fixedSize(horizontal: true, vertical: false)   // its own width, not the deadline list's
+      .fixedSize()
       .background(K.surface2)
-      .overlay(alignment: .bottomLeading) {
-        if busy { GeometryReader { g in Rectangle().fill(K.accent).frame(width: g.size.width * n.progress, height: 2 * z).frame(maxHeight: .infinity, alignment: .bottom) } }
-      }
       .clipShape(RoundedRectangle(cornerRadius: 3 * z))
       .overlay(RoundedRectangle(cornerRadius: 3 * z).stroke(busy ? K.stamp.opacity(0.6) : K.border, lineWidth: 1))
-      .contentShape(Rectangle())
-      .onTapGesture(count: 2) { m.resetHUD() }
-      .onTapGesture(perform: open)
-      .help("Click: Focus mode · Drag: move · Double-click: back to the corner")
-      if m.hudDeadlines > 0 && !n.deadlines.isEmpty { deadlineList(n, z) }
-      }
       .padding(HUD.inset)                       // transparent margin so the close button can sit on the corner
       .overlay(alignment: .topLeading) {
         // one-click hide on the pill's top-left corner, like a macOS notification; shown on hover; a fixed size whatever the widget size
@@ -670,30 +691,16 @@ struct HUD: View {
 }
 
 extension HUD {
-  /** The closest n deadlines (Settings → Deadlines), under the pill: time left (urgency colour) · title. Click → Deadlines. */
-  func deadlineList(_ n: Now, _ z: CGFloat) -> some View {
-    let shown = Array(n.deadlines.prefix(m.hudDeadlines))
-    let left = shown.map { $0.mins <= 0 ? "late" : countdown($0.mins) }
-    let w = left.map { ($0 as NSString).size(withAttributes: [.font: NSFont.monospacedSystemFont(ofSize: 12 * z, weight: .semibold)]).width }.max() ?? 0
-    return VStack(alignment: .leading, spacing: 5 * z) {
-      ForEach(Array(shown.enumerated()), id: \.element.id) { i, d in
-        HStack(spacing: 10 * z) {
-          // glance.js colours: red ≤ 12 h or overdue, amber ≤ 48 h, else green
-          Text(left[i]).font(.system(size: 12 * z, weight: .semibold, design: .monospaced))
-            .foregroundColor(d.mins <= 720 ? K.danger : d.mins <= 2880 ? K.warn : K.accent)
-            .frame(width: ceil(w) + 1, alignment: .trailing)
-          Text(d.title).font(.system(size: 12.5 * z)).foregroundColor(K.text).lineLimit(1).truncationMode(.tail)
-            .frame(maxWidth: 300 * z, alignment: .leading)
-        }
-      }
-    }
-    .padding(.horizontal, 10 * z).padding(.vertical, 7 * z)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(K.surface2)
-    .clipShape(RoundedRectangle(cornerRadius: 3 * z))
-    .overlay(RoundedRectangle(cornerRadius: 3 * z).stroke(K.border, lineWidth: 1))
-    .contentShape(Rectangle()).onTapGesture { m.onDeadlines?() }
-    .help("Click: the Deadlines page")
+  /** The NOW/NEXT tag and the deadline times share this box: same type, padding and corners, a fixed column width. */
+  func box(_ text: String, _ z: CGFloat, width: CGFloat, fg: Color, fill: Color, stroke: Color) -> some View {
+    Text(text).font(.system(size: 10 * z, weight: .bold, design: .monospaced)).tracking(0.6 * z).foregroundColor(fg).lineLimit(1)
+      .frame(width: width).padding(.vertical, 2 * z)
+      .background(RoundedRectangle(cornerRadius: 2 * z).fill(fill))
+      .overlay(RoundedRectangle(cornerRadius: 2 * z).stroke(stroke, lineWidth: 1))
+  }
+  static func boxWidth(_ texts: [String], _ z: CGFloat) -> CGFloat {
+    let f = NSFont.monospacedSystemFont(ofSize: 10 * z, weight: .bold)
+    return ceil(texts.map { ($0 as NSString).size(withAttributes: [.font: f, .kern: 0.6 * z]).width }.max() ?? 0) + 12 * z
   }
 }
 
