@@ -191,9 +191,12 @@ final class Model: ObservableObject {
   /** The floating widget's size, 0.75…3 (the slider in the panel; 1 = the original size). */
   @Published var hudScale = defaults.object(forKey: "hudScale") as? Double ?? 1 { didSet { defaults.set(hudScale, forKey: "hudScale"); onChange?() } }
   /** How many of the closest deadlines the floating widget lists under its headline (Settings…; 0 = none). */
-  @Published var hudDeadlines = defaults.object(forKey: "hudDeadlines") as? Int ?? 3 { didSet { defaults.set(hudDeadlines, forKey: "hudDeadlines"); onChange?() } }
+  @Published var hudDeadlines = defaults.object(forKey: "hudDeadlines") as? Int ?? 0 { didSet { defaults.set(hudDeadlines, forKey: "hudDeadlines"); onChange?() } }
   var onDeadlines: (() -> Void)?
   static let hudScaleRange = 0.75...3.0
+  /** The widget's opacity (0.2…1) and click-through (clicks go to what's underneath), both in Settings…. */
+  @Published var hudOpacity = defaults.object(forKey: "hudOpacity") as? Double ?? 1 { didSet { defaults.set(hudOpacity, forKey: "hudOpacity"); onChange?() } }
+  @Published var hudClickThrough = defaults.bool(forKey: "hudClickThrough") { didSet { defaults.set(hudClickThrough, forKey: "hudClickThrough"); onChange?() } }
   var onChange: (() -> Void)?
 
   var url: String { (defaults.string(forKey: "url") ?? Model.defaultServer).trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) }
@@ -558,6 +561,22 @@ struct SettingsView: View {
               .frame(minWidth: 180)
             Image(systemName: "textformat.size.larger").foregroundColor(.secondary)
             Text("\(Int((m.hudScale * 100).rounded()))%").monospacedDigit().foregroundColor(.secondary).frame(width: 40, alignment: .trailing)
+          }
+        }
+        LabeledContent("Opacity") {
+          HStack(spacing: 8) {
+            Image(systemName: "circle.dotted").foregroundColor(.secondary)
+            NotchedSlider(value: Binding(get: { m.hudOpacity }, set: { m.hudOpacity = $0; if !m.showHUD { m.showHUD = true } }), range: 0.2...1, notches: 9)
+              .frame(minWidth: 180)
+            Image(systemName: "circle.fill").foregroundColor(.secondary)
+            Text("\(Int((m.hudOpacity * 100).rounded()))%").monospacedDigit().foregroundColor(.secondary).frame(width: 40, alignment: .trailing)
+          }
+        }
+        Toggle(isOn: $m.hudClickThrough) {
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Click-through")
+            Text("Clicks go to whatever is underneath. The widget can't be clicked, dragged or closed while this is on; use Show Headline in the gear menu to hide it.")
+              .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
           }
         }
         Stepper(value: $m.hudDeadlines, in: 0...10) {
@@ -990,6 +1009,8 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     let right = defaults.object(forKey: "hudRight") as? Double ?? 12 - Double(HUD.inset), top = defaults.object(forKey: "hudTop") as? Double ?? 10 - Double(HUD.inset)
     let f = NSRect(x: vf.maxX - right - size.width, y: vf.maxY - top - size.height, width: size.width, height: size.height)
     if hud.frame != f { placing = true; hud.setFrame(f, display: true); placing = false }
+    hud.alphaValue = CGFloat(model.hudOpacity)
+    hud.ignoresMouseEvents = model.hudClickThrough
     if !hud.isVisible { hud.orderFrontRegardless() }
   }
   func hudMoved() {
