@@ -60,11 +60,18 @@ const activeKey = computed(() => (route.name === 'module' ? route.params.module 
 
 // the left menu is hideable on desktop; the choice is remembered per device
 const sideOpen = ref((() => { try { return localStorage.getItem('life-console/sidebar') !== 'hidden' } catch { return true } })())
+// Focus mode starts without the menu; the menu button opens it there (ISS-27), and it's closed again
+// on the next visit. That choice isn't remembered, so it never changes the desktop setting.
+const focusSide = ref(false)
+watch(() => route.name, (n) => { if (n !== 'focus') focusSide.value = false })
+const inFocus = computed(() => route.name === 'focus')
+const sideShown = computed(() => (inFocus.value ? focusSide.value : !route.meta.bare && sideOpen.value))
 function toggleSide() {
+  if (inFocus.value) { focusSide.value = !focusSide.value; return }
   sideOpen.value = !sideOpen.value
   try { localStorage.setItem('life-console/sidebar', sideOpen.value ? 'open' : 'hidden') } catch { /* ignore */ }
 }
-const sideIcon = computed(() => (sideOpen.value ? 'menu' : 'menu_open'))
+const sideIcon = computed(() => (sideShown.value ? 'menu' : 'menu_open'))
 
 function openPalette(mode) {
   ui.paletteMode = mode
@@ -182,8 +189,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <AuthScreen v-if="showAuth" />
-  <div v-else class="app" :class="{ bare: route.meta.bare, 'side-hidden': !sideOpen }">
-    <aside v-if="!route.meta.bare" class="sidebar">
+  <div v-else class="app" :class="{ bare: route.meta.bare && !sideShown, 'side-hidden': !sideShown }">
+    <aside v-if="!route.meta.bare || sideShown" class="sidebar">
       <div class="brand">
         <img class="logo" src="/icons/brand-96.png" alt="" width="34" height="34" />
         <div>
@@ -215,7 +222,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
     <div class="main">
       <header v-if="!route.meta.sheet" class="topbar">
-        <button class="btn icon-only side-toggle" :title="sideOpen ? 'Hide the left menu' : 'Show the left menu'" @click="toggleSide"><span class="icon sm">{{ sideIcon }}</span></button>
+        <button class="btn icon-only side-toggle" :title="sideShown ? 'Hide the left menu' : 'Show the left menu'" @click="toggleSide"><span class="icon sm">{{ sideIcon }}</span></button>
         <div class="crumb mono">
           <span class="muted">{{ route.meta.screen ?? 'S-??' }}</span>
           <span class="muted">/</span>

@@ -1,5 +1,5 @@
 // "What should I be doing right now?" — derived live from today's timeline + todos.
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { allSigs, state, ui, todayISO, blocksForDay, todosForDay, toMin, fromMin, pad, updateTodo, byPriority, isLeaf } from './store'
 
 export function fmtDur(sec) {
@@ -20,6 +20,15 @@ export function fmtClock(sec) {
 function relatedTo(t, b) {
   if (!b.link) return false
   return t.links.some((l) => l === b.link || allSigs().find((s) => s.no === l)?.psg === b.link)
+}
+
+/** ISS-25: in a pomodoro sitting the big clock shows ONE countdown: to the pomodoro switch (break / back to
+ *  work) or to the end of the whole block. Click the clock to switch; remembered per device. */
+const CLOCK_KEY = 'life-console/pomo-clock'
+export const clockMode = ref((() => { try { return localStorage.getItem(CLOCK_KEY) === 'block' ? 'block' : 'pomo' } catch { return 'pomo' } })())
+export function toggleClockMode() {
+  clockMode.value = clockMode.value === 'pomo' ? 'block' : 'pomo'
+  try { localStorage.setItem(CLOCK_KEY, clockMode.value) } catch { /* ignore */ }
 }
 
 export function useNow() {
@@ -56,6 +65,18 @@ export function useNow() {
       if (off < end + s.brk * 60) return { phase: 'break', n: i + 1, of: segs.length, left: end + s.brk * 60 - off, brk: s.brk }
     }
     return null
+  })
+  /** The big clock: { sec, label, title } for the current block, following clockMode in a pomodoro sitting. */
+  const readout = computed(() => {
+    const p = progress.value
+    if (!p) return null
+    const ph = pomoPhase.value
+    if (!ph) return { sec: p.remaining, label: 'left', title: null }
+    const other = clockMode.value === 'pomo' ? 'Click to show the time left in the whole block' : 'Click to show the time to the next break'
+    if (clockMode.value === 'block') return { sec: p.remaining, label: 'left in block', title: other }
+    if (ph.phase === 'break') return { sec: ph.left, label: 'break left', title: other }
+    if (ph.last) return { sec: p.remaining, label: 'left · last pomodoro', title: other }
+    return { sec: ph.left, label: 'to break', title: other }
   })
   const untilNext = computed(() => (next.value ? toMin(next.value.start) * 60 - nowSec.value : null))
   /** Free seconds from now until the next block (or end of day). */
@@ -97,5 +118,5 @@ export function useNow() {
     return { state: 'idle', text: 'Nothing scheduled', meta: 'press N to add' }
   })
 
-  return { T, nowSec, nowMin, current, overlapping, next, progress, pomoPhase, untilNext, gap, queue, suggestion, suggestionFits, missedAt, startNow, headline }
+  return { T, nowSec, nowMin, current, overlapping, next, progress, pomoPhase, readout, untilNext, gap, queue, suggestion, suggestionFits, missedAt, startNow, headline }
 }

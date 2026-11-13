@@ -5,11 +5,11 @@
 // task you could pick up is the UP NEXT bottom line with Start now, so it never reads as already running.
 import { computed } from 'vue'
 import { ui, toggleTodo, toast, findTodo } from '../store'
-import { useNow, fmtDur, fmtClock } from '../now'
+import { useNow, fmtDur, fmtClock, toggleClockMode } from '../now'
 import Prio from './Prio.vue'
 
 const n = useNow()
-const { current, next, progress, pomoPhase, untilNext, gap, suggestion, suggestionFits, missedAt } = n
+const { current, next, progress, pomoPhase, readout, untilNext, gap, suggestion, suggestionFits, missedAt } = n
 /** ISS-24: the todo behind the current block, so its key points and notes are readable right here. */
 const curTodo = computed(() => (current.value?.kind === 'todo' ? findTodo(current.value.todoId) : null))
 /** Click the title: a todo opens its drawer, a fixed block its dialog. */
@@ -52,13 +52,9 @@ function start(t) {
       </div>
 
       <div class="clock">
-        <div v-if="current" class="readout"><span class="inst-big mono">{{ fmtClock(progress.remaining) }}</span><span class="muted">left</span></div>
-        <!-- ISS-25: pomodoro sittings also say when the break starts, or when it ends -->
-        <div v-if="pomoPhase" class="pomo mono" :class="pomoPhase.phase">
-          <template v-if="pomoPhase.phase === 'break'"><span class="muted">break ends in</span> <b>{{ fmtClock(pomoPhase.left) }}</b></template>
-          <template v-else-if="!pomoPhase.last"><span class="muted">{{ pomoPhase.brk }}m break in</span> <b>{{ fmtClock(pomoPhase.left) }}</b></template>
-          <template v-else><span class="muted">last pomodoro · no break</span></template>
-        </div>
+        <!-- ISS-25: one countdown; in a pomodoro sitting, click it to switch between the break and the whole block -->
+        <button v-if="current && pomoPhase" class="readout toggle" :class="pomoPhase.phase" :title="readout.title" @click="toggleClockMode"><span class="inst-big mono">{{ fmtClock(readout.sec) }}</span><span class="muted">{{ readout.label }}</span></button>
+        <div v-else-if="current" class="readout"><span class="inst-big mono">{{ fmtClock(readout.sec) }}</span><span class="muted">{{ readout.label }}</span></div>
         <div v-else class="readout"><span class="inst-big mono">{{ fmtClock(gap) }}</span><span class="muted">left</span></div>
         <div class="actions">
           <button v-if="current?.kind === 'todo'" class="btn primary" @click="toggleTodo(current.todoId)"><span class="icon sm">check</span>Done <span class="kbd">X</span></button>
@@ -117,12 +113,12 @@ function start(t) {
 .title-btn { display: block; width: 100%; border: 0; padding: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .title-btn:hover { text-decoration: underline dotted; text-underline-offset: 4px; }
 /* the current todo's key points and notes, at reading size (ISS-24) */
-.notes { display: flex; flex-direction: column; gap: 6px; max-width: 760px; border-left: 2px solid var(--border); padding-left: 12px; }
+.notes { display: flex; flex-direction: column; gap: 6px; max-width: 760px; }
 .vital { font-size: 16px; line-height: 24px; font-weight: 600; }
 .notes-text { font-size: 15px; line-height: 23px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9.6em; overflow: auto; color: var(--text); }
-.pomo { font-size: 18px; }
-.pomo b { font-weight: 700; }
-.pomo.break b { color: var(--accent); }
+.readout.toggle { border: 0; padding: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.readout.toggle:hover .muted { text-decoration: underline dotted; }
+.readout.toggle.break .inst-big { color: var(--accent); }
 .title .until { color: var(--warn); }
 .title .until-w { color: var(--muted); font-weight: 400; }
 .title { font: 600 30px/36px Inter, sans-serif; letter-spacing: -0.015em; }
