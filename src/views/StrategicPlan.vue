@@ -385,7 +385,7 @@ const print = () => window.print()
           <div class="panel-h"><span class="icon sm ok">flag</span><h2>Prioritised strategic goals (PSG)</h2><span class="spacer"></span><span class="mono small muted">PSG % = mean of SIGs</span></div>
           <div class="tw">
             <table class="tbl">
-              <colgroup><col style="width: 58px" /><col style="width: 100px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 68px" /></colgroup>
+              <colgroup><col style="width: 58px" /><col style="width: 100px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 80px" /></colgroup>
               <thead><tr><th>Prio</th><th>PSG No.</th><th>PSG name</th><th>Indicators of success</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="[fx('goals', p.no), { selected: selected === p.no }]" @click="rowClick(p.no, $event)">
@@ -421,7 +421,7 @@ const print = () => window.print()
           </div>
           <div class="tw">
             <table class="tbl wide">
-              <colgroup><col style="width: 58px" /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 24%" /><col /><col style="width: 160px" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 72px" /></colgroup>
+              <colgroup><col style="width: 58px" /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 24%" /><col /><col style="width: 160px" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 108px" /></colgroup>
               <thead><tr><th>Prio</th><th>SIG No.</th><th>PSG</th><th>SIG name</th><th>Specific &amp; measurable criteria</th><th>Depends on</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="[fx('goals', s.no), { selected: selected === s.no }]" @click="rowClick(s.no, $event)">
@@ -668,6 +668,10 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 .tw { overflow-x: auto; }
 .tw .tbl { min-width: 760px; }
 .tw .tbl.wide { min-width: 900px; }
+/* ISS-23: the row actions (deadline, todo, delete) stay pinned to the right edge while the table scrolls sideways */
+.tw .tbl:has(td > .acts) th:last-child, .tw .tbl td:has(> .acts) { position: sticky; right: 0; z-index: 1; background: var(--surface); box-shadow: -1px 0 0 var(--border); }
+.tw .tbl tbody tr:hover > td:has(> .acts) { background: var(--surface-2); }
+.tw .tbl tbody tr.selected > td:has(> .acts) { background: color-mix(in srgb, var(--info) 14%, var(--surface)); }
 .input.w { width: 100%; }
 .select.small, .input.small { height: 24px; font-size: 11px; }
 .widgets { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
