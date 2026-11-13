@@ -670,49 +670,30 @@ struct HUD: View {
 }
 
 extension HUD {
-  /**
-   * The closest n deadlines (Settings → Deadlines), under the pill. Each row: an urgency bar (glance.js colours:
-   * red ≤ 12 h or overdue, amber ≤ 48 h, else green), the title with its due date, and the time left. Click → Deadlines.
-   */
+  /** The closest n deadlines (Settings → Deadlines), under the pill: time left (urgency colour) · title. Click → Deadlines. */
   func deadlineList(_ n: Now, _ z: CGFloat) -> some View {
     let shown = Array(n.deadlines.prefix(m.hudDeadlines))
-    return VStack(alignment: .leading, spacing: 0) {
-      HStack {
-        Text("DEADLINES").font(.system(size: 9.5 * z, weight: .bold)).tracking(1.2 * z).foregroundColor(K.muted)
-        Spacer()
-        if n.deadlines.count > shown.count { Text("\(shown.count) of \(n.deadlines.count)").font(.system(size: 9.5 * z, weight: .medium, design: .monospaced)).foregroundColor(K.muted) }
-      }
-      .padding(.bottom, 5 * z)
+    let left = shown.map { $0.mins <= 0 ? "late" : countdown($0.mins) }
+    let w = left.map { ($0 as NSString).size(withAttributes: [.font: NSFont.monospacedSystemFont(ofSize: 12 * z, weight: .semibold)]).width }.max() ?? 0
+    return VStack(alignment: .leading, spacing: 5 * z) {
       ForEach(Array(shown.enumerated()), id: \.element.id) { i, d in
-        let col = d.mins <= 720 ? K.danger : d.mins <= 2880 ? K.warn : K.accent
-        if i > 0 { Rectangle().fill(K.border).frame(height: 1).padding(.leading, 12 * z) }
-        HStack(alignment: .center, spacing: 9 * z) {
-          RoundedRectangle(cornerRadius: 1.5 * z).fill(col).frame(width: 3 * z, height: 26 * z)
-          VStack(alignment: .leading, spacing: 1 * z) {
-            Text(d.title).font(.system(size: 12.5 * z, weight: .medium)).foregroundColor(K.text).lineLimit(1).truncationMode(.tail)
-              .frame(maxWidth: 260 * z, alignment: .leading)
-            Text(dueLabel(d.due)).font(.system(size: 10 * z)).foregroundColor(K.muted).lineLimit(1)
-          }
-          Spacer(minLength: 12 * z)
-          Text(d.mins <= 0 ? "OVERDUE" : countdown(d.mins)).font(.system(size: 13 * z, weight: .semibold, design: .monospaced)).foregroundColor(col)
-            .padding(.horizontal, 6 * z).padding(.vertical, 2 * z)
-            .background(RoundedRectangle(cornerRadius: 3 * z).fill(col.opacity(0.12)))
+        HStack(spacing: 10 * z) {
+          // glance.js colours: red ≤ 12 h or overdue, amber ≤ 48 h, else green
+          Text(left[i]).font(.system(size: 12 * z, weight: .semibold, design: .monospaced))
+            .foregroundColor(d.mins <= 720 ? K.danger : d.mins <= 2880 ? K.warn : K.accent)
+            .frame(width: ceil(w) + 1, alignment: .trailing)
+          Text(d.title).font(.system(size: 12.5 * z)).foregroundColor(K.text).lineLimit(1).truncationMode(.tail)
+            .frame(maxWidth: 300 * z, alignment: .leading)
         }
-        .padding(.vertical, 5 * z)
       }
     }
-    .padding(.horizontal, 10 * z).padding(.top, 8 * z).padding(.bottom, 5 * z)
+    .padding(.horizontal, 10 * z).padding(.vertical, 7 * z)
+    .frame(maxWidth: .infinity, alignment: .leading)
     .background(K.surface2)
     .clipShape(RoundedRectangle(cornerRadius: 3 * z))
     .overlay(RoundedRectangle(cornerRadius: 3 * z).stroke(K.border, lineWidth: 1))
     .contentShape(Rectangle()).onTapGesture { m.onDeadlines?() }
     .help("Click: the Deadlines page")
-  }
-  /** "Fri 15 Nov · 18:00", or just the day for an end-of-day deadline. */
-  func dueLabel(_ d: Date) -> String {
-    let f = DateFormatter(); let c = Calendar.current.dateComponents([.hour, .minute], from: d)
-    f.dateFormat = c.hour == 23 && c.minute == 59 ? "EEE d MMM" : "EEE d MMM · HH:mm"
-    return f.string(from: d)
   }
 }
 
