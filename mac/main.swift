@@ -200,6 +200,8 @@ final class Model: ObservableObject {
   @Published var hudBgOpacity = defaults.object(forKey: "hudBgOpacity") as? Double ?? defaults.object(forKey: "hudOpacity") as? Double ?? 1 { didSet { defaults.set(hudBgOpacity, forKey: "hudBgOpacity"); onChange?() } }
   @Published var hudFgOpacity = defaults.object(forKey: "hudFgOpacity") as? Double ?? defaults.object(forKey: "hudOpacity") as? Double ?? 1 { didSet { defaults.set(hudFgOpacity, forKey: "hudFgOpacity"); onChange?() } }
   @Published var hudClickThrough = defaults.bool(forKey: "hudClickThrough") { didSet { defaults.set(hudClickThrough, forKey: "hudClickThrough"); onChange?() } }
+  /** Pointer over the widget while click-through is on (the window gets no hover events then): shows the ×. */
+  @Published var hudPointerOver = false
   var onChange: (() -> Void)?
 
   var url: String { (defaults.string(forKey: "url") ?? Model.defaultServer).trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) }
@@ -571,7 +573,7 @@ struct SettingsView: View {
         Toggle(isOn: $m.hudClickThrough) {
           VStack(alignment: .leading, spacing: 2) {
             Text("Click-through")
-            Text("Clicks go to whatever is underneath. The widget can't be clicked, dragged or closed while this is on; use Show Headline in the gear menu to hide it.")
+            Text("Clicks go to whatever is underneath. Only its × still works: point at the widget and click the × on its corner. It can't be clicked or dragged meanwhile.")
               .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
           }
         }
@@ -714,7 +716,7 @@ struct HUD: View {
       .padding(HUD.inset)                       // transparent margin so the close button can sit on the corner
       .overlay(alignment: .topLeading) {
         // one-click hide on the pill's top-left corner, like a macOS notification; shown on hover; a fixed size whatever the widget size
-        if hover {
+        if hover || m.hudPointerOver {
           Button { m.showHUD = false } label: {
             Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundColor(K.text)
               .frame(width: 16, height: 16).background(Circle().fill(K.surface2)).overlay(Circle().stroke(K.border, lineWidth: 1))
@@ -943,7 +945,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     hud.level = .statusBar; // menu-bar level: stays put while swiping between Spaces (.floating fades out and back in)
     hud.isOpaque = false; hud.backgroundColor = .clear; hud.hasShadow = true
     hud.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-    hud.isMovableByWindowBackground = true; hud.hidesOnDeactivate = false
+    hud.isMovableByWindowBackground = true; hud.hidesOnDeactivate = false; hud.acceptsMouseMovedEvents = true
     hudHost = FirstMouseHost(rootView: HUD(m: model, open: { [weak self] in self?.openFocus() }))
     hud.contentView = hudHost
     NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: hud, queue: .main) { [weak self] _ in self?.hudMoved() }
@@ -1016,16 +1018,44 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
   }
   /** Keep the pill pinned by its top-right corner (offsets saved when you drag it) while its width changes. */
   func renderHUD() {
-    guard model.showHUD, model.snapshot != nil, let vf = (hud.screen ?? NSScreen.main)?.visibleFrame else { hud.orderOut(nil); return }
+    guard model.showHUD, model.snapshot != nil, let vf = (hud.screen ?? NSScreen.main)?.visibleFrame else { hud.orderOut(nil); syncClickThrough(); return }
     hudHost.layoutSubtreeIfNeeded()
     let size = hudHost.fittingSize
     let right = defaults.object(forKey: "hudRight") as? Double ?? 12 - Double(HUD.inset), top = defaults.object(forKey: "hudTop") as? Double ?? 10 - Double(HUD.inset)
     let f = NSRect(x: vf.maxX - right - size.width, y: vf.maxY - top - size.height, width: size.width, height: size.height)
     if hud.frame != f { placing = true; hud.setFrame(f, display: true); placing = false }
     hud.invalidateShadow()                      // the shadow follows what's drawn, e.g. a see-through background
-    hud.ignoresMouseEvents = model.hudClickThrough
     if !hud.isVisible { hud.orderFrontRegardless() }
+    syncClickThrough()
   }
+  /**
+   * Click-through, but the × stays usable: while it's on, follow the pointer (global + local mouse-moved monitors,
+   * no permission needed). Over the widget the × shows; only over the × corner does the window take clicks.
+   */
+  var mouseMonitors: [Any] = []
+  var overClose = false
+  func syncClickThrough() {
+    let watch = model.hudClickThrough && model.showHUD && hud.isVisible
+    if watch && mouseMonitors.isEmpty {
+      let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
+      if let g = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in self?.pointerMoved() }) { mouseMonitors.append(g) }
+      if let l = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] e in self?.pointerMoved(); return e }) { mouseMonitors.append(l) }
+    } else if !watch && !mouseMonitors.isEmpty {
+      mouseMonitors.forEach(NSEvent.removeMonitor); mouseMonitors = []
+      overClose = false; if model.hudPointerOver { model.hudPointerOver = false }
+    }
+    hud.ignoresMouseEvents = model.hudClickThrough && !overClose
+  }
+  func pointerMoved() {
+    let p = NSEvent.mouseLocation, f = hud.frame
+    // the × sits on the card's top-left corner: the window's top-left 2·inset square
+    let close = NSRect(x: f.minX, y: f.maxY - 2 * HUD.inset - 4, width: 2 * HUD.inset + 4, height: 2 * HUD.inset + 4)
+    let over = f.insetBy(dx: HUD.inset - 2, dy: HUD.inset - 2).contains(p) || close.contains(p)
+    if model.hudPointerOver != over { model.hudPointerOver = over }
+    let c = close.contains(p)
+    if c != overClose { overClose = c; hud.ignoresMouseEvents = model.hudClickThrough && !c }
+  }
+
   func hudMoved() {
     guard !placing, let vf = (hud.screen ?? NSScreen.main)?.visibleFrame else { return }
     defaults.set(Double(vf.maxX - hud.frame.maxX), forKey: "hudRight"); defaults.set(Double(vf.maxY - hud.frame.maxY), forKey: "hudTop")
