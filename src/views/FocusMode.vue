@@ -6,6 +6,7 @@ import { useNow, fmtDur, fmtClock, toggleClockMode } from '../now'
 import Stamps from '../components/Stamps.vue'
 import Prio from '../components/Prio.vue'
 import Chip from '../components/Chip.vue'
+import PomoBar from '../components/PomoBar.vue'
 
 const n = useNow()
 const { T, current, next, progress, pomoPhase, readout, untilNext, gap, queue, suggestion, suggestionFits, missedAt } = n
@@ -43,7 +44,8 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
       <!-- ISS-25: one countdown; in a pomodoro sitting, click it to switch between the break and the whole block -->
       <button v-if="pomoPhase" class="countdown mono toggle" :class="pomoPhase.phase" :title="readout.title" @click="toggleClockMode">{{ fmtClock(readout.sec) }} <span class="muted">{{ readout.label }}</span><span class="muted pomo-n">· POMODORO {{ pomoPhase.n }}/{{ pomoPhase.of }}<template v-if="pomoPhase.phase === 'break'"> · BREAK</template></span></button>
       <div v-else class="countdown mono">{{ fmtClock(readout.sec) }} <span class="muted">{{ readout.label }}</span></div>
-      <div class="bar big"><i :style="{ width: progress.pct + '%' }"></i></div>
+      <PomoBar v-if="current.pomo" :segs="current.pomo" :elapsed="progress.elapsed" />
+      <div v-else class="bar big"><i :style="{ width: progress.pct + '%' }"></i></div>
       <div class="row mono small muted"><span>START {{ current.start }}</span><span class="spacer"></span><span>elapsed {{ fmtDur(progress.elapsed) }} / {{ fmtDur(progress.total) }}</span><span class="spacer"></span><span>END {{ current.end }}</span></div>
       <div v-if="suggestion" class="do">
         <span class="tiny upper muted">Work on</span> <Prio :p="suggestion.priority" /> {{ suggestion.title }} <span class="mono muted">{{ suggestion.timeMin }}m</span>

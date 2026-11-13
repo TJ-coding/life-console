@@ -7,6 +7,7 @@ import { computed } from 'vue'
 import { ui, toggleTodo, toast, findTodo } from '../store'
 import { useNow, fmtDur, fmtClock, toggleClockMode } from '../now'
 import Prio from './Prio.vue'
+import PomoBar from './PomoBar.vue'
 
 const n = useNow()
 const { current, next, progress, pomoPhase, readout, untilNext, gap, suggestion, suggestionFits, missedAt } = n
@@ -63,7 +64,8 @@ function start(t) {
       </div>
     </div>
 
-    <div v-if="current" class="bar big-bar"><i :style="{ width: progress.pct + '%' }"></i></div>
+    <PomoBar v-if="current?.pomo" :segs="current.pomo" :elapsed="progress.elapsed" />
+    <div v-else-if="current" class="bar big-bar"><i :style="{ width: progress.pct + '%' }"></i></div>
 
     <!-- free: the todo you could start, as the bottom line (only the next block's start time is in the label row, so "next" is said once) -->
     <div v-if="!current" class="next-row upnext">
