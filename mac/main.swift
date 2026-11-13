@@ -187,9 +187,9 @@ final class Model: ObservableObject {
   var onConnect: (() -> Void)?
   var onPlan: (() -> Void)?
   @Published var showHUD = defaults.object(forKey: "hud") as? Bool ?? false { didSet { defaults.set(showHUD, forKey: "hud"); onChange?() } }
-  /** The floating widget's size: 0.85 small · 1 medium · 1.25 large · 1.5 extra large (gear menu → Widget Size). */
+  /** The floating widget's size, 0.75…3 (the slider in the panel; 1 = the original size). */
   @Published var hudScale = defaults.object(forKey: "hudScale") as? Double ?? 1 { didSet { defaults.set(hudScale, forKey: "hudScale"); onChange?() } }
-  static let hudSizes: [(String, Double)] = [("Small", 0.85), ("Medium", 1), ("Large", 1.25), ("Extra Large", 1.5)]
+  static let hudScaleRange = 0.75...3.0
   var onChange: (() -> Void)?
 
   var url: String { (defaults.string(forKey: "url") ?? Model.defaultServer).trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) }
@@ -329,6 +329,7 @@ struct Panel: View {
         if !n.blocks.isEmpty { timeline(n) }
         if !n.unscheduled.isEmpty { unscheduled(n) }
         if !n.deadlines.isEmpty { deadlines(n) }
+        if m.showHUD { sizeRow }
       } else if m.connected {
         Card { Text(m.error ?? "Loading…").foregroundColor(K.muted) }
       }
@@ -511,6 +512,17 @@ struct Panel: View {
     }
   }
 
+  /** Widget size: a continuous slider with a notch every 25 % (it snaps to a notch when close). */
+  var sizeRow: some View {
+    HStack(spacing: 10) {
+      Image(systemName: "textformat.size.smaller").font(.system(size: 11)).foregroundColor(K.muted)
+      NotchedSlider(value: Binding(get: { m.hudScale }, set: { m.hudScale = $0 }), range: Model.hudScaleRange, notches: 10)
+      Image(systemName: "textformat.size.larger").font(.system(size: 13)).foregroundColor(K.muted)
+      Text("\(Int((m.hudScale * 100).rounded()))%").font(K.mono).foregroundColor(K.muted).frame(width: 38, alignment: .trailing)
+    }
+    .padding(.horizontal, 6).help("Size of the widget in the top-right corner")
+  }
+
   var footer: some View {
     HStack(spacing: 6) {
       Button(action: open) {
@@ -530,9 +542,6 @@ struct Panel: View {
           loginOn = SMAppService.mainApp.status == .enabled
         }))
         Toggle("Show Headline on Screen", isOn: $m.showHUD)
-        Picker("Widget Size", selection: Binding(get: { m.hudScale }, set: { m.hudScale = $0; m.showHUD = true })) {
-          ForEach(Model.hudSizes, id: \.1) { Text($0.0).tag($0.1) }
-        }
         Button("Reset Headline Position") { m.resetHUD() }
         Button("Fit Menu Bar Again") { m.onRefit?() }.help("After freeing menu-bar space: let the headline grow back")
         Divider()
@@ -548,6 +557,30 @@ struct Panel: View {
   }
 }
 
+
+/** NSSlider with tick marks ("notches"): continuous, but snaps to a notch within 2 % of it. */
+struct NotchedSlider: NSViewRepresentable {
+  @Binding var value: Double
+  let range: ClosedRange<Double>
+  let notches: Int
+  func makeNSView(context: Context) -> NSSlider {
+    let s = NSSlider(value: value, minValue: range.lowerBound, maxValue: range.upperBound, target: context.coordinator, action: #selector(Coordinator.changed(_:)))
+    s.numberOfTickMarks = notches; s.allowsTickMarkValuesOnly = false; s.tickMarkPosition = .below; s.isContinuous = true
+    s.controlSize = .small
+    return s
+  }
+  func updateNSView(_ s: NSSlider, context: Context) { if abs(s.doubleValue - value) > 0.001 { s.doubleValue = value } }
+  func makeCoordinator() -> Coordinator { Coordinator(self) }
+  final class Coordinator: NSObject {
+    var parent: NotchedSlider
+    init(_ p: NotchedSlider) { parent = p }
+    @objc func changed(_ s: NSSlider) {
+      let tick = s.closestTickMarkValue(toValue: s.doubleValue)
+      let snapped = abs(tick - s.doubleValue) < (parent.range.upperBound - parent.range.lowerBound) * 0.02 ? tick : s.doubleValue
+      parent.value = (snapped * 100).rounded() / 100
+    }
+  }
+}
 
 /* ───────────── on-screen headline: the app's NOW pill (App.vue .nowpill) ───────────── */
 struct HUD: View {
