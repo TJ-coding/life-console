@@ -186,6 +186,7 @@ final class Model: ObservableObject {
   var onRefit: (() -> Void)?
   var onConnect: (() -> Void)?
   var onPlan: (() -> Void)?
+  var onSettings: (() -> Void)?
   @Published var showHUD = defaults.object(forKey: "hud") as? Bool ?? false { didSet { defaults.set(showHUD, forKey: "hud"); onChange?() } }
   /** The floating widget's size, 0.75…3 (the slider in the panel; 1 = the original size). */
   @Published var hudScale = defaults.object(forKey: "hudScale") as? Double ?? 1 { didSet { defaults.set(hudScale, forKey: "hudScale"); onChange?() } }
@@ -314,7 +315,6 @@ struct Chip: View {
 struct Panel: View {
   @ObservedObject var m: Model
   let open: () -> Void, settings: () -> Void, quit: () -> Void
-  @State private var loginOn = SMAppService.mainApp.status == .enabled
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -329,7 +329,6 @@ struct Panel: View {
         if !n.blocks.isEmpty { timeline(n) }
         if !n.unscheduled.isEmpty { unscheduled(n) }
         if !n.deadlines.isEmpty { deadlines(n) }
-        if m.showHUD { sizeRow }
       } else if m.connected {
         Card { Text(m.error ?? "Loading…").foregroundColor(K.muted) }
       }
@@ -512,17 +511,6 @@ struct Panel: View {
     }
   }
 
-  /** Widget size: a continuous slider with a notch every 25 % (it snaps to a notch when close). */
-  var sizeRow: some View {
-    HStack(spacing: 10) {
-      Image(systemName: "textformat.size.smaller").font(.system(size: 11)).foregroundColor(K.muted)
-      NotchedSlider(value: Binding(get: { m.hudScale }, set: { m.hudScale = $0 }), range: Model.hudScaleRange, notches: 10)
-      Image(systemName: "textformat.size.larger").font(.system(size: 13)).foregroundColor(K.muted)
-      Text("\(Int((m.hudScale * 100).rounded()))%").font(K.mono).foregroundColor(K.muted).frame(width: 38, alignment: .trailing)
-    }
-    .padding(.horizontal, 6).help("Size of the widget in the top-right corner")
-  }
-
   var footer: some View {
     HStack(spacing: 6) {
       Button(action: open) {
@@ -537,18 +525,11 @@ struct Panel: View {
       }
       Spacer()
       Menu {
-        Toggle("Open at Login", isOn: Binding(get: { loginOn }, set: { on in
-          if on { try? SMAppService.mainApp.register() } else { try? SMAppService.mainApp.unregister() }
-          loginOn = SMAppService.mainApp.status == .enabled
-        }))
         Toggle("Show Headline on Screen", isOn: $m.showHUD)
-        Button("Reset Headline Position") { m.resetHUD() }
-        Button("Fit Menu Bar Again") { m.onRefit?() }.help("After freeing menu-bar space: let the headline grow back")
-        Divider()
-        Button(m.checkedNoUpdate && m.update == nil ? "Up to Date (\(Model.version))" : "Check for Updates") { m.checkUpdate(force: true) }
-        Text("Version \(Model.version)")
         Button("Refresh") { m.fetch() }
-        Button("Server & Token…", action: settings)
+        Button(m.checkedNoUpdate && m.update == nil ? "Up to Date (\(Model.version))" : "Check for Updates") { m.checkUpdate(force: true) }
+        Divider()
+        Button("Settings…") { m.onSettings?() }.keyboardShortcut(",")
         Divider()
         Button("Quit Life Console Now", action: quit)
       } label: { Image(systemName: "gearshape") }
@@ -557,6 +538,51 @@ struct Panel: View {
   }
 }
 
+
+/** Settings window (gear menu → Settings…): the widget, the menu bar, login, account. */
+struct SettingsView: View {
+  @ObservedObject var m: Model
+  let changeServer: () -> Void, connect: () -> Void, refit: () -> Void
+  @State private var loginOn = SMAppService.mainApp.status == .enabled
+  var body: some View {
+    Form {
+      Section("Widget in the screen's corner") {
+        Toggle("Show the widget", isOn: $m.showHUD)
+        LabeledContent("Size") {
+          HStack(spacing: 8) {
+            Image(systemName: "textformat.size.smaller").foregroundColor(.secondary)
+            NotchedSlider(value: Binding(get: { m.hudScale }, set: { m.hudScale = $0; if !m.showHUD { m.showHUD = true } }), range: Model.hudScaleRange, notches: 10)
+              .frame(minWidth: 180)
+            Image(systemName: "textformat.size.larger").foregroundColor(.secondary)
+            Text("\(Int((m.hudScale * 100).rounded()))%").monospacedDigit().foregroundColor(.secondary).frame(width: 40, alignment: .trailing)
+          }
+        }
+        HStack { Text("Position"); Spacer(); Button("Back to the Corner") { m.resetHUD() } }
+      }
+      Section {
+        HStack { Text("Headline size"); Spacer(); Button("Fit Menu Bar Again", action: refit) }
+      } header: { Text("Menu bar") } footer: {
+        Text("When the menu bar is full, the headline shortens until it fits. After freeing space, let it grow back.").font(.caption).foregroundColor(.secondary)
+      }
+      Section("General") {
+        Toggle("Open at login", isOn: Binding(get: { loginOn }, set: { on in
+          if on { try? SMAppService.mainApp.register() } else { try? SMAppService.mainApp.unregister() }
+          loginOn = SMAppService.mainApp.status == .enabled
+        }))
+        LabeledContent("Version") {
+          HStack { Text(Model.version).foregroundColor(.secondary)
+            Button(m.checkedNoUpdate && m.update == nil ? "Up to Date" : "Check for Updates") { m.checkUpdate(force: true) } }
+        }
+      }
+      Section("Account") {
+        LabeledContent("Server") { Text(m.url).foregroundColor(.secondary).textSelection(.enabled) }
+        LabeledContent("Status") { Text(!m.connected ? "Not connected" : m.error ?? "Connected").foregroundColor(m.connected && m.error == nil ? .secondary : .orange) }
+        HStack { Button("Connect from Life Console…", action: connect); Spacer(); Button("Server & Token…", action: changeServer) }
+      }
+    }
+    .formStyle(.grouped).frame(width: 460)
+  }
+}
 
 /** NSSlider with tick marks ("notches"): continuous, but snaps to a notch within 2 % of it. */
 struct NotchedSlider: NSViewRepresentable {
@@ -822,6 +848,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     model.onInstall = { [weak self] in self?.installUpdate() }
     model.onConnect = { [weak self] in self?.openConnectPage() }
     model.onPlan = { [weak self] in self?.openPath("/app#/week") }
+    model.onSettings = { [weak self] in self?.openSettings() }
     if !defaults.bool(forKey: "loginAsked") { defaults.set(true, forKey: "loginAsked"); try? SMAppService.mainApp.register() }
 
     item.button?.target = self; item.button?.action = #selector(toggle)
@@ -920,6 +947,22 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
   /** The pill: Focus mode, or the week planner while it asks you to schedule what's next. */
   func openFocus() { openPath(model.snapshot?.planning == true ? "/app#/week" : "/app#/focus") }
   func openPath(_ p: String) { popover.performClose(nil); if let u = URL(string: model.url + p) { NSWorkspace.shared.open(u) } }
+  var settingsWindow: NSWindow?
+  func openSettings() {
+    popover.performClose(nil)
+    if settingsWindow == nil {
+      let hc = NSHostingController(rootView: SettingsView(m: model, changeServer: { [weak self] in self?.configure() },
+                                                          connect: { [weak self] in self?.openConnectPage() },
+                                                          refit: { [weak self] in self?.model.onRefit?() }))
+      hc.sizingOptions = .preferredContentSize
+      let w = NSWindow(contentViewController: hc)
+      w.title = "Life Console Now Settings"; w.styleMask = [.titled, .closable]; w.isReleasedWhenClosed = false
+      w.center(); settingsWindow = w
+    }
+    NSApp.activate(ignoringOtherApps: true)
+    settingsWindow?.makeKeyAndOrderFront(nil)
+  }
+
   func showPanel() {
     guard let b = item.button, !popover.isShown else { return }
     popover.show(relativeTo: b.bounds, of: b, preferredEdge: .minY)
