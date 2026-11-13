@@ -5,7 +5,7 @@ import { state, ui, toggleTheme, setAccent, ACCENTS, resetDemo, clearPlanner, to
 import { sync, pull, deviceName, setDeviceName, leaveGuest } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
 import { rhythm, wallMin } from '../../server/pomodoro.mjs'
-import { auth, signOut, changePassword, deleteAccount, rename } from '../auth'
+import { auth, signOut, changePassword, deleteAccount, rename, macAppToken } from '../auth'
 import { analyticsAvailable } from '../analytics'
 import { serverUpdate, loadUpdate, checkUpdate, applyUpdate, setAutoUpdate } from '../updates'
 import { signupsAdmin, loadSignups, setSignups } from '../signups'
@@ -40,7 +40,23 @@ onMounted(async () => {
   loadSignups()
   await loadUpdate()
   if (route.hash === '#updates') updPanel.value?.scrollIntoView({ block: 'start' })
+  if (route.query.mac) macPanel.value?.scrollIntoView({ block: 'start' }) // the Mac app's "Connect" opens #/settings?mac=connect
 })
+
+/* ── Mac menu-bar app (mac/): download, then connect it to this account with a one-time link ── */
+const macPanel = ref(null)
+const mac = ref({ busy: false, sent: false, token: '' })
+const MAC_INSTALL_CMD = 'curl -fsSL https://life-console.dev/download/mac.zip -o /tmp/lcn.zip && ditto -xk /tmp/lcn.zip /Applications && open "/Applications/Life Console Now.app"'
+const origin = () => window.location.origin
+async function connectMac() {
+  mac.value.busy = true
+  try {
+    const token = await macAppToken()
+    mac.value = { busy: false, sent: true, token }
+    // hands the server and token to the app (it asks you to confirm); nothing happens if it isn't installed yet
+    window.location.href = `lifeconsole-now://connect?server=${encodeURIComponent(origin())}&token=${encodeURIComponent(token)}`
+  } catch (e) { mac.value.busy = false; toast(e.message) }
+}
 const sgn = computed(() => signupsAdmin.info)
 const fmtDay = (d) => (d ? new Date(d).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) : '—')
 function updateNow() {
@@ -239,6 +255,29 @@ const reload = () => window.location.reload()
       </div>
     </section>
 
+    <section v-if="!env.ios && !env.android" id="mac" ref="macPanel" class="panel" :class="{ focus: route.query.mac }">
+      <div class="panel-h"><span class="icon sm">desktop_mac</span><h2>Mac menu-bar app</h2><span class="spacer"></span><span class="tiny muted">macOS 13+</span></div>
+      <div class="panel-b col small">
+        <p>Life Console Now shows what you should be doing right now in the menu bar: the current block and the time left, or what's next. Click it for today's timeline and deadlines.</p>
+        <div class="steps">
+          <div class="step"><b class="row"><span class="icon sm">download</span>1 · Install</b>
+            <p><a class="btn" href="/download/mac"><span class="icon sm">download</span>Download for Mac</a></p>
+            <p class="tiny muted">Open the .dmg and drag the app to Applications. It isn't notarised by Apple yet, so the first time, right-click it and choose <b>Open</b> (macOS 15: System Settings → Privacy &amp; Security → <b>Open Anyway</b>). Or install from Terminal with no warning:</p>
+            <div class="row"><code class="mono tiny grow cmd">{{ MAC_INSTALL_CMD }}</code><button class="btn" @click="copy(MAC_INSTALL_CMD)"><span class="icon sm">content_copy</span>Copy</button></div>
+          </div>
+          <div class="step"><b class="row"><span class="icon sm">link</span>2 · Connect it to this account</b>
+            <p v-if="!auth.user" class="muted">Sign in first.</p>
+            <template v-else>
+              <p><button class="btn primary" :disabled="mac.busy" @click="connectMac"><span class="icon sm">link</span>Connect Mac app</button></p>
+              <p v-if="mac.sent" class="tiny">Sent to the app: confirm in the dialog it shows. Nothing happened? Install it first and click Connect again, or choose <b>Server &amp; Token…</b> in its gear menu and paste <code class="mono">{{ origin() }}</code> and this token: <code class="mono">{{ mac.token }}</code> <button class="btn" @click="copy(mac.token)"><span class="icon sm">content_copy</span>Copy</button></p>
+              <p v-else class="tiny muted">Creates a key just for the Mac app. Connecting again replaces it.</p>
+            </template>
+          </div>
+        </div>
+        <p class="tiny muted">Updates: the app tells you when there's a new version and installs it with one click.</p>
+      </div>
+    </section>
+
     <!-- notifications: this device -->
     <section class="panel">
       <div class="panel-h"><span class="icon sm">notifications</span><h2>Notifications</h2><span class="spacer"></span>
@@ -395,6 +434,8 @@ const reload = () => window.location.reload()
 .wrap { flex-wrap: wrap; }
 .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .step { border: 1px solid var(--border); border-radius: 2px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.panel.focus { border-color: var(--accent); }
+.cmd { padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; overflow-x: auto; white-space: nowrap; }
 .step ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .kind { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
 .kind input { margin-top: 3px; }

@@ -10,6 +10,7 @@ import { createIssues } from './issues.mjs'
 import { createScheduler } from './scheduler.mjs'
 import { createMetricsReporter } from './metrics.mjs'
 import { createUpdates } from './updates.mjs'
+import { createMacApp } from './macapp.mjs'
 import { createMailer } from './mail.mjs'
 import { createGoogle } from './google.mjs'
 import { createSignups } from './signups.mjs'
@@ -24,7 +25,7 @@ const MIME = {
 const LEGAL = new Set(['/privacy', '/terms'])
 const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
 const DOCS_DATE = '2026-11-10' // sitemap <lastmod> for the docs pages: bump when they change
-const LANDING_DATE = '2026-11-13' // sitemap <lastmod> for the landing page: bump when it changes
+const LANDING_DATE = '2026-11-14' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
 function send(res, status, body, headers = {}) {
@@ -63,6 +64,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const limit = createLimiter()
   const metrics = createMetricsReporter({ db, pool, cfg, log })
   const updates = createUpdates({ cfg, log })
+  const macApp = createMacApp({ cfg, log })
   const scheduler = createScheduler({ db, planner, push, tickMs: cfg.tickMs, log })
   const appOrigin = cfg.appUrl ? new URL(cfg.appUrl).origin : null
   const appHost = cfg.appUrl ? new URL(cfg.appUrl).host : null
@@ -105,6 +107,9 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         const signupMode = dbOk ? await signups.publicMode().catch(() => cfg.signups) : cfg.signups
         return send(res, dbOk ? 200 : 503, { ok: dbOk, build: BUILD, time: new Date().toISOString(), auth: { signups: signupMode, passwordReset: !!mailer, password: cfg.passwordAuth, google: !!google }, ...(cfg.analyticsScript && cfg.analyticsSiteId ? { analytics: { script: cfg.analyticsScript, siteId: cfg.analyticsSiteId } } : {}) })
       }
+      case 'GET /api/mac/latest': // the Mac menu-bar app's update check (server/macapp.mjs)
+        limit(`maclatest:${ip(req)}`, 120, 3600000)
+        return send(res, 200, await macApp.latest(), { 'Cache-Control': 'public, max-age=600' })
       case 'GET /api/auth/google/start': {
         if (!google) throw httpError(404, 'Google sign-in is not set up on this server')
         limit(`google:${ip(req)}`, 60, 900000)
@@ -211,6 +216,16 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         await db.delete(users).where(eq(users.id, uid))
         log(`[auth] deleted account ${uid.slice(0, 8)}`)
         return send(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie(secureFor(req)) })
+      }
+      case 'POST /api/auth/tokens': { // "Connect Mac app" in Settings: an API token for one named device
+        if (who.via !== 'session') throw httpError(403, 'Create tokens from a signed-in browser')
+        const b = await body(req)
+        const name = String(b.name || '').trim().slice(0, 60)
+        if (!/^[\w .()-]{1,60}$/.test(name)) throw httpError(400, 'name (letters, digits, spaces) required')
+        limit(`tokens:${uid}`, 20, 3600000)
+        const token = await auth.replaceApiToken(uid, name)
+        log(`[auth] api token "${name}" for ${uid.slice(0, 8)}`)
+        return send(res, 201, { token, name }, { 'Cache-Control': 'no-store' })
       }
       case 'POST /api/auth/password': {
         noPasswords()
@@ -481,6 +496,10 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
     try {
       if (url.pathname.startsWith('/api/')) return await api(req, res, url)
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed')
+      // the Mac menu-bar app's latest release (landing page buttons, the Terminal install line)
+      if (url.pathname === '/download/mac' || url.pathname === '/download/mac.zip') {
+        return redirect(res, await macApp.downloadUrl(url.pathname.endsWith('.zip') ? 'zip' : 'dmg'))
+      }
       return serveStatic(req, res, url.pathname, url.searchParams)
     } catch (err) {
       const status = err.status || 500

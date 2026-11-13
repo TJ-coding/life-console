@@ -101,6 +101,8 @@ export async function signOut(endpoint) {
   location.replace(location.pathname + '#/')
   location.reload()
 }
+/** A token for the Mac menu-bar app (mac/). Connecting again replaces the previous one. */
+export async function macAppToken() { return (await api('POST', '/auth/tokens', { name: 'Mac app' })).token }
 export async function deleteAccount(password, confirm) {
   await api('DELETE', '/auth/me', { password, confirm })
   wipeLocalData()

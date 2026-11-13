@@ -166,12 +166,17 @@ export function createAuth(db, cfg, signups = null) {
     await db.insert(apiTokens).values({ tokenHash: sha256(token), userId, name: String(name).slice(0, 60) })
     return token
   }
+  /** A token for one named device (e.g. "Mac app"): connecting it again replaces the old one, so tokens don't pile up. */
+  async function replaceApiToken(userId, name) {
+    await db.delete(apiTokens).where(and(eq(apiTokens.userId, userId), eq(apiTokens.name, String(name).slice(0, 60))))
+    return createApiToken(userId, name)
+  }
   async function purgeExpired() {
     await db.delete(sessions).where(lt(sessions.expiresAt, new Date()))
     await db.delete(passwordResets).where(lt(passwordResets.expiresAt, new Date(Date.now() - 86400000)))
   }
 
-  return { findUserByEmail, createUser, googleSignIn, startSession, clearCookie, identify, endSession, endOtherSessions, setPassword, createResetToken, useResetToken, createApiToken, purgeExpired }
+  return { findUserByEmail, createUser, googleSignIn, startSession, clearCookie, identify, endSession, endOtherSessions, setPassword, createResetToken, useResetToken, createApiToken, replaceApiToken, purgeExpired }
 }
 
 export function parseCookies(header = '') {

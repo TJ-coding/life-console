@@ -285,3 +285,30 @@ test('migrations are idempotent and safe to run concurrently', async () => {
   const [a, b] = await Promise.all([runMigrations(conn.pool, { log: quiet }), runMigrations(conn.pool, { log: quiet })])
   assert.equal(a + b, 0)
 })
+
+test('API tokens for a device ("Connect Mac app"): only from a browser session; connecting again replaces the old token', async () => {
+  const carol = client()
+  assert.equal((await carol('POST', '/api/auth/signup', { email: 'carol-mac@example.com', password: 'carol password' })).status, 201)
+  await carol('PUT', '/api/state', { state: doc({ todos: [{ id: 'T-1', title: 'carol only' }] }), baseVersion: 0 })
+  const bearer = (t) => ({ Authorization: `Bearer ${t}` })
+
+  const t1 = await carol('POST', '/api/auth/tokens', { name: 'Mac app' })
+  assert.equal(t1.status, 201)
+  assert.match(t1.body.token, /^lct_/)
+  const app = client()
+  const s1 = await app('GET', '/api/state', undefined, bearer(t1.body.token))
+  assert.equal(s1.status, 200)
+  assert.equal(s1.body.state.todos[0].title, 'carol only', "the token reads its owner's planner")
+
+  assert.equal((await app('POST', '/api/auth/tokens', { name: 'Mac app' }, bearer(t1.body.token))).status, 403, "a token can't mint tokens")
+  assert.equal((await client()('POST', '/api/auth/tokens', { name: 'Mac app' })).status, 401)
+  assert.equal((await carol('POST', '/api/auth/tokens', { name: '' })).status, 400)
+  assert.equal((await carol('POST', '/api/auth/tokens', { name: '<script>' })).status, 400)
+
+  const t2 = await carol('POST', '/api/auth/tokens', { name: 'Mac app' })
+  assert.equal((await app('GET', '/api/state', undefined, bearer(t1.body.token))).status, 401, 'the previous Mac token stops working')
+  assert.equal((await app('GET', '/api/state', undefined, bearer(t2.body.token))).status, 200)
+  const other = await carol('POST', '/api/auth/tokens', { name: 'Other Mac' })
+  assert.equal((await app('GET', '/api/state', undefined, bearer(t2.body.token))).status, 200, 'other device names keep their tokens')
+  assert.equal((await app('GET', '/api/state', undefined, bearer(other.body.token))).status, 200)
+})
