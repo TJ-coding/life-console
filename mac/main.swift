@@ -200,8 +200,11 @@ final class Model: ObservableObject {
   @Published var hudBgOpacity = defaults.object(forKey: "hudBgOpacity") as? Double ?? defaults.object(forKey: "hudOpacity") as? Double ?? 1 { didSet { defaults.set(hudBgOpacity, forKey: "hudBgOpacity"); onChange?() } }
   @Published var hudFgOpacity = defaults.object(forKey: "hudFgOpacity") as? Double ?? defaults.object(forKey: "hudOpacity") as? Double ?? 1 { didSet { defaults.set(hudFgOpacity, forKey: "hudFgOpacity"); onChange?() } }
   @Published var hudClickThrough = defaults.bool(forKey: "hudClickThrough") { didSet { defaults.set(hudClickThrough, forKey: "hudClickThrough"); onChange?() } }
+  /** With click-through on, keep the NOW / NEXT / PLAN tag clickable (it opens Focus mode or the week planner). */
+  @Published var hudTagClickable = defaults.object(forKey: "hudTagClickable") as? Bool ?? true { didSet { defaults.set(hudTagClickable, forKey: "hudTagClickable"); onChange?() } }
   /** Pointer over the widget while click-through is on (the window gets no hover events then): shows the ×. */
   @Published var hudPointerOver = false
+  @Published var hudPointerOnTag = false   // click-through: the tag is under the pointer (it brightens: "this you can click")
   var onChange: (() -> Void)?
 
   var url: String { (defaults.string(forKey: "url") ?? Model.defaultServer).trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) }
@@ -573,10 +576,17 @@ struct SettingsView: View {
         Toggle(isOn: $m.hudClickThrough) {
           VStack(alignment: .leading, spacing: 2) {
             Text("Click-through")
-            Text("Clicks go to whatever is underneath. Only its × still works: point at the widget and click the × on its corner. It can't be clicked or dragged meanwhile.")
+            Text("Clicks go to whatever is underneath, except on the × (point at the widget to see it) and, if you keep it, the tag.")
               .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
           }
         }
+        Toggle(isOn: $m.hudTagClickable) {
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Keep the tag clickable")
+            Text("With click-through on, the NOW / NEXT / PLAN tag still opens Focus mode or the week planner.")
+              .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+          }
+        }.disabled(!m.hudClickThrough)
         Stepper(value: $m.hudDeadlines, in: 0...10) {
           HStack { Text("Deadlines"); Spacer(); Text(m.hudDeadlines == 0 ? "None" : "Closest \(m.hudDeadlines)").foregroundColor(.secondary) }
         }
@@ -660,11 +670,12 @@ struct HUD: View {
       let shown = m.hudDeadlines > 0 ? Array(n.deadlines.prefix(m.hudDeadlines)) : []
       let times = shown.map { $0.mins <= 0 ? "late" : countdown($0.mins) }
       // one column for the tag and the deadline times, so their boxes line up and every title starts at one edge
-      let col = HUD.boxWidth([tag] + times, z)
+      let col = HUD.columnWidth(m, n)
       // one card: the headline, then (Settings → Deadlines) the closest deadlines in the same boxes and type
       VStack(alignment: .leading, spacing: 0) {
         HStack(spacing: 8 * z) {
           box(tag, z, width: col, fg: busy ? .white : free ? tagColor : K.muted, fill: busy ? K.stamp : K.surface, stroke: tagColor)
+            .brightness(m.hudPointerOnTag ? 0.18 : 0)
           Text(bar.title).font(.system(size: 13 * z, weight: .medium)).foregroundColor(K.text)
             .lineLimit(1).truncationMode(.tail).frame(maxWidth: 320 * z, alignment: .leading)
           if !bar.longMeta.isEmpty {
@@ -737,6 +748,13 @@ extension HUD {
       .frame(width: width).padding(.vertical, 2 * z)
       .background(RoundedRectangle(cornerRadius: 2 * z).fill(fill))
       .overlay(RoundedRectangle(cornerRadius: 2 * z).stroke(stroke, lineWidth: 1))
+  }
+  /** The tag + deadline-time column (shared by the view and the click-through hit test for the tag). */
+  static func columnWidth(_ m: Model, _ n: Now) -> CGFloat {
+    let bar = n.bar
+    let tag = bar.mode == .busy ? "NOW" : bar.plan ? "PLAN" : bar.mode == .free ? "NEXT" : "IDLE"
+    let times = (m.hudDeadlines > 0 ? Array(n.deadlines.prefix(m.hudDeadlines)) : []).map { $0.mins <= 0 ? "late" : countdown($0.mins) }
+    return boxWidth([tag] + times, CGFloat(m.hudScale))
   }
   static func boxWidth(_ texts: [String], _ z: CGFloat) -> CGFloat {
     let f = NSFont.monospacedSystemFont(ofSize: 10 * z, weight: .bold)
@@ -1033,7 +1051,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
    * no permission needed). Over the widget the × shows; only over the × corner does the window take clicks.
    */
   var mouseMonitors: [Any] = []
-  var overClose = false
+  var overClose = false   // over the × or (if kept clickable) the tag: the window takes clicks there
   func syncClickThrough() {
     let watch = model.hudClickThrough && model.showHUD && hud.isVisible
     if watch && mouseMonitors.isEmpty {
@@ -1042,7 +1060,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
       if let l = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] e in self?.pointerMoved(); return e }) { mouseMonitors.append(l) }
     } else if !watch && !mouseMonitors.isEmpty {
       mouseMonitors.forEach(NSEvent.removeMonitor); mouseMonitors = []
-      overClose = false; if model.hudPointerOver { model.hudPointerOver = false }
+      overClose = false; if model.hudPointerOver { model.hudPointerOver = false }; if model.hudPointerOnTag { model.hudPointerOnTag = false }
     }
     hud.ignoresMouseEvents = model.hudClickThrough && !overClose
   }
@@ -1052,7 +1070,14 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     let close = NSRect(x: f.minX, y: f.maxY - 2 * HUD.inset - 4, width: 2 * HUD.inset + 4, height: 2 * HUD.inset + 4)
     let over = f.insetBy(dx: HUD.inset - 2, dy: HUD.inset - 2).contains(p) || close.contains(p)
     if model.hudPointerOver != over { model.hudPointerOver = over }
-    let c = close.contains(p)
+    // the tag: the left end of the headline row (the card starts one inset in; the row is 30·z tall)
+    var onTag = false
+    if model.hudTagClickable, let n = model.snapshot {
+      let z = CGFloat(model.hudScale)
+      onTag = NSRect(x: f.minX + HUD.inset, y: f.maxY - HUD.inset - 30 * z, width: 8 * z + HUD.columnWidth(model, n), height: 30 * z).contains(p)
+    }
+    if model.hudPointerOnTag != onTag { model.hudPointerOnTag = onTag }
+    let c = close.contains(p) || onTag
     if c != overClose { overClose = c; hud.ignoresMouseEvents = model.hudClickThrough && !c }
   }
 
