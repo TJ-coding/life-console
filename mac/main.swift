@@ -194,8 +194,11 @@ final class Model: ObservableObject {
   @Published var hudDeadlines = defaults.object(forKey: "hudDeadlines") as? Int ?? 0 { didSet { defaults.set(hudDeadlines, forKey: "hudDeadlines"); onChange?() } }
   var onDeadlines: (() -> Void)?
   static let hudScaleRange = 0.75...3.0
-  /** The widget's opacity (0.2…1) and click-through (clicks go to what's underneath), both in Settings…. */
-  @Published var hudOpacity = defaults.object(forKey: "hudOpacity") as? Double ?? 1 { didSet { defaults.set(hudOpacity, forKey: "hudOpacity"); onChange?() } }
+  /** The widget's opacities and click-through (clicks go to what's underneath), both in Settings…. */
+  // background (the card's fill, 0 = only text and outline) and text & outline (everything drawn on it), set apart;
+  // both start from the single opacity earlier builds stored
+  @Published var hudBgOpacity = defaults.object(forKey: "hudBgOpacity") as? Double ?? defaults.object(forKey: "hudOpacity") as? Double ?? 1 { didSet { defaults.set(hudBgOpacity, forKey: "hudBgOpacity"); onChange?() } }
+  @Published var hudFgOpacity = defaults.object(forKey: "hudFgOpacity") as? Double ?? defaults.object(forKey: "hudOpacity") as? Double ?? 1 { didSet { defaults.set(hudFgOpacity, forKey: "hudFgOpacity"); onChange?() } }
   @Published var hudClickThrough = defaults.bool(forKey: "hudClickThrough") { didSet { defaults.set(hudClickThrough, forKey: "hudClickThrough"); onChange?() } }
   var onChange: (() -> Void)?
 
@@ -563,15 +566,8 @@ struct SettingsView: View {
             Text("\(Int((m.hudScale * 100).rounded()))%").monospacedDigit().foregroundColor(.secondary).frame(width: 40, alignment: .trailing)
           }
         }
-        LabeledContent("Opacity") {
-          HStack(spacing: 8) {
-            Image(systemName: "circle.dotted").foregroundColor(.secondary)
-            NotchedSlider(value: Binding(get: { m.hudOpacity }, set: { m.hudOpacity = $0; if !m.showHUD { m.showHUD = true } }), range: 0.2...1, notches: 9)
-              .frame(minWidth: 180)
-            Image(systemName: "circle.fill").foregroundColor(.secondary)
-            Text("\(Int((m.hudOpacity * 100).rounded()))%").monospacedDigit().foregroundColor(.secondary).frame(width: 40, alignment: .trailing)
-          }
-        }
+        opacityRow("Background", value: Binding(get: { m.hudBgOpacity }, set: { m.hudBgOpacity = $0 }), range: 0...1, notches: 11)
+        opacityRow("Text & outline", value: Binding(get: { m.hudFgOpacity }, set: { m.hudFgOpacity = $0 }), range: 0.2...1, notches: 9)
         Toggle(isOn: $m.hudClickThrough) {
           VStack(alignment: .leading, spacing: 2) {
             Text("Click-through")
@@ -606,6 +602,20 @@ struct SettingsView: View {
       }
     }
     .formStyle(.grouped).frame(width: 460)
+  }
+}
+
+extension SettingsView {
+  func opacityRow(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, notches: Int) -> some View {
+    LabeledContent(label) {
+      HStack(spacing: 8) {
+        Image(systemName: "circle.dotted").foregroundColor(.secondary)
+        NotchedSlider(value: Binding(get: { value.wrappedValue }, set: { value.wrappedValue = $0; if !m.showHUD { m.showHUD = true } }), range: range, notches: notches)
+          .frame(minWidth: 180)
+        Image(systemName: "circle.fill").foregroundColor(.secondary)
+        Text("\(Int((value.wrappedValue * 100).rounded()))%").monospacedDigit().foregroundColor(.secondary).frame(width: 40, alignment: .trailing)
+      }
+    }
   }
 }
 
@@ -695,9 +705,12 @@ struct HUD: View {
         }
       }
       .fixedSize()
-      .background(K.surface2)
+      // over a see-through background, a soft shadow keeps the text readable on light windows and wallpapers
+      .shadow(color: .black.opacity(0.85 * (1 - m.hudBgOpacity)), radius: 1.5 * z, x: 0, y: 0.5 * z)
+      .opacity(m.hudFgOpacity)                  // text, tag, progress and divider
+      .background(K.surface2.opacity(m.hudBgOpacity))
       .clipShape(RoundedRectangle(cornerRadius: 3 * z))
-      .overlay(RoundedRectangle(cornerRadius: 3 * z).stroke(busy ? K.stamp.opacity(0.6) : K.border, lineWidth: 1))
+      .overlay(RoundedRectangle(cornerRadius: 3 * z).stroke(busy ? K.stamp.opacity(0.6) : K.border, lineWidth: 1).opacity(m.hudFgOpacity))
       .padding(HUD.inset)                       // transparent margin so the close button can sit on the corner
       .overlay(alignment: .topLeading) {
         // one-click hide on the pill's top-left corner, like a macOS notification; shown on hover; a fixed size whatever the widget size
@@ -1009,7 +1022,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     let right = defaults.object(forKey: "hudRight") as? Double ?? 12 - Double(HUD.inset), top = defaults.object(forKey: "hudTop") as? Double ?? 10 - Double(HUD.inset)
     let f = NSRect(x: vf.maxX - right - size.width, y: vf.maxY - top - size.height, width: size.width, height: size.height)
     if hud.frame != f { placing = true; hud.setFrame(f, display: true); placing = false }
-    hud.alphaValue = CGFloat(model.hudOpacity)
+    hud.invalidateShadow()                      // the shadow follows what's drawn, e.g. a see-through background
     hud.ignoresMouseEvents = model.hudClickThrough
     if !hud.isVisible { hud.orderFrontRegardless() }
   }
