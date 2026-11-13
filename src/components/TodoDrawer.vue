@@ -1,7 +1,7 @@
 <script setup>
 // Right 480px side drawer for editing a todo (spec §2.4 "Side drawer").
 import { computed, ref } from 'vue'
-import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast, childrenOf, isContainer, budgetLeft, subCount, ancestorsOf, addSubtask, parseQuick } from '../store'
+import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast, childrenOf, isContainer, budgetLeft, subCount, ancestorsOf, addSubtask, parseQuick, pomo } from '../store'
 import Chip from './Chip.vue'
 
 const t = computed(() => (ui.drawerId ? findTodo(ui.drawerId) : null))
@@ -16,7 +16,12 @@ const schedDate = computed({
 })
 const schedStart = computed({
   get: () => t.value?.scheduled?.start ?? '',
-  set: (v) => { if (t.value.scheduled) t.value.scheduled.start = v || null },
+  set: (v) => {
+    if (!t.value.scheduled) return
+    // ISS-25: a first start time follows the pomodoro rhythm, as on the timeline
+    if (v && !t.value.scheduled.start && t.value.pomo === undefined && pomo().on) t.value.pomo = true
+    t.value.scheduled.start = v || null
+  },
 })
 const goalOptions = computed(() => state.plans.filter((p) => p.status !== 'archived').flatMap((p) => [...p.psgs.map((g) => g.no), ...p.sigs.map((s) => s.no)]))
 const deadlineOptions = computed(() => state.deadlines.filter((d) => !d.done && !t.value?.links.includes(d.id)).sort((a, b) => a.due.localeCompare(b.due)))
@@ -130,6 +135,10 @@ const dayName = computed(() => {
             <span class="icon sm">move_to_inbox</span>Unschedule from {{ dayName }}
           </button>
         </div>
+        <label v-if="t.scheduled?.start && !box" class="pomo-sw row small" title="Lay this sitting out as pomodoros: the work time is cut into pomodoros with breaks between them, so the block on the schedule includes the breaks">
+          <input type="checkbox" :checked="!!t.pomo" @change="updateTodo(t.id, { pomo: $event.target.checked || undefined })" />
+          <span>Pomodoro sitting</span><span class="mono muted">{{ pomo().work }}/{{ pomo().short }}m · breaks on the schedule</span>
+        </label>
         <div class="field">
           <span class="lbl">Priority</span>
           <div class="row">
@@ -192,6 +201,7 @@ const dayName = computed(() => {
 </template>
 
 <style scoped>
+.pomo-sw { gap: 8px; align-items: center; cursor: pointer; }
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 480px; max-width: 100vw; background: var(--surface); border-left: 1px solid var(--border); z-index: 40; display: flex; flex-direction: column; box-shadow: -1px 0 0 var(--border); }
 .dh { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .id { font-size: 16px; font-weight: 700; }

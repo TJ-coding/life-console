@@ -440,12 +440,17 @@ export function addTodo(partial) {
     due: null, scheduled: null, links: [], notes: '', createdAt: now, updatedAt: now,
     order: Math.max(0, ...state.todos.map((x) => x.order ?? 0)) + 1000, ...partial,
   }
+  if (t.scheduled?.start && !('pomo' in partial) && pomo().on) t.pomo = true
   state.todos.push(t)
   return state.todos[state.todos.length - 1] // the reactive proxy, not the raw object
 }
 export function updateTodo(id, patch) {
   const t = findTodo(id)
-  if (t) Object.assign(t, patch, { updatedAt: new Date().toISOString() })
+  if (!t) return
+  // ISS-25: a task getting its first start time follows the pomodoro rhythm when it's on, however it got
+  // the time (Start now, a timeline drop, the briefing…); a caller that decides `pomo` itself wins
+  if (patch.scheduled?.start && !t.scheduled?.start && !('pomo' in patch) && pomo().on) patch = { ...patch, pomo: true }
+  Object.assign(t, patch, { updatedAt: new Date().toISOString() })
 }
 export function toggleTodo(id) {
   const t = findTodo(id)
