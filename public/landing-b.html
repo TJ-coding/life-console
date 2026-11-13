@@ -357,6 +357,12 @@ p { margin: 0 0 14px; }
 .wide > p:not(.label) { color: var(--muted); max-width: 68ch; margin-bottom: 28px; }
 .split p { color: var(--muted); }
 .split p b { color: var(--text); font-weight: 600; }
+.split.mac > * { min-width: 0; } /* the long Terminal line scrolls inside its box instead of widening the page */
+.mac-shot { margin: 0; }
+.mac-shot img { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); cursor: zoom-in; }
+.mac-note { color: var(--muted); font-size: 13px; }
+.mac-cmd { display: flex; gap: 8px; align-items: stretch; }
+.mac-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 9px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); font-size: 12px; }
 @media (max-width: 900px) { .split, .split.rev { grid-template-columns: 1fr; gap: 24px; } .split.rev > :first-child { order: 0; } .split + .split, .wide, .wide + .split { margin-top: 64px; } }
 
 ul.plain { margin: 6px 0 0; padding: 0 0 0 18px; color: var(--muted); }
@@ -695,6 +701,18 @@ footer a { color: var(--muted); }
         <img data-full="/media/m-week.webp" src="/media/m-week.webp" width="780" height="1688" loading="lazy" decoding="async" alt="Phone: the week planner" />
         <img data-full="/media/m-focus.webp" src="/media/m-focus.webp" width="780" height="1688" loading="lazy" decoding="async" alt="Phone: focus mode" />
       </div>
+      <div class="split mac" id="mac">
+        <div>
+          <p class="label">On your Mac</p>
+          <h2>What to do now, in the menu bar.</h2>
+          <p><b>Life Console Now</b> keeps the current block and the time left at the top of your screen, or what's next when you're between blocks. Click it for today's timeline, deadlines and <b>Mark done</b>. An optional pill floats in the corner, even over full-screen apps.</p>
+          <p class="ctas"><a class="btn primary" href="/download/mac">Download for Mac</a><span class="mac-note">Free · macOS 13+ · Apple silicon and Intel</span></p>
+          <p>Open the download and drag the app to Applications. It isn't notarised by Apple yet, so the first time, right-click it and choose <b>Open</b> (on macOS 15: System Settings → Privacy &amp; Security → <b>Open Anyway</b>). Or install it from Terminal, with no warning:</p>
+          <p class="mac-cmd"><code>curl -fsSL https://life-console.dev/download/mac.zip -o /tmp/lcn.zip &amp;&amp; ditto -xk /tmp/lcn.zip /Applications &amp;&amp; open "/Applications/Life Console Now.app"</code><button type="button" class="btn" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent).then(() => { this.textContent = 'Copied' })">Copy</button></p>
+          <p>Then in Life Console: <b>Settings → Mac menu-bar app → Connect</b>. The app tells you when there's an update and installs it with one click.</p>
+        </div>
+        <figure class="mac-shot"><img data-full="/media/mac-app.webp" src="/media/mac-app.webp" width="1680" height="1110" loading="lazy" decoding="async" alt="Life Console Now on a Mac: the current block and time left in the menu bar, a floating pill, and the panel with today's timeline and deadlines" /></figure>
+      </div>
     </div>
   </section>
 
@@ -876,7 +894,7 @@ footer a { color: var(--muted); }
 
   // full-size view
   const lb = document.getElementById('lb'), lbImg = lb.querySelector('img'), lbCap = lb.querySelector('p')
-  document.querySelectorAll('#shots img, .phones img').forEach((img) => img.addEventListener('click', () => {
+  document.querySelectorAll('#shots img, .phones img, .mac-shot img').forEach((img) => img.addEventListener('click', () => {
     lbImg.src = img.dataset.full || img.src.replace('.webp', '@2x.webp')
     lbImg.alt = img.alt; lbCap.textContent = img.alt
     lb.showModal()

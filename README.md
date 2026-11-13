@@ -21,6 +21,7 @@ Life Console started as a set of paper planning sheets: a week plan with a backl
 - **One-line quick-add:** `Read chapter 3 #ST2001 30m due:fri p2 @SIG-02.1 [L]` sets the estimate, due date, priority, links and type. Subtasks go to any depth.
 - **Keyboard first.** `⌘K` command palette, `F` focus mode, `W` week, `G D` deadlines, `J`/`K`, `X` done, `1`–`5` priority.
 - **Pomodoro-aware planning**, push notifications with a **Mark done** action, dark and light themes.
+- **On your Mac, in the menu bar:** [Life Console Now](mac/README.md) shows the current block and time left (or what's next) at the top of your screen, with today's timeline one click away. It updates itself with one click.
 - **Works on phones and offline.** Install it from the browser; it syncs across devices and merges edits made on two devices at once.
 
 ![Goal flow: milestones feed the goals that depend on them, on a timeline, ending in the vision](public/media/goalflow@2x.webp)

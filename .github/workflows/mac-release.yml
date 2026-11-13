@@ -1,0 +1,43 @@
+# The Mac menu-bar app (mac/): push a tag mac-vX.Y.Z and this builds it on a Mac and publishes a GitHub release
+# with LifeConsoleNow.zip and LifeConsoleNow.dmg. Servers find the newest one (server/macapp.mjs), so the landing
+# page's download button, /download/mac and the app's "Update available" pick it up within the hour.
+#   git tag mac-v1.0.1 <commit on main> && git push origin mac-v1.0.1
+# (Tags mac-v* don't match deploy.yml's v*, so a Mac release never retags the server image.)
+name: mac-release
+
+on:
+  push:
+    tags: ['mac-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version from the tag
+        id: v
+        run: |
+          v="${GITHUB_REF_NAME#mac-v}"
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "tag must be mac-vX.Y.Z" >&2; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Build (universal, macOS 13+)
+        run: mac/build.sh "${{ steps.v.outputs.version }}"
+      - name: Publish the release (not marked "latest": that stays the server's)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.v.outputs.version }}"
+          cat > notes.md <<EOF
+          **Life Console Now ${v}**, the Mac menu-bar app: what you should be doing right now, at the top of your screen.
+
+          - **New install:** download \`LifeConsoleNow.dmg\` and drag the app to Applications, or run in Terminal:
+            \`curl -fsSL https://life-console.dev/download/mac.zip -o /tmp/lcn.zip && ditto -xk /tmp/lcn.zip /Applications && open "/Applications/Life Console Now.app"\`
+          - **Already installed:** the app shows *Update available* and installs this with one click.
+
+          Then in Life Console: Settings → Mac menu-bar app → Connect. Needs macOS 13 or later.
+          EOF
+          gh release create "$GITHUB_REF_NAME" mac/build/LifeConsoleNow.zip mac/build/LifeConsoleNow.dmg \
+            --title "Life Console Now ${v} (Mac app)" --notes-file notes.md --latest=false
