@@ -25,7 +25,7 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
       - name: Build (universal, macOS 13+)
         run: mac/build.sh "${{ steps.v.outputs.version }}"
-      - name: Publish the release (not marked "latest": that stays the server's)
+      - name: Publish the release (not marked latest, which stays the server's)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
