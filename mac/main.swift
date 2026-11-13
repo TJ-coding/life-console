@@ -150,7 +150,7 @@ func compute(_ state: [String: Any], at now: Date = Date()) -> Now {
     let eff = !target.isEmpty && target >= T ? "\(target)T23:59" : dueS
     guard let due = parseLocal(eff) else { return nil }
     return Deadline(id: d["id"] as? String ?? UUID().uuidString, title: d["title"] as? String ?? "", due: due, mins: Int((due.timeIntervalSince(now) / 60).rounded()))
-  }.sorted { $0.due < $1.due }.prefix(3).map { $0 }
+  }.sorted { $0.due < $1.due }.prefix(20).map { $0 }   // the panel and the widget each show their own count
   return n
 }
 
@@ -190,6 +190,10 @@ final class Model: ObservableObject {
   @Published var showHUD = defaults.object(forKey: "hud") as? Bool ?? false { didSet { defaults.set(showHUD, forKey: "hud"); onChange?() } }
   /** The floating widget's size, 0.75…3 (the slider in the panel; 1 = the original size). */
   @Published var hudScale = defaults.object(forKey: "hudScale") as? Double ?? 1 { didSet { defaults.set(hudScale, forKey: "hudScale"); onChange?() } }
+  /** How many of the closest deadlines to list under the widget (0 = none) and in the panel (Settings…). */
+  @Published var hudDeadlines = defaults.object(forKey: "hudDeadlines") as? Int ?? 0 { didSet { defaults.set(hudDeadlines, forKey: "hudDeadlines"); onChange?() } }
+  @Published var panelDeadlines = defaults.object(forKey: "panelDeadlines") as? Int ?? 3 { didSet { defaults.set(panelDeadlines, forKey: "panelDeadlines"); onChange?() } }
+  var onDeadlines: (() -> Void)?
   static let hudScaleRange = 0.75...3.0
   var onChange: (() -> Void)?
 
@@ -328,7 +332,7 @@ struct Panel: View {
         if let nx = n.next { nextRow(nx, n) }
         if !n.blocks.isEmpty { timeline(n) }
         if !n.unscheduled.isEmpty { unscheduled(n) }
-        if !n.deadlines.isEmpty { deadlines(n) }
+        if !n.deadlines.isEmpty && m.panelDeadlines > 0 { deadlines(n) }
       } else if m.connected {
         Card { Text(m.error ?? "Loading…").foregroundColor(K.muted) }
       }
@@ -499,7 +503,7 @@ struct Panel: View {
   func deadlines(_ n: Now) -> some View {
     VStack(alignment: .leading, spacing: 6) {
       SectionLabel(text: "DEADLINES")
-      ForEach(n.deadlines) { d in
+      ForEach(n.deadlines.prefix(m.panelDeadlines)) { d in
         let col = d.mins <= 720 ? K.danger : d.mins <= 2880 ? K.warn : K.accent
         HStack(spacing: 8) {
           Image(systemName: d.mins <= 0 ? "exclamationmark.triangle.fill" : "flag.fill").font(.system(size: 10)).foregroundColor(col)
@@ -557,7 +561,15 @@ struct SettingsView: View {
             Text("\(Int((m.hudScale * 100).rounded()))%").monospacedDigit().foregroundColor(.secondary).frame(width: 40, alignment: .trailing)
           }
         }
+        Stepper(value: $m.hudDeadlines, in: 0...10) {
+          HStack { Text("Deadlines below it"); Spacer(); Text(m.hudDeadlines == 0 ? "None" : "Closest \(m.hudDeadlines)").foregroundColor(.secondary) }
+        }
         HStack { Text("Position"); Spacer(); Button("Back to the Corner") { m.resetHUD() } }
+      }
+      Section("Panel") {
+        Stepper(value: $m.panelDeadlines, in: 0...10) {
+          HStack { Text("Deadlines"); Spacer(); Text(m.panelDeadlines == 0 ? "None" : "Closest \(m.panelDeadlines)").foregroundColor(.secondary) }
+        }
       }
       Section {
         HStack { Text("Headline size"); Spacer(); Button("Fit Menu Bar Again", action: refit) }
@@ -619,6 +631,7 @@ struct HUD: View {
       let bar = n.bar, z = CGFloat(m.hudScale)   // every size below scales with Widget Size
       let busy = bar.mode == .busy, free = bar.mode == .free
       let tagColor = busy ? K.stamp : bar.plan ? K.info : free ? K.accent : K.border
+      VStack(alignment: .trailing, spacing: 4 * z) {
       HStack(spacing: 8 * z) {
         Text(busy ? "NOW" : bar.plan ? "PLAN" : free ? "NEXT" : "IDLE").font(.system(size: 10 * z, weight: .bold, design: .monospaced)).tracking(0.6 * z)
           .foregroundColor(busy ? .white : free ? tagColor : K.muted)
@@ -632,6 +645,7 @@ struct HUD: View {
         }
       }
       .padding(.leading, 4 * z).padding(.trailing, 10 * z).frame(height: 30 * z)
+      .fixedSize(horizontal: true, vertical: false)   // its own width, not the deadline list's
       .background(K.surface2)
       .overlay(alignment: .bottomLeading) {
         if busy { GeometryReader { g in Rectangle().fill(K.accent).frame(width: g.size.width * n.progress, height: 2 * z).frame(maxHeight: .infinity, alignment: .bottom) } }
@@ -642,6 +656,8 @@ struct HUD: View {
       .onTapGesture(count: 2) { m.resetHUD() }
       .onTapGesture(perform: open)
       .help("Click: Focus mode · Drag: move · Double-click: back to the corner")
+      if m.hudDeadlines > 0 && !n.deadlines.isEmpty { deadlineList(n, z) }
+      }
       .padding(HUD.inset)                       // transparent margin so the close button can sit on the corner
       .overlay(alignment: .topLeading) {
         // one-click hide on the pill's top-left corner, like a macOS notification; shown on hover; a fixed size whatever the widget size
@@ -656,6 +672,30 @@ struct HUD: View {
       .onHover { hover = $0 }
       .fixedSize()
     }
+  }
+}
+
+extension HUD {
+  /** The closest n deadlines (Settings → Widget), under the pill; click → the Deadlines page. */
+  func deadlineList(_ n: Now, _ z: CGFloat) -> some View {
+    VStack(alignment: .leading, spacing: 4 * z) {
+      ForEach(n.deadlines.prefix(m.hudDeadlines)) { d in
+        let col = d.mins <= 720 ? K.danger : d.mins <= 2880 ? K.warn : K.accent
+        HStack(spacing: 7 * z) {
+          Image(systemName: d.mins <= 0 ? "exclamationmark.triangle.fill" : "flag.fill").font(.system(size: 9 * z)).foregroundColor(col)
+          Text(d.title).font(.system(size: 12 * z)).foregroundColor(K.text).lineLimit(1).truncationMode(.tail)
+            .frame(maxWidth: 300 * z, alignment: .leading)
+          Spacer(minLength: 10 * z)
+          Text(d.mins <= 0 ? "OVERDUE" : countdown(d.mins)).font(.system(size: 11 * z, weight: .medium, design: .monospaced)).foregroundColor(col)
+        }
+      }
+    }
+    .padding(.horizontal, 9 * z).padding(.vertical, 7 * z)
+    .background(K.surface2)
+    .clipShape(RoundedRectangle(cornerRadius: 3 * z))
+    .overlay(RoundedRectangle(cornerRadius: 3 * z).stroke(K.border, lineWidth: 1))
+    .contentShape(Rectangle()).onTapGesture { m.onDeadlines?() }
+    .help("Click: the Deadlines page")
   }
 }
 
@@ -849,6 +889,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     model.onConnect = { [weak self] in self?.openConnectPage() }
     model.onPlan = { [weak self] in self?.openPath("/app#/week") }
     model.onSettings = { [weak self] in self?.openSettings() }
+    model.onDeadlines = { [weak self] in self?.openPath("/app#/deadlines") }
     if !defaults.bool(forKey: "loginAsked") { defaults.set(true, forKey: "loginAsked"); try? SMAppService.mainApp.register() }
 
     item.button?.target = self; item.button?.action = #selector(toggle)
