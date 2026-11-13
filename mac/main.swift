@@ -627,7 +627,7 @@ struct HUD: View {
       let tagColor = busy ? K.stamp : bar.plan ? K.info : free ? K.accent : K.border
       let tag = busy ? "NOW" : bar.plan ? "PLAN" : free ? "NEXT" : "IDLE"
       let shown = m.hudDeadlines > 0 ? Array(n.deadlines.prefix(m.hudDeadlines)) : []
-      let times = shown.map { $0.mins <= 0 ? "LATE" : countdown($0.mins) }
+      let times = shown.map { $0.mins <= 0 ? "late" : countdown($0.mins) }
       // one column for the tag and the deadline times, so their boxes line up and every title starts at one edge
       let col = HUD.boxWidth([tag] + times, z)
       // one card: the headline, then (Settings → Deadlines) the closest deadlines in the same boxes and type
@@ -652,18 +652,21 @@ struct HUD: View {
         .help("Click: Focus mode · Drag: move · Double-click: back to the corner")
         if !shown.isEmpty {
           Rectangle().fill(K.border).frame(height: 1)
-          VStack(alignment: .leading, spacing: 5 * z) {
+          // quiet on purpose: deadlines are background, the task above is what to do. Grey, smaller, no boxes;
+          // colour only when one is close (amber ≤ 48 h, red ≤ 12 h or late, as in glance.js)
+          VStack(alignment: .leading, spacing: 3 * z) {
             ForEach(Array(shown.enumerated()), id: \.element.id) { i, d in
-              // glance.js colours: red ≤ 12 h or overdue, amber ≤ 48 h, else green; overdue is filled like NOW
-              let c = d.mins <= 720 ? K.danger : d.mins <= 2880 ? K.warn : K.accent
+              let close = d.mins <= 2880
               HStack(spacing: 8 * z) {
-                box(times[i], z, width: col, fg: d.mins <= 0 ? .white : c, fill: d.mins <= 0 ? K.stamp : K.surface, stroke: d.mins <= 0 ? K.stamp : c)
-                Text(d.title).font(.system(size: 12.5 * z)).foregroundColor(K.text).lineLimit(1).truncationMode(.tail)
+                Text(times[i]).font(.system(size: 10.5 * z, weight: close ? .semibold : .regular, design: .monospaced))
+                  .foregroundColor(d.mins <= 720 ? K.danger : close ? K.warn : K.muted)
+                  .frame(width: col)
+                Text(d.title).font(.system(size: 11.5 * z)).foregroundColor(K.muted).lineLimit(1).truncationMode(.tail)
                   .frame(maxWidth: 320 * z, alignment: .leading)
               }
             }
           }
-          .padding(.leading, 4 * z).padding(.trailing, 10 * z).padding(.vertical, 7 * z)
+          .padding(.leading, 4 * z).padding(.trailing, 10 * z).padding(.vertical, 6 * z)
           .frame(maxWidth: .infinity, alignment: .leading)
           .contentShape(Rectangle()).onTapGesture { m.onDeadlines?() }
           .help("Click: the Deadlines page")
