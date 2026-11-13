@@ -1,6 +1,7 @@
 <script setup>
 // S-01 Focus mode — one thing at a glance: the current block, the next one, top 3 actions.
 import { computed, watchEffect, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { state, ui, wd, workload, getStamps, CAPACITY_H, toggleTodo, toast } from '../store'
 import { useNow, fmtDur, fmtClock } from '../now'
 import Stamps from '../components/Stamps.vue'
@@ -8,7 +9,8 @@ import Prio from '../components/Prio.vue'
 import Chip from '../components/Chip.vue'
 
 const n = useNow()
-const { T, current, next, progress, untilNext, gap, queue, suggestion, suggestionFits, missedAt } = n
+const router = useRouter()
+const { T, current, next, progress, pomoPhase, untilNext, gap, queue, suggestion, suggestionFits, missedAt } = n
 const clock = computed(() => fmtClock(n.nowSec.value).padStart(8, '0'))
 const top3 = computed(() => queue.value.slice(0, 3))
 watchEffect(() => { ui.focusIds = top3.value.map((t) => t.id) })
@@ -24,10 +26,14 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
   <div class="focus">
     <header class="fhead">
       <div>
-        <div class="row"><span class="chip goal">● FOCUS</span><span class="mono tiny muted">ESC to leave</span></div>
+        <div class="row"><span class="chip goal">● FOCUS</span></div>
         <div class="date mono">{{ T }} {{ wd(T) }}</div>
       </div>
-      <div class="clock mono">{{ clock }}</div>
+      <div class="fright">
+        <div class="clock mono">{{ clock }}</div>
+        <!-- ISS-27: a visible way out (Esc and F still work) -->
+        <button class="btn exit" title="Leave focus mode (Esc)" @click="router.push('/')"><span class="icon sm">close_fullscreen</span>Exit focus <span class="kbd">Esc</span></button>
+      </div>
     </header>
 
     <!-- the one thing -->
@@ -41,6 +47,12 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
       </div>
       <h1>{{ current.title }}</h1>
       <div class="countdown mono">{{ fmtClock(progress.remaining) }} <span class="muted">left</span></div>
+      <div v-if="pomoPhase" class="pomo mono" :class="pomoPhase.phase">
+        <span class="muted">POMODORO {{ pomoPhase.n }}/{{ pomoPhase.of }} ·</span>
+        <template v-if="pomoPhase.phase === 'break'"><b>BREAK</b> <span class="muted">ends in</span> <b>{{ fmtClock(pomoPhase.left) }}</b></template>
+        <template v-else-if="!pomoPhase.last"><span class="muted">{{ pomoPhase.brk }}m break in</span> <b>{{ fmtClock(pomoPhase.left) }}</b></template>
+        <span v-else class="muted">last one, no break</span>
+      </div>
       <div class="bar big"><i :style="{ width: progress.pct + '%' }"></i></div>
       <div class="row mono small muted"><span>START {{ current.start }}</span><span class="spacer"></span><span>elapsed {{ fmtDur(progress.elapsed) }} / {{ fmtDur(progress.total) }}</span><span class="spacer"></span><span>END {{ current.end }}</span></div>
       <div v-if="suggestion" class="do">
@@ -108,6 +120,9 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
 .fhead { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 18px; }
 .date { font-size: 34px; line-height: 42px; font-weight: 700; margin-top: 8px; }
 .clock { font-size: 28px; font-weight: 600; color: var(--muted); }
+.fright { display: flex; align-items: center; gap: 16px; }
+.pomo { font-size: 20px; }
+.pomo.break b { color: var(--accent); }
 .hero { padding: 26px 30px; gap: 14px; border-left: 4px solid var(--c, var(--accent)); }
 .hero.free { border-left-color: var(--muted); }
 .hero h1 { margin: 0; font: 700 32px/40px 'JetBrains Mono', monospace; letter-spacing: -0.02em; }
@@ -128,5 +143,5 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
 .tile { padding: 14px 16px; gap: 12px; }
 .tile.center { align-items: stretch; }
 .tile.center :deep(.stamps) { justify-content: center; }
-@media (max-width: 760px) { .tiles { grid-template-columns: 1fr; } .hero h1 { font-size: 24px; line-height: 30px; } .countdown { font-size: 32px; } }
+@media (max-width: 760px) { .fright { flex-direction: column-reverse; align-items: flex-end; gap: 8px; } .exit .kbd { display: none; } .tiles { grid-template-columns: 1fr; } .hero h1 { font-size: 24px; line-height: 30px; } .countdown { font-size: 32px; } }
 </style>

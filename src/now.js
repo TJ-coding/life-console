@@ -42,6 +42,21 @@ export function useNow() {
     const elapsed = nowSec.value - toMin(c.start) * 60
     return { total, elapsed, remaining: total - elapsed, pct: Math.min(100, (elapsed / total) * 100) }
   })
+  /** ISS-25: where the current pomodoro sitting is: working (seconds until the break) or on a break
+   *  (seconds until work resumes). `n` / `of` count pomodoros. Null when the block isn't a pomodoro sitting. */
+  const pomoPhase = computed(() => {
+    const c = current.value
+    const segs = c?.pomo
+    if (!segs?.length) return null
+    const off = nowSec.value - toMin(c.start) * 60
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i]
+      const end = s.end * 60
+      if (off < end) return { phase: 'work', n: i + 1, of: segs.length, left: end - off, brk: s.brk, last: i === segs.length - 1 }
+      if (off < end + s.brk * 60) return { phase: 'break', n: i + 1, of: segs.length, left: end + s.brk * 60 - off, brk: s.brk }
+    }
+    return null
+  })
   const untilNext = computed(() => (next.value ? toMin(next.value.start) * 60 - nowSec.value : null))
   /** Free seconds from now until the next block (or end of day). */
   const gap = computed(() => (next.value ? toMin(next.value.start) : 1440) * 60 - nowSec.value)
@@ -82,5 +97,5 @@ export function useNow() {
     return { state: 'idle', text: 'Nothing scheduled', meta: 'press N to add' }
   })
 
-  return { T, nowSec, nowMin, current, overlapping, next, progress, untilNext, gap, queue, suggestion, suggestionFits, missedAt, startNow, headline }
+  return { T, nowSec, nowMin, current, overlapping, next, progress, pomoPhase, untilNext, gap, queue, suggestion, suggestionFits, missedAt, startNow, headline }
 }

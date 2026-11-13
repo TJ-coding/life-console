@@ -3,12 +3,22 @@
 // actions on the right, progress across, and what's next as one line at the bottom.
 // Between blocks the headline is just "Free" (the clock says how long, the label row until when); the
 // task you could pick up is the UP NEXT bottom line with Start now, so it never reads as already running.
-import { ui, toggleTodo, toast } from '../store'
+import { computed } from 'vue'
+import { ui, toggleTodo, toast, findTodo } from '../store'
 import { useNow, fmtDur, fmtClock } from '../now'
 import Prio from './Prio.vue'
 
 const n = useNow()
-const { current, next, progress, untilNext, gap, suggestion, suggestionFits, missedAt } = n
+const { current, next, progress, pomoPhase, untilNext, gap, suggestion, suggestionFits, missedAt } = n
+/** ISS-24: the todo behind the current block, so its key points and notes are readable right here. */
+const curTodo = computed(() => (current.value?.kind === 'todo' ? findTodo(current.value.todoId) : null))
+/** Click the title: a todo opens its drawer, a fixed block its dialog. */
+function openCurrent() {
+  const c = current.value
+  if (!c) return
+  if (c.kind === 'todo') ui.drawerId = c.todoId
+  else ui.blockId = c.id
+}
 function start(t) {
   n.startNow(t)
   toast(`Started ${t.id} now`)
@@ -22,9 +32,15 @@ function start(t) {
         <div v-if="current" class="inst-lbl">
           <span class="tag mono"><span class="pulse"></span>NOW</span>
           <span class="mono muted range">{{ current.start }}–{{ current.end }}</span>
+          <span v-if="pomoPhase?.phase === 'break'" class="tag mono brk-tag">BREAK</span>
+          <span v-if="pomoPhase" class="mono muted range" title="Pomodoro in this sitting">POMODORO {{ pomoPhase.n }}/{{ pomoPhase.of }}</span>
         </div>
         <template v-if="current">
-          <div class="title clamp2">{{ current.title }}</div>
+          <button class="title clamp2 title-btn" :title="current.kind === 'todo' ? 'Open this todo (notes, links, details)' : 'Open this block'" @click="openCurrent">{{ current.title }}</button>
+          <div v-if="curTodo?.vital || curTodo?.notes" class="notes">
+            <div v-if="curTodo.vital" class="vital">{{ curTodo.vital }}</div>
+            <div v-if="curTodo.notes" class="notes-text">{{ curTodo.notes }}</div>
+          </div>
           <button v-if="suggestion" class="do" title="Open this todo" @click="ui.drawerId = suggestion.id">
             <span class="tiny upper muted">Work on</span><Prio :p="suggestion.priority" />
             <span class="ellipsis grow">{{ suggestion.title }}</span><span class="mono small muted">{{ suggestion.timeMin }}m</span>
@@ -37,6 +53,12 @@ function start(t) {
 
       <div class="clock">
         <div v-if="current" class="readout"><span class="inst-big mono">{{ fmtClock(progress.remaining) }}</span><span class="muted">left</span></div>
+        <!-- ISS-25: pomodoro sittings also say when the break starts, or when it ends -->
+        <div v-if="pomoPhase" class="pomo mono" :class="pomoPhase.phase">
+          <template v-if="pomoPhase.phase === 'break'"><span class="muted">break ends in</span> <b>{{ fmtClock(pomoPhase.left) }}</b></template>
+          <template v-else-if="!pomoPhase.last"><span class="muted">{{ pomoPhase.brk }}m break in</span> <b>{{ fmtClock(pomoPhase.left) }}</b></template>
+          <template v-else><span class="muted">last pomodoro · no break</span></template>
+        </div>
         <div v-else class="readout"><span class="inst-big mono">{{ fmtClock(gap) }}</span><span class="muted">left</span></div>
         <div class="actions">
           <button v-if="current?.kind === 'todo'" class="btn primary" @click="toggleTodo(current.todoId)"><span class="icon sm">check</span>Done <span class="kbd">X</span></button>
@@ -90,6 +112,17 @@ function start(t) {
 .pulse { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: pulse 1.6s infinite; }
 @keyframes pulse { 50% { opacity: 0.2; } }
 .range { font-size: 13px; min-width: 0; }
+.brk-tag { background: var(--accent); color: var(--on-accent); }
+.inst-lbl { flex-wrap: wrap; }
+.title-btn { display: block; width: 100%; border: 0; padding: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.title-btn:hover { text-decoration: underline dotted; text-underline-offset: 4px; }
+/* the current todo's key points and notes, at reading size (ISS-24) */
+.notes { display: flex; flex-direction: column; gap: 6px; max-width: 760px; border-left: 2px solid var(--border); padding-left: 12px; }
+.vital { font-size: 16px; line-height: 24px; font-weight: 600; }
+.notes-text { font-size: 15px; line-height: 23px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9.6em; overflow: auto; color: var(--text); }
+.pomo { font-size: 18px; }
+.pomo b { font-weight: 700; }
+.pomo.break b { color: var(--accent); }
 .title .until { color: var(--warn); }
 .title .until-w { color: var(--muted); font-weight: 400; }
 .title { font: 600 30px/36px Inter, sans-serif; letter-spacing: -0.015em; }
