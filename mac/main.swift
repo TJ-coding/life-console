@@ -191,7 +191,7 @@ final class Model: ObservableObject {
   /** The floating widget's size, 0.75…3 (the slider in the panel; 1 = the original size). */
   @Published var hudScale = defaults.object(forKey: "hudScale") as? Double ?? 1 { didSet { defaults.set(hudScale, forKey: "hudScale"); onChange?() } }
   /** How many of the closest deadlines to list under the widget (0 = none) and in the panel (Settings…). */
-  @Published var hudDeadlines = defaults.object(forKey: "hudDeadlines") as? Int ?? 0 { didSet { defaults.set(hudDeadlines, forKey: "hudDeadlines"); onChange?() } }
+  @Published var hudDeadlines = defaults.object(forKey: "hudDeadlines") as? Int ?? 3 { didSet { defaults.set(hudDeadlines, forKey: "hudDeadlines"); onChange?() } }
   @Published var panelDeadlines = defaults.object(forKey: "panelDeadlines") as? Int ?? 3 { didSet { defaults.set(panelDeadlines, forKey: "panelDeadlines"); onChange?() } }
   var onDeadlines: (() -> Void)?
   static let hudScaleRange = 0.75...3.0
