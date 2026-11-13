@@ -190,9 +190,8 @@ final class Model: ObservableObject {
   @Published var showHUD = defaults.object(forKey: "hud") as? Bool ?? false { didSet { defaults.set(showHUD, forKey: "hud"); onChange?() } }
   /** The floating widget's size, 0.75…3 (the slider in the panel; 1 = the original size). */
   @Published var hudScale = defaults.object(forKey: "hudScale") as? Double ?? 1 { didSet { defaults.set(hudScale, forKey: "hudScale"); onChange?() } }
-  /** How many of the closest deadlines to list under the widget (0 = none) and in the panel (Settings…). */
+  /** How many of the closest deadlines the floating widget lists under its headline (Settings…; 0 = none). */
   @Published var hudDeadlines = defaults.object(forKey: "hudDeadlines") as? Int ?? 3 { didSet { defaults.set(hudDeadlines, forKey: "hudDeadlines"); onChange?() } }
-  @Published var panelDeadlines = defaults.object(forKey: "panelDeadlines") as? Int ?? 3 { didSet { defaults.set(panelDeadlines, forKey: "panelDeadlines"); onChange?() } }
   var onDeadlines: (() -> Void)?
   static let hudScaleRange = 0.75...3.0
   var onChange: (() -> Void)?
@@ -332,7 +331,7 @@ struct Panel: View {
         if let nx = n.next { nextRow(nx, n) }
         if !n.blocks.isEmpty { timeline(n) }
         if !n.unscheduled.isEmpty { unscheduled(n) }
-        if !n.deadlines.isEmpty && m.panelDeadlines > 0 { deadlines(n) }
+        if !n.deadlines.isEmpty { deadlines(n) }
       } else if m.connected {
         Card { Text(m.error ?? "Loading…").foregroundColor(K.muted) }
       }
@@ -503,7 +502,7 @@ struct Panel: View {
   func deadlines(_ n: Now) -> some View {
     VStack(alignment: .leading, spacing: 6) {
       SectionLabel(text: "DEADLINES")
-      ForEach(n.deadlines.prefix(m.panelDeadlines)) { d in
+      ForEach(n.deadlines.prefix(3)) { d in
         let col = d.mins <= 720 ? K.danger : d.mins <= 2880 ? K.warn : K.accent
         HStack(spacing: 8) {
           Image(systemName: d.mins <= 0 ? "exclamationmark.triangle.fill" : "flag.fill").font(.system(size: 10)).foregroundColor(col)
@@ -562,14 +561,9 @@ struct SettingsView: View {
           }
         }
         Stepper(value: $m.hudDeadlines, in: 0...10) {
-          HStack { Text("Deadlines below it"); Spacer(); Text(m.hudDeadlines == 0 ? "None" : "Closest \(m.hudDeadlines)").foregroundColor(.secondary) }
+          HStack { Text("Deadlines"); Spacer(); Text(m.hudDeadlines == 0 ? "None" : "Closest \(m.hudDeadlines)").foregroundColor(.secondary) }
         }
         HStack { Text("Position"); Spacer(); Button("Back to the Corner") { m.resetHUD() } }
-      }
-      Section("Panel") {
-        Stepper(value: $m.panelDeadlines, in: 0...10) {
-          HStack { Text("Deadlines"); Spacer(); Text(m.panelDeadlines == 0 ? "None" : "Closest \(m.panelDeadlines)").foregroundColor(.secondary) }
-        }
       }
       Section {
         HStack { Text("Headline size"); Spacer(); Button("Fit Menu Bar Again", action: refit) }
@@ -676,26 +670,49 @@ struct HUD: View {
 }
 
 extension HUD {
-  /** The closest n deadlines (Settings → Widget), under the pill; click → the Deadlines page. */
+  /**
+   * The closest n deadlines (Settings → Deadlines), under the pill. Each row: an urgency bar (glance.js colours:
+   * red ≤ 12 h or overdue, amber ≤ 48 h, else green), the title with its due date, and the time left. Click → Deadlines.
+   */
   func deadlineList(_ n: Now, _ z: CGFloat) -> some View {
-    VStack(alignment: .leading, spacing: 4 * z) {
-      ForEach(n.deadlines.prefix(m.hudDeadlines)) { d in
+    let shown = Array(n.deadlines.prefix(m.hudDeadlines))
+    return VStack(alignment: .leading, spacing: 0) {
+      HStack {
+        Text("DEADLINES").font(.system(size: 9.5 * z, weight: .bold)).tracking(1.2 * z).foregroundColor(K.muted)
+        Spacer()
+        if n.deadlines.count > shown.count { Text("\(shown.count) of \(n.deadlines.count)").font(.system(size: 9.5 * z, weight: .medium, design: .monospaced)).foregroundColor(K.muted) }
+      }
+      .padding(.bottom, 5 * z)
+      ForEach(Array(shown.enumerated()), id: \.element.id) { i, d in
         let col = d.mins <= 720 ? K.danger : d.mins <= 2880 ? K.warn : K.accent
-        HStack(spacing: 7 * z) {
-          Image(systemName: d.mins <= 0 ? "exclamationmark.triangle.fill" : "flag.fill").font(.system(size: 9 * z)).foregroundColor(col)
-          Text(d.title).font(.system(size: 12 * z)).foregroundColor(K.text).lineLimit(1).truncationMode(.tail)
-            .frame(maxWidth: 300 * z, alignment: .leading)
-          Spacer(minLength: 10 * z)
-          Text(d.mins <= 0 ? "OVERDUE" : countdown(d.mins)).font(.system(size: 11 * z, weight: .medium, design: .monospaced)).foregroundColor(col)
+        if i > 0 { Rectangle().fill(K.border).frame(height: 1).padding(.leading, 12 * z) }
+        HStack(alignment: .center, spacing: 9 * z) {
+          RoundedRectangle(cornerRadius: 1.5 * z).fill(col).frame(width: 3 * z, height: 26 * z)
+          VStack(alignment: .leading, spacing: 1 * z) {
+            Text(d.title).font(.system(size: 12.5 * z, weight: .medium)).foregroundColor(K.text).lineLimit(1).truncationMode(.tail)
+              .frame(maxWidth: 260 * z, alignment: .leading)
+            Text(dueLabel(d.due)).font(.system(size: 10 * z)).foregroundColor(K.muted).lineLimit(1)
+          }
+          Spacer(minLength: 12 * z)
+          Text(d.mins <= 0 ? "OVERDUE" : countdown(d.mins)).font(.system(size: 13 * z, weight: .semibold, design: .monospaced)).foregroundColor(col)
+            .padding(.horizontal, 6 * z).padding(.vertical, 2 * z)
+            .background(RoundedRectangle(cornerRadius: 3 * z).fill(col.opacity(0.12)))
         }
+        .padding(.vertical, 5 * z)
       }
     }
-    .padding(.horizontal, 9 * z).padding(.vertical, 7 * z)
+    .padding(.horizontal, 10 * z).padding(.top, 8 * z).padding(.bottom, 5 * z)
     .background(K.surface2)
     .clipShape(RoundedRectangle(cornerRadius: 3 * z))
     .overlay(RoundedRectangle(cornerRadius: 3 * z).stroke(K.border, lineWidth: 1))
     .contentShape(Rectangle()).onTapGesture { m.onDeadlines?() }
     .help("Click: the Deadlines page")
+  }
+  /** "Fri 15 Nov · 18:00", or just the day for an end-of-day deadline. */
+  func dueLabel(_ d: Date) -> String {
+    let f = DateFormatter(); let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+    f.dateFormat = c.hour == 23 && c.minute == 59 ? "EEE d MMM" : "EEE d MMM · HH:mm"
+    return f.string(from: d)
   }
 }
 
