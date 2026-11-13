@@ -59,14 +59,16 @@ struct Now {
   /** What the menu-bar headline and floating widget show: the running block, else the next scheduled block,
    *  else PLAN: a prompt to schedule what's next (with how many of today's todos still have no time). */
   var toSchedule = 0      // today's open todos with no time still ahead of them (unscheduled, or their time passed)
+  var topToSchedule: Todo?  // the highest-priority of them
+  var topCategory = "experiment"
   var planning: Bool { current == nil && next == nil }
   struct Bar { var mode = Mode.idle, plan = false, title = "", meta = "", longMeta = "" }
   var bar: Bar {
     if current != nil { return Bar(mode: .busy, title: text, meta: fmtDur(remaining), longMeta: "\(fmtDur(remaining)) left") }
     if let nx = next { let inS = "in \(fmtDur(toMin(nx.start) * 60 - nowSec))"; return Bar(mode: .free, title: nx.title, meta: inS, longMeta: "\(nx.start) · \(inS)") }
     // nothing left on today's timeline: ask to schedule rather than presenting an unscheduled todo as "next"
-    let k = toSchedule > 0 ? "\(toSchedule) to schedule" : ""
-    return Bar(mode: .free, plan: true, title: "Schedule what's next", meta: k, longMeta: k)
+    let k = toSchedule > 0 ? "\(toSchedule) unscheduled" : ""
+    return Bar(mode: .free, plan: true, title: topToSchedule?.title ?? "Schedule what's next", meta: k, longMeta: k)
   }
 }
 
@@ -136,6 +138,10 @@ func compute(_ state: [String: Any], at now: Date = Date()) -> Now {
   if n.mode == .free, let st = suggestion?.start, suggestion?.date == T, toMin(st) < nowMin { n.missedAt = st }
   n.unscheduled = queue.filter { $0.start == nil && $0.id != suggestion?.id }
   n.toSchedule = queue.count
+  n.topToSchedule = queue.first   // queue is in priority order
+  n.topCategory = queue.first.map(categoryOf) ?? "experiment"
+  // planning: the list under the card holds the rest of what still needs a time (passed ones included), so it adds up
+  if n.planning { n.unscheduled = Array(queue.dropFirst()) }
 
   // Deadlines (glance.js effDue): the personal internal target while it still stands, else the hard due.
   n.deadlines = (state["deadlines"] as? [[String: Any]] ?? []).compactMap { d -> Deadline? in
@@ -373,9 +379,15 @@ struct Panel: View {
     Card {
       VStack(alignment: .leading, spacing: 9) {
         HStack { Chip(text: "PLAN", color: K.info); Spacer() }
-        Text("Schedule what's next").font(.system(size: 16, weight: .semibold)).foregroundColor(K.text)
-        Text(n.toSchedule == 1 ? "1 of today's tasks still needs a time." : n.toSchedule > 1 ? "\(n.toSchedule) of today's tasks still need a time." : "Nothing left on today's timeline.")
-          .font(.system(size: 12)).foregroundColor(K.muted)
+        HStack(alignment: .top, spacing: 9) {
+          if n.topToSchedule != nil { RoundedRectangle(cornerRadius: 2).fill(K.cat(n.topCategory)).frame(width: 4) }
+          VStack(alignment: .leading, spacing: 3) {
+            Text(n.topToSchedule?.title ?? "Schedule what's next").font(.system(size: 16, weight: .semibold)).foregroundColor(K.text)
+              .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            Text(n.topToSchedule.map { t in "Highest priority · \(t.timeMin)m · \(n.toSchedule) unscheduled today" } ?? "Nothing left on today's timeline.")
+              .font(.system(size: 12)).foregroundColor(K.muted)
+          }
+        }.fixedSize(horizontal: false, vertical: true)
         HStack {
           Spacer()
           Button { m.onPlan?() } label: {
@@ -469,7 +481,7 @@ struct Panel: View {
 
   func unscheduled(_ n: Now) -> some View {
     VStack(alignment: .leading, spacing: 6) {
-      SectionLabel(text: "UNSCHEDULED TODAY", trailing: "\(n.unscheduled.count)")
+      SectionLabel(text: n.planning ? "ALSO UNSCHEDULED" : "UNSCHEDULED TODAY", trailing: "\(n.unscheduled.count)")
       ForEach(n.unscheduled.prefix(5), id: \.id) { t in
         HStack(spacing: 8) {
           Image(systemName: "circle").font(.system(size: 10)).foregroundColor(K.muted)
