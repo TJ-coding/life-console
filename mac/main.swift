@@ -187,6 +187,9 @@ final class Model: ObservableObject {
   var onConnect: (() -> Void)?
   var onPlan: (() -> Void)?
   @Published var showHUD = defaults.object(forKey: "hud") as? Bool ?? false { didSet { defaults.set(showHUD, forKey: "hud"); onChange?() } }
+  /** The floating widget's size: 0.85 small · 1 medium · 1.25 large · 1.5 extra large (gear menu → Widget Size). */
+  @Published var hudScale = defaults.object(forKey: "hudScale") as? Double ?? 1 { didSet { defaults.set(hudScale, forKey: "hudScale"); onChange?() } }
+  static let hudSizes: [(String, Double)] = [("Small", 0.85), ("Medium", 1), ("Large", 1.25), ("Extra Large", 1.5)]
   var onChange: (() -> Void)?
 
   var url: String { (defaults.string(forKey: "url") ?? Model.defaultServer).trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) }
@@ -527,6 +530,9 @@ struct Panel: View {
           loginOn = SMAppService.mainApp.status == .enabled
         }))
         Toggle("Show Headline on Screen", isOn: $m.showHUD)
+        Picker("Widget Size", selection: Binding(get: { m.hudScale }, set: { m.hudScale = $0; m.showHUD = true })) {
+          ForEach(Model.hudSizes, id: \.1) { Text($0.0).tag($0.1) }
+        }
         Button("Reset Headline Position") { m.resetHUD() }
         Button("Fit Menu Bar Again") { m.onRefit?() }.help("After freeing menu-bar space: let the headline grow back")
         Divider()
@@ -551,28 +557,28 @@ struct HUD: View {
   @State private var hover = false
   var body: some View {
     if let n = m.snapshot {
-      let bar = n.bar
+      let bar = n.bar, z = CGFloat(m.hudScale)   // every size below scales with Widget Size
       let busy = bar.mode == .busy, free = bar.mode == .free
       let tagColor = busy ? K.stamp : bar.plan ? K.info : free ? K.accent : K.border
-      HStack(spacing: 8) {
-        Text(busy ? "NOW" : bar.plan ? "PLAN" : free ? "NEXT" : "IDLE").font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(0.6)
+      HStack(spacing: 8 * z) {
+        Text(busy ? "NOW" : bar.plan ? "PLAN" : free ? "NEXT" : "IDLE").font(.system(size: 10 * z, weight: .bold, design: .monospaced)).tracking(0.6 * z)
           .foregroundColor(busy ? .white : free ? tagColor : K.muted)
-          .padding(.horizontal, 6).padding(.vertical, 2)
-          .background(RoundedRectangle(cornerRadius: 2).fill(busy ? K.stamp : K.surface))
-          .overlay(RoundedRectangle(cornerRadius: 2).stroke(tagColor, lineWidth: 1))
-        Text(bar.title).font(.system(size: 13, weight: .medium)).foregroundColor(K.text)
-          .lineLimit(1).truncationMode(.tail).frame(maxWidth: 320, alignment: .leading)
+          .padding(.horizontal, 6 * z).padding(.vertical, 2 * z)
+          .background(RoundedRectangle(cornerRadius: 2 * z).fill(busy ? K.stamp : K.surface))
+          .overlay(RoundedRectangle(cornerRadius: 2 * z).stroke(tagColor, lineWidth: 1))
+        Text(bar.title).font(.system(size: 13 * z, weight: .medium)).foregroundColor(K.text)
+          .lineLimit(1).truncationMode(.tail).frame(maxWidth: 320 * z, alignment: .leading)
         if !bar.longMeta.isEmpty {
-          Text(bar.longMeta).font(K.mono).foregroundColor(K.muted).lineLimit(1).frame(maxWidth: 160)
+          Text(bar.longMeta).font(.system(size: 11 * z, weight: .medium, design: .monospaced)).foregroundColor(K.muted).lineLimit(1).frame(maxWidth: 160 * z)
         }
       }
-      .padding(.leading, 4).padding(.trailing, 10).frame(height: 30)
+      .padding(.leading, 4 * z).padding(.trailing, 10 * z).frame(height: 30 * z)
       .background(K.surface2)
       .overlay(alignment: .bottomLeading) {
-        if busy { GeometryReader { g in Rectangle().fill(K.accent).frame(width: g.size.width * n.progress, height: 2).frame(maxHeight: .infinity, alignment: .bottom) } }
+        if busy { GeometryReader { g in Rectangle().fill(K.accent).frame(width: g.size.width * n.progress, height: 2 * z).frame(maxHeight: .infinity, alignment: .bottom) } }
       }
-      .clipShape(RoundedRectangle(cornerRadius: 3))
-      .overlay(RoundedRectangle(cornerRadius: 3).stroke(busy ? K.stamp.opacity(0.6) : K.border, lineWidth: 1))
+      .clipShape(RoundedRectangle(cornerRadius: 3 * z))
+      .overlay(RoundedRectangle(cornerRadius: 3 * z).stroke(busy ? K.stamp.opacity(0.6) : K.border, lineWidth: 1))
       .contentShape(Rectangle())
       .onTapGesture(count: 2) { m.resetHUD() }
       .onTapGesture(perform: open)
@@ -582,8 +588,8 @@ struct HUD: View {
         // one-click hide on the pill's top-left corner, like a macOS notification; shown on hover
         if hover {
           Button { m.showHUD = false } label: {
-            Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundColor(K.text)
-              .frame(width: 16, height: 16).background(Circle().fill(K.surface2)).overlay(Circle().stroke(K.border, lineWidth: 1))
+            Image(systemName: "xmark").font(.system(size: 8 * max(1, z), weight: .bold)).foregroundColor(K.text)
+              .frame(width: 16 * max(1, z), height: 16 * max(1, z)).background(Circle().fill(K.surface2)).overlay(Circle().stroke(K.border, lineWidth: 1))
               .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
           }.buttonStyle(.plain).help("Hide (bring it back from the menu-bar panel → Show headline)")
         }
