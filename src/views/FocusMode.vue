@@ -42,9 +42,12 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
       </div>
       <h1>{{ current.title }}</h1>
       <!-- ISS-25: one countdown; in a pomodoro sitting, click it to switch between the break and the whole block -->
-      <button v-if="pomoPhase" class="countdown mono toggle" :class="pomoPhase.phase" :title="readout.title" @click="toggleClockMode">{{ fmtClock(readout.sec) }} <span class="muted">{{ readout.label }}</span><span class="muted pomo-n">· POMODORO {{ pomoPhase.n }}/{{ pomoPhase.of }}<template v-if="pomoPhase.phase === 'break'"> · BREAK</template></span></button>
+      <button v-if="pomoPhase" class="countdown mono toggle" :class="pomoPhase.phase" :title="readout.title" @click="toggleClockMode">{{ fmtClock(readout.sec) }}<span class="muted pomo-n">POMODORO {{ pomoPhase.n }}/{{ pomoPhase.of }}<template v-if="pomoPhase.phase === 'break'"> · BREAK</template></span></button>
       <div v-else class="countdown mono">{{ fmtClock(readout.sec) }} <span class="muted">{{ readout.label }}</span></div>
-      <PomoBar v-if="current.pomo" :segs="current.pomo" :elapsed="progress.elapsed" />
+      <button v-if="pomoPhase" class="bar-toggle" :title="readout.title" @click="toggleClockMode">
+        <div v-if="readout.piece" class="bar big" :class="pomoPhase.phase"><i :style="{ width: readout.pct + '%' }"></i></div>
+        <PomoBar v-else :segs="current.pomo" :elapsed="progress.elapsed" />
+      </button>
       <div v-else class="bar big"><i :style="{ width: progress.pct + '%' }"></i></div>
       <div class="row mono small muted"><span>START {{ current.start }}</span><span class="spacer"></span><span>elapsed {{ fmtDur(progress.elapsed) }} / {{ fmtDur(progress.total) }}</span><span class="spacer"></span><span>END {{ current.end }}</span></div>
       <div v-if="suggestion" class="do">
@@ -113,9 +116,10 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
 .date { font-size: 34px; line-height: 42px; font-weight: 700; margin-top: 8px; }
 .clock { font-size: 28px; font-weight: 600; color: var(--muted); }
 .countdown.toggle { border: 0; padding: 0; background: transparent; font: inherit; font-size: 44px; line-height: 48px; font-weight: 700; color: var(--text); text-align: left; cursor: pointer; }
-.countdown.toggle:hover > .muted { text-decoration: underline dotted; }
 .countdown.toggle.break { color: var(--accent); }
-.pomo-n { margin-left: 6px; }
+.pomo-n { margin-left: 14px; font-size: 16px; font-weight: 500; }
+.bar-toggle { display: block; width: 100%; border: 0; padding: 4px 0; margin: -4px 0; background: transparent; cursor: pointer; }
+.hero .bar.big.break > i { background: var(--accent); }
 .hero { padding: 26px 30px; gap: 14px; border-left: 4px solid var(--c, var(--accent)); }
 .hero.free { border-left-color: var(--muted); }
 .hero h1 { margin: 0; font: 700 32px/40px 'JetBrains Mono', monospace; letter-spacing: -0.02em; }

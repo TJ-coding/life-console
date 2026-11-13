@@ -61,22 +61,21 @@ export function useNow() {
     for (let i = 0; i < segs.length; i++) {
       const s = segs[i]
       const end = s.end * 60
-      if (off < end) return { phase: 'work', n: i + 1, of: segs.length, left: end - off, brk: s.brk, last: i === segs.length - 1 }
-      if (off < end + s.brk * 60) return { phase: 'break', n: i + 1, of: segs.length, left: end + s.brk * 60 - off, brk: s.brk }
+      // pct: progress through this pomodoro (or this break)
+      if (off < end) return { phase: 'work', n: i + 1, of: segs.length, left: end - off, brk: s.brk, last: i === segs.length - 1, pct: Math.min(100, Math.max(0, ((off - s.start * 60) / (s.work * 60)) * 100)) }
+      if (off < end + s.brk * 60) return { phase: 'break', n: i + 1, of: segs.length, left: end + s.brk * 60 - off, brk: s.brk, pct: Math.min(100, ((off - end) / (s.brk * 60)) * 100) }
     }
     return null
   })
-  /** The big clock: { sec, label, title } for the current block, following clockMode in a pomodoro sitting. */
+  /** The big clock and its bar for the current block. In a pomodoro sitting they follow clockMode and carry
+   *  no label: `piece` = this pomodoro / break only (sec to the switch, pct through it), else the whole block. */
   const readout = computed(() => {
     const p = progress.value
     if (!p) return null
     const ph = pomoPhase.value
-    if (!ph) return { sec: p.remaining, label: 'left', title: null }
-    const other = clockMode.value === 'pomo' ? 'Click to show the time left in the whole block' : 'Click to show the time to the next break'
-    if (clockMode.value === 'block') return { sec: p.remaining, label: 'left in block', title: other }
-    if (ph.phase === 'break') return { sec: ph.left, label: 'break left', title: other }
-    if (ph.last) return { sec: p.remaining, label: 'left · last pomodoro', title: other }
-    return { sec: ph.left, label: 'to break', title: other }
+    if (!ph) return { sec: p.remaining, label: 'left', pct: p.pct, piece: false, title: null }
+    if (clockMode.value === 'block') return { sec: p.remaining, label: '', pct: p.pct, piece: false, title: 'Whole block · click to show the current pomodoro' }
+    return { sec: ph.left, label: '', pct: ph.pct, piece: true, title: `${ph.phase === 'break' ? 'Break' : `Pomodoro ${ph.n}/${ph.of}`} · click to show the whole block` }
   })
   const untilNext = computed(() => (next.value ? toMin(next.value.start) * 60 - nowSec.value : null))
   /** Free seconds from now until the next block (or end of day). */
