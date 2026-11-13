@@ -57,13 +57,16 @@ struct Now {
   var remaining: Int { current.map { toMin($0.end) * 60 - nowSec } ?? 0 }
 
   /** What the menu-bar headline and floating widget show: the running block, else the next scheduled block,
-   *  else a suggested todo (MISSED when its own start time already passed), else nothing. */
-  struct Bar { var mode = Mode.idle, missedAt: String? = nil, title = "", meta = "", longMeta = "" }
+   *  else PLAN: a prompt to schedule what's next (with how many of today's todos still have no time). */
+  var toSchedule = 0      // today's open todos with no time still ahead of them (unscheduled, or their time passed)
+  var planning: Bool { current == nil && next == nil }
+  struct Bar { var mode = Mode.idle, plan = false, title = "", meta = "", longMeta = "" }
   var bar: Bar {
     if current != nil { return Bar(mode: .busy, title: text, meta: fmtDur(remaining), longMeta: "\(fmtDur(remaining)) left") }
     if let nx = next { let inS = "in \(fmtDur(toMin(nx.start) * 60 - nowSec))"; return Bar(mode: .free, title: nx.title, meta: inS, longMeta: "\(nx.start) · \(inS)") }
-    if let s = suggestion { return Bar(mode: .free, missedAt: missedAt, title: s.title, meta: fmtDur(gap), longMeta: "free \(fmtDur(gap))") }
-    return Bar(title: "Nothing scheduled")
+    // nothing left on today's timeline: ask to schedule rather than presenting an unscheduled todo as "next"
+    let k = toSchedule > 0 ? "\(toSchedule) to schedule" : ""
+    return Bar(mode: .free, plan: true, title: "Schedule what's next", meta: k, longMeta: k)
   }
 }
 
@@ -132,6 +135,7 @@ func compute(_ state: [String: Any], at now: Date = Date()) -> Now {
   n.suggestionCategory = suggestion.map(categoryOf) ?? "experiment"
   if n.mode == .free, let st = suggestion?.start, suggestion?.date == T, toMin(st) < nowMin { n.missedAt = st }
   n.unscheduled = queue.filter { $0.start == nil && $0.id != suggestion?.id }
+  n.toSchedule = queue.count
 
   // Deadlines (glance.js effDue): the personal internal target while it still stands, else the hard due.
   n.deadlines = (state["deadlines"] as? [[String: Any]] ?? []).compactMap { d -> Deadline? in
@@ -175,6 +179,7 @@ final class Model: ObservableObject {
   @Published var lastSync: Date?
   var onRefit: (() -> Void)?
   var onConnect: (() -> Void)?
+  var onPlan: (() -> Void)?
   @Published var showHUD = defaults.object(forKey: "hud") as? Bool ?? false { didSet { defaults.set(showHUD, forKey: "hud"); onChange?() } }
   var onChange: (() -> Void)?
 
@@ -360,6 +365,29 @@ struct Panel: View {
   }
 
   @ViewBuilder func nowCard(_ n: Now) -> some View {
+    if n.planning { planCard(n) } else { activeCard(n) }
+  }
+
+  /** No block running and nothing else scheduled today: prompt to plan. */
+  func planCard(_ n: Now) -> some View {
+    Card {
+      VStack(alignment: .leading, spacing: 9) {
+        HStack { Chip(text: "PLAN", color: K.info); Spacer() }
+        Text("Schedule what's next").font(.system(size: 16, weight: .semibold)).foregroundColor(K.text)
+        Text(n.toSchedule == 1 ? "1 of today's tasks still needs a time." : n.toSchedule > 1 ? "\(n.toSchedule) of today's tasks still need a time." : "Nothing left on today's timeline.")
+          .font(.system(size: 12)).foregroundColor(K.muted)
+        HStack {
+          Spacer()
+          Button { m.onPlan?() } label: {
+            Label("Plan in Life Console", systemImage: "calendar.badge.plus").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+              .padding(.horizontal, 10).padding(.vertical, 5).background(RoundedRectangle(cornerRadius: 6).fill(K.info))
+          }.buttonStyle(.plain)
+        }
+      }
+    }
+  }
+
+  @ViewBuilder func activeCard(_ n: Now) -> some View {
     Card {
       VStack(alignment: .leading, spacing: 9) {
         HStack {
@@ -513,9 +541,9 @@ struct HUD: View {
     if let n = m.snapshot {
       let bar = n.bar
       let busy = bar.mode == .busy, free = bar.mode == .free
-      let tagColor = busy ? K.stamp : bar.missedAt != nil ? K.warn : free ? K.accent : K.border
+      let tagColor = busy ? K.stamp : bar.plan ? K.info : free ? K.accent : K.border
       HStack(spacing: 8) {
-        Text(busy ? "NOW" : bar.missedAt.map { "MISSED \($0)" } ?? (free ? "NEXT" : "IDLE")).font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(0.6)
+        Text(busy ? "NOW" : bar.plan ? "PLAN" : free ? "NEXT" : "IDLE").font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(0.6)
           .foregroundColor(busy ? .white : free ? tagColor : K.muted)
           .padding(.horizontal, 6).padding(.vertical, 2)
           .background(RoundedRectangle(cornerRadius: 2).fill(busy ? K.stamp : K.surface))
@@ -585,7 +613,7 @@ func radarGlyph() -> NSImage {
  */
 final class HeadlineView: NSView {
   var mode: Now.Mode = .idle, meta = "", stale = false
-  var missedAt: String?
+  var plan = false
   var title = "" { didSet { if title != oldValue { textW = ceil((title as NSString).size(withAttributes: [.font: font]).width) } } }
   var slot: CGFloat = 0                         // max width of the title slot
   private let font = NSFont.menuBarFont(ofSize: 0)
@@ -607,7 +635,7 @@ final class HeadlineView: NSView {
   required init?(coder: NSCoder) { fatalError() }
 
   override func hitTest(_ point: NSPoint) -> NSView? { nil }   // clicks go to the status item button
-  private var tagText: String? { mode == .busy ? "NOW" : mode == .free ? (missedAt.map { "MISSED \($0)" } ?? "NEXT") : nil }
+  private var tagText: String? { mode == .busy ? "NOW" : plan ? "PLAN" : mode == .free ? "NEXT" : nil }
   private var showRadar: Bool { tagText == nil }   // the NOW / NEXT / MISSED tag leads when there is one
   private var tagW: CGFloat { tagText.map { ceil(($0 as NSString).size(withAttributes: [.font: tagFont, .kern: 0.6]).width) + 10 } ?? 0 }
   private var titleW: CGFloat { title.isEmpty ? 0 : min(slot, textW) }
@@ -635,7 +663,7 @@ final class HeadlineView: NSView {
       if mode == .busy { rgb(0xd94a3d).setFill(); path.fill(); fg = .white }
       else {
         let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        fg = missedAt != nil ? (dark ? rgb(0xe3b341) : rgb(0xb7791f)) : (dark ? rgb(0x3fb68b) : rgb(0x1e8a63))
+        fg = plan ? (dark ? rgb(0x4c9aff) : rgb(0x2563eb)) : (dark ? rgb(0x3fb68b) : rgb(0x1e8a63))
         fg.setStroke(); path.lineWidth = 1; path.stroke()
       }
       let str = NSAttributedString(string: tag, attributes: [.font: tagFont, .kern: 0.6, .foregroundColor: fg])
@@ -742,6 +770,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     model.onUpdateFound = { [weak self] u in self?.notifyUpdate(u) }
     model.onInstall = { [weak self] in self?.installUpdate() }
     model.onConnect = { [weak self] in self?.openConnectPage() }
+    model.onPlan = { [weak self] in self?.openPath("/app#/week") }
     if !defaults.bool(forKey: "loginAsked") { defaults.set(true, forKey: "loginAsked"); try? SMAppService.mainApp.register() }
 
     item.button?.target = self; item.button?.action = #selector(toggle)
@@ -777,7 +806,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     let bar = n?.bar ?? Now.Bar()
     let title = bar.mode == .idle ? "" : bar.title, meta = bar.meta
     // compact steps (only ever shrinks, see checkFit): the title slot narrows; the time always stays
-    headline.mode = bar.mode; headline.missedAt = bar.missedAt; headline.title = title
+    headline.mode = bar.mode; headline.plan = bar.plan; headline.title = title
     headline.slot = [150, 110, 80, 56, 0][compact]
     headline.meta = meta
     headline.stale = model.stale && model.error != nil
@@ -837,7 +866,9 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     guard !placing, let vf = (hud.screen ?? NSScreen.main)?.visibleFrame else { return }
     defaults.set(Double(vf.maxX - hud.frame.maxX), forKey: "hudRight"); defaults.set(Double(vf.maxY - hud.frame.maxY), forKey: "hudTop")
   }
-  func openFocus() { if let u = URL(string: model.url + "/#/focus") { NSWorkspace.shared.open(u) } }
+  /** The pill: Focus mode, or the week planner while it asks you to schedule what's next. */
+  func openFocus() { openPath(model.snapshot?.planning == true ? "/app#/week" : "/app#/focus") }
+  func openPath(_ p: String) { popover.performClose(nil); if let u = URL(string: model.url + p) { NSWorkspace.shared.open(u) } }
   func showPanel() {
     guard let b = item.button, !popover.isShown else { return }
     popover.show(relativeTo: b.bounds, of: b, preferredEdge: .minY)

@@ -23,7 +23,7 @@ full-screen apps. Features and how to use it: [docs/GUIDE.md → Mac menu-bar ap
 - `main.swift` is the whole app (AppKit + SwiftUI, no dependencies). It reads `GET /api/state` with an API token
   every minute, caches it for offline use, and recomputes "now" every few seconds. `compute()` is a port of
   `src/now.js` (`useNow`) and `server/pomodoro.mjs`, and the deadline countdowns follow `src/glance.js`: **if you
-  change those, port the change here.** The headline (`Now.bar`) shows the next scheduled block between blocks.
+  change those, port the change here.** The headline (`Now.bar`) shows the next scheduled block between blocks, and PLAN (*Schedule what's next*) once nothing else is scheduled today.
 - **Connecting:** Settings → *Connect Mac app* calls `POST /api/auth/tokens {name: "Mac app"}` (browser sessions
   only; a second call replaces the token) and opens `lifeconsole-now://connect?server=…&token=lct_…`. The app asks
   the person to confirm, then drops the previous account's cached planner.
