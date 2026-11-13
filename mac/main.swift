@@ -652,15 +652,18 @@ struct HUD: View {
         .help("Click: Focus mode · Drag: move · Double-click: back to the corner")
         if !shown.isEmpty {
           Rectangle().fill(K.border).frame(height: 1)
-          // quiet on purpose: deadlines are background, the task above is what to do. Grey, smaller, no boxes;
-          // colour only when one is close (amber ≤ 48 h, red ≤ 12 h or late, as in glance.js)
-          VStack(alignment: .leading, spacing: 3 * z) {
+          // quiet on purpose: deadlines are background, the task above is what to do. Grey and smaller; urgency is
+          // a short solid bar on the left (glance.js: red ≤ 12 h or late, amber ≤ 48 h, else green)
+          VStack(alignment: .leading, spacing: 4 * z) {
             ForEach(Array(shown.enumerated()), id: \.element.id) { i, d in
-              let close = d.mins <= 2880
               HStack(spacing: 8 * z) {
-                Text(times[i]).font(.system(size: 10.5 * z, weight: close ? .semibold : .regular, design: .monospaced))
-                  .foregroundColor(d.mins <= 720 ? K.danger : close ? K.warn : K.muted)
-                  .frame(width: col)
+                HStack(spacing: 0) {
+                  RoundedRectangle(cornerRadius: 1.5 * z).fill(d.mins <= 720 ? K.danger : d.mins <= 2880 ? K.warn : K.accent)
+                    .frame(width: 3 * z, height: 13 * z)
+                  Text(times[i]).font(.system(size: 10.5 * z, design: .monospaced)).foregroundColor(K.muted)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .frame(width: col)
                 Text(d.title).font(.system(size: 11.5 * z)).foregroundColor(K.muted).lineLimit(1).truncationMode(.tail)
                   .frame(maxWidth: 320 * z, alignment: .leading)
               }
