@@ -14,12 +14,16 @@ export function countdown(due) {
   return m < 0 ? `−${s}` : s
 }
 
-/** Big ticking readout: H:MM:SS within a day, otherwise days + hours (absolute; pair with "overdue by"). */
+/** Big readout: minutes within an hour, hours + minutes within a day, otherwise days + hours (absolute;
+ *  pair with "overdue by"). No seconds: a ticking deadline is distracting (ISS-26). Rounds up while
+ *  counting down, so "1m" shows until it's due rather than "0m" a minute early. */
 export function bigCountdown(due) {
   void ui.now
-  const a = Math.floor(Math.abs(new Date(due) - ui.now) / 1000)
-  if (a < 86400) return `${Math.floor(a / 3600)}:${pad(Math.floor((a % 3600) / 60))}:${pad(a % 60)}`
-  return `${Math.floor(a / 86400)}d ${Math.floor((a % 86400) / 3600)}h`
+  const ms = new Date(due) - ui.now
+  const a = ms > 0 ? Math.ceil(ms / 60000) : Math.floor(-ms / 60000)
+  if (a < 60) return `${a}m`
+  if (a < 1440) return `${Math.floor(a / 60)}h ${pad(a % 60)}m`
+  return `${Math.floor(a / 1440)}d ${Math.floor((a % 1440) / 60)}h`
 }
 
 /** Status colour class: ≤ 12 h or overdue = danger, ≤ 48 h = warn, else ok. */
