@@ -37,5 +37,5 @@ const pieces = computed(() => props.segs.flatMap((s, i) => {
 .brk.past::before { border-top-color: color-mix(in srgb, var(--c, var(--accent)) 45%, transparent); }
 .brk.now::before { border-top-color: var(--accent); }
 /* the piece the clock counts down (ISS-25) */
-.cur { outline: 1.5px solid color-mix(in srgb, var(--c, var(--accent)) 60%, transparent); outline-offset: 2px; } /* the bar's own colour: nothing new on screen */
+.cur { outline: 1.5px solid var(--accent); outline-offset: 2px; } /* exactly the accent colour (Settings → Accent colour) */
 </style>
