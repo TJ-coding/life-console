@@ -4,4 +4,5 @@ import core from './core.js'
 import { buildRegistry } from './registry.js'
 
 export { defineModule } from './registry.js'
+export { useModuleState, ensureModuleState } from './state.js'
 export const registry = buildRegistry([...MODULES, core])

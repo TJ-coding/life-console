@@ -61,7 +61,13 @@ export function checkDocs(states, { prefixes = [] } = {}) {
     const v = String(Number(s.schemaVersion) || 1)
     schemas[v] = (schemas[v] ?? 0) + 1
     for (const [k, val] of Object.entries(s)) keyBytes[k] = (keyBytes[k] ?? 0) + Buffer.byteLength(JSON.stringify(val) ?? '')
-    if (isObj(s.modules)) for (const id of Object.keys(s.modules)) namespaces[id] = (namespaces[id] ?? 0) + 1
+    if (isObj(s.modules)) {
+      for (const id of Object.keys(s.modules)) {
+        const v = String(Number(s.moduleVersions?.[id]) || 1)
+        namespaces[id] ??= {}
+        namespaces[id][`v${v}`] = (namespaces[id][`v${v}`] ?? 0) + 1
+      }
+    }
     for (const p of prefixes) {
       const goals = (Array.isArray(s.plans) ? s.plans : []).flatMap((pl) => [...(pl?.psgs ?? []), ...(pl?.sigs ?? [])])
       const hits = goals.filter((g) => String(g?.no ?? '').toUpperCase().startsWith(p.toUpperCase())).length

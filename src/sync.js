@@ -7,7 +7,8 @@
 //   independent edits on two devices are both kept; same-field clashes go to the newest edit.
 // Without a server (vite dev, static hosting) sync quietly stays off and the app works locally.
 import { reactive, watch, nextTick } from 'vue'
-import { state, normalizeState, toast, hadLocalData, migrateDoc, SCHEMA_VERSION } from './store'
+import { state, normalizeState, toast, hadLocalData, migrateDoc } from './store'
+import { tooNewForThisBuild } from '../server/schema.mjs'
 import { merge3 } from './merge'
 import { pauseUndo, resetUndo } from './undo'
 import { auth, bindUser, startGuest, endGuest } from './auth'
@@ -50,7 +51,8 @@ const MY_BUILD = (document.querySelector('script[type="module"][src*="/assets/in
 const checkBuild = (h) => { if (h?.build && MY_BUILD !== 'dev' && h.build !== 'dev' && h.build !== MY_BUILD) sync.outdated = true }
 /** Data written by a newer app version must not be applied or overwritten by this (older) code. */
 function tooNew(doc) {
-  if ((Number(doc?.state?.schemaVersion) || 1) > SCHEMA_VERSION) { sync.outdated = true; sync.status = 'outdated'; return true }
+  // a newer core schema, or a newer version of a module namespace this build knows (server/schema.mjs)
+  if (tooNewForThisBuild(doc?.state)) { sync.outdated = true; sync.status = 'outdated'; return true }
   return false
 }
 /** fetch JSON from our API; detect a Cloudflare Access login redirect as "signed out". */

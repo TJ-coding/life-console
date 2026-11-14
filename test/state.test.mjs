@@ -111,8 +111,76 @@ test('check-docs: reports totals and problem types only', async () => {
   assert.equal(r.failed, 2)
   assert.deepEqual(r.problems, { 'normalize-throws:TypeError': 1, 'not-an-object': 1 })
   assert.deepEqual(r.schemaVersions, { 1: 1, 2: 3 })
-  assert.deepEqual(r.moduleNamespaces, { study: 1, xyz: 1 })
+  assert.deepEqual(r.moduleNamespaces, { study: { v1: 1 }, xyz: { v4: 1 } })
   assert.deepEqual(r.goalPrefixes, { 'PSG-': { docs: 2, goals: 2 }, 'LEC-': { docs: 0, goals: 0 } })
   assert.ok(r.bytes.max > 0 && r.bytes.total >= r.bytes.max)
   assert.ok(!JSON.stringify(r).includes('CS101'), 'no document content in the report')
+})
+
+/* ───────────── module namespaces (platform phase 2) ───────────── */
+const { migrateModules, tooNewForThisBuild, olderThanStored, moduleVersionsOf } = await import('../server/schema.mjs')
+const { checkModuleData } = await import('../modules/data.js')
+// a made-up module at version 3: v2 renames a field, v3 adds a default
+const books = {
+  id: 'books', schemaVersion: 3, defaults: () => ({ items: [] }),
+  migrations: {
+    2: (ns) => { for (const b of ns.items) if ('name' in b) { b.title ??= b.name; delete b.name } },
+    3: (ns) => { for (const b of ns.items) b.read ??= false },
+  },
+}
+const flat = { id: 'flat', schemaVersion: 1, defaults: () => ({ items: [] }) }
+const LIST = [books, flat]
+
+test('namespaces: migrated per module, idempotent; missing, unknown and too-new ones left alone', () => {
+  const d = { schemaVersion: 2, modules: { books: { items: [{ id: 'B-1', name: 'Dune' }] }, other: { x: 1 }, flat: { items: [] } }, moduleVersions: { other: 9 } }
+  migrateModules(d, LIST)
+  assert.deepEqual(d.modules.books.items, [{ id: 'B-1', title: 'Dune', read: false }])
+  assert.deepEqual(d.moduleVersions, { other: 9, books: 3, flat: 1 })
+  assert.deepEqual(d.modules.other, { x: 1 }, 'a module this build doesn’t know is kept untouched')
+  const again = migrateModules(clone(d), LIST)
+  assert.deepEqual(again, d, 'idempotent')
+  // a namespace from a NEWER build of a known module isn't migrated (the client stops syncing instead)
+  const newer = { modules: { books: { items: [{ id: 'B-1', shape: 'v4' }] } }, moduleVersions: { books: 4 } }
+  assert.deepEqual(migrateModules(clone(newer), LIST), newer)
+  // no namespace: nothing is created (a missing namespace means defaults)
+  const none = { schemaVersion: 2, todos: [] }
+  assert.deepEqual(migrateModules(clone(none), LIST), none)
+  assert.deepEqual(normalizeDoc(clone({ ...doc(), modules: {} })).moduleVersions, undefined)
+  // a namespace without a recorded version counts as version 1
+  const unversioned = migrateModules({ modules: { books: { items: [{ id: 'B-2', name: 'Emma' }] } } }, LIST)
+  assert.deepEqual([unversioned.modules.books.items[0].title, unversioned.moduleVersions.books], ['Emma', 3])
+  // a step may return a replacement namespace
+  const repl = migrateModules({ modules: { r: { old: true } } }, [{ id: 'r', schemaVersion: 2, defaults: () => ({}), migrations: { 2: () => ({ items: [] }) } }])
+  assert.deepEqual(repl.modules.r, { items: [] })
+  // the real module list has no namespaces yet, so migrateDoc leaves module data alone
+  assert.deepEqual(moduleVersionsOf(), {})
+  assert.deepEqual(normalizeDoc(withFuture(doc())).modules, FUTURE.modules)
+})
+
+test('client guard: newer core schema or a newer known module = too new; an unknown module is not', () => {
+  assert.equal(tooNewForThisBuild({ schemaVersion: SCHEMA_VERSION }, LIST), false)
+  assert.equal(tooNewForThisBuild({ schemaVersion: SCHEMA_VERSION + 1 }, LIST), true)
+  assert.equal(tooNewForThisBuild({ schemaVersion: SCHEMA_VERSION, moduleVersions: { books: 3 } }, LIST), false)
+  assert.equal(tooNewForThisBuild({ schemaVersion: SCHEMA_VERSION, moduleVersions: { books: 4 } }, LIST), true)
+  assert.equal(tooNewForThisBuild({ schemaVersion: SCHEMA_VERSION, moduleVersions: { runway: 7 } }, LIST), false, 'after a rollback: keep syncing, keep the data')
+  assert.equal(tooNewForThisBuild(undefined, LIST), false)
+})
+
+test('server guard: older core schema, or an older module version present on both sides, is refused', () => {
+  const stored = { schemaVersion: 2, moduleVersions: { books: 3, flat: 1 } }
+  assert.equal(olderThanStored({ schemaVersion: 2, moduleVersions: { books: 3, flat: 1 } }, stored), false)
+  assert.equal(olderThanStored({ schemaVersion: 1, moduleVersions: { books: 3 } }, stored), true)
+  assert.equal(olderThanStored({ schemaVersion: 2, moduleVersions: { books: 2 } }, stored), true, 'a stale tab’s old namespace')
+  assert.equal(olderThanStored({ schemaVersion: 2, moduleVersions: { books: 4 } }, stored), false, 'newer is fine')
+  assert.equal(olderThanStored({ schemaVersion: 2 }, stored), false, 'namespaces removed on purpose (import, start empty)')
+  assert.equal(olderThanStored({ schemaVersion: 2, moduleVersions: { runway: 1 } }, stored), false, 'only on one side')
+  assert.equal(olderThanStored({ schemaVersion: 2, moduleVersions: { books: 1 } }, null), false, 'nothing stored yet')
+  assert.equal(olderThanStored({ schemaVersion: 2, moduleVersions: { books: 1 } }, { schemaVersion: 2 }), false)
+})
+
+test('module data contracts: a namespace needs defaults, a version and every migration step', () => {
+  assert.equal(checkModuleData(LIST), true)
+  assert.throws(() => checkModuleData([{ id: 'x', schemaVersion: 1 }]), /defaults\(\)/)
+  assert.throws(() => checkModuleData([{ id: 'x', defaults: () => ({}) }]), /schemaVersion/)
+  assert.throws(() => checkModuleData([{ ...books, migrations: { 2: books.migrations[2] } }]), /migrations\[3\] is missing/)
 })

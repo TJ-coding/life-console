@@ -166,6 +166,25 @@ test('schema guard: an older app version can never overwrite newer data, even fo
   assert.equal(missing.status, 409)
 })
 
+test('module namespaces: kept as sent; the guard refuses an older version of a namespace both copies have', async () => {
+  const put = async (state, extra = {}) => bob('PUT', '/api/state', { state, baseVersion: (await bob('GET', '/api/state')).body.version, ...extra })
+  const ns = (v, items) => doc({ modules: { books: { items } }, moduleVersions: { books: v } })
+  assert.equal((await put(ns(2, [{ id: 'B-1' }]))).status, 200)
+  assert.deepEqual((await bob('GET', '/api/state')).body.state.modules, { books: { items: [{ id: 'B-1' }] } })
+  // a stale tab with the module's older version: refused even when forced, and told about the newer copy
+  const stale = await put(ns(1, []))
+  assert.equal(stale.status, 409)
+  assert.equal(stale.body.error, 'outdated')
+  assert.equal(stale.body.state.moduleVersions.books, 2)
+  assert.equal((await put(ns(1, []), { force: true })).status, 409)
+  // newer is fine; so is a document without the namespace (Import JSON / Start empty remove it on purpose) …
+  assert.equal((await put(ns(3, [{ id: 'B-1' }, { id: 'B-2' }]))).status, 200)
+  assert.equal((await put(doc({ todos: [{ id: 'T-1', title: 'bob again' }] }))).status, 200)
+  // … and a release that doesn't know a module keeps a namespace it was sent untouched (rollbacks)
+  assert.equal((await put(doc({ modules: { future: { x: [1] } }, moduleVersions: { future: 7 } }))).status, 200)
+  assert.deepEqual((await bob('GET', '/api/state')).body.state.modules, { future: { x: [1] } })
+})
+
 test('forced overwrite keeps a revision, and it can be restored', async () => {
   const before = (await alice('GET', '/api/state')).body
   const f = await alice('PUT', '/api/state', { state: { schemaVersion: 3, todos: [{ id: 'T-9', title: 'forced' }] }, baseVersion: 0, force: true })

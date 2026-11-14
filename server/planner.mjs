@@ -2,13 +2,15 @@
 //
 // Safety rails for a live service that ships often:
 //   - version check: a write must name the version it was based on (409 otherwise; the client merges);
-//   - schema guard: a write with an older `schemaVersion` than the stored one is refused, so a stale
-//     tab or a rolled-back front end can never overwrite data that newer code has upgraded;
+//   - schema guard: a write with an older `schemaVersion` than the stored one, or an older version of a module
+//     namespace both copies have (`moduleVersions`), is refused, so a stale tab or a rolled-back front end can
+//     never overwrite data that newer code has upgraded;
 //   - snapshots: before a forced overwrite, and at most every REVISION_EVERY_MIN while the planner
 //     changes, the previous copy goes to planner_revisions (restore with `npm run admin -- restore`).
 import { and, desc, eq, sql, inArray } from 'drizzle-orm'
 import { plannerDocs, plannerRevisions } from './db/schema.js'
 import { httpError } from './auth.mjs'
+import { olderThanStored } from './schema.mjs'
 
 const EMPTY = { version: 0, updatedAt: null, device: null, state: null }
 const schemaOf = (state) => Number(state?.schemaVersion) || 1
@@ -58,7 +60,7 @@ export function createPlanner(db, cfg) {
         state = structuredClone(row.state)
         if (mutate(state) === false) return { ok: false, notFound: true }
       } else {
-        if (row.version > 0 && schemaOf(state) < row.schemaVersion) return { ok: false, conflict: toDoc(row), outdated: true }
+        if (row.version > 0 && olderThanStored(state, { ...row.state, schemaVersion: row.schemaVersion })) return { ok: false, conflict: toDoc(row), outdated: true }
         if (!force && row.version > 0 && baseVersion !== row.version) return { ok: false, conflict: toDoc(row) }
       }
       const now = new Date()

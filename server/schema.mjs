@@ -6,7 +6,12 @@
 // To change the data shape: bump SCHEMA_VERSION and add the next numbered step. Never edit old steps.
 // A new OPTIONAL field with a default needs no step: default it in normalizeDoc() instead.
 // Keys this code doesn't know are never dropped (a newer release may have written them); test/state.test.mjs checks it.
+//
+// Module namespaces (the platform plan, §4): a module keeps its own data in state.modules[id], versioned
+// separately in state.moduleVersions[id], with its own migrations in modules/<id>/data.js. Both keys are
+// optional: a missing namespace means the module's defaults, and nothing creates one until the module is used.
 import { POMODORO_DEFAULTS } from './pomodoro.mjs'
+import { MODULE_DATA } from '../modules/data.js'
 
 export const SCHEMA_VERSION = 2
 const PLAN_STATUSES = ['active', 'paused', 'archived']
@@ -38,7 +43,60 @@ export function migrateDoc(doc) {
   while (v < SCHEMA_VERSION) { MIGRATIONS[v + 1](doc); v += 1 }
   if (doc.plan) MIGRATIONS[2](doc) // an out-of-date device synced the old field back
   doc.schemaVersion = SCHEMA_VERSION
+  migrateModules(doc)
   return doc
+}
+
+const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+/** Each module's current data version (modules with a namespace only). */
+export const moduleVersionsOf = (list = MODULE_DATA) => Object.fromEntries(list.filter((m) => m.schemaVersion).map((m) => [m.id, m.schemaVersion]))
+/**
+ * Bring every namespace this build knows up to its module's version, in place.
+ * Untouched: namespaces of modules this build doesn't know (a newer release wrote them; keep them for it) and
+ * namespaces newer than this build (sync.js stops syncing and asks for a reload instead).
+ * A module's migration step gets (namespace, doc) and changes the namespace in place, or returns a replacement.
+ */
+export function migrateModules(doc, list = MODULE_DATA) {
+  if (!isObj(doc?.modules)) return doc
+  for (const m of list) {
+    if (!m.schemaVersion || !isObj(doc.modules[m.id])) continue
+    if (!isObj(doc.moduleVersions)) doc.moduleVersions = {}
+    let v = Number(doc.moduleVersions[m.id]) || 1
+    if (v > m.schemaVersion) continue
+    while (v < m.schemaVersion) {
+      const out = m.migrations[v + 1](doc.modules[m.id], doc)
+      if (out !== undefined) doc.modules[m.id] = out
+      v += 1
+    }
+    if (doc.moduleVersions[m.id] !== m.schemaVersion) doc.moduleVersions[m.id] = m.schemaVersion
+  }
+  return doc
+}
+
+/**
+ * True when a document was written by a newer build than this one: a newer core schema, or a namespace whose
+ * module this build knows at an older version. (A module this build doesn't know at all is NOT "too new":
+ * every build has every module it ships, so that only happens after a rollback, and the data is simply kept.)
+ */
+export function tooNewForThisBuild(doc, list = MODULE_DATA) {
+  if ((Number(doc?.schemaVersion) || 1) > SCHEMA_VERSION) return true
+  const known = moduleVersionsOf(list)
+  for (const [id, v] of Object.entries(isObj(doc?.moduleVersions) ? doc.moduleVersions : {})) if (known[id] && Number(v) > known[id]) return true
+  return false
+}
+
+/**
+ * The server's write guard: refuse a write whose core schema, or any module version present on BOTH sides, is older
+ * than the stored copy's, so a stale tab can't overwrite data newer code has upgraded. "Both sides", because a
+ * deliberate whole-document action (import, start empty, restore) may remove a namespace on purpose.
+ * Needs no module code: only the version numbers.
+ */
+export function olderThanStored(incoming, stored) {
+  if (!stored) return false
+  if ((Number(incoming?.schemaVersion) || 1) < (Number(stored.schemaVersion) || 1)) return true
+  const a = isObj(incoming?.moduleVersions) ? incoming.moduleVersions : {}
+  const b = isObj(stored.moduleVersions) ? stored.moduleVersions : {}
+  return Object.keys(a).some((id) => id in b && (Number(a[id]) || 1) < (Number(b[id]) || 1))
 }
 
 /** Notification preferences live in the synced document so the server scheduler can read them. */
