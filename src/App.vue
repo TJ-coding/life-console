@@ -134,6 +134,13 @@ function onKey(e) {
     if (ui.drawerId) ui.drawerId = ui.selectedId
     return
   }
+  // ISS-32: ← → step through days on Today / a day view, like [ ] (selected blocks took the arrows above)
+  if ((k === 'arrowleft' || k === 'arrowright') && (route.name === 'today' || route.name === 'day')) {
+    e.preventDefault()
+    const d = addDays(route.params.date || todayISO(), k === 'arrowleft' ? -1 : 1)
+    router.push(d === todayISO() ? '/' : `/day/${d}`)
+    return
+  }
   switch (k) {
     case 'g': gPending = true; gTimer = setTimeout(() => { gPending = false }, 1000); break
     case 't': router.push('/'); break
