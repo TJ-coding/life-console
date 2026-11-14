@@ -2,7 +2,7 @@
 // S-35 · Strategy overview — every active goal at a glance; plan management below.
 // Questions, in order (docs/DESIGN.md): which goal is behind? what's the next milestone, and how long do I have?
 // what should I work on next for each goal? when is the next plan check?
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { state, ui, todayISO, planPct, nextCheckDate, relDay, diffDays, planIds, deletePlan, toast, activePlans, isLeaf } from '../store'
 import { psgGlance, nextMilestone, sigState, daysTo, inDays, minsTo, countdown, urgency, openDeadlines } from '../glance'
@@ -13,12 +13,23 @@ const router = useRouter()
 const T = computed(() => todayISO())
 
 /* ── goals at a glance ── */
-const plansAtGlance = computed(() => activePlans().map((p) => ({
-  plan: p,
-  pct: planPct(p),
-  check: nextCheckDate(p),
-  goals: [...p.psgs].sort((a, b) => a.priority - b.priority).map(psgGlance),
-})))
+/* ISS-35: completed goals are hidden by default (a done PSG with all its SIGs, and done SIGs under open PSGs);
+   each plan says how many are hidden, and one click shows them */
+const showDone = ref(false)
+const psgDone = (g) => g.status === 'done' || (g.sigs.length > 0 && g.sigs.every((s) => sigState(s) === 'done'))
+const plansAtGlance = computed(() => activePlans().map((p) => {
+  const all = [...p.psgs].sort((a, b) => a.priority - b.priority).map(psgGlance)
+  let hidden = 0
+  const goals = showDone.value ? all : all.filter((g) => {
+    if (psgDone(g)) { hidden += 1 + g.sigs.length; return false }
+    return true
+  }).map((g) => {
+    const sigs = g.sigs.filter((s) => sigState(s) !== 'done')
+    hidden += g.sigs.length - sigs.length
+    return { ...g, sigs }
+  })
+  return { plan: p, pct: planPct(p), check: nextCheckDate(p), goals, hidden, total: all.length }
+}))
 const behindCount = computed(() => plansAtGlance.value.reduce((n, x) => n + x.goals.filter((g) => g.behind).length, 0))
 const milestone = computed(() => nextMilestone())
 const msClass = (days) => (days < 0 ? 'danger' : days <= 7 ? 'warn' : 'ok')
@@ -106,7 +117,13 @@ function remove(p) {
           </span>
         </div>
       </template>
-      <div v-if="!x.goals.length" class="empty">No goals yet. <router-link :to="`/strategy/${x.plan.id}`">Add a PSG</router-link>.</div>
+      <div v-if="!x.total" class="empty">No goals yet. <router-link :to="`/strategy/${x.plan.id}`">Add a PSG</router-link>.</div>
+      <div v-else-if="x.hidden || showDone" class="done-note small muted">
+        <span class="icon sm">task_alt</span>
+        <template v-if="showDone">Showing completed goals</template>
+        <template v-else>{{ x.hidden }} completed goal{{ x.hidden > 1 ? 's' : '' }} hidden</template>
+        <button class="linkish" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }}</button>
+      </div>
     </section>
     <div v-if="!plansAtGlance.length" class="panel empty-plans">No active plan. Activate one below or use <b>+ New plan</b> above.</div>
 
@@ -136,6 +153,8 @@ function remove(p) {
 </template>
 
 <style scoped>
+.done-note { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-top: 1px solid var(--border); }
+.done-note .linkish { border: 0; background: none; color: var(--info); font: inherit; cursor: pointer; padding: 0; text-decoration: underline dotted; }
 .pi { display: flex; flex-direction: column; gap: 12px; min-height: 100%; padding-bottom: 16px; }
 .pi > .panel, .all-h, .grid, .note { margin: 0 16px; }
 .hero { margin-top: 4px; padding: 16px 20px; border-left: 3px solid var(--border); }
