@@ -4,7 +4,7 @@
 // Lives inside DayColumn directly above that day's timeline — drag a block down onto a time.
 import PartBadge from './PartBadge.vue'
 import { computed, ref } from 'vue'
-import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked, loadsDay } from '../store'
+import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked, loadsDay, rowSelectClick, isTodoSel } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 
 const props = defineProps({
@@ -50,6 +50,8 @@ const stackPx = computed(() => todos.value.reduce((s, t) => s + cardH(t) + 2, fi
 const height = computed(() => Math.max(rows.value * props.hourPx, stackPx.value + 2) + 2)
 const showLabels = computed(() => props.hourPx >= 14)
 
+/** ISS-29: a card is selected when its task is (a merged card: all of its parts on this day are). */
+const cardSel = (t) => (t.grouped ? t.grouped.parts.every(isTodoSel) : isTodoSel(t))
 const hot = ref(false)
 function onDrop(e) {
   hot.value = false
@@ -73,7 +75,7 @@ function toggleParts(t) {
 
 <template>
   <div
-    class="bucket" :class="{ 'drop-hot': hot }" :style="{ height: height + 'px' }"
+    class="bucket" data-boxsel data-sellist :class="{ 'drop-hot': hot }" :style="{ height: height + 'px' }"
     @dragover.prevent="hot = true" @dragleave="hot = false" @drop.prevent="onDrop"
   >
     <div v-for="r in rows" :key="r" class="hrow" :class="{ over: rows - r + 1 > cap }" :style="{ bottom: (rows - r) * hourPx + 1 + 'px', height: hourPx + 'px' }">
@@ -89,17 +91,17 @@ function toggleParts(t) {
         v-for="t in todos" :key="t.id" class="card block"
         :draggable="!t.grouped"
         :class="['cat-' + categoryOf(t), dropClass(t, true), {
-          'is-done': t.grouped ? t.grouped.parts.every((p) => p.done) : t.done, sel: ui.selectedId === t.id, linked: isHoverLinked(t.id), short: cardH(t) < 28,
+          'is-done': t.grouped ? t.grouped.parts.every((p) => p.done) : t.done, sel: ui.selectedId === t.id, msel: cardSel(t), linked: isHoverLinked(t.id), short: cardH(t) < 28,
           untimed: t.grouped ? t.grouped.parts.some((p) => !p.done && !p.scheduled.start) : !t.done && !t.scheduled.start, dim: dimFn && dimFn(t), grouped: t.grouped,
         }]"
-        :style="{ height: cardH(t) + 'px' }"
+        :style="{ height: cardH(t) + 'px' }" :data-bkey="'todo:' + t.id" :data-bparts="t.grouped ? t.grouped.parts.map((p) => p.id).join(',') : null"
         :title="t.grouped
           ? `${t.title} · ${groupMeta(t.grouped)}${t.grouped.parts.some((p) => p.scheduled.start) ? ' (' + t.grouped.parts.filter((p) => p.scheduled.start).map((p) => p.scheduled.start).join(', ') + ')' : ''}\nClick the plan button to change days or times.`
           : `${t.title} · ${t.timeMin}m · P${t.priority} · ${t.scheduled.start ? 'at ' + t.scheduled.start : 'no time yet — drag onto the timeline'}`"
         @dragstart="startDrag($event, t)" @dragend="endDrag"
         @dragover="overRow($event, t, { reverse: true })" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t, { adoptDate: true })"
         @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
-        @click="ui.selectedId = t.id" @dblclick="t.grouped ? (ui.splitId = t.id) : (ui.drawerId = t.id)"
+        @click="rowSelectClick($event, t) || (ui.selectedId = t.id)" @contextmenu.prevent="rowSelectClick($event, t)" @dblclick="t.grouped ? (ui.splitId = t.id) : (ui.drawerId = t.id)"
       >
         <input type="checkbox" class="ck" :checked="t.grouped ? t.grouped.parts.every((p) => p.done) : t.done" :title="t.grouped ? 'Done: all of this task today' : 'Done'" @click.stop @change="t.grouped ? toggleParts(t) : toggleTodo(t.id)" />
         <span class="ttl"><PartBadge v-if="partLabel(t) && !t.grouped" :todo="t" class="part mono" />{{ t.title }}</span>
@@ -141,7 +143,7 @@ function toggleParts(t) {
 .card.grouped .ttl { padding-right: 16px; }
 .tiny-i { font-size: 11px; }
 .part { font-weight: 600; font-size: 9px; margin-right: 4px; opacity: 0.8; }
-.card.sel { outline: 1px solid var(--info); }
+.card.sel, .card.msel { outline: 1px solid var(--info); }
 .card.linked { outline: 2px solid var(--info); z-index: 3; }
 .card.is-done .ttl { text-decoration: line-through; }
 .splitbtn { position: absolute; top: 1px; right: 1px; display: none; border: 1px solid var(--border); background: var(--surface); border-radius: 2px; padding: 0 1px; cursor: pointer; color: var(--text); line-height: 1; }

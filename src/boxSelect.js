@@ -2,7 +2,7 @@
 // every block it touches joins ui.selBlocks (the same selection Shift-click builds, so the selection bar,
 // arrow keys and group drag all work on it). Shift while drawing adds to the current selection.
 // Timelines opt in with `data-boxsel` on their area and `data-bkey="<blockKey>"` on each block; the box can
-// cross several of them (the day columns of Plan week). Mouse / pen only — phones keep long-press.
+// cross several of them (the day columns of Plan week). Plan week's workload buckets opt in the same way. Mouse / pen only — phones keep long-press.
 // Clicking anywhere outside the selected blocks clears the selection.
 import { ui } from './store'
 
@@ -19,7 +19,7 @@ function rectOf(a, b) {
 const hits = (r) => [...document.querySelectorAll('[data-boxsel] [data-bkey]')].filter((el) => {
   const b = el.getBoundingClientRect()
   return b.width > 0 && b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top
-}).map((el) => el.dataset.bkey)
+}).flatMap((el) => (el.dataset.bparts ? el.dataset.bparts.split(',').map((id) => `todo:${id}`) : [el.dataset.bkey])) // a merged workload card = all its parts
 
 function onDown(e) {
   if (e.button !== 0 || e.pointerType === 'touch') return

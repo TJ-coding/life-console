@@ -740,12 +740,17 @@ export const clearBlockSel = () => { ui.selBlocks.splice(0) }
    toggles while a selection is open. Tasks with subtasks aren't scheduled, so they're skipped. */
 let selAnchor = null
 export const isTodoSel = (t) => ui.selBlocks.includes(`todo:${t.id}`)
-function toggleTodoSel(t) {
+/** The task ids a row stands for: one, or (a workload card merging a task's parts on a day) all of them. */
+const rowIds = (el, t) => (el?.dataset?.bparts ? el.dataset.bparts.split(',') : [t.id])
+function toggleTodoSel(t, ids = [t.id]) {
   if (isContainer(t)) return
-  const k = `todo:${t.id}`
-  const i = ui.selBlocks.indexOf(k)
-  if (i >= 0) ui.selBlocks.splice(i, 1)
-  else ui.selBlocks.push(k)
+  const keys = ids.map((id) => `todo:${id}`)
+  const all = keys.every((k) => ui.selBlocks.includes(k))
+  for (const k of keys) {
+    const i = ui.selBlocks.indexOf(k)
+    if (all && i >= 0) ui.selBlocks.splice(i, 1)
+    else if (!all && i < 0) ui.selBlocks.push(k)
+  }
 }
 /** Handle a click on a list row. Returns true when it was a selection click (the caller then does nothing else). */
 export function rowSelectClick(e, t) {
@@ -756,13 +761,17 @@ export function rowSelectClick(e, t) {
     if (cur && !isContainer(cur) && list?.querySelector(`[data-bkey="todo:${cur.id}"]`)) { ui.selBlocks.push(`todo:${cur.id}`); selAnchor = selAnchor ?? cur.id }
   }
   if (e.shiftKey && selAnchor && list) {
-    const keys = [...list.querySelectorAll('[data-bkey]')].map((el) => el.dataset.bkey)
+    const els = [...list.querySelectorAll('[data-bkey]')]
+    const keys = els.map((el) => el.dataset.bkey)
     const a = keys.indexOf(`todo:${selAnchor}`)
     const b = keys.indexOf(`todo:${t.id}`)
     if (a >= 0 && b >= 0) {
-      for (const k of keys.slice(Math.min(a, b), Math.max(a, b) + 1)) {
-        const x = findTodo(k.slice(5))
-        if (x && !isContainer(x) && !ui.selBlocks.includes(k)) ui.selBlocks.push(k)
+      for (const el of els.slice(Math.min(a, b), Math.max(a, b) + 1)) {
+        for (const id of rowIds(el, { id: el.dataset.bkey.slice(5) })) {
+          const k = `todo:${id}`
+          const x = findTodo(id)
+          if (x && !isContainer(x) && !ui.selBlocks.includes(k)) ui.selBlocks.push(k)
+        }
       }
       window.getSelection?.()?.removeAllRanges()
       return true
@@ -770,7 +779,7 @@ export function rowSelectClick(e, t) {
   }
   const touch = e.pointerType === 'touch' || (!e.pointerType && window.matchMedia?.('(hover: none)').matches)
   if (e.shiftKey || e.metaKey || e.ctrlKey || e.type === 'contextmenu' || (touch && ui.selBlocks.length)) {
-    toggleTodoSel(t)
+    toggleTodoSel(t, rowIds(e.currentTarget, t))
     selAnchor = t.id
     return true
   }
@@ -817,7 +826,7 @@ export function shiftSelected(dMin, dDays = 0) {
   const items = selItems().filter((x) => (dMin ? x.start !== null : x.date !== null))
   if (!items.length) {
     if (!ui.selBlocks.length) return false
-    toast(dMin ? 'Nothing selected has a time to move' : 'Nothing selected is on a day yet')
+    toast(dMin ? 'Nothing selected has a time to move' : 'Nothing selected can move a day (done, or not on a day yet)')
     return false
   }
   if (items.some((x) => x.start !== null && (x.start + dMin < 0 || x.start + dMin + x.dur > 1440))) {
