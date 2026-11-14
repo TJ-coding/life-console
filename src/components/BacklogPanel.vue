@@ -133,7 +133,6 @@ function onDrop(e) {
 </template>
 
 <style scoped>
-.card.msel { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
 .backlog.only { border-right: 0; }
 .backlog.only .qa, .backlog.only .preview { max-width: 720px; }
 .crumb { font-size: 11px; margin-bottom: 2px; }
@@ -159,7 +158,7 @@ function onDrop(e) {
 .list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; }
 .card { border: 1px solid var(--border); border-radius: 2px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; cursor: grab; background: var(--bg); }
 .card:hover, .card.linked { border-color: var(--info); }
-.card.sel { box-shadow: inset 0 0 0 1px var(--info); }
+.card.sel, .card.msel { box-shadow: inset 0 0 0 1px var(--info); }
 .meta { flex-wrap: wrap; gap: 4px; }
 .part { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 2px; padding: 0 3px; margin-right: 5px; }
 .quick { display: none; gap: 2px; margin-top: 2px; }

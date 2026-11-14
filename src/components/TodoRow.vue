@@ -42,11 +42,10 @@ const crumb = computed(() => (props.todo.parent ? parentPath(props.todo) : ''))
   </div>
 </template>
 <style scoped>
-.trow.msel { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
 .trow { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 8px; border-bottom: 1px solid var(--border); cursor: grab; }
 .trow.compact { gap: 5px; padding: 3px 6px; min-height: 26px; font-size: 11px; }
 .trow:hover { background: var(--surface-2); }
-.trow.sel { box-shadow: inset 0 0 0 1px var(--info); }
+.trow.sel, .trow.msel { box-shadow: inset 0 0 0 1px var(--info); }
 .trow.done .title { text-decoration: line-through; color: var(--muted); }
 .trow.dim { opacity: 0.3; }
 .time { color: var(--muted); }

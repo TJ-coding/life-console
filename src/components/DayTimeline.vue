@@ -1,7 +1,7 @@
 <script setup>
 // Vertical hourly schedule used in each Weekly Planner day column.
 import { computed, ref } from 'vue'
-import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel, blockKey } from '../store'
+import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel, blockKey, clearBlockSel } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 6 }, to: { type: Number, default: 23 }, pxh: { type: Number, default: 22 }, dimFn: Function,
   // preview mode (Briefing / Debrief): no editing; markFn(b) adds classes (pv-new, pv-ghost, pv-late, pv-star); lineAt draws a line (minutes)
@@ -30,7 +30,11 @@ const hover = ed.hover
 function openBlock(e, b) {
   if (ed.isResizing()) return
   // Shift/⌘/Ctrl-click — or any click while a selection is open — adds/removes it from the selection
-  if (e.shiftKey || e.metaKey || e.ctrlKey || ui.selBlocks.length) { toggleBlockSel(b); return }
+  // ISS-29: modifier-click adds/removes; on touch screens a tap does too while a selection is open; a plain
+  // mouse click opens the block and clears the selection
+  const touch = e.pointerType === 'touch' || (!e.pointerType && window.matchMedia?.('(hover: none)').matches)
+  if (e.shiftKey || e.metaKey || e.ctrlKey || (touch && ui.selBlocks.length)) { toggleBlockSel(b); return }
+  clearBlockSel()
   if (b.todoId) emit('open', b.todoId)
   else emit('edit', b) // a fixed block: detail + delete dialog (ISS-8)
 }

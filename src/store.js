@@ -735,8 +735,9 @@ export function toggleBlockSel(b) {
 export const clearBlockSel = () => { ui.selBlocks.splice(0) }
 /* ISS-29: selecting tasks in lists, into the same ui.selBlocks the schedule uses (so a task picked in a list
    lights up on the timeline too). ⌘/Ctrl-click toggles, Shift-click selects the range from the last row
-   clicked (rows in DOM order inside the same [data-sellist]), long-press / right-click toggles; while a
-   selection is open a plain click toggles too. Tasks with subtasks aren't scheduled, so they're skipped. */
+   clicked (rows in DOM order inside the same [data-sellist]), long-press / right-click toggles. A plain
+   mouse click does the row's usual thing and clears the selection; on touch screens (no modifier keys) a tap
+   toggles while a selection is open. Tasks with subtasks aren't scheduled, so they're skipped. */
 let selAnchor = null
 export const isTodoSel = (t) => ui.selBlocks.includes(`todo:${t.id}`)
 function toggleTodoSel(t) {
@@ -749,6 +750,11 @@ function toggleTodoSel(t) {
 /** Handle a click on a list row. Returns true when it was a selection click (the caller then does nothing else). */
 export function rowSelectClick(e, t) {
   const list = e.currentTarget?.closest?.('[data-sellist]')
+  // starting a group from a row that's already selected (outlined) includes that row, like a file manager
+  if ((e.shiftKey || e.metaKey || e.ctrlKey || e.type === 'contextmenu') && !ui.selBlocks.length && ui.selectedId && ui.selectedId !== t.id) {
+    const cur = findTodo(ui.selectedId)
+    if (cur && !isContainer(cur) && list?.querySelector(`[data-bkey="todo:${cur.id}"]`)) { ui.selBlocks.push(`todo:${cur.id}`); selAnchor = selAnchor ?? cur.id }
+  }
   if (e.shiftKey && selAnchor && list) {
     const keys = [...list.querySelectorAll('[data-bkey]')].map((el) => el.dataset.bkey)
     const a = keys.indexOf(`todo:${selAnchor}`)
@@ -762,11 +768,13 @@ export function rowSelectClick(e, t) {
       return true
     }
   }
-  if (e.shiftKey || e.metaKey || e.ctrlKey || e.type === 'contextmenu' || ui.selBlocks.length) {
+  const touch = e.pointerType === 'touch' || (!e.pointerType && window.matchMedia?.('(hover: none)').matches)
+  if (e.shiftKey || e.metaKey || e.ctrlKey || e.type === 'contextmenu' || (touch && ui.selBlocks.length)) {
     toggleTodoSel(t)
     selAnchor = t.id
     return true
   }
+  clearBlockSel()
   selAnchor = t.id
   return false
 }

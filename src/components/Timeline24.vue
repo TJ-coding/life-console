@@ -3,7 +3,7 @@
 // Fixed px-per-hour so block text stays readable; scrolls horizontally and
 // auto-centres on "now". Todos can be dropped onto it to get a start time.
 import { computed, ref, onMounted, nextTick, watch } from 'vue'
-import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isBlockSel, toggleBlockSel, blockKey } from '../store'
+import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isBlockSel, toggleBlockSel, blockKey, clearBlockSel } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 0 }, to: { type: Number, default: 24 } })
@@ -57,7 +57,11 @@ const removeBlock = removeTimelineBlock
 function openBlock(e, b) {
   if (ed.isResizing()) return
   // Shift/⌘/Ctrl-click — or any click while a selection is open — adds/removes it from the selection
-  if (e.shiftKey || e.metaKey || e.ctrlKey || ui.selBlocks.length) { toggleBlockSel(b); return }
+  // ISS-29: modifier-click adds/removes; on touch screens a tap does too while a selection is open; a plain
+  // mouse click opens the block and clears the selection
+  const touch = e.pointerType === 'touch' || (!e.pointerType && window.matchMedia?.('(hover: none)').matches)
+  if (e.shiftKey || e.metaKey || e.ctrlKey || (touch && ui.selBlocks.length)) { toggleBlockSel(b); return }
+  clearBlockSel()
   if (b.todoId) emit('open', b.todoId)
   else emit('edit', b) // a fixed block: detail + delete dialog (ISS-8)
 }

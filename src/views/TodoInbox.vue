@@ -236,8 +236,9 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
 </template>
 
 <style scoped>
-tr.msel td, .card.msel { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-tr.msel td:first-child, .card.msel { box-shadow: inset 2px 0 0 var(--accent); }
+/* multi-selected rows look like the selected row (styles.css .tbl tr.selected) */
+.tbl tr.msel { box-shadow: inset 0 0 0 1px var(--info); background: color-mix(in srgb, var(--info) 6%, transparent); }
+.card.msel { box-shadow: inset 0 0 0 1px var(--info); background: color-mix(in srgb, var(--info) 6%, transparent); }
 .sub-mark { margin-right: 4px; }
 .crumb { font-size: 0.9em; }
 .subc { font-size: 10px; color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 50%, var(--border)); border-radius: 2px; padding: 0 3px; margin-left: 6px; }
