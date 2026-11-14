@@ -3,6 +3,7 @@
 // arrow keys and group drag all work on it). Shift while drawing adds to the current selection.
 // Timelines opt in with `data-boxsel` on their area and `data-bkey="<blockKey>"` on each block; the box can
 // cross several of them (the day columns of Plan week). Mouse / pen only — phones keep long-press.
+// Clicking anywhere outside the selected blocks clears the selection.
 import { ui } from './store'
 
 const SKIP = '.block, button, a, input, select, textarea, [contenteditable="true"], .handle'
@@ -10,7 +11,7 @@ const START_PX = 5
 
 let cand = null // { x, y, base: [] } after pointerdown, before the drag starts
 let box = null // the overlay element while drawing
-let suppressClick = false
+let boxEndedAt = 0 // when the last box drag ended: the click that follows it isn't a real click
 
 function rectOf(a, b) {
   return { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), right: Math.max(a.x, b.x), bottom: Math.max(a.y, b.y) }
@@ -47,13 +48,20 @@ function end(cancel) {
     box.remove()
     box = null
     document.body.classList.remove('boxselecting')
-    suppressClick = true // the click that ends the drag isn't a click on whatever is under it
-    setTimeout(() => { suppressClick = false }, 0)
+    boxEndedAt = Date.now()
     if (cancel) ui.selBlocks.splice(0, ui.selBlocks.length, ...cand.base)
   }
   cand = null
 }
-function onClick(e) { if (suppressClick) { e.stopPropagation(); e.preventDefault(); suppressClick = false } }
+/** Capture phase, so it sees clicks other handlers stop. The click ending a box drag is swallowed; any other
+ *  click outside the selected blocks clears the selection (blocks, the selection bar and toasts don't). */
+const KEEP = '[data-bkey], .selbar, .toast, .scrim, .pb-pop'
+function onClick(e) {
+  if (Date.now() - boxEndedAt < 400) { e.stopPropagation(); e.preventDefault(); boxEndedAt = 0; return }
+  if (!ui.selBlocks.length || e.shiftKey || e.metaKey || e.ctrlKey) return
+  if (e.target.closest?.(KEEP)) return
+  ui.selBlocks.splice(0)
+}
 function onKey(e) { if (e.key === 'Escape' && box) { e.stopPropagation(); end(true) } }
 
 let installed = false

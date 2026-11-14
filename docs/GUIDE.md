@@ -67,7 +67,7 @@ Anything not given to a day stays in the backlog. **Estimate − / +** changes t
 - Category colours (`--cat-*` in `styles.css`) come from the validated categorical palette. They're separate from the status colours (green = done, amber = warning, red = overdue).
 
 ## Moving several schedule items at once
-- **Select:** drag a box from an empty spot on any schedule to select every block it touches (it can cross the day columns of Plan week; hold Shift to add to the selection, Esc while drawing cancels), or Shift-, ⌘- or Ctrl-click blocks (long-press on phones). While a selection is open, plain clicks/taps add or remove blocks. Esc clears it, and so does changing screen.
+- **Select:** drag a box from an empty spot on any schedule to select every block it touches (it can cross the day columns of Plan week; hold Shift to add to the selection, Esc while drawing cancels), or Shift-, ⌘- or Ctrl-click blocks (long-press on phones). While a selection is open, plain clicks/taps add or remove blocks. Clicking anywhere else, Esc or changing screen clears it.
 - **Move:** drag any selected block and they all move by the same amount (to another day too), or use ↑/↓ (15 min, Shift = 1 h) and ←/→ (a day). **Delete** takes them off the schedule (tasks stay on their day). The bar at the bottom has the same actions, and every action has one Undo.
 
 ## Pomodoro planning
