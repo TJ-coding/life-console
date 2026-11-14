@@ -201,6 +201,23 @@ final class Model: ObservableObject {
   @Published var hudFgOpacity = defaults.object(forKey: "hudFgOpacity") as? Double ?? defaults.object(forKey: "hudOpacity") as? Double ?? 1 { didSet { defaults.set(hudFgOpacity, forKey: "hudFgOpacity"); onChange?() } }
   @Published var hudClickThrough = defaults.bool(forKey: "hudClickThrough") { didSet { defaults.set(hudClickThrough, forKey: "hudClickThrough"); onChange?() } }
   /** With click-through on, keep the NOW / NEXT / PLAN tag clickable (it opens Focus mode or the week planner). */
+  /**
+   * Which display the widget is on: "" = the main display (the one with the menu bar), else a screen's key
+   * "<display id>|<name>" (Settings → Display, or drag it there). A missing screen falls back to the main one.
+   */
+  @Published var hudScreen = defaults.string(forKey: "hudScreen") ?? "" { didSet { defaults.set(hudScreen, forKey: "hudScreen"); onChange?() } }
+  @Published var screensChanged = 0         // bumped when displays are plugged in or out (the Settings list follows)
+  static func screenKey(_ s: NSScreen) -> String {
+    "\((s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0)|\(s.localizedName)"
+  }
+  /** The chosen display: the same display id, else a screen with the same name (ids can change), else the main one. */
+  func targetScreen() -> NSScreen? {
+    let main = NSScreen.screens.first
+    guard !hudScreen.isEmpty else { return main }
+    let id = hudScreen.split(separator: "|", maxSplits: 1).first.map(String.init) ?? ""
+    let name = hudScreen.split(separator: "|", maxSplits: 1).dropFirst().first.map(String.init) ?? ""
+    return NSScreen.screens.first { Model.screenKey($0).hasPrefix(id + "|") } ?? NSScreen.screens.first { $0.localizedName == name } ?? main
+  }
   @Published var hudTagClickable = defaults.object(forKey: "hudTagClickable") as? Bool ?? true { didSet { defaults.set(hudTagClickable, forKey: "hudTagClickable"); onChange?() } }
   /** Pointer over the widget while click-through is on (the window gets no hover events then): shows the ×. */
   @Published var hudPointerOver = false
@@ -589,6 +606,14 @@ struct SettingsView: View {
         Stepper(value: $m.hudDeadlines, in: 0...10) {
           HStack { Text("Deadlines"); Spacer(); Text(m.hudDeadlines == 0 ? "None" : "Closest \(m.hudDeadlines)").foregroundColor(.secondary) }
         }
+        Picker("Display", selection: $m.hudScreen) {
+          let _ = m.screensChanged
+          Text(NSScreen.screens.count > 1 ? "Main display (with the menu bar)" : "Main display").tag("")
+          ForEach(NSScreen.screens.dropFirst(), id: \.self) { scr in Text(scr.localizedName).tag(Model.screenKey(scr)) }
+          if !m.hudScreen.isEmpty && !NSScreen.screens.dropFirst().contains(where: { Model.screenKey($0) == m.hudScreen }) {
+            Text("\(m.hudScreen.split(separator: "|", maxSplits: 1).dropFirst().first.map(String.init) ?? "Display") (not connected)").tag(m.hudScreen)
+          }
+        }
         HStack { Text("Position"); Spacer(); Button("Back to the Corner") { m.resetHUD() } }
       }
       Section {
@@ -965,7 +990,8 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     hudHost = FirstMouseHost(rootView: HUD(m: model, open: { [weak self] in self?.openFocus() }))
     hud.contentView = hudHost
     NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: hud, queue: .main) { [weak self] _ in self?.hudMoved() }
-    NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.renderHUD() }
+    NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+      self?.model.screensChanged += 1; self?.renderHUD() }
 
     model.onChange = { [weak self] in self?.renderTitle(); self?.renderHUD() }
     model.onRefit = { [weak self] in self?.compact = 0; self?.renderTitle() }
@@ -1034,7 +1060,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
   }
   /** Keep the pill pinned by its top-right corner (offsets saved when you drag it) while its width changes. */
   func renderHUD() {
-    guard model.showHUD, model.snapshot != nil, let vf = (hud.screen ?? NSScreen.main)?.visibleFrame else { hud.orderOut(nil); syncClickThrough(); return }
+    guard model.showHUD, model.snapshot != nil, let vf = (model.targetScreen() ?? NSScreen.main)?.visibleFrame else { hud.orderOut(nil); syncClickThrough(); return }
     hudHost.layoutSubtreeIfNeeded()
     let size = hudHost.fittingSize
     let right = defaults.object(forKey: "hudRight") as? Double ?? 12 - Double(HUD.inset), top = defaults.object(forKey: "hudTop") as? Double ?? 10 - Double(HUD.inset)
@@ -1079,8 +1105,11 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
   }
 
   func hudMoved() {
-    guard !placing, let vf = (hud.screen ?? NSScreen.main)?.visibleFrame else { return }
+    guard !placing, let scr = hud.screen else { return }
+    let vf = scr.visibleFrame
     defaults.set(Double(vf.maxX - hud.frame.maxX), forKey: "hudRight"); defaults.set(Double(vf.maxY - hud.frame.maxY), forKey: "hudTop")
+    // dragged onto another display: that display becomes the widget's
+    if scr != model.targetScreen() { model.hudScreen = scr == NSScreen.screens.first ? "" : Model.screenKey(scr) }
   }
   /** The pill: Focus mode, or the week planner while it asks you to schedule what's next. */
   func openFocus() { openPath(model.snapshot?.planning == true ? "/app#/week" : "/app#/focus") }
