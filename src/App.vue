@@ -4,7 +4,7 @@ import { installBoxSelect } from './boxSelect'
 installBoxSelect() // ISS-29: drag a box on a timeline to select blocks
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ui, state, todayISO, sendToNextDay, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf } from './store'
+import { ui, state, todayISO, sendToNextDay, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf, stepPlanDay } from './store'
 import { NAV } from './nav'
 import CommandPalette from './components/CommandPalette.vue'
 import TodoDrawer from './components/TodoDrawer.vue'
@@ -151,6 +151,7 @@ function onKey(e) {
     return
   }
   // ISS-32: ← → step through days on Today / a day view, like [ ] (selected blocks took the arrows above)
+  if ((k === 'arrowleft' || k === 'arrowright') && route.name === 'week' && ui.planDay) { e.preventDefault(); stepPlanDay(k === 'arrowleft' ? -1 : 1); return } // ISS-38
   if ((k === 'arrowleft' || k === 'arrowright') && (route.name === 'today' || route.name === 'day')) {
     e.preventDefault()
     const d = addDays(route.params.date || todayISO(), k === 'arrowleft' ? -1 : 1)
@@ -189,6 +190,8 @@ function onKey(e) {
         // day view: previous / next day
         const d = addDays(route.params.date || todayISO(), dir)
         router.push(d === todayISO() ? '/' : `/day/${d}`)
+      } else if (route.name === 'week' && ui.planDay) {
+        stepPlanDay(dir) // ISS-38: Day mode steps a day
       } else {
         ui.weekStart = addDays(ui.weekStart, dir * 7)
         if (route.name !== 'week') router.push('/week')

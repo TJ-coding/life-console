@@ -5,7 +5,7 @@
 // each day column (workload bucket, schedule). Both lit = both shown; click one to focus it,
 // click it again to show both.
 import { computed } from 'vue'
-import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, setScheduleLock, LOCK_HELP, touchUI, backlogFor } from '../store'
+import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, setScheduleLock, LOCK_HELP, touchUI, backlogFor, setPlanDay, stepPlanDay, wd, fmtSlash } from '../store'
 
 const weekEnd = computed(() => addDays(ui.weekStart, 6))
 const isThisWeek = computed(() => ui.weekStart === mondayOf(todayISO()))
@@ -14,7 +14,7 @@ const backlog = computed(() => backlogFor(ui.weekStart).length) // this week's +
 const assigned = computed(() => state.todos.filter((t) => !t.done && t.scheduled && inWeek(t.scheduled.date)))
 const timed = computed(() => assigned.value.filter((t) => t.scheduled.start).length)
 const pct = computed(() => (assigned.value.length ? Math.round((timed.value / assigned.value.length) * 100) : 100))
-const shift = (n) => { ui.weekStart = addDays(ui.weekStart, n * 7) }
+const shift = (n) => { if (ui.planDay) stepPlanDay(n); else ui.weekStart = addDays(ui.weekStart, n * 7) }
 const shows = (m) => !ui.backlogOnly && (ui.planMode === m || ui.planMode === 'both')
 const setMode = (step) => {
   const m = !ui.backlogOnly && ui.planMode === step ? 'both' : step // focused step clicked again → both
@@ -27,10 +27,16 @@ const setMode = (step) => {
 <template>
   <div class="weekbar">
     <div class="weeksel">
-      <button class="btn icon-only" title="Previous week ( [ )" @click="shift(-1)"><span class="icon sm">chevron_left</span></button>
-      <span class="mono wk">W{{ isoWeek(ui.weekStart) }} · {{ fmtMD(ui.weekStart) }} – {{ fmtMD(weekEnd) }}</span>
-      <button class="btn icon-only" title="Next week ( ] )" @click="shift(1)"><span class="icon sm">chevron_right</span></button>
-      <button v-if="!isThisWeek" class="btn sm" @click="ui.weekStart = mondayOf(todayISO())">This week</button>
+      <div class="seg" role="group" aria-label="Week or day">
+        <button class="btn sm" :class="{ active: !ui.planDay }" :aria-pressed="!ui.planDay" title="Plan the whole week" @click="setPlanDay(false)">Week</button>
+        <button class="btn sm" :class="{ active: !!ui.planDay }" :aria-pressed="!!ui.planDay" title="Plan one day, large: backlog, its workload and a full-height schedule" @click="setPlanDay(true)">Day</button>
+      </div>
+      <button class="btn icon-only" :title="ui.planDay ? 'Previous day ( ← or [ )' : 'Previous week ( [ )'" @click="shift(-1)"><span class="icon sm">chevron_left</span></button>
+      <span v-if="ui.planDay" class="mono wk">{{ wd(ui.planDay) }} {{ fmtSlash(ui.planDay) }} · W{{ isoWeek(ui.weekStart) }}</span>
+      <span v-else class="mono wk">W{{ isoWeek(ui.weekStart) }} · {{ fmtMD(ui.weekStart) }} – {{ fmtMD(weekEnd) }}</span>
+      <button class="btn icon-only" :title="ui.planDay ? 'Next day ( → or ] )' : 'Next week ( ] )'" @click="shift(1)"><span class="icon sm">chevron_right</span></button>
+      <button v-if="ui.planDay && ui.planDay !== todayISO()" class="btn sm" @click="ui.planDay = todayISO(); ui.weekStart = mondayOf(todayISO())">Today</button>
+      <button v-else-if="!ui.planDay && !isThisWeek" class="btn sm" @click="ui.weekStart = mondayOf(todayISO())">This week</button>
     </div>
 
     <div class="flow" role="group" aria-label="Planning flow and layout">
@@ -61,6 +67,10 @@ const setMode = (step) => {
 </template>
 
 <style scoped>
+.seg { display: inline-flex; margin-right: 4px; }
+.seg .btn { border-radius: 0; }
+.seg .btn:first-child { border-radius: 2px 0 0 2px; }
+.seg .btn:last-child { border-radius: 0 2px 2px 0; margin-left: -1px; }
 .weekbar { display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .weeksel { display: flex; align-items: center; gap: 6px; }
 .wk { font-weight: 600; min-width: 170px; text-align: center; }

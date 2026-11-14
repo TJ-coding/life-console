@@ -392,6 +392,7 @@ export const ui = reactive({
     } catch { /* ignore */ }
     return true
   })(),
+  planDay: null, // ISS-38: Plan week's Day mode — the day shown large (YYYY-MM-DD), null = week mode
   backlogOnly: false, // Plan week: hide the day columns, spread the backlog over the next weeks (ISS-16)
   hoverId: null, // todo under the pointer — highlighted in backlog, bucket and timeline at once
   planMode: (() => { try { return localStorage.getItem('life-console/plan-mode') || 'both' } catch { return 'both' } })(), // 'days' | 'both' | 'times'
@@ -734,6 +735,19 @@ export function toggleBlockSel(b) {
   else ui.selBlocks.push(k)
 }
 export const clearBlockSel = () => { ui.selBlocks.splice(0) }
+/** ISS-38: Plan week's Day mode. On: today if it's in the shown week, else that week's Monday. */
+export function setPlanDay(on) {
+  if (!on) { ui.planDay = null; return }
+  const t = todayISO()
+  ui.planDay = t >= ui.weekStart && t <= addDays(ui.weekStart, 6) ? t : ui.weekStart
+  ui.backlogOnly = false
+}
+/** Step the Day mode's day; the week follows it. */
+export function stepPlanDay(n) {
+  if (!ui.planDay) return
+  ui.planDay = addDays(ui.planDay, n)
+  ui.weekStart = mondayOf(ui.planDay)
+}
 /* ISS-29: selecting tasks in lists, into the same ui.selBlocks the schedule uses (so a task picked in a list
    lights up on the timeline too). ⌘/Ctrl-click toggles, Shift-click selects the range from the last row
    clicked (rows in DOM order inside the same [data-sellist]); right-click / long-press opens the menu (openCtxMenu). A plain

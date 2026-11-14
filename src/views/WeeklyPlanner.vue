@@ -2,13 +2,17 @@
 // S-10 · Plan week — the whole flow on one sheet, like the paper planner:
 //   ① Backlog (left) → ② Workload bucket per day (assign day) → ③ timeline right below it (assign time)
 // Balance and routines live in a side rail that opens on demand so the day columns stay wide.
-import { computed, ref, watch, watchEffect } from 'vue'
+import { computed, nextTick, ref, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   state, ui, todayISO, addDays, wd, todosForDay, workload, CAPACITY_H, toast, autoTimebox,
   routineDone, toggleRoutine, monthGroup, toggleMonthly, suggestRebalance,
   weekBalance, backlogFor, backlogTodos, planWeek,
+  blocksForDay, moveBlock, toMin, byPriority, categoryOf, fmtSlash, partLabel, isHoverLinked,
 } from '../store'
+import { startDrag, endDrag } from '../dnd'
+import DayTimeline from '../components/DayTimeline.vue'
+import PartBadge from '../components/PartBadge.vue'
 import WeekBar from '../components/WeekBar.vue'
 import DayColumn from '../components/DayColumn.vue'
 import BacklogPanel from '../components/BacklogPanel.vue'
@@ -122,6 +126,29 @@ const kpi = computed(() => {
 })
 
 const print = () => window.print()
+
+/* ── ISS-38: Day mode — one day large: its column (workload, deadlines, fits) and a full-height schedule ── */
+const DPX = 44 // px per hour on the day's schedule
+const dayBlocks = computed(() => (ui.planDay ? blocksForDay(ui.planDay) : []))
+const dayUntimed = computed(() => (ui.planDay ? todosForDay(ui.planDay).filter((t) => !t.done && !t.scheduled.start).sort(byPriority) : []))
+const dayUntimedMin = computed(() => dayUntimed.value.reduce((s, t) => s + (t.timeMin || 0), 0))
+const hmm = (m) => { const h = Math.floor(m / 60); return h ? `${h}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` : `${m}m` }
+const scheduleDay = (id, start) => moveBlock('todo', id, ui.planDay, toMin(start))
+function autoDay() {
+  const r = autoTimebox(ui.planDay)
+  toast(r.unplaced.length ? `Time-boxed ${r.placed.length}; ${r.unplaced.length} didn't fit 08:00–21:00` : `Time-boxed ${r.placed.length} task${r.placed.length === 1 ? '' : 's'}`)
+}
+// open the schedule around the working day (07:00), or around now on today
+const dayScroller = ref(null)
+watch(() => ui.planDay, async (d) => {
+  if (!d) return
+  await nextTick()
+  const el = dayScroller.value
+  if (!el) return
+  const now = new Date()
+  const h = d === T.value ? Math.max(0, now.getHours() - 1) : 7
+  el.scrollTop = h * DPX
+}, { immediate: true })
 </script>
 
 <template>
@@ -152,7 +179,29 @@ const print = () => window.print()
     <div class="body" :class="{ only: ui.backlogOnly }">
       <BacklogPanel :focus="ui.backlogOnly" @focus="ui.backlogOnly = !ui.backlogOnly" />
 
-      <template v-if="!ui.backlogOnly">
+      <template v-if="!ui.backlogOnly && ui.planDay">
+      <div class="dayview">
+        <DayColumn :key="ui.planDay" :date="ui.planDay" :filter="filter" mode="days" class="dv-col" />
+        <section class="panel dv-sched">
+          <div class="panel-h">
+            <span class="tiny upper muted"><span class="mono">③</span> Schedule · {{ wd(ui.planDay) }} {{ fmtSlash(ui.planDay) }}</span>
+            <span class="spacer"></span>
+            <button v-if="dayUntimed.length && ui.planDay >= T" class="btn sm" :title="`Auto time-box: give ${dayUntimed.length} untimed task(s) a time in free gaps (08:00–21:00), by priority`" @click="autoDay"><span class="icon sm">bolt</span>Auto time-box {{ dayUntimed.length }}</button>
+          </div>
+          <div v-if="dayUntimed.length" class="dv-untimed" :title="`${hmm(dayUntimedMin)} of the day's work has no time yet: drag each onto the schedule`">
+            <span class="tiny upper muted">Not timed · <b class="mono">{{ hmm(dayUntimedMin) }}</b></span>
+            <div
+              v-for="t in dayUntimed" :key="t.id" class="tt block" :class="['cat-' + categoryOf(t), { linked: isHoverLinked(t.id) }]" draggable="true"
+              @dragstart="startDrag($event, t)" @dragend="endDrag" @click="ui.drawerId = t.id" @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
+            ><span class="ttl ellipsis"><PartBadge v-if="partLabel(t)" :todo="t" class="mono pl" />{{ t.title }}</span><span class="mono muted">{{ hmm(t.timeMin) }}</span></div>
+          </div>
+          <div ref="dayScroller" class="dv-scroll">
+            <DayTimeline :date="ui.planDay" :blocks="dayBlocks" :from="0" :to="24" :pxh="DPX" @drop-todo="scheduleDay" @open="(id) => (ui.drawerId = id)" @edit="(b) => (ui.blockId = b.id)" />
+          </div>
+        </section>
+      </div>
+      </template>
+      <template v-else-if="!ui.backlogOnly">
       <div class="days" :class="'mode-' + ui.planMode">
         <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" :balance="dayBalance" />
         <div class="weekend">
@@ -209,6 +258,20 @@ const print = () => window.print()
 
 <style scoped>
 .wp { display: flex; flex-direction: column; height: 100%; }
+/* ISS-38: Day mode */
+.dayview { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 12px; padding: 12px; min-height: 0; overflow: auto; align-items: start; }
+.dv-sched { display: flex; flex-direction: column; min-height: 0; max-height: calc(100vh - 190px); }
+.dv-untimed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.dv-untimed .tt { display: flex; align-items: center; gap: 8px; max-width: 260px; padding: 3px 8px; font-size: 12px; cursor: grab; }
+.dv-untimed .ttl { min-width: 0; }
+.dv-scroll { flex: 1; min-height: 240px; overflow-y: auto; padding: 6px 8px 8px 4px; }
+@media (max-width: 900px) {
+  /* stacked: a flex column (a grid row would shrink to the clipped day column and the schedule would overlap it) */
+  .dayview { display: flex; flex-direction: column; align-items: stretch; flex: 1; }
+  .dayview > * { flex: none; }
+  .dv-sched { max-height: none; }
+  .dv-scroll { max-height: 70vh; }
+}
 .phone-switch { display: none; }
 .guide { display: flex; align-items: center; gap: 12px; padding: 7px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; min-height: 42px; }
 .next { font-weight: 600; gap: 6px; }
