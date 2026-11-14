@@ -1,4 +1,5 @@
 <script setup>
+import { undo, redo } from './undo'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ui, state, todayISO, sendToNextDay, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf } from './store'
@@ -97,6 +98,18 @@ function onKey(e) {
     else if (ui.selBlocks.length) clearBlockSel()
     else if (['focus', 'briefing', 'debrief'].includes(route.name)) router.push('/')
     else ui.selectedId = null
+    return
+  }
+  // ISS-30: undo / redo — except in a text field, where the browser's own undo of the typing applies
+  const zKey = e.key.toLowerCase()
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && (zKey === 'z' || (zKey === 'y' && e.ctrlKey && !e.metaKey))) {
+    const el = e.target
+    const textField = el.closest?.('textarea, [contenteditable="true"]') || (el.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'range', 'color', 'submit'].includes(el.type))
+    if (textField || ui.palette || issues.dialog) return
+    e.preventDefault()
+    const isRedo = zKey === 'y' || e.shiftKey
+    const ok = isRedo ? redo() : undo()
+    toast(ok ? (isRedo ? 'Redone' : 'Undone') : (isRedo ? 'Nothing to redo' : 'Nothing to undo'))
     return
   }
   const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]')

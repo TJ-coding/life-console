@@ -35,6 +35,7 @@ The stack is plain JavaScript (no TypeScript), Vue 3 `<script setup>`, Vite 6, v
 | Accounts (client) | `src/auth.js` (sign in/up/out, reset, `bindUser`: one browser's local copy belongs to one account), `src/components/AuthScreen.vue` (S-00, replaces the app while signed out) |
 | Push on the device | `src/push.js` (permission, subscribe, install prompt), `public/sw.js` (service worker: offline shell, `push`, `notificationclick`, "Mark done") |
 | "What to do now" | `src/now.js` (`useNow()`: current block, next, gap, suggestion, headline) |
+| Undo / redo | `src/undo.js` (⌘Z/Ctrl+Z, ⇧⌘Z/Ctrl+Y: whole-document snapshots of local edits; sync.js resets the history when another device's changes arrive) |
 | Drag and drop | `src/dnd.js` (todo rows: reorder = re-prioritise), `src/timelineEdit.js` (move/resize timeline blocks) |
 | Issue log | `src/issues.js` (client API, offline queue), `src/components/IssueDialog.vue` (report dialog), `src/views/Issues.vue` (S-95 list), `scripts/issues.mjs` (CLI for agents, needs an admin API token); server: `server/issues.mjs`, table `issues` |
 | Shell | `src/App.vue` (sidebar, top bar, NOW pill, global shortcuts, dialogs, sync/update banners, phone tab bar), `src/main.js` (router, SW registration, `startSync()`), `src/nav.js` |

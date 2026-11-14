@@ -9,6 +9,7 @@
 import { reactive, watch, nextTick } from 'vue'
 import { state, normalizeState, toast, hadLocalData, migrateDoc, SCHEMA_VERSION } from './store'
 import { merge3 } from './merge'
+import { pauseUndo, resetUndo } from './undo'
 import { auth, bindUser, startGuest, endGuest } from './auth'
 
 const K = { base: 'life-console/sync-base', version: 'life-console/sync-version', dirty: 'life-console/sync-dirty', edited: 'life-console/sync-edited', device: 'life-console/device' }
@@ -85,6 +86,7 @@ async function mergeRemote(remote) {
   const base = migrateDoc(readBase())
   const merged = base ? merge3(base, plain(state), remote.state) : plain(state) // no base (old client): keep local
   applying = true
+  pauseUndo() // another device's changes aren't undo steps
   for (const k of Object.keys(state)) delete state[k]
   Object.assign(state, merged)
   normalizeState()
@@ -93,16 +95,19 @@ async function mergeRemote(remote) {
   saveBase(remote.state)
   await nextTick()
   applying = false
+  resetUndo()
   markDirty()
 }
 async function applyRemote(remote) {
   applying = true
+  pauseUndo()
   for (const k of Object.keys(state)) delete state[k]
   Object.assign(state, JSON.parse(JSON.stringify(remote.state)))
   normalizeState()
   markClean(remote.version)
   await nextTick()
   applying = false
+  resetUndo()
 }
 function fail(err) {
   if (err instanceof AuthError && auth.guest && !err.proxy) {
