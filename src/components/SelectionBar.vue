@@ -1,5 +1,5 @@
 <script setup>
-// Shown while schedule blocks are multi-selected (Shift/⌘-click, long-press on phones):
+// Shown while schedule blocks are multi-selected (box select, Shift/⌘-click, long-press on phones):
 // move them together by 15 min / a day, take them off the schedule, or clear the selection.
 import { ui, shiftSelected, removeSelected, clearBlockSel } from '../store'
 </script>

@@ -1,5 +1,7 @@
 <script setup>
 import { undo, redo } from './undo'
+import { installBoxSelect } from './boxSelect'
+installBoxSelect() // ISS-29: drag a box on a timeline to select blocks
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ui, state, todayISO, sendToNextDay, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf } from './store'
