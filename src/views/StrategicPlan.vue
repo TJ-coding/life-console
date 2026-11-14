@@ -3,7 +3,7 @@
 import DateInput from '../components/DateInput.vue'
 import { computed, ref, nextTick, reactive, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel, moveSig, renameGoalNo, nextSigNo, isPsgNo, GOAL_NO_MAX } from '../store'
+import { state, ui, todayISO, fmtSlash, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel, moveSig, renameGoalNo, nextSigNo, isPsgNo, GOAL_NO_MAX } from '../store'
 import PlanTabs from '../components/PlanTabs.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -254,6 +254,18 @@ const planDeadlines = computed(() => {
 const openPlanDeadlines = computed(() => planDeadlines.value.filter((d) => !d.done))
 const dlOf = (no) => openPlanDeadlines.value.filter((d) => d.source === no)
 const dlLeft = (d) => (minsTo(effDue(d)) <= 0 ? 'overdue' : countdown(effDue(d)))
+/* ISS-36: link a deadline that already exists (soonest open ones not in this plan yet) to the plan */
+const linkableDeadlines = computed(() => {
+  const ids = new Set(planIds(plan.value))
+  return state.deadlines.filter((d) => !d.done && !ids.has(d.source)).sort((a, b) => effDue(a).localeCompare(effDue(b)))
+})
+function linkDeadline(id) {
+  const d = state.deadlines.find((x) => x.id === id)
+  if (!d) return
+  const prev = d.source
+  d.source = plan.value.planNo
+  toast(`${d.id} linked to ${plan.value.planNo}${prev ? ` (was ${prev})` : ''} · open it to pick a goal`, { label: 'Undo', run: () => { d.source = prev } })
+}
 function planDeadline() {
   goalDeadline({ no: plan.value.planNo, name: plan.value.title, priority: 3, timeBound: '' })
 }
@@ -476,8 +488,12 @@ const print = () => window.print()
                 <span class="mono small muted">{{ d.due.slice(5, 10) }}</span>
                 <Chip :id="d.source" />
               </div>
-              <div v-if="!planDeadlines.length" class="empty">No deadlines for this plan yet. Use <span class="icon sm">alarm_add</span> on a goal.</div>
+              <div v-if="!planDeadlines.length" class="empty">No deadlines for this plan yet. Use <span class="icon sm">alarm_add</span> on a goal, or link one below.</div>
             </div>
+            <select v-if="linkableDeadlines.length" class="select sm link-dl" title="Link a deadline you already have to this plan" @change="linkDeadline($event.target.value); $event.target.value = ''">
+              <option value="">＋ Link existing deadline…</option>
+              <option v-for="d in linkableDeadlines" :key="d.id" :value="d.id">{{ d.title }} · {{ fmtSlash(d.due) }}{{ d.source ? ` · ${d.source}` : '' }}</option>
+            </select>
           </section>
 
           <!-- check schedule -->
@@ -562,6 +578,7 @@ const print = () => window.print()
 </template>
 
 <style scoped>
+.link-dl { margin: 6px 10px 10px; width: calc(100% - 20px); }
 .sp { display: flex; flex-direction: column; min-height: 100%; }
 .status-sel { height: 26px; font-size: 11px; color: var(--accent); border-color: var(--accent); }
 .status-sel.paused { color: var(--warn); border-color: var(--warn); }

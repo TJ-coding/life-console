@@ -3,6 +3,8 @@
 import DateInput from './DateInput.vue'
 import { computed } from 'vue'
 import { ui, state, deleteDeadline, isOverdue, relDay, todayISO } from '../store'
+/** ISS-36: what Source can point at — every plan and goal number, with its name, as suggestions */
+const sourceOpts = computed(() => state.plans.flatMap((p) => [{ no: p.planNo, name: p.title }, ...p.psgs.map((g) => ({ no: g.no, name: `${g.name} (${p.planNo})` })), ...p.sigs.map((g) => ({ no: g.no, name: `${g.name} (${p.planNo})` }))]))
 
 const d = computed(() => (ui.deadlineId ? state.deadlines.find((x) => x.id === ui.deadlineId) : null))
 const date = computed({ get: () => d.value.due.slice(0, 10), set: (v) => { if (v) d.value.due = `${v}T${d.value.due.slice(11)}` } })
@@ -34,7 +36,8 @@ function remove() {
           <label class="field"><span>Date</span><DateInput v-model="date" class="input mono" /></label>
           <label class="field"><span>Time</span><input v-model="time" type="time" class="input mono" /></label>
           <label class="field"><span>Internal deadline (yours)</span><DateInput v-model="d.internal" class="input mono" title="Working target before the hard deadline; leave empty if none" /></label>
-          <label class="field"><span>Source (course / plan / goal)</span><input v-model.trim="d.source" class="input mono" placeholder="RUN" /></label>
+          <label class="field"><span>Source (course / plan / goal)</span><input v-model.trim="d.source" class="input mono" placeholder="RUN" list="dl-sources" title="A course code, or a plan / goal number — type to pick one" /></label>
+          <datalist id="dl-sources"><option v-for="o in sourceOpts" :key="o.no" :value="o.no">{{ o.name }}</option></datalist>
           <label class="field"><span>Priority</span>
             <select v-model.number="d.priority" class="select mono"><option v-for="p in 5" :key="p" :value="p">P{{ p }}</option></select>
           </label>
