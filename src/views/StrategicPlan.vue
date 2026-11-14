@@ -206,7 +206,9 @@ function goalDeadline(g) {
 }
 
 /* SIG dependencies (ISS-5): optional `deps` array of SIG numbers, defaulted in normalizeState */
-const sigNos = computed(() => allSigs().map((s) => s.no).sort())
+/* only this plan's goals: other plans' SIGs made the list hard to search (ISS-37); existing cross-plan deps still show and can be removed */
+const sigOpts = computed(() => [...plan.value.sigs].sort((a, b) => a.no.localeCompare(b.no)))
+const optLabel = (g) => (g.name ? `${g.no} · ${g.name.length > 40 ? g.name.slice(0, 39) + '…' : g.name}` : g.no)
 function addDep(s, dep) {
   if (!dep) return
   if (!Array.isArray(s.deps)) s.deps = []
@@ -436,8 +438,8 @@ const print = () => window.print()
                       <Chip v-for="dp in s.deps ?? []" :key="dp" :id="dp" removable @remove="removeDep(s, dp)" />
                       <select class="dep-add mono" title="Add a dependency — a PSG or another SIG this one needs" @click.stop @change="addDep(s, $event.target.value); $event.target.value = ''">
                         <option value="">{{ s.deps?.length ? '＋' : '＋ dep' }}</option>
-                        <option v-for="p in psgs.filter((x) => x.no !== s.psg)" :key="p.no" :value="p.no" :disabled="sigWouldCycle(s.no, p.no)">✦ {{ p.no }}</option>
-                        <option v-for="no in sigNos.filter((n) => n !== s.no)" :key="no" :value="no" :disabled="sigWouldCycle(s.no, no)">{{ no }}</option>
+                        <option v-for="p in psgs.filter((x) => x.no !== s.psg)" :key="p.no" :value="p.no" :disabled="sigWouldCycle(s.no, p.no)">✦ {{ optLabel(p) }}</option>
+                        <option v-for="o in sigOpts.filter((x) => x.no !== s.no)" :key="o.no" :value="o.no" :disabled="sigWouldCycle(s.no, o.no)">{{ optLabel(o) }}</option>
                       </select>
                     </div>
                   </td>
