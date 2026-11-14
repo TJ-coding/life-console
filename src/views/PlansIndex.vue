@@ -19,8 +19,8 @@ const showDone = ref(false)
 const psgDone = (g) => g.status === 'done' || (g.sigs.length > 0 && g.sigs.every((s) => sigState(s) === 'done'))
 const plansAtGlance = computed(() => activePlans().map((p) => {
   const all = [...p.psgs].sort((a, b) => a.priority - b.priority).map(psgGlance)
-  let hidden = 0
-  const goals = showDone.value ? all : all.filter((g) => {
+  let hidden = 0 // completed goals (PSGs and SIGs), counted whether or not they're shown
+  const open = all.filter((g) => {
     if (psgDone(g)) { hidden += 1 + g.sigs.length; return false }
     return true
   }).map((g) => {
@@ -28,6 +28,7 @@ const plansAtGlance = computed(() => activePlans().map((p) => {
     hidden += g.sigs.length - sigs.length
     return { ...g, sigs }
   })
+  const goals = showDone.value ? all : open
   return { plan: p, pct: planPct(p), check: nextCheckDate(p), goals, hidden, total: all.length }
 }))
 const behindCount = computed(() => plansAtGlance.value.reduce((n, x) => n + x.goals.filter((g) => g.behind).length, 0))
@@ -118,10 +119,9 @@ function remove(p) {
         </div>
       </template>
       <div v-if="!x.total" class="empty">No goals yet. <router-link :to="`/strategy/${x.plan.id}`">Add a PSG</router-link>.</div>
-      <div v-else-if="x.hidden || showDone" class="done-note small muted">
+      <div v-else-if="x.hidden" class="done-note small muted">
         <span class="icon sm">task_alt</span>
-        <template v-if="showDone">Showing completed goals</template>
-        <template v-else>{{ x.hidden }} completed goal{{ x.hidden > 1 ? 's' : '' }} hidden</template>
+        {{ x.hidden }} completed goal{{ x.hidden > 1 ? 's' : '' }}
         <button class="linkish" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }}</button>
       </div>
     </section>
