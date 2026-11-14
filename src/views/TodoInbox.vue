@@ -3,7 +3,7 @@
 import PartBadge from '../components/PartBadge.vue'
 import { computed, ref, reactive, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
-import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel, isContainer, subCount, parentPath, rowSelectClick, isTodoSel } from '../store'
+import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel, isContainer, subCount, parentPath, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import LsdToggle from '../components/LsdToggle.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -175,7 +175,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
           <tbody data-sellist>
             <tr
               v-for="t in rows" :key="t.id" class="clickable" :class="[{ done: t.done, selected: ui.selectedId === t.id, msel: isTodoSel(t) }, dropClass(t)]" :draggable="!isContainer(t)" :data-bkey="'todo:' + t.id"
-              @click="rowSelectClick($event, t) || open(t)" @contextmenu.prevent="rowSelectClick($event, t)" @dragstart="startDrag($event, t)" @dragend="endDrag" @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t)"
+              @click="rowSelectClick($event, t) || open(t)" @contextmenu.prevent="openCtxMenu($event, ['todo:' + t.id])" @dragstart="startDrag($event, t)" @dragend="endDrag" @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t)"
             >
               <td @click.stop><input v-model="picked" type="checkbox" :value="t.id" /></td>
               <td @click.stop><input type="checkbox" :checked="t.done" @change="toggleTodo(t.id)" /></td>
@@ -206,7 +206,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
         <!-- phone (ISS-10): the table's select/id columns waste the width, so cards instead —
              the name leads, then what's next: done · P · time · when · links; open = tap -->
         <div v-if="rows.length" class="cards" data-sellist>
-          <div v-for="t in rows" :key="t.id" class="card" :class="{ done: t.done, msel: isTodoSel(t) }" :data-bkey="'todo:' + t.id" @click="rowSelectClick($event, t) || open(t)" @contextmenu.prevent="rowSelectClick($event, t)">
+          <div v-for="t in rows" :key="t.id" class="card" :class="{ done: t.done, msel: isTodoSel(t) }" :data-bkey="'todo:' + t.id" @click="rowSelectClick($event, t) || open(t)" @contextmenu.prevent="openCtxMenu($event, ['todo:' + t.id])">
             <div class="r1 row">
               <input type="checkbox" :checked="t.done" title="Done" @click.stop @change="toggleTodo(t.id)" />
               <Prio :p="t.priority" />

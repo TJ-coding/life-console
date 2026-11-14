@@ -5,7 +5,7 @@
 // then the next weeks, with week buttons instead of day buttons. Drop a task here to send it back.
 import PartBadge from './PartBadge.vue'
 import { computed, ref, watch, nextTick } from 'vue'
-import { ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, parentPath, planWeek, backlogTodos, backlogFor, isoWeek, rowSelectClick, isTodoSel } from '../store'
+import { ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, parentPath, planWeek, backlogTodos, backlogFor, isoWeek, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
@@ -97,7 +97,7 @@ function onDrop(e) {
       <div class="card" :class="[dropClass(t), { linked: isHoverLinked(t.id), sel: ui.selectedId === t.id, msel: isTodoSel(t) }]" draggable="true" :data-bkey="'todo:' + t.id"
         @dragstart="startDrag($event, t)" @dragend="endDrag" @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)"
         @drop="dropOnRow($event, t, { unschedule: true, week: t.week ?? null })" @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
-        @click="rowSelectClick($event, t) || (ui.selectedId = t.id)" @contextmenu.prevent="rowSelectClick($event, t)" @dblclick="ui.drawerId = t.id"
+        @click="rowSelectClick($event, t) || (ui.selectedId = t.id)" @contextmenu.prevent="openCtxMenu($event, ['todo:' + t.id])" @dblclick="ui.drawerId = t.id"
       >
         <div v-if="t.parent && parentPath(t)" class="crumb small muted ellipsis" :title="parentPath(t)">↳ {{ parentPath(t) }}</div>
         <div class="row">

@@ -13,6 +13,7 @@ import BlockDialog from './components/BlockDialog.vue'
 import DeadlineDialog from './components/DeadlineDialog.vue'
 import IssueDialog from './components/IssueDialog.vue'
 import SelectionBar from './components/SelectionBar.vue'
+import ContextMenu from './components/ContextMenu.vue'
 import { issues, openIssueDialog, openCount as openIssueCount } from './issues'
 import { useNow } from './now'
 import { sync, chooseSync, leaveGuest } from './sync'
@@ -333,6 +334,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <BlockDialog />
     <IssueDialog />
     <SelectionBar />
+    <ContextMenu />
     <TourOverlay v-if="ui.tourOpen" />
     <transition name="fade">
       <div v-if="ui.toast" class="toast mono" role="status">

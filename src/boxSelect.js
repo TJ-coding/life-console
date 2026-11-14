@@ -55,7 +55,7 @@ function end(cancel) {
 }
 /** Capture phase, so it sees clicks other handlers stop. The click ending a box drag is swallowed; any other
  *  click outside the selected blocks clears the selection (blocks, the selection bar and toasts don't). */
-const KEEP = '[data-bkey], .selbar, .bulkbar, .toast, .scrim, .pb-pop, thead'
+const KEEP = '[data-bkey], .selbar, .bulkbar, .toast, .scrim, .pb-pop, .ctx-scrim, thead'
 function onClick(e) {
   if (Date.now() - boxEndedAt < 400) { e.stopPropagation(); e.preventDefault(); boxEndedAt = 0; return }
   if (!ui.selBlocks.length || e.shiftKey || e.metaKey || e.ctrlKey) return

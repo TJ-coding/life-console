@@ -1,8 +1,8 @@
 <script setup>
-// The "2/3" badge on a split task (ISS-28). Tap it to see all the parts and recombine them into one task,
-// right from the list (no drawer). The parent's `.part` styling applies to the root span.
+// The "2/3" badge on a split task (ISS-28). Tap it to see all the parts, open one, or select them all
+// (then right-click → Recombine joins the selected ones). The parent's `.part` styling applies to the root span.
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
-import { ui, partLabel, splitSiblings, mergePartsUndo, wd, fmtSlash } from '../store'
+import { ui, partLabel, splitSiblings, wd, fmtSlash } from '../store'
 
 const props = defineProps({ todo: { type: Object, required: true } })
 const open = ref(false)
@@ -32,7 +32,11 @@ async function toggle() {
   document.addEventListener('touchstart', onOutside, true)
   document.addEventListener('keydown', onKey, true)
 }
-function recombine() { close(); mergePartsUndo(props.todo.id) }
+/** Put every open part into the selection; deselect any you want to keep apart, then right-click → Recombine. */
+function selectAll() {
+  close()
+  for (const p of openParts.value) { const k = `todo:${p.id}`; if (!ui.selBlocks.includes(k)) ui.selBlocks.push(k) }
+}
 function openPart(p) { close(); ui.drawerId = p.id }
 onBeforeUnmount(close)
 </script>
@@ -48,8 +52,8 @@ onBeforeUnmount(close)
           <span class="mono small">{{ p.timeMin }}m</span>
           <span v-if="p.done" class="ok">✓</span>
         </button>
-        <button v-if="openParts.length > 1" class="btn sm primary pb-go" @click="recombine"><span class="icon sm">merge</span>Recombine into one task · {{ total }}m</button>
-        <div v-else class="tiny muted pb-note">Only one part is still open: nothing to recombine.</div>
+        <button v-if="openParts.length > 1" class="btn sm pb-go" title="Select the open parts, then right-click one → Recombine (or use the selection bar)" @click="selectAll"><span class="icon sm">select_all</span>Select all parts</button>
+        <div class="tiny muted pb-note">To recombine: select the parts (⌘-click, or long-press then tap), then right-click → Recombine.</div>
       </div>
     </Teleport>
   </span>

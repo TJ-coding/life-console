@@ -1,7 +1,10 @@
 <script setup>
 // Shown while schedule blocks are multi-selected (box select, Shift/⌘-click, long-press on phones):
 // move them together by 15 min / a day, take them off the schedule, or clear the selection.
-import { ui, shiftSelected, removeSelected, clearBlockSel } from '../store'
+import { computed } from 'vue'
+import { ui, shiftSelected, removeSelected, clearBlockSel, selectedPartGroups, recombineParts } from '../store'
+/** ISS-28: ≥ 2 open parts of one split task selected → Recombine just those */
+const groups = computed(() => selectedPartGroups())
 </script>
 
 <template>
@@ -12,6 +15,10 @@ import { ui, shiftSelected, removeSelected, clearBlockSel } from '../store'
     <button class="btn sm icon-only" title="15 min later (↓ · Shift+↓ = 1 h)" aria-label="15 minutes later" @click="shiftSelected(15)"><span class="icon sm">keyboard_arrow_down</span></button>
     <button class="btn sm icon-only" title="A day earlier (←)" aria-label="A day earlier" @click="shiftSelected(0, -1)"><span class="icon sm">keyboard_arrow_left</span></button>
     <button class="btn sm icon-only" title="A day later (→)" aria-label="A day later" @click="shiftSelected(0, 1)"><span class="icon sm">keyboard_arrow_right</span></button>
+    <template v-if="groups.length">
+      <span class="sep"></span>
+      <button v-for="g in groups" :key="g.group" class="btn sm primary" :title="`Recombine the ${g.parts.length} selected parts of “${g.title}” into one task (undo in the toast)`" @click="recombineParts(g.parts.map((p) => p.id))"><span class="icon sm">merge</span>Recombine {{ g.parts.length }}</button>
+    </template>
     <span class="sep"></span>
     <button class="btn sm icon-only" title="Take them off the schedule (Delete) · tasks stay on their day" aria-label="Take off the schedule" @click="removeSelected"><span class="icon sm">event_busy</span></button>
     <button class="btn sm icon-only" title="Clear selection (Esc)" aria-label="Clear selection" @click="clearBlockSel"><span class="icon sm">close</span></button>

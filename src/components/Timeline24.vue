@@ -3,7 +3,7 @@
 // Fixed px-per-hour so block text stays readable; scrolls horizontally and
 // auto-centres on "now". Todos can be dropped onto it to get a start time.
 import { computed, ref, onMounted, nextTick, watch } from 'vue'
-import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isBlockSel, toggleBlockSel, blockKey, clearBlockSel } from '../store'
+import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 0 }, to: { type: Number, default: 24 } })
@@ -82,7 +82,7 @@ function openBlock(e, b) {
         <div
           v-for="b in laid.blocks" :key="b.id" :data-bkey="blockKey(b)" class="block tl-block" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b) }]"
           :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag right edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!ui.scheduleLock"
-          @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock($event, b)" @contextmenu.prevent="toggleBlockSel(b)"
+          @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock($event, b)" @contextmenu.prevent="openCtxMenu($event, [blockKey(b)])"
         >
           <span class="mono t"><span v-if="b.done" class="icon dn" title="Completed">check_circle</span>{{ b.start }}–{{ b.end }}</span>
           <span class="nm">{{ b.title }}</span>

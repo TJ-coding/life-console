@@ -403,6 +403,7 @@ export const ui = reactive({
   dropOver: null, // todo row under the cursor
   dropPos: null, // 'before' | 'after'
   toast: '',
+  ctxMenu: null, // ISS-28: right-click / long-press menu for the selection: { x, y }
   toastAction: null,
   theme: savedTheme,
   accent: savedAccent,
@@ -735,7 +736,7 @@ export function toggleBlockSel(b) {
 export const clearBlockSel = () => { ui.selBlocks.splice(0) }
 /* ISS-29: selecting tasks in lists, into the same ui.selBlocks the schedule uses (so a task picked in a list
    lights up on the timeline too). ⌘/Ctrl-click toggles, Shift-click selects the range from the last row
-   clicked (rows in DOM order inside the same [data-sellist]), long-press / right-click toggles. A plain
+   clicked (rows in DOM order inside the same [data-sellist]); right-click / long-press opens the menu (openCtxMenu). A plain
    mouse click does the row's usual thing and clears the selection; on touch screens (no modifier keys) a tap
    toggles while a selection is open. Tasks with subtasks aren't scheduled, so they're skipped. */
 let selAnchor = null
@@ -752,11 +753,60 @@ function toggleTodoSel(t, ids = [t.id]) {
     else if (!all && i < 0) ui.selBlocks.push(k)
   }
 }
+/**
+ * ISS-28: right-click (long-press on phones) on a task row, card or timeline block: opens the action menu for
+ * the selection. Right-clicking something outside the selection makes it the selection; inside, it's kept.
+ * `keys` = the item's selection keys (a merged workload card stands for several parts).
+ */
+export function openCtxMenu(e, keys) {
+  e.preventDefault()
+  keys = keys.filter((k) => { const x = k.startsWith('todo:') ? findTodo(k.slice(5)) : true; return x && !(x !== true && isContainer(x)) })
+  if (!keys.length) return
+  if (!keys.every((k) => ui.selBlocks.includes(k))) ui.selBlocks.splice(0, ui.selBlocks.length, ...keys)
+  ui.ctxMenu = { x: e.clientX, y: e.clientY }
+}
+/** Split tasks with ≥ 2 open parts in the selection: [{ group, parts (selection order irrelevant), min, title }]. */
+export function selectedPartGroups() {
+  const by = new Map()
+  for (const k of ui.selBlocks) {
+    if (!k.startsWith('todo:')) continue
+    const t = findTodo(k.slice(5))
+    if (!t?.split || t.done) continue
+    const l = by.get(t.split.group) ?? []
+    l.push(t)
+    by.set(t.split.group, l)
+  }
+  return [...by.entries()].filter(([, l]) => l.length > 1).map(([group, parts]) => ({ group, parts, min: parts.reduce((a, x) => a + x.timeMin, 0), title: parts[0].title }))
+}
+/** Recombine just these parts of one split task into the earliest of them (minutes added up), with Undo. */
+export function recombineParts(ids) {
+  const first = findTodo(ids[0])
+  if (!first?.split) return null
+  const all = splitSiblings(first)
+  const chosen = all.filter((x) => ids.includes(x.id) && !x.done)
+  if (chosen.length < 2) return null
+  const before = all.map((x) => JSON.parse(JSON.stringify(x)))
+  const [keep, ...drop] = chosen // splitSiblings is in day/time order: the earliest part keeps its slot
+  updateTodo(keep.id, { timeMin: chosen.reduce((a, x) => a + x.timeMin, 0) })
+  drop.forEach((x) => deleteTodo(x.id))
+  if (splitSiblings(keep).length < 2) delete keep.split
+  for (const x of drop) { const i = ui.selBlocks.indexOf(`todo:${x.id}`); if (i >= 0) ui.selBlocks.splice(i, 1) }
+  const ids0 = new Set(before.map((x) => x.id))
+  const where = keep.scheduled ? `${wd(keep.scheduled.date)} ${fmtSlash(keep.scheduled.date)}${keep.scheduled.start ? ' ' + keep.scheduled.start : ''}` : 'the backlog'
+  toast(`Recombined ${chosen.length} parts · ${keep.timeMin}m on ${where}`, {
+    label: 'Undo',
+    run: () => {
+      for (let i = state.todos.length - 1; i >= 0; i--) if (ids0.has(state.todos[i].id)) state.todos.splice(i, 1)
+      before.forEach((c) => state.todos.push(c))
+    },
+  })
+  return keep
+}
 /** Handle a click on a list row. Returns true when it was a selection click (the caller then does nothing else). */
 export function rowSelectClick(e, t) {
   const list = e.currentTarget?.closest?.('[data-sellist]')
   // starting a group from a row that's already selected (outlined) includes that row, like a file manager
-  if ((e.shiftKey || e.metaKey || e.ctrlKey || e.type === 'contextmenu') && !ui.selBlocks.length && ui.selectedId && ui.selectedId !== t.id) {
+  if ((e.shiftKey || e.metaKey || e.ctrlKey) && !ui.selBlocks.length && ui.selectedId && ui.selectedId !== t.id) {
     const cur = findTodo(ui.selectedId)
     if (cur && !isContainer(cur) && list?.querySelector(`[data-bkey="todo:${cur.id}"]`)) { ui.selBlocks.push(`todo:${cur.id}`); selAnchor = selAnchor ?? cur.id }
   }
@@ -778,7 +828,7 @@ export function rowSelectClick(e, t) {
     }
   }
   const touch = e.pointerType === 'touch' || (!e.pointerType && window.matchMedia?.('(hover: none)').matches)
-  if (e.shiftKey || e.metaKey || e.ctrlKey || e.type === 'contextmenu' || (touch && ui.selBlocks.length)) {
+  if (e.shiftKey || e.metaKey || e.ctrlKey || (touch && ui.selBlocks.length)) {
     toggleTodoSel(t, rowIds(e.currentTarget, t))
     selAnchor = t.id
     return true

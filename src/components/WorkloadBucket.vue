@@ -4,7 +4,7 @@
 // Lives inside DayColumn directly above that day's timeline — drag a block down onto a time.
 import PartBadge from './PartBadge.vue'
 import { computed, ref } from 'vue'
-import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked, loadsDay, rowSelectClick, isTodoSel } from '../store'
+import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked, loadsDay, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 
 const props = defineProps({
@@ -101,7 +101,7 @@ function toggleParts(t) {
         @dragstart="startDrag($event, t)" @dragend="endDrag"
         @dragover="overRow($event, t, { reverse: true })" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t, { adoptDate: true })"
         @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
-        @click="rowSelectClick($event, t) || (ui.selectedId = t.id)" @contextmenu.prevent="rowSelectClick($event, t)" @dblclick="t.grouped ? (ui.splitId = t.id) : (ui.drawerId = t.id)"
+        @click="rowSelectClick($event, t) || (ui.selectedId = t.id)" @contextmenu.prevent="openCtxMenu($event, t.grouped ? t.grouped.parts.map((p) => 'todo:' + p.id) : ['todo:' + t.id])" @dblclick="t.grouped ? (ui.splitId = t.id) : (ui.drawerId = t.id)"
       >
         <input type="checkbox" class="ck" :checked="t.grouped ? t.grouped.parts.every((p) => p.done) : t.done" :title="t.grouped ? 'Done: all of this task today' : 'Done'" @click.stop @change="t.grouped ? toggleParts(t) : toggleTodo(t.id)" />
         <span class="ttl"><PartBadge v-if="partLabel(t) && !t.grouped" :todo="t" class="part mono" />{{ t.title }}</span>

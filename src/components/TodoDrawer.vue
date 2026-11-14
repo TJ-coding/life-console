@@ -170,7 +170,7 @@ const dayName = computed(() => {
           </div>
           <div class="row">
             <button class="btn sm" :disabled="t.done" @click="ui.splitId = t.id"><span class="icon sm">call_split</span>{{ parts.length > 1 ? 'Edit plan…' : 'Plan over days / times…' }}</button>
-            <button v-if="parts.filter((p) => !p.done).length > 1" class="btn sm" @click="merge"><span class="icon sm">merge</span>Recombine into one task</button>
+            <button v-if="parts.filter((p) => !p.done).length > 1" class="btn sm" @click="merge"><span class="icon sm">merge</span>Recombine all open parts</button>
           </div>
         </div>
         <label class="field">
