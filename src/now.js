@@ -95,6 +95,10 @@ export function useNow() {
       return queue.value.find((t) => relatedTo(t, c))
         ?? state.todos.filter((t) => !t.done && isLeaf(t) && relatedTo(t, c)).sort(byPriority)[0] ?? null
     }
+    // free: the next task on today's timeline (earliest start, a missed one included) — ISS-33;
+    // only when nothing has a time, the best untimed todo that fits the gap
+    const timed = todosForDay(T.value).filter((t) => !t.done && t.scheduled?.start).sort((a, b) => toMin(a.scheduled.start) - toMin(b.scheduled.start))
+    if (timed.length) return timed[0]
     const freeMin = gap.value / 60
     return queue.value.find((t) => t.timeMin <= freeMin) ?? queue.value[0] ?? null
   })

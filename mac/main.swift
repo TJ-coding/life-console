@@ -128,7 +128,11 @@ func compute(_ state: [String: Any], at now: Date = Date()) -> Now {
   let queue = todos.filter { $0.date == T }.sorted(by: byPriority).filter { !$0.done && $0.id != current?.todoId && !($0.start.map { toMin($0) > nowMin } ?? false) }
   var suggestion: Todo?
   if let cur = current, cur.todoId == nil { suggestion = queue.first { related($0, cur) } ?? todos.filter { !$0.done && !parents.contains($0.id) && related($0, cur) }.sorted(by: byPriority).first }
-  else if current == nil { suggestion = queue.first { $0.timeMin * 60 <= gap } ?? queue.first }
+  else if current == nil {
+    // the next task on today's timeline (earliest start, a missed one included), as src/now.js (ISS-33)
+    let timed = todos.filter { $0.date == T && !$0.done && $0.start != nil }.sorted { toMin($0.start!) < toMin($1.start!) }
+    suggestion = timed.first ?? queue.first { $0.timeMin * 60 <= gap } ?? queue.first
+  }
 
   if let cur = current { n.mode = .busy; n.text = cur.title; n.meta = "\(fmtDur(toMin(cur.end) * 60 - nowSec)) left" }
   else if let s = suggestion { n.mode = .free; n.text = s.title; n.meta = "free \(fmtDur(gap))" }
