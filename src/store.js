@@ -31,9 +31,11 @@ export const fmtMD = (s) => {
   const d = parseISO(s)
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`
 }
+/** MM/DD, or YYYY/MM/DD when it isn't this year (so a deadline next January doesn't read as this past one — ISS-34). */
 export const fmtSlash = (s) => {
   const d = parseISO(s)
-  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
+  const y = d.getFullYear() !== new Date().getFullYear() ? `${d.getFullYear()}/` : ''
+  return `${y}${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
 }
 export const hhmm = (isoTs) => {
   const d = new Date(isoTs)

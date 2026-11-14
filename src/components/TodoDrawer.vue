@@ -1,5 +1,6 @@
 <script setup>
 // Right 480px side drawer for editing a todo (spec §2.4 "Side drawer").
+import DateInput from './DateInput.vue'
 import { computed, ref } from 'vue'
 import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast, childrenOf, isContainer, budgetLeft, subCount, ancestorsOf, addSubtask, parseQuick, pomo } from '../store'
 import Chip from './Chip.vue'
@@ -93,9 +94,9 @@ const dayName = computed(() => {
         <label class="field"><span>Vital points</span><input v-model="t.vital" class="input" placeholder="Key notes shown under the title" /></label>
         <div class="grid2">
           <label class="field"><span>{{ box ? 'Budget, min (for its subtasks)' : 'Est. min (takt)' }}</span><input v-model.number="t.timeMin" type="number" min="0" step="5" class="input mono" /></label>
-          <label class="field"><span>Due</span><input v-model="t.due" type="date" class="input mono" /></label>
+          <label class="field"><span>Due</span><DateInput v-model="t.due" class="input mono" /></label>
           <template v-if="!box">
-            <label class="field"><span>Scheduled day</span><input v-model="schedDate" type="date" class="input mono" /></label>
+            <label class="field"><span>Scheduled day</span><DateInput v-model="schedDate" class="input mono" /></label>
             <label class="field"><span>Start time</span><input v-model="schedStart" type="time" step="900" class="input mono" :disabled="!t.scheduled" /></label>
           </template>
         </div>

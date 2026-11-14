@@ -1,5 +1,6 @@
 <script setup>
 // Edit / delete a fixed calendar block (opened by clicking it on any timeline — ISS-8).
+import DateInput from './DateInput.vue'
 import { computed } from 'vue'
 import { ui, state, deleteBlock, toast, toMin } from '../store'
 
@@ -34,7 +35,7 @@ function remove() {
       <div class="bd">
         <label class="field"><span>Title</span><input v-model="b.title" class="input big" autofocus /></label>
         <div class="grid">
-          <label class="field"><span>Date</span><input v-model="b.date" type="date" class="input mono" /></label>
+          <label class="field"><span>Date</span><DateInput v-model="b.date" class="input mono" /></label>
           <label class="field"><span>Link (goal / plan / course)</span><input v-model.trim="b.link" class="input mono" placeholder="BASE, SP-01" /></label>
           <label class="field"><span>Start</span><input v-model="b.start" type="time" step="900" class="input mono" /></label>
           <label class="field"><span>End</span><input v-model="b.end" type="time" step="900" class="input mono" /></label>

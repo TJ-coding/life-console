@@ -1,5 +1,6 @@
 <script setup>
 // S-30 · Strategic Plan (Goals Planner) — Vision → PSG → SIG cascade with tables and review widgets.
+import DateInput from '../components/DateInput.vue'
 import { computed, ref, nextTick, reactive, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel, moveSig, renameGoalNo, nextSigNo, isPsgNo, GOAL_NO_MAX } from '../store'
@@ -525,7 +526,7 @@ const print = () => window.print()
             <form class="row ev-add" @submit.prevent="addEvent">
               <select v-model="ev.sym" class="select small sym-in"><option v-for="s in ['◆', '▲', '■', '●', '★']" :key="s">{{ s }}</option></select>
               <input v-model="ev.event" class="input small grow" placeholder="Event" />
-              <input v-model="ev.date" type="date" class="input small mono" />
+              <DateInput v-model="ev.date" class="input small mono" />
               <button class="btn sm" type="submit">Add</button>
             </form>
           </section>
