@@ -1,12 +1,12 @@
 <script setup>
 // Compact todo row: checkbox · title + vital points · time · L/S/D · linked chips. Draggable.
 import { computed } from 'vue'
-import { ui, toggleTodo, updateTodo, partLabel, isContainer, subCount, parentPath, sendToNextDay } from '../store'
+import { ui, toggleTodo, updateTodo, partLabel, isContainer, subCount, parentPath } from '../store'
 import { startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import LsdToggle from './LsdToggle.vue'
 import Chip from './Chip.vue'
 import Prio from './Prio.vue'
-const props = defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean, default: true }, compact: Boolean, dim: Boolean, adoptDate: Boolean, flagUntimed: Boolean, removable: Boolean, showStart: Boolean, showPrio: Boolean, nextDay: Boolean })
+const props = defineProps({ todo: { type: Object, required: true }, showLinks: { type: Boolean, default: true }, compact: Boolean, dim: Boolean, adoptDate: Boolean, flagUntimed: Boolean, removable: Boolean, showStart: Boolean, showPrio: Boolean })
 defineEmits(['remove'])
 const box = computed(() => isContainer(props.todo))
 const sub = computed(() => (box.value ? subCount(props.todo) : null))
@@ -30,7 +30,6 @@ const crumb = computed(() => (props.todo.parent ? parentPath(props.todo) : ''))
     <span v-else class="mono tiny muted">{{ todo.lsd }}</span>
     <span v-if="flagUntimed && !todo.done && !todo.scheduled?.start" class="icon untimed" title="No time yet — drag onto the schedule">more_time</span>
     <span v-if="showLinks && todo.links.length" class="links"><Chip :id="todo.links[todo.links.length - 1]" /></span>
-    <button v-if="nextDay && !todo.done && !box" class="rm nd" title="Move to the next day (>)" @click.stop="sendToNextDay(todo.id)"><span class="icon sm">redo</span></button>
     <button v-if="removable" class="rm" title="Delete this todo" @click.stop="$emit('remove', todo)"><span class="icon sm">close</span></button>
     <button class="open" title="Open (Enter)" @click.stop="ui.drawerId = todo.id"><span class="icon sm">chevron_right</span></button>
   </div>
@@ -52,7 +51,6 @@ const crumb = computed(() => (props.todo.parent ? parentPath(props.todo) : ''))
 .start { flex: none; width: 38px; }
 .rm { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0; display: flex; opacity: 0.35; }
 .rm:hover { color: var(--danger); opacity: 1; }
-.rm.nd:hover { color: var(--info); }
 .trow:hover .rm, .trow.sel .rm { opacity: 1; }
 .untimed { font-size: 13px; color: var(--warn); }
 .crumb { color: var(--muted); font-size: 0.9em; }
