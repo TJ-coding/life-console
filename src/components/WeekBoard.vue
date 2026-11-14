@@ -6,6 +6,7 @@
 //   2. Which week has room for this task?   → free hours in each week's header (and on the buttons)
 //   3. What is due in that week?            → its deadlines & goal milestones under the header
 // Click a week on a row, or drag it onto a week. The week bar arrows page through the weeks.
+import PartBadge from './PartBadge.vue'
 import { computed, ref } from 'vue'
 
 const props = defineProps({ prio: { type: Number, default: 0 } }) // the panel's P1–P5 filter
@@ -94,7 +95,7 @@ const leave = (e, w) => { if (hot.value === w && !e.currentTarget.contains(e.rel
         <Prio :p="t.priority" />
         <span class="grow ellipsis ttl">
           <span v-if="t.parent && parentPath(t)" class="small muted">{{ parentPath(t) }} › </span>
-          <span v-if="partLabel(t)" class="part mono">{{ partLabel(t) }}</span>{{ t.title }}
+          <PartBadge v-if="partLabel(t)" :todo="t" class="part mono" />{{ t.title }}
         </span>
         <span class="meta row">
           <Chip v-for="l in t.links" :key="l" :id="l" />

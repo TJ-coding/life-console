@@ -2,6 +2,7 @@
 // Step ② for one day: the 7-hour workload bucket (the paper template's "1 Hour … 7 Hours" gauge).
 // Tasks stack from the bottom, each sized by its estimate; past capacity spills into a red zone.
 // Lives inside DayColumn directly above that day's timeline — drag a block down onto a time.
+import PartBadge from './PartBadge.vue'
 import { computed, ref } from 'vue'
 import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked, loadsDay } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
@@ -101,7 +102,7 @@ function toggleParts(t) {
         @click="ui.selectedId = t.id" @dblclick="t.grouped ? (ui.splitId = t.id) : (ui.drawerId = t.id)"
       >
         <input type="checkbox" class="ck" :checked="t.grouped ? t.grouped.parts.every((p) => p.done) : t.done" :title="t.grouped ? 'Done: all of this task today' : 'Done'" @click.stop @change="t.grouped ? toggleParts(t) : toggleTodo(t.id)" />
-        <span class="ttl"><b v-if="partLabel(t) && !t.grouped" class="part mono">{{ partLabel(t) }}</b>{{ t.title }}</span>
+        <span class="ttl"><PartBadge v-if="partLabel(t) && !t.grouped" :todo="t" class="part mono" />{{ t.title }}</span>
         <span class="meta mono">
           <template v-if="t.grouped">{{ groupMeta(t.grouped) }}</template>
           <template v-else-if="t.scheduled.start">{{ t.scheduled.start }}</template>

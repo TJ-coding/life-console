@@ -2,7 +2,7 @@
 // Right 480px side drawer for editing a todo (spec §2.4 "Side drawer").
 import DateInput from './DateInput.vue'
 import { computed, ref } from 'vue'
-import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, ancestorsOf, addSubtask, parseQuick, pomo } from '../store'
+import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergePartsUndo, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, ancestorsOf, addSubtask, parseQuick, pomo } from '../store'
 import Chip from './Chip.vue'
 
 const t = computed(() => (ui.drawerId ? findTodo(ui.drawerId) : null))
@@ -39,8 +39,8 @@ const goalName = (no) => linkLabel(no)
 const fmt = (s) => new Date(s).toLocaleString()
 const parts = computed(() => splitSiblings(t.value))
 function merge() {
-  const k = mergeParts(t.value.id)
-  if (k) { ui.drawerId = k.id; toast(`Merged into ${k.id} (${k.timeMin}m)`) }
+  const k = mergePartsUndo(t.value.id)
+  if (k) ui.drawerId = k.id
 }
 /* subtasks: the estimate of a task with subtasks is a budget they use up (owner's mental model) */
 const kids = computed(() => (t.value ? childrenOf(t.value.id) : []))
@@ -170,7 +170,7 @@ const dayName = computed(() => {
           </div>
           <div class="row">
             <button class="btn sm" :disabled="t.done" @click="ui.splitId = t.id"><span class="icon sm">call_split</span>{{ parts.length > 1 ? 'Edit plan…' : 'Plan over days / times…' }}</button>
-            <button v-if="parts.filter((p) => !p.done).length > 1" class="btn sm" @click="merge"><span class="icon sm">merge</span>Merge open parts</button>
+            <button v-if="parts.filter((p) => !p.done).length > 1" class="btn sm" @click="merge"><span class="icon sm">merge</span>Recombine into one task</button>
           </div>
         </div>
         <label class="field">

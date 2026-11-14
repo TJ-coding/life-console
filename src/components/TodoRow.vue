@@ -1,5 +1,6 @@
 <script setup>
 // Compact todo row: checkbox · title + vital points · time · L/S/D · linked chips. Draggable.
+import PartBadge from './PartBadge.vue'
 import { computed } from 'vue'
 import { ui, toggleTodo, updateTodo, partLabel, isContainer, subCount, parentPath, sendToNextDay, addDays, todayISO, wd, fmtSlash } from '../store'
 import { startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
@@ -27,7 +28,7 @@ const crumb = computed(() => (props.todo.parent ? parentPath(props.todo) : ''))
     <span v-if="showStart" class="mono small start" :class="{ muted: !todo.scheduled?.start }">{{ todo.scheduled?.start ?? '--:--' }}</span>
     <Prio v-if="showPrio" :p="todo.priority" />
     <div class="grow">
-      <div class="title ellipsis"><span v-if="crumb" class="crumb" :title="crumb">{{ crumb }} › </span><span v-if="partLabel(todo)" class="part mono">{{ partLabel(todo) }}</span>{{ todo.title }}<span v-if="sub" class="subc mono" :title="`${sub.done} of ${sub.total} subtasks done`">{{ sub.done }}/{{ sub.total }}</span></div>
+      <div class="title ellipsis"><span v-if="crumb" class="crumb" :title="crumb">{{ crumb }} › </span><PartBadge v-if="partLabel(todo)" :todo="todo" class="part mono" />{{ todo.title }}<span v-if="sub" class="subc mono" :title="`${sub.done} of ${sub.total} subtasks done`">{{ sub.done }}/{{ sub.total }}</span></div>
       <div v-if="todo.vital && !compact" class="small muted ellipsis">{{ todo.vital }}</div>
     </div>
     <span class="mono small time" :class="{ warn: todo.timeMin >= 90 }">{{ todo.timeMin }}m</span>

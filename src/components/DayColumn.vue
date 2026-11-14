@@ -2,6 +2,7 @@
 // One day of the unified planner, top → bottom like the paper template:
 //   header · ② Workload bucket (assign day) · ③ Schedule timeline (assign time) · deadlines · notes · sign-off
 // A task dropped in the bucket can be dragged straight down onto a time in the same column.
+import PartBadge from './PartBadge.vue'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, diffDays, CAPACITY_H, autoTimebox, toast, isOverdue, moveBlock, toMin, byPriority, categoryOf, partLabel, isHoverLinked, isLeaf, assignToDay, updateTodo } from '../store'
@@ -103,7 +104,7 @@ function auto() {
           @dragstart="startDrag($event, t)" @dragend="endDrag" @click="ui.drawerId = t.id"
           @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
         >
-          <span class="ttl"><b v-if="partLabel(t)" class="mono pl">{{ partLabel(t) }}</b>{{ t.title }}</span><span class="mono muted">{{ hm(t.timeMin) }}</span>
+          <span class="ttl"><PartBadge v-if="partLabel(t)" :todo="t" class="mono pl" />{{ t.title }}</span><span class="mono muted">{{ hm(t.timeMin) }}</span>
         </div>
       </div>
       <DayTimeline :date="date" :blocks="blocks" :pxh="timelinePx" :dim-fn="filter ? dimBlock : null" @drop-todo="schedule" @open="(id) => (ui.drawerId = id)" @edit="(b) => (ui.blockId = b.id)" />

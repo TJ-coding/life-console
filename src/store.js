@@ -1174,6 +1174,24 @@ export function mergeParts(id) {
   return keep
 }
 
+/** ISS-28: recombine a split task's open parts into one, with an Undo toast that puts every part back. */
+export function mergePartsUndo(id) {
+  const t = findTodo(id)
+  const group = splitSiblings(t)
+  const before = group.map((x) => JSON.parse(JSON.stringify(x)))
+  const keep = mergeParts(id)
+  if (!keep) return null
+  const ids = new Set(before.map((x) => x.id))
+  const where = keep.scheduled ? `${wd(keep.scheduled.date)} ${fmtSlash(keep.scheduled.date)}${keep.scheduled.start ? ' ' + keep.scheduled.start : ''}` : 'the backlog'
+  toast(`Recombined into one task · ${keep.timeMin}m on ${where}`, {
+    label: 'Undo',
+    run: () => {
+      for (let i = state.todos.length - 1; i >= 0; i--) if (ids.has(state.todos[i].id)) state.todos.splice(i, 1)
+      before.forEach((c) => state.todos.push(c))
+    },
+  })
+  return keep
+}
 /**
  * The Split dialog's apply: split `id` into `parts`, with an Undo toast that restores every todo of
  * the group exactly as it was. whole = re-split the whole task: merge its open parts first, so a

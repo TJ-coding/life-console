@@ -41,6 +41,8 @@ Click a task's plan button (backlog cards and workload blocks; **Plan over days 
 
 Anything not given to a day stays in the backlog. **Estimate − / +** changes the budget. `Enter` applies and `Esc` cancels; Apply can be undone from the toast. Opening it again on a planned task shows the current plan to edit (done parts are kept). Under the hood each sitting, each day's untimed rest and the backlog rest is an ordinary task part (`1/3`, `2/3`…, same title, links, priority, due date; existing ids are reused). The workload bucket shows all of a task's parts on one day as **one card** ("4h · 4 times"); the timeline shows each sitting as its own block. If dropping a task overfills a day, a message offers to plan it.
 
+**Recombine a split task:** tap its part badge (`2/3`) anywhere it shows (lists, backlog, workload, timeline) to see all its parts and **Recombine into one task**: the open parts become one task on the earliest part's day and time, with their minutes added up (Undo in the toast). The drawer has the same button.
+
 ### Removing things from the schedule
 - **Timeline ✕**: on a task it only clears the start time (the task stays on that day's list). On a fixed block it removes the block. On a phone the ✕ is always shown while the schedule is unlocked.
 - **Tap a block** (works even when locked): fixed blocks open a dialog with **Remove from schedule**. Tasks open the drawer with **Remove from schedule** (clear the time), **Unschedule from <day>** (back to the backlog) and **Delete**.
