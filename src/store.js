@@ -733,6 +733,43 @@ export function toggleBlockSel(b) {
   else ui.selBlocks.push(k)
 }
 export const clearBlockSel = () => { ui.selBlocks.splice(0) }
+/* ISS-29: selecting tasks in lists, into the same ui.selBlocks the schedule uses (so a task picked in a list
+   lights up on the timeline too). ⌘/Ctrl-click toggles, Shift-click selects the range from the last row
+   clicked (rows in DOM order inside the same [data-sellist]), long-press / right-click toggles; while a
+   selection is open a plain click toggles too. Tasks with subtasks aren't scheduled, so they're skipped. */
+let selAnchor = null
+export const isTodoSel = (t) => ui.selBlocks.includes(`todo:${t.id}`)
+function toggleTodoSel(t) {
+  if (isContainer(t)) return
+  const k = `todo:${t.id}`
+  const i = ui.selBlocks.indexOf(k)
+  if (i >= 0) ui.selBlocks.splice(i, 1)
+  else ui.selBlocks.push(k)
+}
+/** Handle a click on a list row. Returns true when it was a selection click (the caller then does nothing else). */
+export function rowSelectClick(e, t) {
+  const list = e.currentTarget?.closest?.('[data-sellist]')
+  if (e.shiftKey && selAnchor && list) {
+    const keys = [...list.querySelectorAll('[data-bkey]')].map((el) => el.dataset.bkey)
+    const a = keys.indexOf(`todo:${selAnchor}`)
+    const b = keys.indexOf(`todo:${t.id}`)
+    if (a >= 0 && b >= 0) {
+      for (const k of keys.slice(Math.min(a, b), Math.max(a, b) + 1)) {
+        const x = findTodo(k.slice(5))
+        if (x && !isContainer(x) && !ui.selBlocks.includes(k)) ui.selBlocks.push(k)
+      }
+      window.getSelection?.()?.removeAllRanges()
+      return true
+    }
+  }
+  if (e.shiftKey || e.metaKey || e.ctrlKey || e.type === 'contextmenu' || ui.selBlocks.length) {
+    toggleTodoSel(t)
+    selAnchor = t.id
+    return true
+  }
+  selAnchor = t.id
+  return false
+}
 /** Live items behind the selection keys: [{ key, kind, id, date, start, dur }] (gone ones dropped). */
 function selItems() {
   const out = []
@@ -740,7 +777,10 @@ function selItems() {
     const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)]
     if (kind === 'todo') {
       const t = findTodo(id)
-      if (t?.scheduled?.start) out.push({ key, kind, id, date: t.scheduled.date, start: toMin(t.scheduled.start), dur: blockMin(t) })
+      if (!t || t.done) continue
+      // list selections (ISS-29) can hold untimed tasks (start: null) and backlog ones (date: null too)
+      if (t.scheduled?.start) out.push({ key, kind, id, date: t.scheduled.date, start: toMin(t.scheduled.start), dur: blockMin(t) })
+      else out.push({ key, kind, id, date: t.scheduled?.date ?? null, start: null, dur: 0 })
     } else {
       const b = state.timeBlocks.find((x) => x.id === id)
       if (b) out.push({ key, kind, id, date: b.date, start: toMin(b.start), dur: toMin(b.end) - toMin(b.start) })
@@ -750,7 +790,7 @@ function selItems() {
 }
 function snapshotSel(items) {
   return items.map((x) => (x.kind === 'todo'
-    ? { kind: 'todo', id: x.id, scheduled: { ...findTodo(x.id).scheduled } }
+    ? { kind: 'todo', id: x.id, scheduled: findTodo(x.id).scheduled ? { ...findTodo(x.id).scheduled } : null }
     : { kind: 'block', copy: { ...state.timeBlocks.find((b) => b.id === x.id) } }))
 }
 function restoreSel(snap) {
@@ -765,15 +805,21 @@ function restoreSel(snap) {
 }
 /** Move every selected item by `dMin` minutes and `dDays` days (one undo). Refuses if any would leave its day. */
 export function shiftSelected(dMin, dDays = 0) {
-  const items = selItems()
-  if (!items.length) { clearBlockSel(); return false }
-  if (items.some((x) => x.start + dMin < 0 || x.start + dMin + x.dur > 1440)) {
+  // a time shift moves only items with a time; a day shift also moves untimed tasks (backlog ones have no day)
+  const items = selItems().filter((x) => (dMin ? x.start !== null : x.date !== null))
+  if (!items.length) {
+    if (!ui.selBlocks.length) return false
+    toast(dMin ? 'Nothing selected has a time to move' : 'Nothing selected is on a day yet')
+    return false
+  }
+  if (items.some((x) => x.start !== null && (x.start + dMin < 0 || x.start + dMin + x.dur > 1440))) {
     toast(`Can't move ${items.length > 1 ? 'them' : 'it'}: something would run past midnight`)
     return false
   }
   const snap = snapshotSel(items)
   for (const x of items) {
     const date = addDays(x.date, dDays)
+    if (x.start === null) { updateTodo(x.id, { scheduled: { date, start: null } }); continue }
     const s = x.start + dMin
     if (x.kind === 'todo') updateTodo(x.id, { scheduled: { date, start: fromMin(s) } })
     else Object.assign(state.timeBlocks.find((b) => b.id === x.id), { date, start: fromMin(s), end: fromMin(s + x.dur) })
@@ -784,13 +830,14 @@ export function shiftSelected(dMin, dDays = 0) {
   toast(`Moved ${items.length} · ${parts.join(' · ') || 'no change'}`, { label: 'Undo', run: () => restoreSel(snap) })
   return true
 }
-/** Take every selected item off the schedule: tasks stay on their day untimed, fixed blocks are removed (one undo). */
+/** Take every selected item off the schedule, one step: a timed task stays on its day untimed, an untimed
+ *  task goes back to the backlog, fixed blocks are removed (one undo). */
 export function removeSelected() {
-  const items = selItems()
-  if (!items.length) return
+  const items = selItems().filter((x) => x.kind !== 'todo' || x.date !== null)
+  if (!items.length) { toast('Nothing selected is on the schedule'); return }
   const snap = snapshotSel(items)
   for (const x of items) {
-    if (x.kind === 'todo') updateTodo(x.id, { scheduled: { date: x.date, start: null } })
+    if (x.kind === 'todo') updateTodo(x.id, { scheduled: x.start !== null ? { date: x.date, start: null } : null })
     else deleteBlock(x.id)
   }
   clearBlockSel()

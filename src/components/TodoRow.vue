@@ -2,7 +2,7 @@
 // Compact todo row: checkbox · title + vital points · time · L/S/D · linked chips. Draggable.
 import PartBadge from './PartBadge.vue'
 import { computed } from 'vue'
-import { ui, toggleTodo, updateTodo, partLabel, isContainer, subCount, parentPath, sendToNextDay, addDays, todayISO, wd, fmtSlash } from '../store'
+import { ui, toggleTodo, updateTodo, partLabel, isContainer, subCount, parentPath, sendToNextDay, addDays, todayISO, wd, fmtSlash, rowSelectClick, isTodoSel } from '../store'
 import { startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import LsdToggle from './LsdToggle.vue'
 import Chip from './Chip.vue'
@@ -20,9 +20,9 @@ const crumb = computed(() => (props.todo.parent ? parentPath(props.todo) : ''))
 </script>
 <template>
   <div
-    class="trow" :class="[{ done: todo.done, sel: ui.selectedId === todo.id, compact, dim }, dropClass(todo)]" :draggable="!box"
+    class="trow" :class="[{ done: todo.done, sel: ui.selectedId === todo.id, msel: isTodoSel(todo), compact, dim }, dropClass(todo)]" :draggable="!box" :data-bkey="'todo:' + todo.id"
     @dragstart="startDrag($event, todo)" @dragend="endDrag"
-    @dragover="overRow($event, todo)" @dragleave="leaveRow($event, todo)" @drop="dropOnRow($event, todo, { adoptDate })" @click="ui.selectedId = todo.id" @dblclick="ui.drawerId = todo.id"
+    @dragover="overRow($event, todo)" @dragleave="leaveRow($event, todo)" @drop="dropOnRow($event, todo, { adoptDate })" @click="rowSelectClick($event, todo) || (ui.selectedId = todo.id)" @contextmenu.prevent="rowSelectClick($event, todo)" @dblclick="ui.drawerId = todo.id"
   >
     <input type="checkbox" :checked="todo.done" @click.stop @change="toggleTodo(todo.id)" />
     <span v-if="showStart" class="mono small start" :class="{ muted: !todo.scheduled?.start }">{{ todo.scheduled?.start ?? '--:--' }}</span>
@@ -42,6 +42,7 @@ const crumb = computed(() => (props.todo.parent ? parentPath(props.todo) : ''))
   </div>
 </template>
 <style scoped>
+.trow.msel { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
 .trow { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 8px; border-bottom: 1px solid var(--border); cursor: grab; }
 .trow.compact { gap: 5px; padding: 3px 6px; min-height: 26px; font-size: 11px; }
 .trow:hover { background: var(--surface-2); }

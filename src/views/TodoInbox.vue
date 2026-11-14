@@ -3,7 +3,7 @@
 import PartBadge from '../components/PartBadge.vue'
 import { computed, ref, reactive, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
-import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel, isContainer, subCount, parentPath } from '../store'
+import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel, isContainer, subCount, parentPath, rowSelectClick, isTodoSel } from '../store'
 import LsdToggle from '../components/LsdToggle.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -71,7 +71,11 @@ function add() {
 }
 
 /* bulk */
-const picked = ref([])
+/* the ticked rows are the shared selection (ISS-29): same as ⌘/Shift-clicking rows, and what the selection bar acts on */
+const picked = computed({
+  get: () => ui.selBlocks.filter((k) => k.startsWith('todo:')).map((k) => k.slice(5)),
+  set: (ids) => { ui.selBlocks.splice(0, ui.selBlocks.length, ...ui.selBlocks.filter((k) => !k.startsWith('todo:')), ...ids.map((id) => `todo:${id}`)) },
+})
 const allPicked = computed({
   get: () => rows.value.length > 0 && rows.value.every((r) => picked.value.includes(r.id)),
   set: (v) => { picked.value = v ? rows.value.map((r) => r.id) : [] },
@@ -168,10 +172,10 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
               <th>Done</th><th>Prio</th><th>ID</th><th>Title / vital points</th><th>Time</th><th>L/S/D</th><th>Due</th><th>Scheduled</th><th>Linked to</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody data-sellist>
             <tr
-              v-for="t in rows" :key="t.id" class="clickable" :class="[{ done: t.done, selected: ui.selectedId === t.id }, dropClass(t)]" :draggable="!isContainer(t)"
-              @click="open(t)" @dragstart="startDrag($event, t)" @dragend="endDrag" @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t)"
+              v-for="t in rows" :key="t.id" class="clickable" :class="[{ done: t.done, selected: ui.selectedId === t.id, msel: isTodoSel(t) }, dropClass(t)]" :draggable="!isContainer(t)" :data-bkey="'todo:' + t.id"
+              @click="rowSelectClick($event, t) || open(t)" @contextmenu.prevent="rowSelectClick($event, t)" @dragstart="startDrag($event, t)" @dragend="endDrag" @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t)"
             >
               <td @click.stop><input v-model="picked" type="checkbox" :value="t.id" /></td>
               <td @click.stop><input type="checkbox" :checked="t.done" @change="toggleTodo(t.id)" /></td>
@@ -201,8 +205,8 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
 
         <!-- phone (ISS-10): the table's select/id columns waste the width, so cards instead —
              the name leads, then what's next: done · P · time · when · links; open = tap -->
-        <div v-if="rows.length" class="cards">
-          <div v-for="t in rows" :key="t.id" class="card" :class="{ done: t.done }" @click="open(t)">
+        <div v-if="rows.length" class="cards" data-sellist>
+          <div v-for="t in rows" :key="t.id" class="card" :class="{ done: t.done, msel: isTodoSel(t) }" :data-bkey="'todo:' + t.id" @click="rowSelectClick($event, t) || open(t)" @contextmenu.prevent="rowSelectClick($event, t)">
             <div class="r1 row">
               <input type="checkbox" :checked="t.done" title="Done" @click.stop @change="toggleTodo(t.id)" />
               <Prio :p="t.priority" />
@@ -232,6 +236,8 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
 </template>
 
 <style scoped>
+tr.msel td, .card.msel { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+tr.msel td:first-child, .card.msel { box-shadow: inset 2px 0 0 var(--accent); }
 .sub-mark { margin-right: 4px; }
 .crumb { font-size: 0.9em; }
 .subc { font-size: 10px; color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 50%, var(--border)); border-radius: 2px; padding: 0 3px; margin-left: 6px; }

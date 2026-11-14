@@ -291,7 +291,7 @@ function quickAdd() {
         </div>
         <div class="tp-body" :class="{ split: planning }">
           <div class="tp-main">
-            <div class="list" :class="{ 'tl-drop': tlDrag, 'tl-hot': listHot }" @dragleave="(e) => { if (!e.currentTarget.contains(e.relatedTarget)) listHot = false }" @dragover.capture="listDragOverCapture" @drop.capture="listDropCapture" @dragover.prevent @drop.prevent="dropOnList">
+            <div class="list" data-sellist :class="{ 'tl-drop': tlDrag, 'tl-hot': listHot }" @dragleave="(e) => { if (!e.currentTarget.contains(e.relatedTarget)) listHot = false }" @dragover.capture="listDragOverCapture" @drop.capture="listDropCapture" @dragover.prevent @drop.prevent="dropOnList">
               <div v-if="tlDrag" class="tl-hint"><span class="icon sm">{{ tlDrag === 'todo' ? 'schedule' : 'add_task' }}</span>{{ tlDrag === 'todo' ? `Drop here to unschedule · stays on ${isToday ? "today's" : wd(T) + "'s"} list` : `Drop here to make it a task for ${isToday ? 'today' : wd(T)}` }}</div>
               <TodoRow v-for="t in pending" :key="t.id" :todo="t" compact adopt-date show-start show-prio next-day removable :show-links="false" @remove="removeTodo" />
               <template v-if="showDone">
