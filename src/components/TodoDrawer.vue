@@ -2,7 +2,7 @@
 // Right 480px side drawer for editing a todo (spec §2.4 "Side drawer").
 import DateInput from './DateInput.vue'
 import { computed, ref } from 'vue'
-import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast, childrenOf, isContainer, budgetLeft, subCount, ancestorsOf, addSubtask, parseQuick, pomo } from '../store'
+import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergeParts, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, ancestorsOf, addSubtask, parseQuick, pomo } from '../store'
 import Chip from './Chip.vue'
 
 const t = computed(() => (ui.drawerId ? findTodo(ui.drawerId) : null))
@@ -131,6 +131,9 @@ const dayName = computed(() => {
         <div v-if="t.scheduled && !box" class="unsched">
           <button v-if="t.scheduled.start" class="btn sm" title="Clear the start time: off the timeline, still on that day's list (undo in the toast)" @click="unscheduleTodo(t.id, 'time')">
             <span class="icon sm">event_busy</span>Remove from schedule
+          </button>
+          <button v-if="!t.done" class="btn sm" title="Move to the next day, same start time (>) · undo in the toast" @click="sendToNextDay(t.id)">
+            <span class="icon sm">redo</span>Move to next day
           </button>
           <button class="btn sm" title="Back to the backlog — no day, no time (undo in the toast)" @click="unscheduleTodo(t.id, 'day')">
             <span class="icon sm">move_to_inbox</span>Unschedule from {{ dayName }}

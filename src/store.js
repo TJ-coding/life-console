@@ -685,6 +685,16 @@ export function unscheduleTodo(id, how = 'time') {
     label: 'Undo', run: () => updateTodo(id, { scheduled: prev }),
   })
 }
+/** ISS-31: move a todo to the day after the one it's on (keeping its start time), or to tomorrow from the
+ *  backlog, with undo. Containers aren't scheduled themselves, so they're left alone. */
+export function sendToNextDay(id) {
+  const t = findTodo(id)
+  if (!t || t.done || isContainer(t)) return
+  const prev = t.scheduled ? { ...t.scheduled } : null
+  const date = addDays(prev?.date ?? todayISO(), 1)
+  updateTodo(id, { scheduled: { date, start: prev?.start ?? null } })
+  toast(`${id} → ${wd(date)} ${fmtSlash(date)}${prev?.start ? ' ' + prev.start : ''}`, { label: 'Undo', run: () => updateTodo(id, { scheduled: prev }) })
+}
 /** Delete a todo with an undo toast (never a hard delete without a way back). */
 export function deleteTodoUndo(id) {
   const t = findTodo(id)

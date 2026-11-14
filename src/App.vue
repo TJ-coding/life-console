@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ui, state, todayISO, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf } from './store'
+import { ui, state, todayISO, sendToNextDay, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf } from './store'
 import { NAV } from './nav'
 import CommandPalette from './components/CommandPalette.vue'
 import TodoDrawer from './components/TodoDrawer.vue'
@@ -165,6 +165,7 @@ function onKey(e) {
       break
     }
     case 'enter': if (ui.selectedId) ui.drawerId = ui.selectedId; break
+    case '>': if (ui.selectedId) sendToNextDay(ui.selectedId); break // ISS-31
     case '[':
     case ']': {
       const dir = k === '[' ? -1 : 1
