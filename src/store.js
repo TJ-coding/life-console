@@ -392,6 +392,7 @@ export const ui = reactive({
     } catch { /* ignore */ }
     return true
   })(),
+  dayPlanning: false, // ISS-38: Today / day view with the backlog column open (plan the day); survives stepping days
   backlogOnly: false, // Plan week: hide the day columns, spread the backlog over the next weeks (ISS-16)
   hoverId: null, // todo under the pointer — highlighted in backlog, bucket and timeline at once
   planMode: (() => { try { return localStorage.getItem('life-console/plan-mode') || 'both' } catch { return 'both' } })(), // 'days' | 'both' | 'times'

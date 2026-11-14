@@ -130,8 +130,10 @@ function dropOnList(e) {
   else updateTodo(t.id, { scheduled: { date: T.value, start: null } })
 }
 /* ── plan the day: pull tasks from the backlog into this day's list, one click each ── */
-const planning = ref(false) // the backlog column beside the day's list
-watch(T, () => { planning.value = false })
+// the backlog column beside the day's list. ISS-38: kept on ui so it stays open while stepping days
+// (← →, ‹ ›) — the day planner — and opened by Plan week's Day button (?plan=1); past days can't be planned
+const planning = computed({ get: () => ui.dayPlanning && T.value >= today.value, set: (v) => { ui.dayPlanning = v } })
+watch(() => route.query.plan, (p) => { if (p === '1') ui.dayPlanning = true }, { immediate: true })
 /** A backlog task dropped anywhere on the list (rows included) just joins the day: no reorder, no
  *  priority change. Capture phase, so the rows' own reorder handlers never see it. */
 const fromBacklog = () => { const t = ui.dragId && findTodo(ui.dragId); return t && !t.scheduled ? t : null }
