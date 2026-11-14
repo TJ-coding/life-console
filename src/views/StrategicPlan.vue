@@ -1,9 +1,10 @@
 <script setup>
 // S-30 · Strategic Plan (Goals Planner) — Vision → PSG → SIG cascade with tables and review widgets.
 import DateInput from '../components/DateInput.vue'
+import AddDeadline from '../components/AddDeadline.vue'
 import { computed, ref, nextTick, reactive, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { state, ui, todayISO, fmtSlash, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel, moveSig, renameGoalNo, nextSigNo, isPsgNo, GOAL_NO_MAX } from '../store'
+import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel, moveSig, renameGoalNo, nextSigNo, isPsgNo, GOAL_NO_MAX } from '../store'
 import PlanTabs from '../components/PlanTabs.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -254,18 +255,6 @@ const planDeadlines = computed(() => {
 const openPlanDeadlines = computed(() => planDeadlines.value.filter((d) => !d.done))
 const dlOf = (no) => openPlanDeadlines.value.filter((d) => d.source === no)
 const dlLeft = (d) => (minsTo(effDue(d)) <= 0 ? 'overdue' : countdown(effDue(d)))
-/* ISS-36: link a deadline that already exists (soonest open ones not in this plan yet) to the plan */
-const linkableDeadlines = computed(() => {
-  const ids = new Set(planIds(plan.value))
-  return state.deadlines.filter((d) => !d.done && !ids.has(d.source)).sort((a, b) => effDue(a).localeCompare(effDue(b)))
-})
-function linkDeadline(id) {
-  const d = state.deadlines.find((x) => x.id === id)
-  if (!d) return
-  const prev = d.source
-  d.source = plan.value.planNo
-  toast(`${d.id} linked to ${plan.value.planNo}${prev ? ` (was ${prev})` : ''} · open it to pick a goal`, { label: 'Undo', run: () => { d.source = prev } })
-}
 function planDeadline() {
   goalDeadline({ no: plan.value.planNo, name: plan.value.title, priority: 3, timeBound: '' })
 }
@@ -413,7 +402,7 @@ const print = () => window.print()
                   <td class="mono" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</td>
                   <td>
                     <div class="row acts">
-                      <button class="btn sm icon-only" title="Add a deadline for this PSG" @click.stop="goalDeadline(p)"><span class="icon sm">alarm_add</span></button>
+                      <AddDeadline :no="p.no" label="this PSG" @new="goalDeadline(p)" />
                       <button class="btn sm icon-only danger-ghost" title="Delete this PSG (and its SIGs)" @click.stop="removePsg(p)"><span class="icon sm">delete</span></button>
                     </div>
                   </td>
@@ -460,7 +449,7 @@ const print = () => window.print()
                   <td><input :value="dv(s, 'pct')" type="number" min="0" max="100" step="5" class="input ghost w mono" :class="pctClass(s.pct)" @focus="dFocus(s, 'pct')" @input="draft.text = $event.target.value" @change="draft.obj = null; setPct(s, $event.target.value)" @blur="dBlur(s, 'pct')" @keydown.enter="$event.target.blur()" /></td>
                   <td>
                     <div class="row acts">
-                      <button class="btn sm icon-only" title="Add a deadline for this SIG" @click.stop="goalDeadline(s)"><span class="icon sm">alarm_add</span></button>
+                      <AddDeadline :no="s.no" label="this SIG" @new="goalDeadline(s)" />
                       <button class="btn sm icon-only" title="Create todo for this SIG" @click.stop="todoFor(s)"><span class="icon sm">add_task</span></button>
                       <button class="btn sm icon-only danger-ghost" title="Delete this SIG" @click.stop="removeSig(s)"><span class="icon sm">delete</span></button>
                     </div>
@@ -479,7 +468,7 @@ const print = () => window.print()
           <section class="panel">
             <div class="panel-h"><span class="icon sm danger">alarm</span><h3>Deadlines</h3><span class="spacer"></span>
               <span class="mono small muted">{{ openPlanDeadlines.length }} open</span>
-              <button class="btn sm icon-only" title="Add a deadline for this plan" @click="planDeadline"><span class="icon sm">alarm_add</span></button>
+              <AddDeadline :no="plan.planNo" label="this plan" :have="planIds(plan)" @new="planDeadline" />
             </div>
             <div class="lt">
               <div v-for="d in planDeadlines" :key="d.id" class="lt-row" :class="[fx('deadlines', d.id), { done: d.done }]" :title="`${d.title}${d.vital ? ' · ' + d.vital : ''} — click to edit`" @click="ui.deadlineId = d.id">
@@ -488,12 +477,8 @@ const print = () => window.print()
                 <span class="mono small muted">{{ d.due.slice(5, 10) }}</span>
                 <Chip :id="d.source" />
               </div>
-              <div v-if="!planDeadlines.length" class="empty">No deadlines for this plan yet. Use <span class="icon sm">alarm_add</span> on a goal, or link one below.</div>
+              <div v-if="!planDeadlines.length" class="empty">No deadlines for this plan yet. Use <span class="icon sm">alarm_add</span> here or on a goal.</div>
             </div>
-            <select v-if="linkableDeadlines.length" class="select sm link-dl" title="Link a deadline you already have to this plan" @change="linkDeadline($event.target.value); $event.target.value = ''">
-              <option value="">＋ Link existing deadline…</option>
-              <option v-for="d in linkableDeadlines" :key="d.id" :value="d.id">{{ d.title }} · {{ fmtSlash(d.due) }}{{ d.source ? ` · ${d.source}` : '' }}</option>
-            </select>
           </section>
 
           <!-- check schedule -->
@@ -578,7 +563,6 @@ const print = () => window.print()
 </template>
 
 <style scoped>
-.link-dl { margin: 6px 10px 10px; width: calc(100% - 20px); }
 .sp { display: flex; flex-direction: column; min-height: 100%; }
 .status-sel { height: 26px; font-size: 11px; color: var(--accent); border-color: var(--accent); }
 .status-sel.paused { color: var(--warn); border-color: var(--warn); }
