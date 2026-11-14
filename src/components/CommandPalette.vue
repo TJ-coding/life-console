@@ -3,7 +3,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { allPsgs, allSigs, planOfGoal, ui, state, addTodo, parseQuick, stampNext, todayISO, addDays, toggleTheme, resetDemo, toast, STAMPS, findTodo, sendToNextDay } from '../store'
-import { NAV } from '../nav'
+import { registry } from '../sdk'
 import Chip from './Chip.vue'
 import { openIssueDialog } from '../issues'
 
@@ -35,9 +35,8 @@ const contextDate = computed(() => {
 /** The selected task, if it can move to the next day. */
 const selTodo = () => { const t = ui.selectedId ? findTodo(ui.selectedId) : null; return t && !t.done ? t : null }
 const commands = computed(() => [
-  ...NAV.map((n) => ({ label: `Go to ${n.label}`, icon: n.icon, hint: n.key1, run: () => router.push(n.to) })),
-  { label: 'Briefing (morning review)', icon: 'wb_sunny', run: () => router.push('/briefing') },
-  { label: 'Debrief (evening review)', icon: 'bedtime', run: () => router.push('/debrief') },
+  ...registry.nav.map((n) => ({ label: `Go to ${n.label}`, icon: n.icon, hint: n.key1, run: () => router.push(n.to) })),
+  ...registry.commands.map((c) => ({ ...c, run: () => c.run({ router, route }) })), // the modules' own commands
   { label: 'New todo…', icon: 'add', hint: 'N', run: () => { ui.paletteMode = 'add'; q.value = ''; return false } },
   // ISS-31: only offered while a task is selected (the drawer's button and the > key do the same)
   ...(selTodo() ? [{ label: `Move "${selTodo().title}" to the next day`, icon: 'redo', hint: '>', run: () => sendToNextDay(selTodo().id) }] : []),

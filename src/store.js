@@ -1,6 +1,7 @@
 // Central reactive store for the prototype. Persisted to localStorage.
 import { reactive, watch, computed } from 'vue'
 import { rhythm, wallMin, workIn, segments } from '../server/pomodoro.mjs'
+import { LINK_TYPES, FALLBACK_LINK, RESERVED_PREFIXES } from '../modules/data.js'
 import { SCHEMA_VERSION, migrateDoc, normalizeDoc, ensureOrderDoc, ensureSettingsDoc, NOTIFY_DEFAULTS } from '../server/schema.mjs'
 
 /* ───────────── date / time helpers ───────────── */
@@ -81,14 +82,12 @@ function goalMap() {
 export const isGoalNo = (no) => goalMap().has(String(no))
 export const isPsgNo = (no) => goalMap().get(String(no)) === 'psg'
 
+/** What a link id points at. The person's goal names first, then the modules' prefixes (modules/data.js), else the fallback (a course). */
 export function linkType(id) {
-  if (isGoalNo(id) || /^(PSG|SIG)-/.test(id)) return 'goal' // goal numbers are free-form: look them up first
-  if (/^DL-/.test(id)) return 'deadline'
-  if (/^SP-/.test(id)) return 'plan'
-  if (/^R-/.test(id)) return 'risk'
-  if (/^IPB-/.test(id)) return 'ipb'
-  if (/^KZ-/.test(id)) return 'kaizen'
-  return 'course'
+  if (isGoalNo(id)) return 'goal' // goal numbers are free-form: look them up first
+  const s = String(id)
+  for (const t of LINK_TYPES) if (s.startsWith(t.prefix)) return t.kind
+  return FALLBACK_LINK
 }
 export function categoryOf(todo) {
   const types = todo.links.map(linkType)
@@ -987,7 +986,7 @@ export function moveSig(sig, psgNo) {
    links (quick-add `@NO`, which splits on spaces). Unique across all plans, ignoring case; whether a number is a PSG
    or a SIG comes from the data, never from its prefix. */
 export const GOAL_NO_MAX = 10
-const RESERVED = /^(DL|SP|T|R|IPB|KZ)-/i // other link types' prefixes (linkType)
+const RESERVED = new RegExp(`^(${RESERVED_PREFIXES.map((p) => p.slice(0, -1)).join('|')})-`, 'i') // other link types' prefixes (modules/data.js)
 const goalTaken = (no, except = null) => [...goalMap().keys()].some((k) => k !== except && k.toLowerCase() === String(no).toLowerCase())
 /** Check a typed goal number. Returns { no } or { error }. */
 export function checkGoalNo(value, except = null) {

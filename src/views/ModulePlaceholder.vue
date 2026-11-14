@@ -1,10 +1,11 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { NAV, PLANNED } from '../nav'
+import { registry } from '../sdk'
 const route = useRoute()
-const mod = computed(() => NAV.find((n) => n.key === route.params.module))
-const screens = computed(() => PLANNED[route.params.module] ?? [])
+// a module that's registered but not built yet lists the spec's planned screens (modules/<id>/index.js `planned`)
+const mod = computed(() => registry.nav.find((n) => n.key === route.params.module))
+const screens = computed(() => registry.byId[route.params.module]?.planned ?? [])
 </script>
 <template>
   <div class="ph">

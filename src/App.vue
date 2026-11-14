@@ -5,7 +5,7 @@ installBoxSelect() // ISS-29: drag a box on a timeline to select blocks
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ui, state, todayISO, sendToNextDay, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf } from './store'
-import { NAV } from './nav'
+import { registry } from './sdk'
 import CommandPalette from './components/CommandPalette.vue'
 import TodoDrawer from './components/TodoDrawer.vue'
 import SplitDialog from './components/SplitDialog.vue'
@@ -24,13 +24,8 @@ import TourOverlay from './components/TourOverlay.vue'
 
 const SYNC_TEXT = { outdated: 'RELOAD', choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', guest: 'GUEST', error: 'ERROR' }
 const SYNC_ICON = { outdated: 'system_update', choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', guest: 'person_off', error: 'error' }
-const TABS = [
-  { to: '/', icon: 'radar', label: 'Today', key: 'today' },
-  { to: '/week', icon: 'calendar_month', label: 'Plan', key: 'week' },
-  { to: '/todos', icon: 'checklist', label: 'Todos', key: 'todos' },
-  { to: '/deadlines', icon: 'alarm', label: 'Deadlines', key: 'deadlines' },
-  { to: '/settings', icon: 'settings', label: 'Settings', key: 'settings' },
-]
+const NAV = registry.nav // sidebar, in module order (modules/index.js)
+const TABS = registry.tabs // phone tab bar: the nav entries with a `tab` label
 
 // "What now" — shown in the top bar on every screen and in the browser tab title.
 const now = useNow()
@@ -60,7 +55,7 @@ watch(() => state.tour === 'pending' && !showAuth.value && ['synced', 'local', '
 }, { immediate: true })
 const openCount = computed(() => state.todos.filter((t) => !t.done && isLeaf(t)).length)
 const overdueCount = computed(() => { void ui.now.getMinutes(); return state.deadlines.filter(isOverdue).length })
-const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.name === 'day' ? 'today' : route.name === 'plans' ? 'strategy' : route.name))
+const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.meta.nav ?? route.name)) // meta.nav: e.g. /day/… lights Today
 
 // the left menu is hideable on desktop; the choice is remembered per device
 const sideOpen = ref((() => { try { return localStorage.getItem('life-console/sidebar') !== 'hidden' } catch { return true } })())
@@ -135,7 +130,7 @@ function onKey(e) {
   if (gPending) {
     gPending = false
     clearTimeout(gTimer)
-    const to = { s: '/strategy', i: '/todos', t: '/', w: '/week', c: '/', l: '/week?mode=days', d: '/deadlines', b: '/issues' }[k]
+    const to = registry.chords[k] // G-chords come from the modules' manifests
     if (to) { router.push(to); e.preventDefault() }
     return
   }
@@ -232,7 +227,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <span v-if="n.key === 'todos'" class="mono tiny count">{{ openCount }}</span>
           <span v-else-if="n.key === 'deadlines' && overdueCount" class="mono tiny count over" title="Overdue">{{ overdueCount }}</span>
           <span v-else-if="n.key === 'issues' && openIssueCount()" class="mono tiny count" title="Open issues">{{ openIssueCount() }}</span>
-          <span v-else-if="n.to.startsWith('/m/')" class="mono tiny muted">soon</span>
+          <span v-else-if="n.soon" class="mono tiny muted">soon</span>
         </router-link>
       </nav>
       <div class="spacer"></div>
@@ -290,7 +285,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
       <nav v-if="!route.meta.sheet" class="tabbar" aria-label="Main">
         <router-link v-for="t in TABS" :key="t.key" :to="t.to" class="tab" :class="{ on: activeKey === t.key }">
-          <span class="icon">{{ t.icon }}</span><span>{{ t.label }}</span>
+          <span class="icon">{{ t.icon }}</span><span>{{ t.tab }}</span>
           <i v-if="t.key === 'deadlines' && overdueCount" class="tabbadge">{{ overdueCount }}</i>
         </router-link>
       </nav>
