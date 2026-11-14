@@ -9,6 +9,9 @@
 //   disable --email E | enable --email E       block / unblock sign-in
 //   set-password --email E [--password P]     (prints a generated one if omitted; signs out every device)
 //   create-token --email E [--name N]          API token for scripts (npm run issues): printed once
+//   check-docs [--revisions] [--prefix LEC-,X-]
+//                                              read-only: migrate/normalise/merge every planner on a copy; prints only totals
+//                                              (problems, schema versions, sizes); --prefix counts goals already named that way
 //   revisions --email E                        planner snapshots for an account
 //   restore --email E --revision ID            put a snapshot back (the current copy is snapshotted first)
 //   metrics [--day YYYY-MM-DD] [--days N] [--send]
@@ -27,6 +30,7 @@ import { users, plannerDocs, plannerRevisions, pushSubscriptions, issues, appKv,
 import { createAuth, normEmail } from './auth.mjs'
 import { createPlanner } from './planner.mjs'
 import { issueNo, platformFromUA } from './issues.mjs'
+import { checkDocs } from './checkdocs.mjs'
 import { computeMetrics, sendToUmami, utcDay, addDays, labelled } from './metrics.mjs'
 
 const argv = process.argv.slice(2)
@@ -48,6 +52,24 @@ const userBy = async (email) => {
 const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return d } }
 
 const commands = {
+  /** Read-only: run the schema code over every stored planner (and, with --revisions, every snapshot); totals only. */
+  async 'check-docs'() {
+    const prefixes = (opt('prefix') || '').split(',').map((s) => s.trim()).filter(Boolean)
+    const docs = (await db.select({ state: plannerDocs.state }).from(plannerDocs).where(sql`${plannerDocs.version} > 0`)).map((r) => r.state)
+    const report = { planners: checkDocs(docs, { prefixes }) }
+    if (has('revisions')) {
+      const states = []
+      for (let after = 0; ;) {
+        const page = await db.select({ id: plannerRevisions.id, state: plannerRevisions.state }).from(plannerRevisions).where(sql`${plannerRevisions.id} > ${after}`).orderBy(plannerRevisions.id).limit(200)
+        if (!page.length) break
+        states.push(...page.map((r) => r.state))
+        after = page[page.length - 1].id
+      }
+      report.snapshots = checkDocs(states)
+    }
+    console.log(JSON.stringify(report, null, 2))
+    if (report.planners.failed || report.snapshots?.failed) process.exitCode = 1
+  },
   async metrics() {
     const last = opt('day') || addDays(utcDay(), -1)
     const n = Number(opt('days') || 1)

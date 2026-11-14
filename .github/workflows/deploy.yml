@@ -75,9 +75,21 @@ jobs:
           curl -fs localhost:8080/manifest.webmanifest | grep -q '"standalone"'
           curl -fs -b jar localhost:8080/api/state | grep -q 'survives upgrade'
           curl -fs -b jar localhost:8080/api/push/key | grep -q publicKey
-          # 3. backups and the admin CLI work inside the image
+          # 3. backups and the admin CLI work inside the image; the stored planners pass the schema check
           LC_IMAGE=life-console LC_VERSION=ci docker compose exec -T app node server/cli.mjs backup
           LC_IMAGE=life-console LC_VERSION=ci docker compose exec -T app node server/cli.mjs users | grep -q ci@example.com
+          # the new build saves a planner with module data (keys the previous release doesn't know)
+          curl -fs -b jar -X PUT -H 'Content-Type: application/json' -d '{"state":{"schemaVersion":2,"todos":[{"id":"T-1","title":"survives upgrade"}],"modules":{"ci":{"items":[{"id":"x1","note":"survives rollback"}]}},"moduleVersions":{"ci":1}},"baseVersion":1}' localhost:8080/api/state | grep -q '"version":2'
+          LC_IMAGE=life-console LC_VERSION=ci docker compose exec -T app node server/cli.mjs check-docs --revisions
+          # 4. ROLLBACK: the previous release runs on the same database again, keeps the new keys and can still save
+          LC_IMAGE=$FROM LC_VERSION=$FROM_TAG docker compose up -d --no-build app
+          sleep 3; wait_healthy
+          curl -fs -b jar localhost:8080/api/state | grep -q 'survives rollback'
+          curl -fs -b jar -X PUT -H 'Content-Type: application/json' -d '{"state":{"schemaVersion":2,"todos":[{"id":"T-1","title":"saved after rollback"}],"modules":{"ci":{"items":[{"id":"x1","note":"survives rollback"}]}},"moduleVersions":{"ci":1}},"baseVersion":2}' localhost:8080/api/state | grep -q '"version":3'
+          # 5. and forward again
+          LC_IMAGE=life-console LC_VERSION=ci docker compose up -d --no-build app
+          sleep 3; wait_healthy
+          curl -fs -b jar localhost:8080/api/state | grep -q 'saved after rollback'
           docker compose logs app | tail -20
           docker compose down -v
       - name: Set up QEMU (arm64 image)

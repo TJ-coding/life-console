@@ -60,7 +60,7 @@ Notifications travel **server → Apple/Google push services → phone**. The pu
 
 | Path | What |
 |---|---|
-| `src/` | Vue 3 front end (`store.js` = data + client-side schema migrations, `sync.js`, `merge.js`, `auth.js`, `push.js`, `views/`, `components/`) |
+| `src/` | Vue 3 front end (`store.js` = data, `sync.js`, `merge.js`, `auth.js`, `push.js`, `views/`, `components/`) |
 | `public/` | Static files: `sw.js` (service worker), `manifest.webmanifest`, `icons/` |
 | `server/server.mjs` | Entry: connect → migrate → listen → scheduler |
 | `server/app.mjs` | HTTP routes (static + `/api/*`), CSRF and auth checks |
@@ -193,7 +193,7 @@ Every device also keeps a copy of its user's planner in the browser. Signing out
 
 ### 6.4 Changing data shapes: two kinds of migration
 
-**a) The planner document (`state`, client-side).** This works as before. Bump `SCHEMA_VERSION` in `src/store.js` and add `MIGRATIONS[n]`, keeping it idempotent and never editing old steps. Clients migrate documents on load, on sync and on import. The server stores `schema_version` and refuses older writes, so a stale tab can't undo an upgrade. Test the step on a copy of a real planner (`revisions` / a dump) first.
+**a) The planner document (`state`, client-side).** Bump `SCHEMA_VERSION` in `server/schema.mjs` and add `MIGRATIONS[n]`, keeping it idempotent and never editing old steps. Clients migrate documents on load, on sync and on import. The server stores `schema_version` and refuses older writes, so a stale tab can't undo an upgrade. Prefer an optional field with a default (no bump): a bump can't be rolled back cleanly, because older tabs then refuse the data. Test the step in `test/state.test.mjs`, then run the read-only check on the server: `docker compose exec app node server/cli.mjs check-docs --revisions`. It runs migrations, normalising and the merge over every stored planner and snapshot on a copy and prints only totals (problem types, schema versions, sizes), so no planner leaves the server.
 
 **b) The database (server-side, Drizzle).** Edit `server/db/schema.js`, run `npm run db:generate -- --name what_changed`, read the generated SQL in `server/db/migrations/`, and commit both. The server applies it on start. CI fails if you forget to generate.
 

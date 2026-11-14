@@ -1,6 +1,7 @@
 // Central reactive store for the prototype. Persisted to localStorage.
 import { reactive, watch, computed } from 'vue'
-import { rhythm, wallMin, workIn, segments, POMODORO_DEFAULTS } from '../server/pomodoro.mjs'
+import { rhythm, wallMin, workIn, segments } from '../server/pomodoro.mjs'
+import { SCHEMA_VERSION, migrateDoc, normalizeDoc, ensureOrderDoc, ensureSettingsDoc, NOTIFY_DEFAULTS } from '../server/schema.mjs'
 
 /* ───────────── date / time helpers ───────────── */
 export const pad = (n) => String(n).padStart(2, '0')
@@ -215,64 +216,16 @@ export const hadLocalData = loaded !== null
 export const state = reactive(loaded ?? seed())
 stateReady = true
 /** Every todo carries a numeric `order` used to rank todos that share a priority. */
-export function ensureOrder() {
-  state.todos?.forEach((t, i) => { if (typeof t.order !== 'number') t.order = (i + 1) * 1000 })
-}
-/** Notification preferences live in the synced document so the server scheduler can read them. */
-export const NOTIFY_DEFAULTS = {
-  notify: { blocks: true, deadlines: true, daily: true, wellbeing: true, vibrate: true, pomodoro: true },
-  pomodoro: { ...POMODORO_DEFAULTS }, // work/short/long minutes, long break after `every` pomodoros
-  shareUsage: true, // anonymous usage statistics, when the server collects them (Settings → Privacy)
-  blockLeadMin: 5, briefingTime: '07:30', eveningTime: '21:00', bedTime: '23:00', windDownMin: 60, caffeineWarnMin: 30,
-}
+export const ensureOrder = () => ensureOrderDoc(state)
+export { NOTIFY_DEFAULTS, SCHEMA_VERSION, migrateDoc }
 export function ensureSettings() {
-  if (!state.settings) state.settings = {}
-  const s = state.settings
-  for (const [k, v] of Object.entries(NOTIFY_DEFAULTS)) if (s[k] === undefined) s[k] = typeof v === 'object' ? { ...v } : v
-  for (const [k, v] of Object.entries(NOTIFY_DEFAULTS.notify)) if (s.notify[k] === undefined) s.notify[k] = v
-  for (const [k, v] of Object.entries(POMODORO_DEFAULTS)) if (s.pomodoro[k] === undefined) s.pomodoro[k] = v
+  ensureSettingsDoc(state)
   // the server schedules in this timezone; keep it in step with the device you're using
   let tz = 'UTC'
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { /* ignore */ }
-  if (s.timezone !== tz) s.timezone = tz
+  if (state.settings.timezone !== tz) state.settings.timezone = tz
 }
-/* ───────────── schema migrations ─────────────
- * Each step upgrades a stored document by one version. They run on every load / sync / import,
- * so data saved by older versions of the app (on the server or in a browser) keeps working.
- * To change the data shape: bump SCHEMA_VERSION and add the next numbered step. Never edit old steps.
- */
-export const SCHEMA_VERSION = 2
-const PLAN_STATUSES = ['active', 'paused', 'archived']
-function planV2(p) {
-  const legacyLabel = typeof p.status === 'string' && !PLAN_STATUSES.includes(p.status) ? p.status : null
-  return {
-    ...p,
-    id: p.id ?? p.planNo ?? 'SP-01',
-    status: PLAN_STATUSES.includes(p.status) ? p.status : 'active',
-    health: p.health ?? (legacyLabel ? legacyLabel.replace(/^Active\s*·\s*/i, '') : 'On-track'),
-  }
-}
-const MIGRATIONS = {
-  // v1 → v2: a single strategic plan (`plan`) becomes a list (`plans`), each with an id and status
-  2(doc) {
-    if (!Array.isArray(doc.plans)) doc.plans = []
-    if (doc.plan) {
-      const p = planV2(doc.plan)
-      if (!doc.plans.some((x) => x.id === p.id)) doc.plans.unshift(p)
-      delete doc.plan
-    }
-    doc.plans = doc.plans.map(planV2)
-  },
-}
-/** Upgrade a document in place to SCHEMA_VERSION (idempotent; tolerates stale clients re-adding old fields). */
-export function migrateDoc(doc) {
-  if (!doc || typeof doc !== 'object') return doc
-  let v = Number(doc.schemaVersion) || 1
-  while (v < SCHEMA_VERSION) { MIGRATIONS[v + 1](doc); v += 1 }
-  if (doc.plan) MIGRATIONS[2](doc) // an out-of-date device synced the old field back
-  doc.schemaVersion = SCHEMA_VERSION
-  return doc
-}
+/* Schema migrations and the document's defaults live in server/schema.mjs (pure, shared with the server). */
 
 /**
  * Backfill: a task linked to a deadline (a `DL-…` link) inherits that date as its due when its own
@@ -291,16 +244,8 @@ function backfillLinkedDues() {
 
 /** Bring any loaded / synced / imported document up to the current shape. */
 export function normalizeState() {
-  migrateDoc(state)
-  ensureOrder()
-  ensureSettings()
-  // SIGs may depend on other SIGs (ISS-5); the field is optional, so default it instead of a migration
-  for (const p of state.plans ?? []) for (const s of p.sigs ?? []) if (!Array.isArray(s.deps)) s.deps = []
-  // an internal (earlier, personal) deadline beside the hard due date (ISS-9); also optional
-  for (const d of state.deadlines ?? []) {
-    if (d.internal === undefined) d.internal = ''
-    delete d.clickUp // the mock ClickUp sync was removed; the field was never used for anything else
-  }
+  normalizeDoc(state)
+  ensureSettings() // + this device's timezone
   backfillLinkedDues()
   syncContainers()
 }
