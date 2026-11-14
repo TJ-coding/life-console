@@ -5,7 +5,6 @@
 // each day column (workload bucket, schedule). Both lit = both shown; click one to focus it,
 // click it again to show both.
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { state, ui, todayISO, addDays, mondayOf, isoWeek, fmtMD, setScheduleLock, LOCK_HELP, touchUI, backlogFor } from '../store'
 
 const weekEnd = computed(() => addDays(ui.weekStart, 6))
@@ -15,14 +14,6 @@ const backlog = computed(() => backlogFor(ui.weekStart).length) // this week's +
 const assigned = computed(() => state.todos.filter((t) => !t.done && t.scheduled && inWeek(t.scheduled.date)))
 const timed = computed(() => assigned.value.filter((t) => t.scheduled.start).length)
 const pct = computed(() => (assigned.value.length ? Math.round((timed.value / assigned.value.length) * 100) : 100))
-const router = useRouter()
-/** ISS-38: plan one day = the Command Center for that day with the backlog beside it (today if it's in this week). */
-function planDay() {
-  const t = todayISO()
-  const d = t >= ui.weekStart && t <= weekEnd.value ? t : ui.weekStart < t ? weekEnd.value : ui.weekStart
-  ui.dayPlanning = true
-  router.push(d === t ? '/?plan=1' : `/day/${d}?plan=1`)
-}
 const shift = (n) => { ui.weekStart = addDays(ui.weekStart, n * 7) }
 const shows = (m) => !ui.backlogOnly && (ui.planMode === m || ui.planMode === 'both')
 const setMode = (step) => {
@@ -36,10 +27,6 @@ const setMode = (step) => {
 <template>
   <div class="weekbar">
     <div class="weeksel">
-      <div class="seg" role="group" aria-label="Week or day">
-        <button class="btn sm active" aria-pressed="true" title="Plan the whole week (here)">Week</button>
-        <button class="btn sm" aria-pressed="false" title="Plan one day: Today / the day view with the backlog beside its list and schedule" @click="planDay">Day</button>
-      </div>
       <button class="btn icon-only" title="Previous week ( [ )" @click="shift(-1)"><span class="icon sm">chevron_left</span></button>
       <span class="mono wk">W{{ isoWeek(ui.weekStart) }} · {{ fmtMD(ui.weekStart) }} – {{ fmtMD(weekEnd) }}</span>
       <button class="btn icon-only" title="Next week ( ] )" @click="shift(1)"><span class="icon sm">chevron_right</span></button>
@@ -74,10 +61,6 @@ const setMode = (step) => {
 </template>
 
 <style scoped>
-.seg { display: inline-flex; margin-right: 4px; }
-.seg .btn { border-radius: 0; }
-.seg .btn:first-child { border-radius: 2px 0 0 2px; }
-.seg .btn:last-child { border-radius: 0 2px 2px 0; margin-left: -1px; }
 .weekbar { display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .weeksel { display: flex; align-items: center; gap: 6px; }
 .wk { font-weight: 600; min-width: 170px; text-align: center; }

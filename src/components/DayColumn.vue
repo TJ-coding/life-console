@@ -15,7 +15,8 @@ import Stamps from './Stamps.vue'
 import Prio from './Prio.vue'
 
 const router = useRouter()
-const openDay = () => router.push(props.date === todayISO() ? '/' : `/day/${props.date}`)
+// ISS-38: a day in Plan week opens it in the Command Center with the backlog beside it, to plan that day
+const openDay = () => { ui.dayPlanning = true; router.push(props.date === todayISO() ? '/?plan=1' : `/day/${props.date}?plan=1`) }
 // balance: ② Assign day only — { avg, counts (days the average covers), rows, moves } from the planner
 const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object })
 /* ② Assign day: the space under the day does that day's job — on an over-full day, what to move out
@@ -64,7 +65,7 @@ function auto() {
 
 <template>
   <div class="day panel" :class="{ today: isToday, past }" :data-date="date">
-    <header class="dh" role="link" tabindex="0" :title="`Open ${wd(date)} ${fmtSlash(date)} in day view`" @click="openDay" @keydown.enter="openDay">
+    <header class="dh" role="link" tabindex="0" :title="`Plan ${wd(date)} ${fmtSlash(date)}: open it with the backlog beside it`" @click="openDay" @keydown.enter="openDay">
       <div class="row">
         <span class="ja">{{ wdJa(date) }}</span>
         <span class="mono md">{{ fmtSlash(date) }}</span>
