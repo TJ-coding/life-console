@@ -4,6 +4,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { allPsgs, allSigs, planOfGoal, ui, state, addTodo, parseQuick, stampNext, todayISO, addDays, toggleTheme, resetDemo, toast, STAMPS, findTodo, sendToNextDay } from '../store'
 import { registry } from '../sdk'
+import { edition, editions, setEdition, isEnabled, feature } from '../edition'
 import Chip from './Chip.vue'
 import { openIssueDialog } from '../issues'
 
@@ -35,14 +36,16 @@ const contextDate = computed(() => {
 /** The selected task, if it can move to the next day. */
 const selTodo = () => { const t = ui.selectedId ? findTodo(ui.selectedId) : null; return t && !t.done ? t : null }
 const commands = computed(() => [
-  ...registry.nav.map((n) => ({ label: `Go to ${n.label}`, icon: n.icon, hint: n.key1, run: () => router.push(n.to) })),
-  ...registry.commands.map((c) => ({ ...c, run: () => c.run({ router, route }) })), // the modules' own commands
+  ...registry.nav.filter((n) => isEnabled(n.module)).map((n) => ({ label: `Go to ${n.label}`, icon: n.icon, hint: n.key1, run: () => router.push(n.to) })),
+  ...registry.commands.filter((c) => isEnabled(c.module)).map((c) => ({ ...c, run: () => c.run({ router, route }) })), // the modules' own commands
   { label: 'New todo…', icon: 'add', hint: 'N', run: () => { ui.paletteMode = 'add'; q.value = ''; return false } },
   // ISS-31: only offered while a task is selected (the drawer's button and the > key do the same)
   ...(selTodo() ? [{ label: `Move "${selTodo().title}" to the next day`, icon: 'redo', hint: '>', run: () => sendToNextDay(selTodo().id) }] : []),
-  { label: 'Stamp next sign-off (today)', icon: 'approval', hint: 'S', run: () => { const i = stampNext(todayISO()); toast(i < 0 ? 'Today is fully stamped 完' : `Stamped ${STAMPS[i]}`) } },
+  ...(feature('stamps') ? [{ label: 'Stamp next sign-off (today)', icon: 'approval', hint: 'S', run: () => { const i = stampNext(todayISO()); toast(i < 0 ? 'Today is fully stamped 完' : `Stamped ${STAMPS[i]}`) } }] : []),
   { label: 'Report an issue on this screen…', icon: 'bug_report', hint: 'I', run: () => openIssueDialog(route) },
   { label: 'Take the tour', icon: 'auto_awesome', run: () => { ui.tourOpen = true } },
+  // editions: switching changes only what this device shows, never the planner
+  ...editions.filter((e) => e.id !== edition.value.id).map((e) => ({ label: `Switch to ${e.name}`, icon: 'dashboard_customize', run: () => { setEdition(e.id); toast(`${e.name}: same planner, ${e.id === 'base' ? 'everything shown' : 'fewer screens'}`) } })),
   { label: 'Toggle light / dark theme', icon: 'contrast', run: toggleTheme },
   { label: 'Print current sheet', icon: 'print', run: () => setTimeout(() => window.print(), 50) },
   { label: 'Reset demo data', icon: 'restart_alt', run: () => { if (confirm('Reset all data to the demo seed?')) resetDemo() } },

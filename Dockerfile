@@ -21,6 +21,7 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY server ./server
 # modules/*/data.js: the modules' pure data contracts (link types, namespace migrations) that server/schema.mjs uses
 COPY modules ./modules
+COPY editions ./editions
 COPY --from=build /app/dist ./dist
 # /updates: shared with the optional `updater` service (one-click updates, see docker-compose.yml)
 RUN mkdir -p /backups /updates && chown node:node /backups /updates

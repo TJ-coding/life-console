@@ -1,4 +1,5 @@
 <script setup>
+import { feature } from '../edition'
 // S-03 Debrief: after the day, one decision at a time, each previewed on tomorrow's real schedule.
 // Questions, in order: where does each unfinished task go? which deadline looms with nothing scheduled
 // from tomorrow on? do tomorrow's tasks have times? what is tomorrow's one thing? Then sign off.
@@ -98,7 +99,7 @@ steps.push({
 <template>
   <BriefingFlow title="Debrief" :date="D" finish="Done" :steps="steps" :recap-days="[N]" @done="router.push('/')">
     <template #recap>
-      <div class="so"><span class="tiny upper muted">Sign off {{ wd(D) }}</span><Stamps :date="D" :size="44" /></div>
+      <div v-if="feature('stamps')" class="so"><span class="tiny upper muted">Sign off {{ wd(D) }}</span><Stamps :date="D" :size="44" /></div>
     </template>
   </BriefingFlow>
 </template>

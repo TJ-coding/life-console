@@ -1,9 +1,10 @@
 <script setup>
+import { feature } from '../edition'
 defineProps({ modelValue: String })
 const emit = defineEmits(['update:modelValue'])
 </script>
 <template>
-  <span class="lsd" @click.stop>
+  <span v-if="feature('lsd')" class="lsd" @click.stop>
     <button v-for="k in ['L', 'S', 'D']" :key="k" :class="{ on: modelValue === k }" :title="{ L: 'Large', S: 'Small', D: 'Daily' }[k]" @click="emit('update:modelValue', k)">{{ k }}</button>
   </span>
 </template>

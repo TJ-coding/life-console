@@ -2,6 +2,8 @@
 import { reactive, watch, computed } from 'vue'
 import { rhythm, wallMin, workIn, segments } from '../server/pomodoro.mjs'
 import { LINK_TYPES, FALLBACK_LINK, RESERVED_PREFIXES } from '../modules/data.js'
+import { editionSeed } from '../editions/index.js'
+import { devicePref } from './editionPref.js'
 import { SCHEMA_VERSION, migrateDoc, normalizeDoc, ensureOrderDoc, ensureSettingsDoc, NOTIFY_DEFAULTS } from '../server/schema.mjs'
 
 /* ───────────── date / time helpers ───────────── */
@@ -212,7 +214,9 @@ function load() {
 const loaded = load()
 /** true if this browser already had planner data saved (vs. a fresh demo seed) */
 export const hadLocalData = loaded !== null
-export const state = reactive(loaded ?? seed())
+/** The demo for this device's edition (or the account's, on Reset demo): its demo data and starting settings. */
+const demo = (accountEdition = null) => editionSeed(seed(), devicePref.value ?? accountEdition)
+export const state = reactive(loaded ?? demo())
 stateReady = true
 /** Every todo carries a numeric `order` used to rank todos that share a priority. */
 export const ensureOrder = () => ensureOrderDoc(state)
@@ -273,7 +277,7 @@ watch(state, (v) => {
 }, { deep: true })
 
 export function resetDemo() {
-  const fresh = seed()
+  const fresh = demo(state.settings?.edition)
   for (const k of Object.keys(state)) delete state[k]
   Object.assign(state, fresh)
   normalizeState()

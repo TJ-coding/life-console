@@ -1,4 +1,5 @@
 <script setup>
+import { feature } from '../edition'
 // S-20 · Todo Inbox — every todo, with filters, smart quick-add and bulk actions.
 import PartBadge from '../components/PartBadge.vue'
 import { computed, ref, reactive, watch, watchEffect } from 'vue'
@@ -121,7 +122,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
           <span class="grow">{{ l }}</span><span class="mono small muted">{{ linkCount(k) }}</span>
         </label>
       </div>
-      <div class="grp">
+      <div v-if="feature('lsd')" class="grp">
         <div class="tiny upper muted gh">Scope (L / S / D)</div>
         <div class="row">
           <button v-for="k in ['L', 'S', 'D']" :key="k" class="btn grow" :class="{ active: f.lsd.includes(k) }" @click="toggleIn(f.lsd, k)">[{{ k }}]</button>
@@ -169,7 +170,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
           <thead>
             <tr>
               <th><input v-model="allPicked" type="checkbox" title="Select all" /></th>
-              <th>Done</th><th>Prio</th><th>ID</th><th>Title / vital points</th><th>Time</th><th>L/S/D</th><th>Due</th><th>Scheduled</th><th>Linked to</th>
+              <th>Done</th><th>Prio</th><th>ID</th><th>Title / vital points</th><th>Time</th><th v-if="feature('lsd')">L/S/D</th><th>Due</th><th>Scheduled</th><th>Linked to</th>
             </tr>
           </thead>
           <tbody data-sellist>
@@ -191,7 +192,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
                 <div v-if="t.vital" class="small muted ellipsis">{{ t.vital }}</div>
               </td>
               <td class="mono small">{{ t.timeMin }}m</td>
-              <td><LsdToggle :model-value="t.lsd" @update:model-value="(v) => updateTodo(t.id, { lsd: v })" /></td>
+              <td v-if="feature('lsd')"><LsdToggle :model-value="t.lsd" @update:model-value="(v) => updateTodo(t.id, { lsd: v })" /></td>
               <td class="mono small" :class="t.due && !t.done && diffDays(T, t.due) < 0 ? 'danger' : t.due === T ? 'warn' : ''">{{ t.due ? relDay(t.due, T) : '—' }}</td>
               <td class="mono small">
                 <template v-if="t.scheduled">{{ wd(t.scheduled.date) }} {{ fmtSlash(t.scheduled.date) }}<span v-if="t.scheduled.start" class="muted">&nbsp;{{ t.scheduled.start }}</span></template>

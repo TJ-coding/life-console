@@ -1,4 +1,5 @@
 <script setup>
+import { feature } from '../edition'
 // One day of the unified planner, top → bottom like the paper template:
 //   header · ② Workload bucket (assign day) · ③ Schedule timeline (assign time) · deadlines · notes · sign-off
 // A task dropped in the bucket can be dragged straight down onto a time in the same column.
@@ -143,7 +144,7 @@ function auto() {
         <div class="sh tiny upper muted">Notes</div>
         <textarea v-model="notes" class="textarea notes" rows="2" placeholder="…"></textarea>
       </div>
-      <div class="sec stamps-sec"><Stamps :date="date" :size="22" /></div>
+      <div v-if="feature('stamps')" class="sec stamps-sec"><Stamps :date="date" :size="22" /></div>
     </template>
   </div>
 </template>

@@ -44,7 +44,7 @@ function claim(seen, kind, name, owner) {
 /** Check a list of manifests and flatten it into what the shell renders. The list's order is the sidebar's order. */
 export function buildRegistry(list) {
   const ids = new Map(), paths = new Map(), names = new Map(), navKeys = new Map(), chordKeys = new Map()
-  const routes = [], nav = [], chords = {}, commands = []
+  const routes = [], nav = [], chords = {}, chordModule = {}, commands = []
   for (const m of list) {
     claim(ids, 'module id', m.id, m.id)
     for (const r of m.routes) {
@@ -57,16 +57,17 @@ export function buildRegistry(list) {
     }
     for (const n of m.nav) {
       claim(navKeys, 'nav key', n.key, m.id)
-      if (n.chord) { chordOk(n.chord, m.id); claim(chordKeys, 'G-chord', n.chord, m.id); chords[n.chord.toLowerCase()] = n.to }
+      if (n.chord) { chordOk(n.chord, m.id); claim(chordKeys, 'G-chord', n.chord, m.id); chords[n.chord.toLowerCase()] = n.to; chordModule[n.chord.toLowerCase()] = m.id }
       // a module that only lists planned screens is shown as "soon"
-      nav.push({ ...n, key1: n.hint ?? (n.chord ? `G ${n.chord.toUpperCase()}` : undefined), soon: !m.routes.length && !!m.planned })
+      nav.push({ ...n, module: m.id, key1: n.hint ?? (n.chord ? `G ${n.chord.toUpperCase()}` : undefined), soon: !m.routes.length && !!m.planned })
     }
     for (const c of m.chords) {
       chordOk(c.key, m.id)
       claim(chordKeys, 'G-chord', c.key, m.id)
       chords[c.key.toLowerCase()] = c.to
+      chordModule[c.key.toLowerCase()] = m.id
     }
-    commands.push(...m.commands)
+    commands.push(...m.commands.map((c) => ({ ...c, module: m.id })))
   }
   return {
     modules: list,
@@ -75,6 +76,7 @@ export function buildRegistry(list) {
     nav,
     tabs: nav.filter((n) => n.tab),
     chords,
+    chordModule, // which module each G-chord belongs to (an edition shows only its modules' chords)
     commands,
   }
 }

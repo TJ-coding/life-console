@@ -23,6 +23,17 @@ Everything Life Console does, screen by screen. For a quick overview, see the [R
 
 ![Quick-add: the live parser reads estimate, priority, due date and goal link as you type](media/quickadd.gif)
 
+## Consoles: Life Console and Minimalist
+
+The same planner can be shown as different **consoles**. Your account, your data and your settings are the same in all of them; a console only changes what's on screen.
+
+- **Life Console** shows every screen.
+- **Minimalist Console** shows Today, Todos and Focus mode, and hides the L/S/D scope, the 印 sign-off stamps and the pomodoro settings. Its own page is at `/minimalist`.
+
+Switch with the menu in the top bar, the ⌘K palette (*Switch to …*) or **Settings → Console**. The choice belongs to the device, like the theme, so your phone and your laptop can show different consoles. A new account made from a console's page starts in that console on every new device.
+
+To use a screen a console hides, tick it under **Settings → Console → Add to …**, or open its link and press *Add it*. Added screens are remembered for your account. Screens that aren't in a console still open from links and notifications.
+
 ## Deadlines
 Add one from the Deadlines screen, the **Deadlines · 7d** panel on Today / the day view, or the **+** in any Plan week day's Deadlines section (defaults to that day). Syntax: `ST2001 Report 3 due:fri 17:00 #ST2001 p1 ! Upload PDF` (`due:` today / tomorrow / weekday / MM-DD / YYYY-MM-DD, defaulting to the day you're on; `HH:MM`, default 23:59; `p1`–`p5`; `#` or `@` sets the source; text after `!` becomes the vital points). Click any deadline to edit or delete it.
 

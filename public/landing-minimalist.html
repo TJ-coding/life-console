@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Minimalist Console — today, your list, and focus. Nothing else.</title>
+<meta name="description" content="Minimalist Console is a calm, keyboard-first planner with three screens: what to do now, your todo list, and focus mode. Free and open source, by Life Console." />
+<link rel="canonical" href="https://life-console.dev/minimalist" />
+<meta name="robots" content="index, follow, max-image-preview:large" />
+<meta name="theme-color" content="#0E1116" />
+<meta name="color-scheme" content="dark light" />
+<meta name="application-name" content="Minimalist Console" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Life Console" />
+<meta property="og:url" content="https://life-console.dev/minimalist" />
+<meta property="og:title" content="Minimalist Console — today, your list, and focus" />
+<meta property="og:description" content="Three screens and nothing else: what to do now, your list, and focus. Free and open source, by Life Console." />
+<meta property="og:image" content="https://life-console.dev/media/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0e1116; --alt: #0b0e12; --surface: #161b22; --border: #2a323d; --rule: #20262f;
+  --text: #e6edf3; --muted: #8b96a3; --accent: #3fb68b; --info: #4c9aff;
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --sans: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f7f7f5; --alt: #eff0ee; --surface: #fff; --border: #d9dde2; --rule: #e3e5e8; --text: #1a1f24; --muted: #5f6b77; --accent: #1e8a63; --info: #2563eb; color-scheme: light; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: var(--info); text-underline-offset: 3px; }
+img { display: block; max-width: 100%; height: auto; }
+kbd { display: inline-block; min-width: 1.7em; text-align: center; padding: 1px 6px; border: 1px solid var(--border); border-radius: 3px; background: var(--surface); font: .88em var(--mono); line-height: 1.5; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+@media (max-width: 520px) { .wrap { padding: 0 16px; } }
+header { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--rule); }
+header .wrap { display: flex; align-items: center; gap: 20px; height: 56px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font: 700 14px/1 var(--mono); letter-spacing: .06em; white-space: nowrap; }
+.brand img { width: 24px; height: 24px; border-radius: 5px; }
+.brand small { font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0; }
+header .spacer { flex: 1; }
+.btn { display: inline-block; padding: 10px 16px; border-radius: 4px; border: 1px solid var(--border); color: var(--text); background: var(--surface); text-decoration: none; font: 600 14px/1.2 var(--sans); white-space: nowrap; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #0e1116; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.big { padding: 14px 24px; font-size: 16px; }
+header .btn { padding: 7px 12px; font-size: 13px; }
+.hero { padding: 88px 0 56px; }
+.kicker { font: 500 13px/1.4 var(--mono); color: var(--muted); margin: 0 0 18px; }
+h1 { font: 700 clamp(34px, 5.4vw, 60px)/1.06 var(--sans); letter-spacing: -.03em; margin: 0 0 18px; max-width: 16ch; }
+.lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 44ch; margin: 0 0 28px; }
+.ctas { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.note { font-size: 14px; color: var(--muted); margin: 14px 0 0; }
+section { padding: 72px 0; border-top: 1px solid var(--rule); }
+section.alt { background: var(--alt); }
+.label { font: 500 12px/1 var(--mono); color: var(--accent); text-transform: uppercase; letter-spacing: .08em; margin: 0 0 12px; }
+h2 { font: 700 clamp(24px, 3vw, 34px)/1.15 var(--sans); letter-spacing: -.02em; margin: 0 0 12px; }
+.split { display: grid; grid-template-columns: 1fr 1.5fr; gap: 48px; align-items: center; }
+.split p { color: var(--muted); margin: 0; }
+figure { margin: 0; }
+figure img { border: 1px solid var(--border); border-radius: 6px; }
+@media (max-width: 860px) { .split { grid-template-columns: 1fr; gap: 24px; } }
+.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+.three div { border: 1px solid var(--border); border-radius: 6px; padding: 18px; background: var(--surface); }
+.three b { display: block; margin-bottom: 4px; }
+.three p { margin: 0; color: var(--muted); font-size: 15px; }
+@media (max-width: 760px) { .three { grid-template-columns: 1fr; } }
+.close { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.close img { width: 72px; height: 72px; }
+.close h2 { margin: 0; flex: 1; min-width: 240px; }
+footer { border-top: 1px solid var(--rule); padding: 28px 0; font-size: 14px; color: var(--muted); }
+footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
+footer nav { display: flex; gap: 18px; flex-wrap: wrap; margin-left: auto; }
+footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="/minimalist" aria-label="Minimalist Console home"><img src="/icons/brand-48.png" alt="" width="24" height="24" />MINIMALIST CONSOLE <small>by Life Console</small></a>
+    <span class="spacer"></span>
+    <a class="btn primary" href="/app?edition=minimalist" data-umami-event="open-app" data-umami-event-place="header">Try it now</a>
+  </div>
+</header>
+
+<main id="main">
+  <div class="hero">
+    <div class="wrap">
+      <p class="kicker">A planner with three screens</p>
+      <h1>Today, your list, and focus. Nothing else.</h1>
+      <p class="lede">See what to do right now, keep one list of everything else, and press one key to hide the rest. No goal trees, no ceremonies to learn.</p>
+      <div class="ctas">
+        <a class="btn primary big" href="/app?edition=minimalist" data-umami-event="open-app" data-umami-event-place="hero">Try it now</a>
+      </div>
+      <p class="note">Free and open source (<a href="https://github.com/TJ-coding/life-console/blob/main/LICENSE" rel="noopener">AGPL-3.0</a>). Sign in with Google; there's no password to make up. Want more later? It's the same account and the same planner as <a href="/">Life Console</a>; switch any time.</p>
+      <div class="three">
+        <div><b>Now</b><p>The current block with a countdown, and what comes next.</p></div>
+        <div><b>Your list</b><p>Add a task in one line with <kbd>N</kbd>. Tick it off with <kbd>X</kbd>.</p></div>
+        <div><b>Focus</b><p>Press <kbd>F</kbd> and only the current task and your top three are left.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="alt">
+    <div class="wrap split">
+      <div>
+        <p class="label">Today</p>
+        <h2>What to do right now.</h2>
+        <p>The block you're in, how long is left, and the next thing on your list. Your day on one timeline, from the time you wake to the time you stop.</p>
+      </div>
+      <figure><img src="/media/today.webp" srcset="/media/today.webp 1440w, /media/today@2x.webp 2880w" sizes="(max-width: 860px) 100vw, 600px" width="1440" height="900" loading="lazy" decoding="async" alt="Today: the current block with a live countdown and the day's timeline" /></figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split">
+      <div>
+        <p class="label">Todos</p>
+        <h2>One list for everything else.</h2>
+        <p>Type <i>call the dentist 10m due fri</i> and it's on the list with an estimate and a date. Sort by priority, give a task a day when you're ready.</p>
+      </div>
+      <figure><img src="/media/todos.webp" srcset="/media/todos.webp 1440w, /media/todos@2x.webp 2880w" sizes="(max-width: 860px) 100vw, 600px" width="1440" height="900" loading="lazy" decoding="async" alt="The todo list with quick-add" /></figure>
+    </div>
+  </section>
+
+  <section class="alt">
+    <div class="wrap split">
+      <div>
+        <p class="label">Focus</p>
+        <h2>One key to hide everything else.</h2>
+        <p>Press <kbd>F</kbd>. A large timer, the current block and your top three actions. Tick them off with <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>, leave with <kbd>Esc</kbd>.</p>
+      </div>
+      <figure><img src="/media/focus.webp" srcset="/media/focus.webp 1440w, /media/focus@2x.webp 2880w" sizes="(max-width: 860px) 100vw, 600px" width="1440" height="900" loading="lazy" decoding="async" alt="Focus mode: a large countdown and the top three actions" /></figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap close">
+      <img src="/media/logo.webp" alt="" width="72" height="72" loading="lazy" />
+      <h2>Start with today.</h2>
+      <a class="btn primary big" href="/app?edition=minimalist" data-umami-event="open-app" data-umami-event-place="end">Try it now</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Minimalist Console · by <a href="/">Life Console</a> · free software under AGPL-3.0</span>
+    <nav aria-label="Footer"><a href="https://github.com/TJ-coding/life-console" rel="noopener" data-umami-event="github" data-umami-event-place="footer">GitHub</a><a href="/docs/guide">Guide</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,4 +1,5 @@
 <script setup>
+import { feature } from '../edition'
 // S-01 "More": the full briefing from the earlier Command Center layout, shown on demand under the cockpit.
 import { computed } from 'vue'
 import {
@@ -70,7 +71,7 @@ const lectures = computed(() => state.lectures.filter((l) => l.date === T.value)
       </div>
     </section>
 
-    <section class="panel c12">
+    <section v-if="feature('stamps')" class="panel c12">
       <div class="panel-h"><span class="icon sm ok">approval</span><h2>Sign-off ledger</h2><span class="spacer"></span><span class="kbd">S</span><span class="small muted">stamp next</span></div>
       <div class="panel-b ledger">
         <div class="wl">

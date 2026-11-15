@@ -6,6 +6,7 @@ import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ui, state, todayISO, sendToNextDay, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf } from './store'
 import { registry } from './sdk'
+import { edition, editions, setEdition, isEnabled, feature } from './edition'
 import CommandPalette from './components/CommandPalette.vue'
 import TodoDrawer from './components/TodoDrawer.vue'
 import SplitDialog from './components/SplitDialog.vue'
@@ -24,14 +25,15 @@ import TourOverlay from './components/TourOverlay.vue'
 
 const SYNC_TEXT = { outdated: 'RELOAD', choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', guest: 'GUEST', error: 'ERROR' }
 const SYNC_ICON = { outdated: 'system_update', choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', guest: 'person_off', error: 'error' }
-const NAV = registry.nav // sidebar, in module order (modules/index.js)
-const TABS = registry.tabs // phone tab bar: the nav entries with a `tab` label
+// sidebar and phone tab bar: the modules' entries in module order (modules/index.js), only those this edition shows
+const NAV = computed(() => registry.nav.filter((n) => isEnabled(n.module)))
+const TABS = computed(() => registry.tabs.filter((n) => isEnabled(n.module)))
 
 // "What now" — shown in the top bar on every screen and in the browser tab title.
 const now = useNow()
 const headline = now.headline
 watch(() => `${headline.value.state === 'busy' ? '▶ ' : ''}${headline.value.text} · ${headline.value.meta}`, (s) => {
-  document.title = `${s} — Life Console`
+  document.title = `${s} — ${edition.value.name}`
 }, { immediate: true })
 
 const route = useRoute()
@@ -58,7 +60,8 @@ const overdueCount = computed(() => { void ui.now.getMinutes(); return state.dea
 const activeKey = computed(() => (route.name === 'module' ? route.params.module : route.meta.nav ?? route.name)) // meta.nav: e.g. /day/… lights Today
 
 // the left menu is hideable on desktop; the choice is remembered per device
-const sideOpen = ref((() => { try { return localStorage.getItem('life-console/sidebar') !== 'hidden' } catch { return true } })())
+// a device that hasn't chosen yet follows the edition (Minimalist starts with it collapsed)
+const sideOpen = ref((() => { try { const v = localStorage.getItem('life-console/sidebar'); return v ? v !== 'hidden' : edition.value.sidebar !== 'collapsed' } catch { return true } })())
 // Focus mode starts without the menu; the menu button opens it there (ISS-27), and it's closed again
 // on the next visit. That choice isn't remembered, so it never changes the desktop setting.
 const focusSide = ref(false)
@@ -130,7 +133,7 @@ function onKey(e) {
   if (gPending) {
     gPending = false
     clearTimeout(gTimer)
-    const to = registry.chords[k] // G-chords come from the modules' manifests
+    const to = isEnabled(registry.chordModule[k]) ? registry.chords[k] : null // G-chords come from the modules this edition shows
     if (to) { router.push(to); e.preventDefault() }
     return
   }
@@ -155,7 +158,7 @@ function onKey(e) {
   switch (k) {
     case 'g': gPending = true; gTimer = setTimeout(() => { gPending = false }, 1000); break
     case 't': router.push('/'); break
-    case 'w': router.push('/week'); break
+    case 'w': if (isEnabled('week')) router.push('/week'); break
     case 'n':
       e.preventDefault()
       if (route.name === 'week') ui.backlogFocus++ // Plan week: capture straight into the backlog panel
@@ -163,12 +166,13 @@ function onKey(e) {
       break
     case '/': e.preventDefault(); openPalette('cmd'); break
     case 's': {
+      if (!feature('stamps')) break
       const i = stampNext(T.value)
       toast(i < 0 ? 'Today is fully stamped 完' : `Stamped ${STAMPS[i]} for ${T.value}`)
       break
     }
     case 'i': e.preventDefault(); openIssueDialog(route); break // report an issue on this screen
-    case 'f': router.push(route.name === 'focus' ? '/' : '/focus'); break
+    case 'f': if (isEnabled('focus')) router.push(route.name === 'focus' ? '/' : '/focus'); break
     case 'x': {
       // X = done on the selected todo, else on the todo you're currently doing
       const id = ui.selectedId ?? (now.current.value?.kind === 'todo' ? now.current.value.todoId : null)
@@ -184,7 +188,7 @@ function onKey(e) {
         // day view: previous / next day
         const d = addDays(route.params.date || todayISO(), dir)
         router.push(d === todayISO() ? '/' : `/day/${d}`)
-      } else {
+      } else if (isEnabled('week')) {
         ui.weekStart = addDays(ui.weekStart, dir * 7)
         if (route.name !== 'week') router.push('/week')
       }
@@ -213,8 +217,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <div class="brand">
         <img class="logo" src="/icons/brand-96.png" alt="" width="34" height="34" />
         <div>
-          <div class="name">LIFE CONSOLE</div>
-          <div class="mono tiny muted">OP-DECK // v0.1 prototype</div>
+          <div class="name">{{ edition.name.toUpperCase() }}</div>
+          <div class="mono tiny muted">{{ edition.id === 'base' ? 'OP-DECK // v0.1 prototype' : 'by Life Console' }}</div>
         </div>
       </div>
       <button class="exec" @click="openPalette('cmd')">
@@ -248,6 +252,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <span>{{ route.name === 'module' ? route.params.module : route.meta.title }}</span>
         </div>
         <span class="spacer"></span>
+        <label class="edsel" title="Which console this device shows (your data is the same in all of them)">
+          <span class="icon sm muted">dashboard_customize</span>
+          <select :value="edition.id" aria-label="Console" @change="setEdition($event.target.value)">
+            <option v-for="e in editions" :key="e.id" :value="e.id">{{ e.short }}</option>
+          </select>
+        </label>
         <router-link v-if="route.name !== 'focus'" to="/focus" class="nowpill" :class="headline.state" :title="`${headline.text} — ${headline.meta} (F for focus mode)`">
           <span class="nowtag mono">{{ headline.state === 'busy' ? 'NOW' : headline.state === 'free' ? 'FREE' : 'IDLE' }}</span>
           <span class="ellipsis">{{ headline.short ?? headline.text }}</span>
@@ -293,12 +303,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <footer v-if="!route.meta.sheet" class="statusbar mono">
         <span><span class="kbd">⌘K</span> Command</span>
         <span><span class="kbd">N</span> New todo</span>
-        <span><span class="kbd">S</span> Stamp</span>
-        <span><span class="kbd">F</span> Focus</span>
+        <span v-if="feature('stamps')"><span class="kbd">S</span> Stamp</span>
+        <span v-if="isEnabled('focus')"><span class="kbd">F</span> Focus</span>
         <span><span class="kbd">T</span> Today</span>
-        <span><span class="kbd">W</span> Week</span>
+        <span v-if="isEnabled('week')"><span class="kbd">W</span> Week</span>
         <span><span class="kbd">[</span><span class="kbd">]</span> Prev/next</span>
-        <span><span class="kbd">G</span><span class="kbd">S</span> Strategy</span>
+        <span v-if="isEnabled('strategy')"><span class="kbd">G</span><span class="kbd">S</span> Strategy</span>
         <span><span class="kbd">J</span><span class="kbd">K</span> Move</span>
         <span><span class="kbd">X</span> Done</span>
         <span><span class="kbd">1–5</span> Priority</span>
@@ -357,6 +367,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .exec { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; color: var(--accent); cursor: pointer; font-size: 12px; }
 .exec:hover { border-color: var(--accent); }
 nav { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
+.edsel { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 4px 0 8px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface); }
+.edsel select { background: transparent; color: var(--text); border: 0; font: inherit; font-size: 12px; cursor: pointer; }
+.edsel select:focus-visible { outline: 1px solid var(--accent); }
+@media (max-width: 640px) { .edsel { display: none; } } /* phones: switch in Settings → Console or the palette */
 .nav { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border-radius: 2px; color: var(--muted); }
 .nav:hover { background: var(--surface-2); color: var(--text); }
 .nav.on { background: var(--surface-2); color: var(--accent); box-shadow: inset 2px 0 0 var(--accent); }

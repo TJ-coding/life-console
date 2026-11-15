@@ -1,4 +1,5 @@
 <script setup>
+import { feature } from '../edition'
 // S-10 · Plan week — the whole flow on one sheet, like the paper planner:
 //   ① Backlog (left) → ② Workload bucket per day (assign day) → ③ timeline right below it (assign time)
 // Balance and routines live in a side rail that opens on demand so the day columns stay wide.
@@ -197,7 +198,7 @@ const print = () => window.print()
                 <div><span class="muted">Todos done</span><b>{{ kpi.done }}/{{ kpi.total }} · {{ kpi.pct }}%</b></div>
                 <div class="bar"><i :style="{ width: kpi.pct + '%' }"></i></div>
                 <div><span class="muted">Planned hours</span><b>{{ kpi.planned.toFixed(1) }}h / {{ CAPACITY_H * 5 }}h</b></div>
-                <div><span class="muted">Days stamped 完</span><b>{{ kpi.stamped }}/7</b></div>
+                <div v-if="feature('stamps')"><span class="muted">Days stamped 完</span><b>{{ kpi.stamped }}/7</b></div>
               </div>
             </template>
           </div>

@@ -3,6 +3,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { auth, signIn, signUp, requestReset, resetPassword, signInWithGoogle } from '../auth'
 import { enterGuest } from '../sync'
+import { edition } from '../edition'
 import { inAppBrowser, trackSignInScreen, trackSignInEvent } from '../analytics'
 
 const mode = ref(auth.resetToken ? 'reset' : 'signin') // signin | signup | forgot | reset
@@ -74,12 +75,18 @@ async function submit() {
     <section class="auth-pitch">
       <img class="auth-hero" src="/media/logo-tile.webp" width="760" height="609" alt="Life Console logo: a white-haired figure with a halo and a white cat" decoding="async" fetchpriority="high" />
       <div class="pitch-text">
-        <p class="kicker mono">Military-grade planning for your own goals</p>
-        <p class="headline">Know what to do right now.</p>
-        <p class="lede">Life Console turns your goals into a week plan, and your week plan into the next thing to do.</p>
+        <p class="kicker mono">{{ edition.id === 'base' ? 'Military-grade planning for your own goals' : `${edition.name} · by Life Console` }}</p>
+        <p class="headline">{{ edition.id === 'base' ? 'Know what to do right now.' : edition.tagline }}</p>
+        <p class="lede">{{ edition.pitch ?? 'Life Console turns your goals into a week plan, and your week plan into the next thing to do.' }}</p>
       </div>
     </section>
-    <ul class="perks">
+    <ul v-if="edition.id !== 'base'" class="perks">
+      <li><span class="icon sm">radar</span><span><b>Today at a glance</b> — the current block counting down, and what's next.</span></li>
+      <li><span class="icon sm">checklist</span><span><b>One list</b> — add a task with N, tick it off with X.</span></li>
+      <li><span class="icon sm">center_focus_strong</span><span><b>Focus</b> — press F and everything else disappears.</span></li>
+      <li><span class="icon sm">sync_alt</span><span><b>One account for every console.</b> Switch to the full Life Console any time; it's the same planner.</span></li>
+    </ul>
+    <ul v-else class="perks">
       <li><span class="icon sm">radar</span><span><b>Today at a glance</b> — the current block counting down, and what's next.</span></li>
       <li><span class="icon sm">calendar_month</span><span><b>Plan the week in three moves</b> — drag tasks onto days and level the load.</span></li>
       <li><span class="icon sm">alarm</span><span><b>Deadlines as time left</b>, not dates, so nothing sneaks up on you.</span></li>
