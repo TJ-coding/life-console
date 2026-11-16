@@ -291,6 +291,8 @@ h1 { font: 700 clamp(34px, 5.4vw, 60px)/1.06 var(--sans); letter-spacing: -.03em
 figure { margin: 0; }
 figure > img, figure > video { width: 100%; border: 1px solid var(--border); border-radius: 6px; background: #0e1116; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
 figcaption { font: 13px/1.5 var(--mono); color: var(--muted); margin-top: 10px; }
+.trailer { margin: 0 0 56px; }
+.trailer > video { aspect-ratio: 16 / 9; object-fit: contain; background: #111; cursor: pointer; }
 figcaption b { color: var(--text); font-weight: 500; }
 
 /* sections */
@@ -432,6 +434,12 @@ footer a { color: var(--muted); }
 
   <section style="border-top:0;padding-top:72px">
     <div class="wrap">
+      <figure class="trailer">
+        <video controls playsinline preload="none" poster="/media/trailer-poster.webp" width="1280" height="720" aria-label="Life Console launch trailer: strategise, distribute, execute">
+          <source src="/media/trailer.mp4" type="video/mp4" />
+        </video>
+        <figcaption>28 seconds: set the goal, level the week, do the one thing now.</figcaption>
+      </figure>
       <p class="note">Life Console started as a set of paper planning sheets: a week plan with <b>a backlog, a 7-hour budget for each day and a timeline</b>, a deadline list, and a strategic plan running from vision down to milestones. It joins those sheets into one console, so the answer to <b>“what should I be doing now?”</b> is always on screen.</p>
     </div>
   </section>
@@ -764,6 +772,8 @@ footer a { color: var(--muted); }
   // videos play only while on screen; with reduced motion they get controls instead
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
   const vo = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting ? e.target.play().catch(() => {}) : e.target.pause()), { threshold: 0.35 })
+  const trailer = document.querySelector('.trailer video')
+  if (trailer) trailer.addEventListener('play', () => { if (!trailer.dataset.played) { trailer.dataset.played = '1'; window.umami?.track('trailer-play') } })
   if (!framed) document.querySelectorAll('video.auto').forEach((v) => reduce ? (v.controls = true) : vo.observe(v))
 
   // gallery: dark / light
