@@ -27,3 +27,5 @@
 - User guide (every screen and shortcut): https://life-console.dev/docs/guide
 - App: https://life-console.dev/app
 - Keyboard tour video: https://life-console.dev/media/tour.mp4
+- Launch trailer: https://life-console.dev/media/trailer.mp4
+- Community (Discord): https://discord.gg/bWZS5QvPYd
