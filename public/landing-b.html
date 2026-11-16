@@ -863,6 +863,7 @@ footer a { color: var(--muted); }
     v.onplay = () => { player.dataset.state = 'playing'; wake() }
     v.onpause = () => { player.dataset.state = 'paused' }
     player.addEventListener('pointermove', wake); player.addEventListener('pointerdown', wake)
+    player.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') { clearTimeout(sleep); player.classList.remove('awake') } })
     sound.onclick = () => {
       v.muted = !v.muted; wake()
       sound.setAttribute('aria-pressed', String(!v.muted)); sound.setAttribute('aria-label', v.muted ? 'Turn sound on' : 'Mute')
