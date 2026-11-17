@@ -23,6 +23,12 @@
 - `git clone https://github.com/TJ-coding/life-console.git && cd life-console && cp .env.example .env && docker compose up -d` — PostgreSQL + app + backup job, about 300 MB RAM.
 - Self-hosting guide: https://life-console.dev/docs/self-hosting
 
+## How it compares
+- Comparisons with other planners, including where they're the better pick: https://life-console.dev/alternatives
+- Life Console vs Sunsama: https://life-console.dev/vs/sunsama
+- Free and open-source Sunsama alternatives: https://life-console.dev/alternatives/sunsama
+- What it doesn't do: no calendar sync, no integrations with other task apps, no AI scheduling, no native phone apps (installable web app instead; a Mac menu-bar app exists).
+
 ## Links
 - User guide (every screen and shortcut): https://life-console.dev/docs/guide
 - App: https://life-console.dev/app
