@@ -283,7 +283,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
 .srch { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface-2); color: var(--muted); }
 .srch:focus-within, .srch.on { border-color: var(--info); color: var(--info); }
 .srch input { min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); }
-.srch.side { margin: 0 8px 10px; }
+.srch.side { margin: 10px 8px; }
 .srch.narrow { display: none; margin: 8px 16px 0; }
 .srch-tog { display: none; height: 34px; width: 34px; justify-content: center; }
 @media (max-width: 900px) { .srch.narrow { display: flex; } .srch-tog { display: inline-flex; } }
