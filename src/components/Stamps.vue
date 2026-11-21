@@ -1,4 +1,5 @@
 <script setup>
+import { feature } from '../edition'
 import { computed } from 'vue'
 import { getStamps, toggleStamp, STAMPS, STAMP_NAMES, hhmm } from '../store'
 const props = defineProps({ date: { type: String, required: true }, size: { type: Number, default: 28 }, showTimes: Boolean })
@@ -6,7 +7,7 @@ const stamps = computed(() => getStamps(props.date))
 const tilt = [-4, 3, -2, 4]
 </script>
 <template>
-  <div class="stamps">
+  <div v-if="feature('stamps')" class="stamps">
     <div v-for="(g, i) in STAMPS" :key="i" class="cell">
       <button
         class="stamp" :class="{ on: stamps[i] }"

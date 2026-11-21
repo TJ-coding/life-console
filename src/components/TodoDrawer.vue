@@ -1,4 +1,5 @@
 <script setup>
+import { feature } from '../edition'
 // Right 480px side drawer for editing a todo (spec §2.4 "Side drawer").
 import DurationInput from './DurationInput.vue'
 import LinkTrail from './LinkTrail.vue'
@@ -153,7 +154,7 @@ const dayName = computed(() => {
             <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: t.priority === p }" @click="updateTodo(t.id, { priority: p })">P{{ p }}</button>
           </div>
         </div>
-        <div class="field">
+        <div v-if="feature('lsd')" class="field">
           <span class="lbl">Scope classification</span>
           <div class="seg">
             <button v-for="(d, k) in { L: ['Large', 'Deep focus'], S: ['Small', 'Quick hit'], D: ['Daily', 'Routine'] }" :key="k" :class="{ on: t.lsd === k }" @click="updateTodo(t.id, { lsd: k })">

@@ -12,5 +12,9 @@ import research from './research/index.js'
 import study from './study/index.js'
 import wellbeing from './wellbeing/index.js'
 import standards from './standards/index.js'
+import sleep from './sleep/index.js'
+import caffeine from './caffeine/index.js'
+import routines from './routines/index.js'
 
-export default [today, week, focus, briefing, todos, deadlines, strategy, intelligence, research, study, wellbeing, standards]
+// plugins (no sidebar entry, off until switched on in Settings → Console) come last
+export default [today, week, focus, briefing, todos, deadlines, strategy, intelligence, research, study, wellbeing, standards, sleep, caffeine, routines]

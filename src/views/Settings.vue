@@ -1,6 +1,8 @@
 <script setup>
 // S-90 · Settings — install on phone, notifications, sync, appearance, data.
 import { computed, onMounted, ref } from 'vue'
+import { registry } from '../sdk'
+import { edition, editions, setEdition, isEnabled, isDefault, setAddOn, feature } from '../edition'
 import { state, ui, toggleTheme, setAccent, ACCENTS, resetDemo, clearPlanner, toast, normalizeState, addBlockout, capH, DEFAULT_CAPACITY_H } from '../store'
 import { sync, pull, deviceName, setDeviceName, leaveGuest } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
@@ -106,6 +108,9 @@ async function test() {
   try { const r = await testPush(); toast(r.sent ? 'Test sent — check this device' : 'Not delivered: re-enable notifications here') } catch (e) { toast(e.message) }
 }
 const n = computed(() => state.settings)
+// Console (editions): which one this device shows, and modules added to it for this account
+const plugins = computed(() => registry.plugins.filter((p) => !isDefault(p.module)))
+const addOnCandidates = computed(() => registry.nav.filter((x) => x.module !== 'core' && !isDefault(x.module)))
 const setWall = computed(() => {
   const r = rhythm(state.settings)
   const m = wallMin(r.work * r.every, r)
@@ -140,7 +145,30 @@ function toggleBoDay(b, i) {
     <!-- account -->
     <section class="panel">
       <div class="panel-h"><span class="icon sm">auto_awesome</span><h2>Getting started</h2></div>
-      <div class="panel-b row"><span class="grow">Learn Strategise → Distribute → Execute in 30 seconds.</span><button class="btn" @click="ui.tourOpen = true"><span class="icon sm">play_arrow</span>Take the tour</button></div>
+      <div class="panel-b row"><span class="grow">{{ edition.id === 'base' ? 'Learn Strategise → Distribute → Execute in 30 seconds.' : `${edition.tagline} A short tour.` }}</span><button class="btn" @click="ui.tourOpen = true"><span class="icon sm">play_arrow</span>Take the tour</button></div>
+    </section>
+    <section id="console" class="panel">
+      <div class="panel-h"><span class="icon sm">dashboard_customize</span><h2>Console</h2><span class="spacer"></span><span class="tiny muted">same planner in every console</span></div>
+      <div class="panel-b col">
+        <div class="tiny upper muted">Shown on this device</div>
+        <label v-for="e in editions" :key="e.id" class="row ed-opt">
+          <input type="radio" name="edition" :checked="edition.id === e.id" @change="setEdition(e.id)" />
+          <div><b>{{ e.name }}</b><div class="small muted">{{ e.tagline }}</div></div>
+        </label>
+        <!-- plugins: parts of other screens (sleep, caffeine, routines), off unless switched on -->
+        <div class="tiny upper muted">Plugins<span class="muted"> · {{ edition.name }} · all your devices</span></div>
+        <label v-for="p in plugins" :key="p.module" class="row ed-opt">
+          <input type="checkbox" :checked="isEnabled(p.module)" @change="setAddOn(p.module, $event.target.checked)" />
+          <span class="icon sm muted">{{ p.icon }}</span><div><b>{{ p.label }}</b><div class="small muted">{{ p.desc }}</div></div>
+        </label>
+        <template v-if="addOnCandidates.length">
+          <div class="tiny upper muted">Add to {{ edition.name }}<span class="muted"> · all your devices</span></div>
+          <label v-for="m in addOnCandidates" :key="m.key" class="row ed-opt">
+            <input type="checkbox" :checked="isEnabled(m.module)" @change="setAddOn(m.module, $event.target.checked)" />
+            <span class="icon sm muted">{{ m.icon }}</span><span>{{ m.label }}</span><span v-if="m.soon" class="mono tiny muted">soon</span>
+          </label>
+        </template>
+      </div>
     </section>
     <section v-if="auth.user" class="panel">
       <div class="panel-h"><span class="icon sm">account_circle</span><h2>Account</h2><span class="spacer"></span>
@@ -362,14 +390,14 @@ function toggleBoDay(b, i) {
           <label class="field"><span>Debrief</span><input v-model="n.eveningTime" type="time" class="input mono" /></label>
           <label class="field"><span>Bedtime</span><input v-model="n.bedTime" type="time" class="input mono" /></label>
           <label class="field"><span>Wind-down (min before bed)</span><input v-model.number="n.windDownMin" type="number" min="0" max="240" class="input mono" /></label>
-          <label class="field"><span>Caffeine cutoff</span><input v-model="state.caffeineCutoff" type="time" class="input mono" /></label>
+          <label v-if="isEnabled('caffeine')" class="field"><span>Caffeine cutoff</span><input v-model="state.caffeineCutoff" type="time" class="input mono" /></label>
         </div>
         <p class="tiny muted">Times are in <b class="mono">{{ n.timezone }}</b> (taken from the device you last used).</p>
       </div>
     </section>
 
     <!-- pomodoro rhythm (synced) -->
-    <section class="panel">
+    <section v-if="feature('pomodoro')" class="panel">
       <div class="panel-h"><span class="icon sm">timer</span><h2>Pomodoro</h2><span class="spacer"></span><span class="tiny muted">applies to all your devices</span></div>
       <div class="panel-b col">
         <label class="kind">
@@ -445,7 +473,7 @@ function toggleBoDay(b, i) {
       </div>
     </section>
 
-    <section class="panel">
+    <section v-if="isEnabled('caffeine')" class="panel">
       <div class="panel-h"><span class="icon sm">local_cafe</span><h2>Wellbeing limits</h2></div>
       <div class="panel-b row">
         <label class="field"><span>Caffeine limit (mg)</span><input v-model.number="state.caffeineLimit" type="number" class="input mono" /></label>
@@ -504,4 +532,6 @@ function toggleBoDay(b, i) {
 .swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
 .swatch.cyan { background: #2bd4e6; }
 .swatch.green { background: #3fb68b; }
+.ed-opt { gap: 8px; align-items: center; cursor: pointer; }
+.ed-opt input { margin: 0; }
 </style>

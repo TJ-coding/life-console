@@ -1,4 +1,5 @@
 <script setup>
+import { feature, isEnabled } from '../edition'
 // S-10 · Plan week — the whole flow on one sheet, like the paper planner:
 //   ① Backlog (left) → ② Workload bucket per day (assign day) → ③ timeline right below it (assign time)
 // Balance and routines live in a side rail that opens on demand so the day columns stay wide.
@@ -170,13 +171,13 @@ const print = () => window.print()
         <button class="rb" :class="{ on: ui.sidePanel === 'balance' }" title="Balance & rebalance" @click="togglePanel('balance')">
           <span class="icon">balance</span><span v-if="rebalanceN || overDays.length" class="badge" :class="overDays.length ? 'bad' : ''">{{ rebalanceN || '!' }}</span>
         </button>
-        <button class="rb" :class="{ on: ui.sidePanel === 'routines' }" title="Routines & week KPI" @click="togglePanel('routines')">
+        <button v-if="isEnabled('routines')" class="rb" :class="{ on: ui.sidePanel === 'routines' }" title="Routines & week KPI" @click="togglePanel('routines')">
           <span class="icon">task_alt</span><span class="badge ok-b mono">{{ routinesDone.length }}</span>
         </button>
       </nav>
 
       <transition name="slide">
-        <aside v-if="ui.sidePanel" class="overlay">
+        <aside v-if="ui.sidePanel && (ui.sidePanel !== 'routines' || isEnabled('routines'))" class="overlay">
           <header class="oh">
             <h3 class="mono upper">{{ ui.sidePanel === 'balance' ? 'Balance' : 'Routines & KPI' }}</h3>
             <span class="spacer"></span>
@@ -200,7 +201,7 @@ const print = () => window.print()
                 <div><span class="muted">Todos done</span><b>{{ kpi.done }}/{{ kpi.total }} · {{ kpi.pct }}%</b></div>
                 <div class="bar"><i :style="{ width: kpi.pct + '%' }"></i></div>
                 <div><span class="muted">Planned hours</span><b>{{ kpi.planned.toFixed(1) }}h / {{ capH() * 5 }}h</b></div>
-                <div><span class="muted">Days stamped 完</span><b>{{ kpi.stamped }}/7</b></div>
+                <div v-if="feature('stamps')"><span class="muted">Days stamped 完</span><b>{{ kpi.stamped }}/7</b></div>
               </div>
             </template>
           </div>

@@ -9,6 +9,7 @@
 import { burst as burstOn } from '../confetti'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { edition, isEnabled } from '../edition'
 import { state, ui, toast, clearPlanner, todayISO, isLeaf, workload, capH, addDays, mondayOf, diffDays } from '../store'
 
 const isPhone = () => innerWidth <= 640
@@ -45,7 +46,7 @@ const mid = (el) => { const r = el.getBoundingClientRect(); return { x: r.left +
 const dragHint = (from, to) => { if (!from || !to) return null; const a = mid(from), b = mid(to); return { x: a.x, y: a.y, dx: b.x - a.x, dy: b.y - a.y } }
 const button = (sel, text) => [...document.querySelectorAll(sel)].find((b) => b.textContent.includes(text)) ?? null
 
-const STEPS = [
+const ALL_STEPS = [
   { kind: 'welcome', icon: 'auto_awesome', title: 'Plan like a strategist', body: 'Build your first plan, give it a week, then run your day. About two minutes.', next: 'Take a tour' },
 
   // Strategise: on the Strategy tab, the user builds a plan of their own
@@ -89,7 +90,14 @@ const STEPS = [
 
   { kind: 'finish', icon: 'celebration', title: 'You’re ready', body: 'Strategise, distribute, execute. Keep the demo to play with, or start empty and plan your own.', next: 'Keep the demo' },
 ]
-const MOVES = ['Strategise', 'Distribute', 'Execute']
+const ALL_MOVES = ['Strategise', 'Distribute', 'Execute']
+/* the edition's tour: only the moves whose screens it shows (Minimalist: Execute), with its own welcome and finish.
+   Read once when the component sets up, so switching console mid-tour doesn't reshuffle the stops. */
+const ed = edition.value
+const moves = ed.tour?.moves ?? [0, 1, 2]
+const STEPS = ALL_STEPS.filter((s) => s.move === undefined || moves.includes(s.move)).map((s) =>
+  s.kind && ed.tour?.[s.kind] ? { ...s, ...ed.tour[s.kind] } : s)
+const MOVES = ALL_MOVES.map((m, k) => (moves.includes(k) ? m : null))
 
 function last(sel) { const all = document.querySelectorAll(sel); return all[all.length - 1] ?? null }
 /** The backlog row to plan: the task made in the tour if it's there, else the first one. */
@@ -279,8 +287,9 @@ function finish() {
 function startEmpty() {
   close() // first, so the snapshot Undo restores already has the tour marked done
   const undo = clearPlanner()
-  router.push('/strategy')
-  toast('Planner emptied. Start with + New plan', { label: 'Undo', run: () => { undo(); router.push('/') } })
+  const strategy = isEnabled('strategy') // a console without Strategy starts on Today, adding tasks with N
+  router.push(strategy ? '/strategy' : '/')
+  toast(strategy ? 'Planner emptied. Start with + New plan' : 'Planner emptied. Press N to add your first task', { label: 'Undo', run: () => { undo(); router.push('/') } })
 }
 function skip() {
   close()
@@ -358,7 +367,7 @@ const blockers = computed(() => {
           <span v-if="centred || done" class="tour-burst" aria-hidden="true"><i v-for="k in 8" :key="k" :style="{ '--a': k * 45 + 'deg' }"></i></span>
         </div>
         <div class="tour-moves mono" aria-label="Progress">
-          <span v-for="(m, k) in MOVES" :key="m" :class="{ on: step.move === k, past: step.kind === 'finish' || (step.move ?? -1) > k }">{{ k + 1 }} {{ m }}</span>
+          <span v-for="(m, k) in MOVES" v-show="m" :key="k" :class="{ on: step.move === k, past: step.kind === 'finish' || (step.move ?? -1) > k }">{{ moves.length > 1 ? `${moves.indexOf(k) + 1} ` : '' }}{{ m }}</span>
         </div>
         <h2 class="tour-title" :class="{ shimmer: centred || done }">{{ done ? 'Nice!' : step.title }}</h2>
         <p v-if="!done" class="tour-body">{{ body }}</p>

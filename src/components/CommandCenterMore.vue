@@ -1,4 +1,5 @@
 <script setup>
+import { feature, isEnabled } from '../edition'
 // S-01 "More": the full briefing from the earlier Command Center layout, shown on demand under the cockpit.
 import { computed } from 'vue'
 import {
@@ -70,7 +71,7 @@ const lectures = computed(() => state.lectures.filter((l) => l.date === T.value)
       </div>
     </section>
 
-    <section class="panel c12">
+    <section v-if="feature('stamps')" class="panel c12">
       <div class="panel-h"><span class="icon sm ok">approval</span><h2>Sign-off ledger</h2><span class="spacer"></span><span class="kbd">S</span><span class="small muted">stamp next</span></div>
       <div class="panel-b ledger">
         <div class="wl">
@@ -87,13 +88,13 @@ const lectures = computed(() => state.lectures.filter((l) => l.date === T.value)
     </section>
 
     <div class="tiles c12">
-      <router-link to="/week" class="panel tile">
+      <router-link v-if="isEnabled('routines')" to="/week" class="panel tile">
         <div class="tiny upper muted row">Routines due<span class="spacer"></span><span class="icon sm">cleaning_services</span></div>
         <div class="big mono">{{ routineCount }}<span class="muted">/{{ state.routines.length }}</span></div>
         <div class="bar"><i :style="{ width: (routineCount / state.routines.length) * 100 + '%' }"></i></div>
         <div class="small">Monthly group <b class="ok mono">{{ group }}</b> · {{ state.monthlyGroups[group].join(', ') }}</div>
       </router-link>
-      <div class="panel tile">
+      <div v-if="isEnabled('sleep')" class="panel tile">
         <div class="tiny upper muted row">{{ isToday ? 'Sleep last night' : 'Sleep (night before)' }}<span class="spacer"></span><span class="icon sm">bedtime</span></div>
         <template v-if="sleep">
           <div class="big mono">{{ Math.floor(sleptMin / 60) }}h {{ pad(sleptMin % 60) }}m <span class="small muted">vs {{ sleep.targetMin / 60 }}h</span></div>
@@ -104,7 +105,7 @@ const lectures = computed(() => state.lectures.filter((l) => l.date === T.value)
         </template>
         <div v-else class="small muted">No entry yet.</div>
       </div>
-      <div class="panel tile">
+      <div v-if="isEnabled('caffeine')" class="panel tile">
         <div class="tiny upper muted row">Caffeine {{ isToday ? 'today' : wd(T) }}<span class="spacer"></span><span class="icon sm">coffee</span></div>
         <div class="big mono">{{ mg }}<span class="muted small">/{{ state.caffeineLimit }}mg</span></div>
         <div class="bar" :class="mg > state.caffeineLimit ? 'danger' : mg > state.caffeineLimit * 0.75 ? 'warn' : ''"><i :style="{ width: Math.min(100, (mg / state.caffeineLimit) * 100) + '%' }"></i></div>
@@ -155,13 +156,12 @@ const lectures = computed(() => state.lectures.filter((l) => l.date === T.value)
 .ledger { display: flex; gap: 18px; align-items: flex-start; }
 .ledger-seals { display: flex; flex-direction: column; gap: 6px; }
 .wl { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; } /* fills the row with the tiles shown (plugins may hide some) */
 .tile { padding: 12px; gap: 8px; color: var(--text); }
 a.tile:hover { border-color: var(--accent); }
 .big { font-size: 22px; line-height: 28px; font-weight: 700; }
 .lec { display: flex; flex-direction: column; gap: 4px; }
 .checks { flex-wrap: wrap; gap: 10px; }
 .checks label { display: flex; align-items: center; gap: 4px; }
-@media (max-width: 1200px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .c6 { grid-column: span 12; } .tiles { grid-template-columns: 1fr; } }
 </style>

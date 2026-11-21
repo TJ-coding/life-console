@@ -60,6 +60,7 @@ Notifications travel **server → Apple/Google push services → phone**. The pu
 
 | Path | What |
 |---|---|
+| `editions/` | Edition manifests (pure; the server reads their landing paths, so the runtime image has them). `/minimalist` serves `public/landing-minimalist.html` where `LANDING=on` (Umami tag `landing-minimalist`), otherwise redirects to `/app?edition=minimalist` |
 | `modules/` | Module manifests (`index.js`, UI) and pure data contracts (`data.js`, also in the runtime image) |
 | `src/` | Vue 3 front end (`store.js` = data, `sync.js`, `merge.js`, `auth.js`, `push.js`, `views/`, `components/`) |
 | `public/` | Static files: `sw.js` (service worker), `manifest.webmanifest`, `icons/` |

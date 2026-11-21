@@ -1,4 +1,5 @@
 <script setup>
+import { feature, isEnabled } from '../edition'
 // S-01 Focus mode — one thing at a glance: the current block, the next one, top 3 actions.
 import { computed, watchEffect, onBeforeUnmount } from 'vue'
 import { state, ui, wd, workload, getStamps, capH, tickTodo, toast } from '../store'
@@ -95,11 +96,11 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
         <div class="row tiny upper muted">Workload<span class="spacer"></span><span class="mono">{{ hours.toFixed(1) }} / {{ capH() }}h</span></div>
         <div class="bar" :class="hours > capH() ? 'warn' : ''"><i :style="{ width: Math.min(100, (hours / capH()) * 100) + '%' }"></i></div>
       </div>
-      <div class="panel tile center">
+      <div v-if="feature('stamps')" class="panel tile center">
         <div class="row tiny upper muted">Sign-off<span class="spacer"></span><span class="mono" style="color: var(--stamp)">{{ stamped }}/4</span></div>
         <Stamps :date="T" :size="30" />
       </div>
-      <div class="panel tile">
+      <div v-if="isEnabled('caffeine')" class="panel tile">
         <div class="row tiny upper muted">Caffeine<span class="spacer"></span><span class="mono">{{ mg }} / {{ state.caffeineLimit }} mg</span></div>
         <div class="bar warn"><i :style="{ width: Math.min(100, (mg / state.caffeineLimit) * 100) + '%' }"></i></div>
       </div>
@@ -134,7 +135,7 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
 .queue { display: flex; flex-direction: column; gap: 6px; }
 .qh { padding-bottom: 6px; border-bottom: 1px solid var(--border); }
 .qrow { flex-direction: row; align-items: center; gap: 12px; padding: 12px 16px; font-size: 14px; }
-.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; } /* the caffeine plugin may hide its tile */
 .tile { padding: 14px 16px; gap: 12px; }
 .tile.center { align-items: stretch; }
 .tile.center :deep(.stamps) { justify-content: center; }

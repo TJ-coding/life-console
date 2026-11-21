@@ -1,4 +1,5 @@
 <script setup>
+import { feature, isEnabled } from '../edition'
 // S-01 · Command Center — a driver's console for today, and (S-11) a day view for any date via /day/:date.
 // Order = priority: what to do NOW (with what's next as a hint) on top; then the day's schedule beside the
 // next DEADLINES and the rest of TODAY.
@@ -252,9 +253,9 @@ function quickAdd() {
         </div>
       </section>
 
-      <div class="side">
+      <div class="side" :class="{ solo: !isEnabled('deadlines') }">
       <!-- deadline sits above the list: second only to NOW -->
-      <section class="panel inst dl-inst" :class="nextDl ? 'u-' + urgency(effDue(nextDl)) : ''">
+      <section v-if="isEnabled('deadlines')" class="panel inst dl-inst" :class="nextDl ? 'u-' + urgency(effDue(nextDl)) : ''">
         <template v-if="nextDl">
           <DeadlineHero :d="nextDl" />
           <!-- then the next four -->
@@ -332,15 +333,15 @@ function quickAdd() {
 
     <!-- 4 · telemetry: one quiet line, pinned to the bottom of the page -->
     <footer class="panel telemetry mono small">
-      <span class="tm seals" title="Daily seals 印 → 印 → 確認 → 完 (S stamps the next)"><span class="muted">SEALS</span> <Stamps :date="T" :size="22" /></span>
-      <span class="tm" title="Sleep the night before"><span class="muted">SLEEP</span>
+      <span v-if="feature('stamps')" class="tm seals" title="Daily seals 印 → 印 → 確認 → 完 (S stamps the next)"><span class="muted">SEALS</span> <Stamps :date="T" :size="22" /></span>
+      <span v-if="isEnabled('sleep')" class="tm" title="Sleep the night before"><span class="muted">SLEEP</span>
         <b v-if="sleep" :class="{ warn: sleptMin < sleep.targetMin }">{{ Math.floor(sleptMin / 60) }}h{{ pad(sleptMin % 60) }}</b><span v-else class="muted">—</span>
       </span>
-      <span class="tm" title="Caffeine today"><span class="muted">CAF</span>
+      <span v-if="isEnabled('caffeine')" class="tm" title="Caffeine today"><span class="muted">CAF</span>
         <b :class="{ danger: mg > state.caffeineLimit, warn: isToday && cutoffLeft < 0 && mg > 0 }">{{ mg }}</b><span class="muted">/{{ state.caffeineLimit }}mg</span>
         <button v-if="isToday" class="btn sm icon-only" :title="cutoffLeft > 0 ? `Add a coffee (95mg) · cutoff ${state.caffeineCutoff}` : `Cutoff ${state.caffeineCutoff} passed`" @click="addCoffee"><span class="icon sm">coffee</span></button>
       </span>
-      <router-link to="/week" class="tm" title="Weekly routines done"><span class="muted">ROUTINES</span> <b>{{ routineCount }}</b><span class="muted">/{{ state.routines.length }}</span></router-link>
+      <router-link v-if="isEnabled('routines')" to="/week" class="tm" title="Weekly routines done"><span class="muted">ROUTINES</span> <b>{{ routineCount }}</b><span class="muted">/{{ state.routines.length }}</span></router-link>
       <span class="spacer"></span>
       <template v-for="a in alerts" :key="a.id">
         <router-link v-if="a.to" :to="a.to" class="tm alert">{{ a.text }} · {{ relDay(a.date, T) }}</router-link>
@@ -381,6 +382,7 @@ function quickAdd() {
 .vert .vscroll { flex: 1 1 0; height: auto; min-height: 340px; }
 /* horizontal strip: deadline and list side by side under it */
 .day:not(.vert) .side { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
+.day:not(.vert) .side.solo { grid-template-columns: minmax(0, 1fr); } /* a console without Deadlines: the list alone */
 /* right column hugs its content: no empty box under the list */
 .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .dayname { min-width: 92px; text-align: center; }

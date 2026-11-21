@@ -13,6 +13,7 @@ else nodeModule.register('data:text/javascript,' + encodeURIComponent(`export as
 const { buildRegistry, defineModule, FROZEN_PATHS } = await import('../src/sdk/registry.js')
 const { default: MODULES } = await import('../modules/index.js')
 const { default: core } = await import('../src/sdk/core.js')
+const { normalizeDoc } = await import('../server/schema.mjs')
 const { MODULE_DATA, LINK_TYPES, RESERVED_PREFIXES, FALLBACK_LINK, checkModuleData } = await import('../modules/data.js')
 
 const reg = buildRegistry([...MODULES, core])
@@ -68,4 +69,53 @@ test('module data: duplicate ids and prefixes are refused', () => {
   assert.throws(() => checkModuleData([...MODULE_DATA, { id: 'study' }]), /used twice/)
   assert.throws(() => checkModuleData([{ id: 'x', linkTypes: [{ kind: 'x', prefix: 'lec' }] }]), /upper-case/)
   assert.throws(() => checkModuleData([...MODULE_DATA, { id: 'x', linkTypes: [{ kind: 'x', fallback: true }] }]), /fallback/)
+})
+
+/* ───────────── editions (platform phase 3) ───────────── */
+const { EDITIONS, EDITION_LIST, EDITION_LANDINGS, editionSeed, enabledModules, checkEditions } = await import('../editions/index.js')
+
+test('editions name only real modules, and base shows every module but the plugins (off by default)', () => {
+  const ids = MODULES.map((m) => m.id)
+  assert.equal(checkEditions(ids), true)
+  assert.deepEqual([...EDITIONS.base.modules].sort(), MODULES.filter((m) => !m.plugin).map((m) => m.id).sort())
+  assert.deepEqual(EDITION_LANDINGS, { '/minimalist': 'minimalist' })
+  assert.throws(() => checkEditions(ids, [...EDITION_LIST, { id: 'x', modules: ['nope'] }]), /unknown module "nope"/)
+  assert.throws(() => checkEditions(ids, [...EDITION_LIST, { id: 'minimalist', modules: [] }]), /used twice/)
+})
+
+test('enabled modules: the edition’s own plus the account’s add-ons for that edition only', () => {
+  assert.deepEqual([...enabledModules('minimalist', {})].sort(), ['focus', 'today', 'todos'])
+  const settings = { addOns: { minimalist: { deadlines: true, study: false }, base: { anything: true } } }
+  assert.deepEqual([...enabledModules('minimalist', settings)].sort(), ['deadlines', 'focus', 'today', 'todos'])
+  assert.ok(enabledModules('minimalist', { addOns: { minimalist: { today: false } } }).has('today'), 'add-ons never take an edition’s own module away')
+  assert.equal(enabledModules('unknown', {}).size, EDITIONS.base.modules.length, 'an unknown edition falls back to base')
+})
+
+test('a new account’s demo: base unchanged; Minimalist gets its demo, starting settings and home edition', () => {
+  const doc = () => ({ todos: [{ id: 'T-101', title: 'a', links: ['REG', 'DL-1'] }, { id: 'T-106', title: 'b', links: [] }], timeBlocks: [{ id: 'B1', link: 'BASE' }], plans: [{ id: 'SP-01' }], deadlines: [{ id: 'DL-1' }], tour: 'pending' })
+  assert.deepEqual(editionSeed(doc(), 'base'), doc())
+  assert.deepEqual(editionSeed(doc(), null), doc())
+  const m = editionSeed(doc(), 'minimalist')
+  assert.deepEqual(m.todos, [{ id: 'T-101', title: 'a', links: [] }])
+  assert.deepEqual([m.plans, m.deadlines, m.timeBlocks[0].link], [[], [], null])
+  assert.deepEqual(m.settings, { notify: { daily: false, wellbeing: false, pomodoro: false }, edition: 'minimalist' })
+  // and normalising keeps those choices while filling in the rest
+  const n = normalizeDoc(m)
+  assert.equal(n.settings.notify.daily, false)
+  assert.equal(n.settings.notify.blocks, true)
+  assert.equal(n.settings.edition, 'minimalist')
+})
+
+test('sleep, caffeine and routines are plugins: listed, no sidebar entry, off until switched on', async () => {
+  const { EDITION_LIST, enabledModules } = await import('../editions/index.js')
+  const reg = buildRegistry([core, ...MODULES])
+  const ids = ['sleep', 'caffeine', 'routines']
+  assert.deepEqual(reg.plugins.map((p) => p.module), ids)
+  for (const p of reg.plugins) assert.ok(p.desc, `${p.module} has a description for Settings`)
+  for (const id of ids) assert.ok(!reg.nav.some((n) => n.module === id), `${id} has no sidebar entry`)
+  for (const e of EDITION_LIST) {
+    for (const id of ids) assert.ok(!enabledModules(e.id, {}).has(id), `${id} is off by default in ${e.id}`)
+    assert.ok(enabledModules(e.id, { addOns: { [e.id]: { caffeine: true } } }).has('caffeine'), `caffeine switches on in ${e.id}`)
+    assert.ok(!enabledModules(e.id, { addOns: { [e.id]: { caffeine: false } } }).has('caffeine'))
+  }
 })

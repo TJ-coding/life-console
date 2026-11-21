@@ -1,4 +1,5 @@
 <script setup>
+import { feature } from '../edition'
 // Compact todo row: checkbox · title + vital points · time · L/S/D · linked chips. Draggable.
 import PartBadge from './PartBadge.vue'
 import { computed } from 'vue'
@@ -33,7 +34,7 @@ const crumb = computed(() => (props.todo.parent ? parentPath(props.todo) : ''))
     </div>
     <span class="mono small time" :class="{ warn: todo.timeMin >= 90 }">{{ todo.timeMin }}m</span>
     <LsdToggle v-if="!compact" :model-value="todo.lsd" @update:model-value="(v) => updateTodo(todo.id, { lsd: v })" />
-    <span v-else class="mono tiny muted lsd-c">{{ todo.lsd }}</span>
+    <span v-else-if="feature('lsd')" class="mono tiny muted lsd-c">{{ todo.lsd }}</span>
     <span v-if="flagUntimed && !todo.done && !todo.scheduled?.start" class="icon untimed" title="No time yet — drag onto the schedule">more_time</span>
     <span v-if="showLinks && todo.links.length" class="links"><Chip :id="todo.links[todo.links.length - 1]" /></span>
     <button v-if="nextDay && !todo.done && !box" class="nd mono" :title="`Move to ${nextLabel} (>) · undo in the toast`" @click.stop="sendToNextDay(todo.id)">Move to {{ nextLabel }}</button>
