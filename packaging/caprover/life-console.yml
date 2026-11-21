@@ -32,7 +32,7 @@ caproverOneClickApp:
     variables:
         - id: $$cap_lc_version
           label: Life Console version
-          defaultValue: '0.1.0'
+          defaultValue: '0.2.0'
           description: Image tag. Releases are listed at https://github.com/TJ-coding/life-console/releases
           validRegex: /^([^\s^\/])+$/
         - id: $$cap_postgres_version

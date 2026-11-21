@@ -94,13 +94,13 @@ Unraid templates are one container each, so users install PostgreSQL 17 separate
 
 Keep this table current: it's the list of stores to update on every release.
 
-| Store | Submitted | Pull request | Status (2026-11-13) | Store's copy of the package |
+| Store | Submitted | Pull request | Status (2026-11-22) | Store's copy of the package |
 |---|---|---|---|---|
-| Portainer templates (Lissy93) | 2026-11-13 | [Lissy93/portainer-templates#177](https://github.com/lissy93/portainer-templates/pull/177) | Open; adds a `sources.csv` row. The template lives in this repo and is fetched nightly, so updates need no PR | `packaging/portainer/` (here) |
-| Dokploy | 2026-11-13 | [Dokploy/templates#1321](https://github.com/Dokploy/templates/pull/1321) | Open; all checks pass; tested on Dokploy v0.29.0 | `blueprints/life-console/` |
-| Cosmos | 2026-11-13 | [azukaar/cosmos-servapps-official#342](https://github.com/azukaar/cosmos-servapps-official/pull/342) | Open; validator clean | `servapps/LifeConsole/` |
-| Easypanel | 2026-11-13 | [easypanel-io/templates#1722](https://github.com/easypanel-io/templates/pull/1722) | Open; preview deploy awaits maintainer approval; not yet run in their playground | `templates/life-console/` |
-| CasaOS | 2026-11-13 | [IceWhaleTech/CasaOS-AppStore#1148](https://github.com/IceWhaleTech/CasaOS-AppStore/pull/1148) | Open; validate + SonarCloud pass | `Apps/LifeConsole/` |
+| Portainer templates (Lissy93) | 2026-11-13 | [Lissy93/portainer-templates#177](https://github.com/lissy93/portainer-templates/pull/177) | **Merged** 2026-11-12. The template lives in this repo and is fetched nightly, so updates need no PR | `packaging/portainer/` (here) |
+| Dokploy | 2026-11-13 | [Dokploy/templates#1321](https://github.com/Dokploy/templates/pull/1321) | **Merged** 2026-11-13 (0.1.0). Updates need a new PR (0.2.0: branch `life-console-0.2.0`) | `blueprints/life-console/` |
+| Cosmos | 2026-11-13 | [azukaar/cosmos-servapps-official#342](https://github.com/azukaar/cosmos-servapps-official/pull/342) | Open; validator clean. Updated to 0.2 on 2026-11-22 | `servapps/LifeConsole/` |
+| Easypanel | 2026-11-13 | [easypanel-io/templates#1722](https://github.com/easypanel-io/templates/pull/1722) | Open; preview deploy awaits maintainer approval. Updated to 0.2.0 on 2026-11-22 | `templates/life-console/` |
+| CasaOS | 2026-11-13 | [IceWhaleTech/CasaOS-AppStore#1148](https://github.com/IceWhaleTech/CasaOS-AppStore/pull/1148) | Open; validate + SonarCloud pass. Updated to 0.2.0 on 2026-11-22 | `Apps/LifeConsole/` |
 
 When a PR merges or closes, update its row. When a new store accepts the app, add a row.
 
