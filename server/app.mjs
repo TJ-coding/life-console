@@ -105,7 +105,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         let dbOk = true
         try { await db.execute(sql`select 1`) } catch { dbOk = false }
         const signupMode = dbOk ? await signups.publicMode().catch(() => cfg.signups) : cfg.signups
-        return send(res, dbOk ? 200 : 503, { ok: dbOk, build: BUILD, time: new Date().toISOString(), auth: { signups: signupMode, passwordReset: !!mailer, password: cfg.passwordAuth, google: !!google }, ...(cfg.analyticsScript && cfg.analyticsSiteId ? { analytics: { script: cfg.analyticsScript, siteId: cfg.analyticsSiteId } } : {}) })
+        return send(res, dbOk ? 200 : 503, { ok: dbOk, build: BUILD, time: new Date().toISOString(), auth: { signups: signupMode, passwordReset: !!mailer, password: cfg.passwordAuth, google: !!google }, upstreamIssues: cfg.upstreamIssues && !!cfg.githubRepo, ...(cfg.analyticsScript && cfg.analyticsSiteId ? { analytics: { script: cfg.analyticsScript, siteId: cfg.analyticsSiteId } } : {}) })
       }
       case 'GET /api/mac/latest': // the Mac menu-bar app's update check (server/macapp.mjs)
         limit(`maclatest:${ip(req)}`, 120, 3600000)

@@ -25,6 +25,7 @@ export const auth = reactive({
   user: null, // { id, email, name, role }
   signups: 'open',
   passwordReset: false,
+  upstreamIssues: false, // the server's UPSTREAM_ISSUES (from /api/health)
   password: true, // email + password sign-in offered by this server
   google: false, // "Continue with Google" offered by this server
   analytics: null, // { script, siteId }: this server collects anonymous usage statistics (see analytics.js)

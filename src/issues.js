@@ -4,6 +4,7 @@
 import { reactive } from 'vue'
 import { ui } from './store'
 import { deviceName } from './sync'
+import { auth } from './auth'
 
 export const KINDS = [
   { key: 'bug', label: 'Bug', icon: 'bug_report' },
@@ -137,10 +138,11 @@ export async function replyIssue(id, text, reopen = false) {
 
 /* Self-hosted servers keep their issues to themselves (they go to that server's admin). So the reporter can
    also tell the Life Console project: a pre-filled GitHub issue, opened in the browser only when they ask.
-   It carries the report and the app context, never the account, email or device name. */
+   It carries the report and the app context, never the account, email or device name. The server decides
+   whether to offer it (UPSTREAM_ISSUES), so a new domain doesn't change anything. */
 const UPSTREAM = 'https://github.com/TJ-coding/life-console/issues/new'
-/** On someone else's server (not life-console.dev, nor the project's own test server). */
-export const selfHosted = () => !/(^|\.)life-console\.dev$|(^|\.)tj-coding\.uk$/i.test(location.hostname)
+/** The server offers the GitHub link (UPSTREAM_ISSUES, on unless its admin turns it off; off on life-console.dev). */
+export const selfHosted = () => !!auth.upstreamIssues
 /** The GitHub "new issue" link for a report: { title, details, kind, severity, screen, screenTitle, route }. */
 export function upstreamUrl(r) {
   const c = context()

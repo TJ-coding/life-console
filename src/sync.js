@@ -238,6 +238,7 @@ export async function startSync() {
     checkBuild(h)
     auth.signups = h.auth?.signups ?? 'open'
     auth.passwordReset = !!h.auth?.passwordReset
+    auth.upstreamIssues = !!h.upstreamIssues // UPSTREAM_ISSUES: offer the GitHub link after a report
     auth.password = h.auth?.password !== false
     auth.google = !!h.auth?.google
     auth.analytics = h.analytics?.script && h.analytics?.siteId ? h.analytics : null

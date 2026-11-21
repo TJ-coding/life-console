@@ -52,6 +52,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      UPSTREAM_ISSUES: ${UPSTREAM_ISSUES:-on}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-Life Console <no-reply@localhost>}
