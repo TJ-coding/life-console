@@ -2,7 +2,7 @@
 // Vertical hourly schedule used in each Weekly Planner day column.
 import { computed, ref, nextTick } from 'vue'
 import { workIn } from '../../server/pomodoro.mjs'
-import { ui, todayISO, blockedRanges, cutBlockAt, findTodo, altLabel, addTodo, parseQuick, pomo, toast, state, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
+import { ui, todayISO, blockedRanges, cutBlockAt, findTodo, cutLabel, isCutKey, addTodo, parseQuick, pomo, toast, state, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 6 }, to: { type: Number, default: 23 }, pxh: { type: Number, default: 22 }, dimFn: Function,
   // preview mode (Briefing / Debrief): no editing; markFn(b) adds classes (pv-new, pv-ghost, pv-late, pv-star); lineAt draws a line (minutes)
@@ -35,7 +35,8 @@ const ed = useTimelineEdit({
 const hover = ed.hover
 function openBlock(e, b) {
   if (ed.isResizing()) return
-  if (e.altKey && cut.value?.id === b.id) { cutBlockAt(b.todoId, cut.value.at); cut.value = null; return }
+  if (isCutKey(e) && cut.value?.id === b.id) { // ISS-39: ⌘/Ctrl-click on the cut line cuts (Shift-click still selects)
+    cutBlockAt(b.todoId, cut.value.at); cut.value = null; return }
   // Shift/⌘/Ctrl-click — or any click while a selection is open — adds/removes it from the selection
   // ISS-29: modifier-click adds/removes; on touch screens a tap does too while a selection is open; a plain
   // mouse click opens the block and clears the selection
@@ -78,7 +79,7 @@ function saveDraft() {
   const id = t.id
   toast(`${id} added ${fromMin(d.start)}–${fromMin(d.end)}`, { label: 'Undo', run: () => { const i = state.todos.findIndex((x) => x.id === id); if (i >= 0) state.todos.splice(i, 1) } })
 }
-/* ISS-39: hovering an open task block shows a cut line at the cursor (snapped to 5 min); ⌥/Alt-click cuts there */
+/* ISS-39: hovering an open task block shows a cut line at the cursor (snapped to 5 min); ⌘/Ctrl-click cuts there */
 const cut = ref(null) // { id, top (px inside the block), at (clock minute) }
 function trackCut(e, b) {
   const t = b.todoId && findTodo(b.todoId)
@@ -104,11 +105,11 @@ function pomos(b) {
     <div v-for="(z, k) in blocked" :key="'bo' + k" class="bo" :style="z" title="Blocked out (Settings → Blocked-out times): auto-scheduling leaves this free"></div>
     <div
       v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b) }, markFn ? markFn(b) : '', { moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b), linked: isHoverLinked(b.todoId) }]"
-      :style="style(b)" :data-tid="b.todoId || null" :data-bkey="blockKey(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline · ' + altLabel + '-click cuts it at the line' : 'removes it')}`" :draggable="!readonly && !ui.scheduleLock"
+      :style="style(b)" :data-tid="b.todoId || null" :data-bkey="blockKey(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline · ' + cutLabel + '-click cuts it at the line · Shift-click selects' : 'removes it')}`" :draggable="!readonly && !ui.scheduleLock"
       @dragstart="!readonly && ed.dragStartBlock($event, b)" @dragend="!readonly && ed.dragEnd($event)" @click="!readonly && openBlock($event, b)" @contextmenu.prevent="!readonly && openCtxMenu($event, [blockKey(b)])"
       @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null; cut = null" @mousemove="trackCut($event, b)"
     >
-      <i v-if="cut?.id === b.id" class="cutline" :style="{ top: cut.top + 'px' }"><span v-if="ui.altHeld" class="mono">{{ fromMin(cut.at) }}</span></i>
+      <i v-if="cut?.id === b.id" class="cutline" :style="{ top: cut.top + 'px' }"><span v-if="ui.cutHeld" class="mono">{{ fromMin(cut.at) }}</span></i>
       <i v-for="(g, k) in pomos(b)" :key="'pm' + k" class="pm" :style="g"></i>
       <span v-if="b.done" class="icon dn" title="Completed">check_circle</span><span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> <span class="bt">{{ b.title }}</span><span v-if="b.pomo && b.pomo.length > 1" class="mono pc" :title="`${b.pomo.length} pomodoros`"><span class="icon">timer</span>{{ b.pomo.length }}</span>
       <button v-if="!readonly && !ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>

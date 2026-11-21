@@ -3,7 +3,7 @@
 // Fixed px-per-hour so block text stays readable; scrolls horizontally and
 // auto-centres on "now". Todos can be dropped onto it to get a start time.
 import { computed, ref, onMounted, nextTick, watch } from 'vue'
-import { ui, todayISO, cutBlockAt, findTodo, altLabel, toMin, fromMin, layoutLanes, removeTimelineBlock, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
+import { ui, todayISO, cutBlockAt, findTodo, cutLabel, isCutKey, toMin, fromMin, layoutLanes, removeTimelineBlock, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 0 }, to: { type: Number, default: 24 } })
@@ -54,7 +54,7 @@ const ed = useTimelineEdit({
 })
 const hover = ed.hover
 const removeBlock = removeTimelineBlock
-/* ISS-39: hovering an open task block shows a cut line at the cursor (snapped to 5 min); ⌥/Alt-click cuts there */
+/* ISS-39: hovering an open task block shows a cut line at the cursor (snapped to 5 min); ⌘/Ctrl-click cuts there */
 const cut = ref(null) // { id, left (px inside the block), at (clock minute) }
 function trackCut(e, b) {
   const t = b.todoId && findTodo(b.todoId)
@@ -66,7 +66,8 @@ function trackCut(e, b) {
 }
 function openBlock(e, b) {
   if (ed.isResizing()) return
-  if (e.altKey && cut.value?.id === b.id) { cutBlockAt(b.todoId, cut.value.at); cut.value = null; return }
+  if (isCutKey(e) && cut.value?.id === b.id) { // ISS-39: ⌘/Ctrl-click on the cut line cuts (Shift-click still selects)
+    cutBlockAt(b.todoId, cut.value.at); cut.value = null; return }
   // Shift/⌘/Ctrl-click — or any click while a selection is open — adds/removes it from the selection
   // ISS-29: modifier-click adds/removes; on touch screens a tap does too while a selection is open; a plain
   // mouse click opens the block and clears the selection
@@ -92,11 +93,11 @@ function openBlock(e, b) {
         </div>
         <div
           v-for="b in laid.blocks" :key="b.id" :data-bkey="blockKey(b)" class="block tl-block" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b) }]"
-          :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag right edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline · ' + altLabel + '-click cuts it at the line' : 'removes it')}`" :draggable="!ui.scheduleLock"
+          :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag right edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline · ' + cutLabel + '-click cuts it at the line · Shift-click selects' : 'removes it')}`" :draggable="!ui.scheduleLock"
           @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock($event, b)" @contextmenu.prevent="openCtxMenu($event, [blockKey(b)])"
           @mousemove="trackCut($event, b)" @mouseleave="cut = null"
         >
-          <i v-if="cut?.id === b.id" class="cutline" :style="{ left: cut.left + 'px' }"><span v-if="ui.altHeld" class="mono">{{ fromMin(cut.at) }}</span></i>
+          <i v-if="cut?.id === b.id" class="cutline" :style="{ left: cut.left + 'px' }"><span v-if="ui.cutHeld" class="mono">{{ fromMin(cut.at) }}</span></i>
           <span class="mono t"><span v-if="b.done" class="icon dn" title="Completed">check_circle</span>{{ b.start }}–{{ b.end }}</span>
           <span class="nm">{{ b.title }}</span>
           <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
