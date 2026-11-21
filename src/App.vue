@@ -12,6 +12,7 @@ import SplitDialog from './components/SplitDialog.vue'
 import BlockDialog from './components/BlockDialog.vue'
 import DeadlineDialog from './components/DeadlineDialog.vue'
 import IssueDialog from './components/IssueDialog.vue'
+import IssueFixedNote from './components/IssueFixedNote.vue'
 import SelectionBar from './components/SelectionBar.vue'
 import ContextMenu from './components/ContextMenu.vue'
 import { issues, openIssueDialog, openCount as openIssueCount } from './issues'
@@ -341,6 +342,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <DeadlineDialog />
     <BlockDialog />
     <IssueDialog />
+    <IssueFixedNote />
     <SelectionBar />
     <ContextMenu />
     <TourOverlay v-if="ui.tourOpen" />

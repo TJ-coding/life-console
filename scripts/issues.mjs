@@ -56,6 +56,7 @@ function print(i, full = true) {
   const ctx = Object.entries(i.context || {}).filter(([k]) => k !== 'userAgent').map(([k, v]) => `${k}=${v}`).join('  ')
   if (ctx) console.log(`  context: ${ctx}`)
   if (i.resolution || i.commit) console.log(`  resolution: ${i.resolution}${i.commit ? `  (commit ${i.commit})` : ''}  ${i.resolvedAt || ''}`)
+  for (const r of i.replies || []) console.log(`  ↳ ${r.by}${r.reopened ? ' (reopened)' : ''} ${r.at}: ${r.text}${r.was ? `  [was: ${r.was}]` : ''}`)
 }
 
 const STATUS_CMD = { start: 'in-progress', fix: 'fixed', wontfix: 'wontfix', reopen: 'open' }

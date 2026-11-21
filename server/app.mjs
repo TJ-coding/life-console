@@ -188,6 +188,9 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   async function userRoute(req, res, url, route, who) {
     const user = who.user
     const uid = user.id
+    // the reporter (or an admin) answers an issue, optionally reopening it: POST /api/issues/ISS-n/reply { text, reopen }
+    const replyId = url.pathname.match(/^\/api\/issues\/(ISS-\d+)\/reply$/)?.[1]
+    if (replyId && req.method === 'POST') { const i = await issues.reply(user, replyId, await body(req)); return i ? send(res, 200, i) : send(res, 404, { error: 'issue not found' }) }
     const issueId = url.pathname.match(/^\/api\/issues\/(ISS-\d+)$/)?.[1]
     if (issueId) {
       if (req.method === 'GET') { const i = await issues.one(user, issueId); return i ? send(res, 200, i) : send(res, 404, { error: 'issue not found' }) }
@@ -321,6 +324,8 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
 
       case 'GET /api/issues':
         return send(res, 200, await issues.list(user, { status: url.searchParams.get('status'), screen: url.searchParams.get('screen'), platform: url.searchParams.get('platform') }))
+      case 'POST /api/issues/seen': // the "your issue is fixed" note was shown: { ids: ['ISS-3', …] }
+        return send(res, 200, { ok: true, n: await issues.seen(user, (await body(req)).ids) })
       case 'POST /api/issues': {
         limit(`issue:${uid}`, 60, 3600000)
         const i = await issues.create(user, await body(req), req.headers['user-agent'])

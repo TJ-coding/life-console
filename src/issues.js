@@ -115,3 +115,22 @@ export async function deleteIssue(id) {
 }
 
 export const openCount = () => issues.list.filter((i) => i.status === 'open' || i.status === 'in-progress').length
+
+/* Closing the loop with reporters: when one of your issues is fixed, the app thanks you (IssueFixedNote.vue)
+   and asks you to check it; if it isn't fixed for you, reopen it with a reply saying why. */
+/** Your fixed issues you haven't seen the note for yet. */
+export const fixedUnseen = () => issues.list.filter((i) => i.mine && i.status === 'fixed' && !i.seenAt)
+/** Mark the fixed note as seen for these issues (your own). */
+export async function markSeen(ids) {
+  if (!ids.length) return
+  const now = new Date().toISOString()
+  for (const i of issues.list) if (ids.includes(i.id)) i.seenAt = now
+  try { await call('POST', '/api/issues/seen', { ids }) } catch { /* shown again next time */ }
+}
+/** Reply to an issue; reopen = it isn't fixed (the reply says why). Updates the list. */
+export async function replyIssue(id, text, reopen = false) {
+  const i = await call('POST', `/api/issues/${id}/reply`, { text, reopen })
+  const k = issues.list.findIndex((x) => x.id === id)
+  if (k >= 0) issues.list[k] = i
+  return i
+}

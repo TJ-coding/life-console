@@ -219,6 +219,34 @@ test('issues: anyone reports, reporters see their own, only admins manage', asyn
   assert.equal((await alice('GET', '/api/issues?status=active')).body.length, 2)
 })
 
+test('issues: reporters see the fixed note once, and may reopen their own with a reply', async () => {
+  const mine = (await bob('GET', '/api/issues')).body.find((i) => i.title === 'bob idea')
+  assert.equal(mine.mine, true)
+  assert.equal(mine.status, 'fixed')
+  assert.equal(mine.seenAt, null, 'a fresh fix is unseen')
+  const aliceView = (await alice('GET', '/api/issues')).body.find((i) => i.title === 'bob idea')
+  assert.equal(aliceView.mine, false, "the admin didn't report it")
+  // only the reporter's own issues count as seen
+  assert.equal((await alice('POST', '/api/issues/seen', { ids: [mine.id] })).body.n, 0)
+  assert.equal((await bob('POST', '/api/issues/seen', { ids: [mine.id] })).body.n, 1)
+  assert.ok((await bob('GET', `/api/issues/${mine.id}`)).body.seenAt)
+  // another user can't reply to or reopen it
+  const carolC = client()
+  assert.equal((await carolC('POST', '/api/auth/signup', { email: 'dora@example.com', password: 'dora password' })).status, 201)
+  assert.equal((await carolC('POST', `/api/issues/${mine.id}/reply`, { text: 'me too', reopen: true })).status, 404)
+  // the reporter reopens it with a reason; the old resolution is kept in the reply
+  const re = await bob('POST', `/api/issues/${mine.id}/reply`, { text: 'still broken on my phone', reopen: true })
+  assert.equal(re.status, 200)
+  assert.equal(re.body.status, 'open')
+  assert.equal(re.body.resolution, '')
+  assert.deepEqual(re.body.replies.map((r) => [r.by, r.text, r.reopened, r.was]), [['reporter', 'still broken on my phone', true, 'done']])
+  assert.equal((await bob('POST', `/api/issues/${mine.id}/reply`, {})).status, 400, 'a reply needs text')
+  // fixed again: the note shows again
+  const again = await alice('PATCH', `/api/issues/${mine.id}`, { status: 'fixed', resolution: 'fixed for phones too' })
+  assert.equal(again.body.seenAt, null)
+  assert.equal((await alice('POST', `/api/issues/${mine.id}/reply`, { text: 'please check again' })).body.replies.at(-1).by, 'admin')
+})
+
 test('API tokens work for scripts (npm run issues)', async () => {
   const me = (await alice('GET', '/api/auth/me')).body.user
   const token = await appA.auth.createApiToken(me.id, 'test')

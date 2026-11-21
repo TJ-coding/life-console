@@ -22,6 +22,13 @@
       "when": 1794305287023,
       "tag": "0002_user_activity",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795250128636,
+      "tag": "0003_issue_replies",
+      "breakpoints": true
     }
   ]
 }
