@@ -2,7 +2,7 @@
 // ISS-28: the right-click / long-press menu for the current selection (store.openCtxMenu opens it).
 // Recombine shows when ≥ 2 open parts of one split task are selected: only those parts join.
 import { computed, nextTick, ref, watch } from 'vue'
-import { ui, findTodo, state, selectedPartGroups, recombineParts, shiftSelected, removeSelected, clearBlockSel, sendToNextDay } from '../store'
+import { ui, findTodo, state, selectedPartGroups, recombineParts, shiftSelected, removeSelected, clearBlockSel, sendToNextDay, canSliceBlock, sliceBlock, duplicateTodo } from '../store'
 
 const el = ref(null)
 const pos = ref({ left: 0, top: 0 })
@@ -22,6 +22,10 @@ const open = () => run(() => { const s = single.value; if (s?.todo) ui.drawerId 
 const recombine = (g) => run(() => { recombineParts(g.parts.map((p) => p.id)) })
 const nextDay = () => run(() => { const s = single.value; if (s?.todo) { sendToNextDay(s.todo.id); clearBlockSel() } else shiftSelected(0, 1) })
 const offSchedule = () => run(removeSelected)
+// ISS-39: slice the block in place, or open the planner for anything more
+const slice = (n) => run(() => { sliceBlock(single.value.todo.id, n); clearBlockSel() })
+const dup = () => run(() => { duplicateTodo(single.value.todo.id); clearBlockSel() })
+const plan = () => run(() => { ui.splitId = single.value.todo.id; clearBlockSel() })
 
 watch(() => ui.ctxMenu, async (m) => {
   if (!m) return
@@ -43,6 +47,12 @@ function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close() } }
           <span class="icon sm">merge</span><span class="grow">Recombine {{ g.parts.length }} parts</span><span class="mono small muted">{{ hm(g.min) }}</span>
         </button>
         <button v-if="single" class="ctx-i" role="menuitem" @click="open"><span class="icon sm">open_in_new</span><span class="grow">Open</span></button>
+        <button v-if="single?.todo" class="ctx-i" role="menuitem" @click="dup"><span class="icon sm">content_copy</span><span class="grow">Duplicate</span><span class="small muted">to backlog</span></button>
+        <template v-if="single?.todo && !single.todo.done">
+          <button v-if="canSliceBlock(single.todo, 2)" class="ctx-i" role="menuitem" @click="slice(2)"><span class="icon sm">vertical_split</span><span class="grow">Split in 2</span><span class="mono small muted">{{ hm(Math.ceil(single.todo.timeMin / 2)) }} each</span></button>
+          <button v-if="canSliceBlock(single.todo, 3)" class="ctx-i" role="menuitem" @click="slice(3)"><span class="icon sm">view_week</span><span class="grow">Split in 3</span><span class="mono small muted">{{ hm(Math.ceil(single.todo.timeMin / 3)) }} each</span></button>
+          <button class="ctx-i" role="menuitem" @click="plan"><span class="icon sm">call_split</span><span class="grow">Plan over days / times…</span></button>
+        </template>
         <button class="ctx-i" role="menuitem" @click="nextDay"><span class="icon sm">redo</span><span class="grow">Move to next day</span><span class="mono small muted">→</span></button>
         <button class="ctx-i" role="menuitem" @click="offSchedule"><span class="icon sm">event_busy</span><span class="grow">Take off the schedule</span><span class="mono small muted">Del</span></button>
       </div>

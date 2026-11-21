@@ -1645,3 +1645,54 @@ export const trailLinks = (t) => [
   ...(t.links || []).filter((l) => linkType(l) === 'plan'),
   ...(t.links || []).filter((l) => linkType(l) === 'goal'),
 ]
+
+/** ISS-39: can this timed task block be sliced into n parts in place? (open, timed, a leaf; each part
+ *  ≥ 10 min, or ≥ one pomodoro for a pomodoro sitting) */
+export function canSliceBlock(t, n = 2) {
+  if (!t || t.done || !t.scheduled?.start || !isLeaf(t)) return false
+  return (t.timeMin || 0) >= n * (t.pomo ? pomo().work : 10)
+}
+/** ISS-39: slice a timed task block into n back-to-back parts on its day, which can then be moved or
+ *  resized one by one; Undo in the toast. A pomodoro sitting splits by its work minutes, each part laid
+ *  out with its own breaks and a short break between parts. */
+export function sliceBlock(id, n = 2) {
+  const t = findTodo(id)
+  if (!canSliceBlock(t, n)) return []
+  const P = pomo()
+  let at = toMin(t.scheduled.start)
+  const parts = evenParts(t.timeMin, n).map((min) => {
+    const p = { min, date: t.scheduled.date, start: fromMin(at) }
+    at += t.pomo ? wallMin(min, P) + P.short : min
+    return p
+  })
+  const made = splitWithUndo(id, parts)
+  if (t.pomo) made.forEach((x) => { if (!x.pomo) x.pomo = true })
+  return made
+}
+
+/** Public ISS-4: duplicate a task (done or not) as a fresh open task in the backlog: same title, notes,
+ *  estimate, priority, scope and links; no day, no done, no split. A task with subtasks is copied with
+ *  its whole tree. The due date is kept only if it's still ahead. Undo in the toast; returns the copy. */
+export function duplicateTodo(id) {
+  const src = findTodo(id)
+  if (!src) return null
+  const T = todayISO()
+  const made = []
+  const copy = (t, parent) => {
+    const c = addTodo({
+      title: t.title, vital: t.vital, notes: t.notes, timeMin: t.timeMin, lsd: t.lsd, priority: t.priority,
+      links: [...(t.links || [])], due: t.due && t.due >= T ? t.due : null, scheduled: null,
+      ...(parent ? { parent } : {}), order: (t.order ?? 0) + 0.0005,
+    })
+    made.push(c.id)
+    for (const k of childrenOf(t.id)) copy(k, c.id)
+    return c
+  }
+  const top = copy(src, src.parent && findTodo(src.parent) && !findTodo(src.parent).done ? src.parent : null)
+  syncContainers()
+  toast(`${src.id} duplicated as ${top.id}${made.length > 1 ? ` (+${made.length - 1} subtasks)` : ''} · in the backlog`, {
+    label: 'Undo',
+    run: () => { const ids = new Set(made); for (let i = state.todos.length - 1; i >= 0; i--) if (ids.has(state.todos[i].id)) state.todos.splice(i, 1); if (ids.has(ui.drawerId)) ui.drawerId = null },
+  })
+  return top
+}
