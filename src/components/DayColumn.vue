@@ -18,7 +18,7 @@ const router = useRouter()
 // ISS-38: a day in Plan week opens it in the Command Center with the backlog beside it, to plan that day
 const openDay = () => { ui.dayPlanning = true; router.push(props.date === todayISO() ? '/?plan=1' : `/day/${props.date}?plan=1`) }
 // balance: ② Assign day only — { avg, counts (days the average covers), rows, moves } from the planner
-const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object, dlRows: { type: Number, default: 0 } })
+const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object })
 /* ② Assign day: the space under the day does that day's job — on an over-full day, what to move out
    (the planner's rebalance moves); on a day with room, the backlog tasks the planner gives it */
 const free = computed(() => CAPACITY_H - hours.value)
@@ -66,9 +66,9 @@ function auto() {
 <template>
   <div class="day panel" :class="{ today: isToday, past, hasdl: deadlines.length }" :data-date="date">
     <!-- ISS-41: a day with a deadline wears a solid banner above its date (red once overdue), so the
-         week's deadline days stand out at a glance; every column reserves the busiest day's number of
-         rows (dlRows) so the dates and everything below stay level -->
-    <div class="dlband" :class="{ has: deadlines.length, over: deadlines.some((d) => !d.done && isOverdue(d)), alldone: deadlines.length && deadlines.every((d) => d.done) }" :style="{ minHeight: dlRows ? dlRows * 22 + 6 + 'px' : 0 }">
+         week's deadline days stand out at a glance. Days without one get no banner and no reserved
+         space (the owner preferred no gap over level dates) -->
+    <div v-if="deadlines.length" class="dlband" :class="{ has: deadlines.length, over: deadlines.some((d) => !d.done && isOverdue(d)), alldone: deadlines.length && deadlines.every((d) => d.done) }">
       <div v-for="d in deadlines" :key="d.id" class="dlb" :class="{ done: d.done, over: isOverdue(d) }" :title="`Deadline: ${d.title}${d.vital ? ' · ' + d.vital : ''} — click to edit`" @click="ui.deadlineId = d.id">
         <span class="icon">flag</span><span class="ellipsis grow">{{ d.title }}</span><span class="mono tm">{{ d.due.slice(11) }}</span>
         <input v-model="d.done" type="checkbox" title="Done" @click.stop />
