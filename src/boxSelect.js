@@ -4,7 +4,10 @@
 // Timelines opt in with `data-boxsel` on their area and `data-bkey="<blockKey>"` on each block; the box can
 // cross several of them (the day columns of Plan week). Plan week's workload buckets opt in the same way. Mouse / pen only — phones keep long-press.
 // Clicking anywhere outside the selected blocks clears the selection.
-import { ui } from './store'
+// ISS-47: on a day timeline that opts in with `data-draw` (+ data-from, data-pxh), a box that touches no block
+// draws a new task instead: it snaps to 15 minutes, shows its time range, and on release the timeline gets an
+// `lc-draw` event { start, end } (clock minutes) to ask for the task's title.
+import { ui, fromMin } from './store'
 
 const SKIP = '.block, button, a, input, select, textarea, [contenteditable="true"], .handle'
 const START_PX = 5
@@ -12,6 +15,7 @@ const START_PX = 5
 let cand = null // { x, y, base: [] } after pointerdown, before the drag starts
 let box = null // the overlay element while drawing
 let boxEndedAt = 0 // when the last box drag ended: the click that follows it isn't a real click
+let draw = null // ISS-47: { area, start, end } while the box is drawing a new task
 
 function rectOf(a, b) {
   return { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), right: Math.max(a.x, b.x), bottom: Math.max(a.y, b.y) }
@@ -25,7 +29,7 @@ function onDown(e) {
   if (e.button !== 0 || e.pointerType === 'touch') return
   const area = e.target.closest?.('[data-boxsel]')
   if (!area || e.target.closest(SKIP) || ui.scheduleLock) return
-  cand = { x: e.clientX, y: e.clientY, base: e.shiftKey || e.metaKey || e.ctrlKey ? [...ui.selBlocks] : [] }
+  cand = { x: e.clientX, y: e.clientY, area, base: e.shiftKey || e.metaKey || e.ctrlKey ? [...ui.selBlocks] : [] }
 }
 function onMove(e) {
   if (!cand) return
@@ -40,7 +44,23 @@ function onMove(e) {
   e.preventDefault()
   const r = rectOf(cand, { x: e.clientX, y: e.clientY })
   Object.assign(box.style, { left: r.left + 'px', top: r.top + 'px', width: r.right - r.left + 'px', height: r.bottom - r.top + 'px' })
-  const sel = [...new Set([...cand.base, ...hits(r)])]
+  const hit = hits(r)
+  // ISS-47: nothing touched on a drawable day timeline → draw a new task there instead of selecting
+  const a = cand.area
+  if (a.dataset.draw && !hit.length && !cand.base.length) {
+    const ar = a.getBoundingClientRect()
+    const from = Number(a.dataset.from) * 60, pxh = Number(a.dataset.pxh)
+    const at = (y) => Math.round((from + ((Math.min(ar.bottom, Math.max(ar.top, y)) - ar.top) / pxh) * 60) / 15) * 15
+    draw = { area: a, start: at(r.top), end: at(r.bottom) }
+    box.classList.add('draw')
+    box.dataset.label = draw.end - draw.start >= 15 ? `${fromMin(draw.start)}–${fromMin(draw.end)} · new task` : 'drag to draw a task'
+    Object.assign(box.style, { left: ar.left + 28 + 'px', width: ar.width - 30 + 'px' })
+    ui.selBlocks.splice(0)
+    return
+  }
+  draw = null
+  box.classList.remove('draw')
+  const sel = [...new Set([...cand.base, ...hit])]
   ui.selBlocks.splice(0, ui.selBlocks.length, ...sel)
 }
 function end(cancel) {
@@ -50,7 +70,9 @@ function end(cancel) {
     document.body.classList.remove('boxselecting')
     boxEndedAt = Date.now()
     if (cancel) ui.selBlocks.splice(0, ui.selBlocks.length, ...cand.base)
+    else if (draw && draw.end - draw.start >= 15) draw.area.dispatchEvent(new CustomEvent('lc-draw', { detail: { start: draw.start, end: draw.end } }))
   }
+  draw = null
   cand = null
 }
 /** Capture phase, so it sees clicks other handlers stop. The click ending a box drag is swallowed; any other
