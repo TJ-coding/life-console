@@ -231,6 +231,7 @@ export function ensureSettings() {
   for (const [k, v] of Object.entries(NOTIFY_DEFAULTS)) if (s[k] === undefined) s[k] = typeof v === 'object' ? { ...v } : v
   for (const [k, v] of Object.entries(NOTIFY_DEFAULTS.notify)) if (s.notify[k] === undefined) s.notify[k] = v
   for (const [k, v] of Object.entries(POMODORO_DEFAULTS)) if (s.pomodoro[k] === undefined) s.pomodoro[k] = v
+  if (!Array.isArray(s.blockouts)) s.blockouts = [] // ISS-3 (public): times auto-scheduling leaves free
   // the server schedules in this timezone; keep it in step with the device you're using
   let tz = 'UTC'
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { /* ignore */ }
@@ -1382,6 +1383,20 @@ export function replanTodo(id, pieces) {
 }
 
 /* ───────────── planning flow: backlog → day → time ───────────── */
+/** ISS-3 (public): blocked-out times (Settings → Scheduling): [{ id, label, start, end, days }], days =
+ *  weekday numbers Mon=0…Sun=6 (empty = every day). Auto time-box and the split planner never put a
+ *  task there; you can still drag one in by hand. */
+export function blockedRanges(date) {
+  const wdIdx = (new Date(date + 'T12:00:00').getDay() + 6) % 7
+  return (state.settings?.blockouts || [])
+    .filter((b) => b.start && b.end && b.start < b.end && (!b.days?.length || b.days.includes(wdIdx)))
+    .map((b) => [toMin(b.start), toMin(b.end)])
+}
+export function addBlockout() {
+  const list = state.settings.blockouts
+  const n = Math.max(0, ...list.map((b) => Number(String(b.id).replace(/\D/g, '')) || 0)) + 1
+  list.push({ id: `BO-${n}`, label: 'Lunch', start: '12:00', end: '13:00', days: [] })
+}
 export const WORK_FROM = '08:00'
 export const WORK_TO = '21:00'
 
@@ -1450,7 +1465,7 @@ export function assignToDay(id, date, cap = CAPACITY_H) {
  * Returns { placed: [ids], unplaced: [ids] }.
  */
 export function autoTimebox(date, from = WORK_FROM, to = WORK_TO) {
-  const busy = busyBlocks(date).map((b) => [toMin(b.start), toMin(b.end)])
+  const busy = busyBlocks(date).map((b) => [toMin(b.start), toMin(b.end)]).concat(blockedRanges(date))
   let earliest = toMin(from)
   if (date === todayISO()) {
     const n = new Date()
@@ -1487,6 +1502,7 @@ export function planDaySpread(date, mins, skipTodoId = null, from = WORK_FROM, t
     .filter((b) => !skip.has(b.todoId))
     .map((b) => [toMin(b.start), toMin(b.end)])
     .concat(extraBusy) // [startMin, endMin] pairs not saved yet (sittings planned in the dialog)
+    .concat(blockedRanges(date))
   let earliest = toMin(from)
   if (date === todayISO()) {
     const n = new Date()
@@ -1522,6 +1538,7 @@ export function planPomodoroDay(date, workMin, skipTodoId = null, extraBusy = []
     // another pomodoro sitting earns its long break too, so sittings never run back to back
     .map((b) => [toMin(b.start), toMin(b.end) + (b.pomo ? P.long : 0)])
     .concat(extraBusy)
+    .concat(blockedRanges(date))
     .sort((a, b) => a[0] - b[0])
   let t = toMin(from)
   if (date === todayISO()) { const n = new Date(); t = Math.max(t, Math.ceil((n.getHours() * 60 + n.getMinutes()) / 5) * 5) }
@@ -1582,4 +1599,31 @@ export function deleteDeadline(id) {
   const i = state.deadlines.findIndex((d) => d.id === id)
   if (i >= 0) state.deadlines.splice(i, 1)
   if (ui.deadlineId === id) ui.deadlineId = null
+}
+
+/** ISS-44: does a todo match a search? Every word must appear (any order, any case) in its id, title,
+ *  vital points, notes, links or parent path. An empty query matches everything. */
+export function todoMatches(t, q) {
+  const words = (q || '').toLowerCase().split(/\s+/).filter(Boolean)
+  if (!words.length) return true
+  const hay = [t.id, t.title, t.vital, t.notes, ...(t.links || []), t.parent ? parentPath(t) : ''].join(' ').toLowerCase()
+  return words.every((w) => hay.includes(w))
+}
+
+/** ISS-45: read a duration typed by hand, in minutes: 5h · 1.5h · 1h30 · 1h 30m · 1:30 · 90 · 90m · 90min.
+ *  A bare number is minutes. Returns null when it isn't a duration. */
+export function parseDuration(text) {
+  const s = String(text ?? '').trim().toLowerCase().replace(/\s+/g, '')
+  if (!s) return null
+  let m
+  if ((m = s.match(/^(\d+(?:\.\d+)?)(?:m|min|mins)?$/))) return Math.round(+m[1])
+  if ((m = s.match(/^(\d+(?:\.\d+)?)(?:h|hr|hrs|hour|hours)$/))) return Math.round(+m[1] * 60)
+  if ((m = s.match(/^(\d+)(?:h|:)(\d{1,2})(?:m|min)?$/))) return +m[1] * 60 + +m[2]
+  return null
+}
+/** minutes as the short form parseDuration reads back: 45m · 5h · 1h30m */
+export const fmtDuration = (min) => {
+  const n = Math.max(0, Math.round(Number(min) || 0))
+  const h = Math.floor(n / 60), r = n % 60
+  return h ? `${h}h${r ? `${r}m` : ''}` : `${r}m`
 }

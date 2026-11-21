@@ -3,6 +3,7 @@
 // then, inside a day, cut that amount into timed sittings (they subtract from the day's amount;
 // the rest stays untimed in the day's bucket). Re-opening shows and edits the current plan.
 // Questions, in order: how much is still unplanned? · how much goes on each day, and does the day fit? · when, within the day?
+import DurationInput from './DurationInput.vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import {
   ui, findTodo, todayISO, addDays, mondayOf, wd, fmtSlash, dayLoad, CAPACITY_H, evenParts, planDaySpread,
@@ -260,7 +261,7 @@ function pomoNote(s) {
             </div>
             <div v-for="(s, i) in plan[d].sittings" :key="i" class="sit">
               <input v-model="s.start" type="time" step="900" class="input mono tm" :aria-label="`Sitting ${i + 1} start`" />
-              <input v-model.number="s.min" type="number" min="5" :step="s.pomo ? P.work : 15" class="input mono mn" :aria-label="`Sitting ${i + 1} minutes`" @change="clampSitting(d, i)" />
+              <DurationInput v-model="s.min" class="mn" :aria-label="`Sitting ${i + 1} length`" @change="clampSitting(d, i)" />
               <span class="small muted">min</span>
               <span class="mono small muted grow">{{ s.start ? '→ ' + end(s) : 'no time' }}<template v-if="s.pomo"> · {{ pomoNote(s) }}</template></span>
               <button class="btn sm icon-only" title="Remove this time (its minutes become untimed)" @click="dropSitting(d, i)"><span class="icon sm">close</span></button>

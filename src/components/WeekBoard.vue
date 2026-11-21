@@ -9,8 +9,8 @@
 import PartBadge from './PartBadge.vue'
 import { computed, ref } from 'vue'
 
-const props = defineProps({ prio: { type: Number, default: 0 } }) // the panel's P1–P5 filter
-import { state, ui, todayISO, addDays, mondayOf, wd, fmtMD, isoWeek, byPriority, partLabel, isHoverLinked, parentPath, planWeek, backlogTodos, planWeeks, weekFree, assignToWeek } from '../store'
+const props = defineProps({ prio: { type: Number, default: 0 }, q: { type: String, default: '' } }) // the panel's P1–P5 filter and search
+import { state, ui, todayISO, addDays, mondayOf, wd, fmtMD, isoWeek, byPriority, partLabel, isHoverLinked, parentPath, planWeek, backlogTodos, planWeeks, weekFree, assignToWeek, todoMatches } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
@@ -34,7 +34,7 @@ const cols = computed(() => weeks.value.map((w) => {
     tasks: backlogTodos().filter((t) => planWeek(t) === w && shown(t)).sort(byPriority),
   }
 }))
-const shown = (t) => !props.prio || t.priority === props.prio
+const shown = (t) => (!props.prio || t.priority === props.prio) && todoMatches(t, props.q)
 const unplanned = computed(() => backlogTodos().filter((t) => !planWeek(t) && shown(t)).sort(byPriority))
 const uHours = computed(() => unplanned.value.reduce((s, t) => s + (t.timeMin || 0) / 60, 0))
 const freeOf = computed(() => Object.fromEntries(cols.value.map((c) => [c.w, c.free])))
