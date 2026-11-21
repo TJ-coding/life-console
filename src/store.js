@@ -1726,14 +1726,16 @@ export function cutBlockAt(id, atMin) {
   if (t.pomo) made.forEach((x) => { if (!x.pomo) x.pomo = true })
   return made
 }
-/** The Option / Alt key's name on this device, for hints like "⌥-click" */
-export const altLabel = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌥' : 'Alt'
-
-/** ISS-39: is the Option/Alt key held right now? The timeline's cut line shows its time only then. */
+/** ISS-39: the timeline's cut key — ⌘ on a Mac (Ctrl-click there is a right-click), Ctrl elsewhere — its
+ *  name for hints, a test for a mouse event, and whether it's held right now (the cut line shows its time
+ *  only then). */
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '')
+export const cutLabel = IS_MAC ? '⌘' : 'Ctrl'
+export const isCutKey = (e) => !!(IS_MAC ? e.metaKey : e.ctrlKey)
 if (typeof window !== 'undefined' && window.addEventListener) {
-  const setAlt = (e) => { ui.altHeld = !!e.altKey }
-  window.addEventListener('keydown', setAlt, true)
-  window.addEventListener('keyup', setAlt, true)
-  window.addEventListener('mousemove', (e) => { if (ui.altHeld !== e.altKey) ui.altHeld = e.altKey }, { passive: true })
-  window.addEventListener('blur', () => { ui.altHeld = false })
+  const track = (e) => { const v = isCutKey(e); if (ui.cutHeld !== v) ui.cutHeld = v }
+  window.addEventListener('keydown', track, true)
+  window.addEventListener('keyup', track, true)
+  window.addEventListener('mousemove', track, { passive: true })
+  window.addEventListener('blur', () => { ui.cutHeld = false })
 }
