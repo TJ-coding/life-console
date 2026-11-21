@@ -70,6 +70,11 @@ function onDrop(e) {
         <span class="icon sm" :class="{ info: focus }">{{ focus ? 'close_fullscreen' : 'calendar_view_week' }}</span>
       </button>
     </header>
+    <label v-if="open" class="srch" :class="{ on: q }" title="Search the backlog: title, ID, notes, links · / to focus · Esc to clear">
+        <span class="icon sm">search</span>
+        <input ref="search" v-model="q" class="small" placeholder="Search…" data-search @keydown.esc.stop="q = ''; $event.target.blur()" />
+        <button v-if="q" type="button" class="clr" title="Clear search" @click="q = ''"><span class="icon sm">close</span></button>
+      </label>
     <form v-if="open" class="qa" @submit.prevent="add">
       <span class="icon sm plus">add</span>
       <input
@@ -90,11 +95,6 @@ function onDrop(e) {
     <div v-if="open" class="pf">
       <button class="btn sm" :class="{ active: !prio }" @click="prio = 0">All</button>
       <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: prio === p }" @click="prio = p">P{{ p }}</button>
-      <label class="srch" :class="{ on: q }" title="Search the backlog: title, ID, notes, links · / to focus · Esc to clear">
-        <span class="icon sm">search</span>
-        <input ref="search" v-model="q" class="small" placeholder="Search…" data-search @keydown.esc.stop="q = ''; $event.target.blur()" />
-        <button v-if="q" type="button" class="clr" title="Clear search" @click="q = ''"><span class="icon sm">close</span></button>
-      </label>
     </div>
 
     <WeekBoard v-if="open && focus" :prio="prio" :q="q" />
@@ -163,7 +163,7 @@ function onDrop(e) {
 .pc b { color: var(--text); font-weight: 500; }
 .enter { margin-left: auto; }
 .pf { display: flex; gap: 3px; padding: 8px 10px; flex-wrap: wrap; align-items: center; }
-.srch { flex: 1 1 110px; min-width: 90px; display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface-2); color: var(--muted); }
+.srch { display: flex; align-items: center; gap: 4px; margin: 10px 8px 0; height: 28px; padding: 0 4px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface-2); color: var(--muted); }
 .srch:focus-within, .srch.on { border-color: var(--info); color: var(--info); }
 .srch input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); }
 .clr { border: 0; background: none; padding: 0; display: flex; color: var(--muted); cursor: pointer; }
