@@ -18,7 +18,7 @@ const router = useRouter()
 // ISS-38: a day in Plan week opens it in the Command Center with the backlog beside it, to plan that day
 const openDay = () => { ui.dayPlanning = true; router.push(props.date === todayISO() ? '/?plan=1' : `/day/${props.date}?plan=1`) }
 // balance: ② Assign day only — { avg, counts (days the average covers), rows, moves } from the planner
-const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object })
+const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object, dlRows: { type: Number, default: 0 } })
 /* ② Assign day: the space under the day does that day's job — on an over-full day, what to move out
    (the planner's rebalance moves); on a day with room, the backlog tasks the planner gives it */
 const free = computed(() => CAPACITY_H - hours.value)
@@ -85,6 +85,23 @@ function auto() {
       </div>
     </header>
 
+    <!-- ISS-41: deadlines sit at the top of the day, and every day reserves the same number of rows
+         (dlRows, the week's busiest day), so the sections below stay level across the columns -->
+    <div class="sec sec-dl" :class="{ has: deadlines.length }">
+      <div class="sh tiny upper" :class="deadlines.length ? 'dlh' : 'muted'">
+        <span class="icon sm">flag</span>Deadlines<span v-if="deadlines.length" class="mono cnt">{{ deadlines.length }}</span><span class="spacer"></span>
+        <button class="btn sm icon-only addbtn" :class="{ active: adding }" :title="`Add a deadline on ${wd(date)}`" @click="adding = !adding"><span class="icon sm">add</span></button>
+      </div>
+      <div class="dls" :style="{ minHeight: dlRows * 24 + 'px' }">
+        <div v-for="d in deadlines" :key="d.id" class="dl" :class="{ done: d.done, over: isOverdue(d) }" :title="`${d.title}${d.vital ? ' · ' + d.vital : ''} — click to edit`" @click="ui.deadlineId = d.id">
+          <input v-model="d.done" type="checkbox" @click.stop />
+          <span class="ellipsis grow">{{ d.title }}</span>
+          <span class="mono tm">{{ d.due.slice(11) }}</span>
+        </div>
+      </div>
+      <DeadlineQuickAdd v-if="adding" :date="date" compact autofocus @cancel="adding = false" />
+    </div>
+
     <div class="sec sec-load">
       <div class="sh tiny upper muted"><span class="n">②</span> Workload<span class="spacer"></span>{{ todos.filter((t) => t.done).length }}/{{ todos.length }} done</div>
       <WorkloadBucket :date="date" :hour-px="bucketPx" :dim-fn="filter ? dimTodo : null" :min-rows="balance?.rows" :avg="balance && balance.counts.includes(date) ? balance.avg : null" />
@@ -109,20 +126,6 @@ function auto() {
         </div>
       </div>
       <DayTimeline :date="date" :blocks="blocks" :pxh="timelinePx" :dim-fn="filter ? dimBlock : null" @drop-todo="schedule" @open="(id) => (ui.drawerId = id)" @edit="(b) => (ui.blockId = b.id)" />
-    </div>
-
-    <div class="sec">
-      <div class="sh tiny upper muted">
-        Deadlines<span class="spacer"></span>
-        <button class="btn sm icon-only addbtn" :class="{ active: adding }" :title="`Add a deadline on ${wd(date)}`" @click="adding = !adding"><span class="icon sm">add</span></button>
-      </div>
-      <div v-for="d in deadlines" :key="d.id" class="dl small" :class="{ done: d.done, over: isOverdue(d) }" :title="`${d.title}${d.vital ? ' · ' + d.vital : ''} — click to edit`" @click="ui.deadlineId = d.id">
-        <input v-model="d.done" type="checkbox" @click.stop />
-        <span class="ellipsis grow">{{ d.title }}</span>
-        <span class="mono muted">{{ d.due.slice(11) }}</span>
-      </div>
-      <DeadlineQuickAdd v-if="adding" :date="date" compact autofocus @cancel="adding = false" />
-      <div v-if="!deadlines.length && !adding" class="small muted pad">—</div>
     </div>
 
     <div v-if="moveOut.length" class="sec sec-out">
@@ -180,9 +183,18 @@ function auto() {
 .sh { display: flex; align-items: center; gap: 4px; padding: 0 2px 5px; min-height: 22px; white-space: nowrap; overflow: hidden; }
 .n { font-size: 12px; }
 .auto { height: 20px; padding: 0 5px; font-size: 10px; color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--border)); }
-.dl { display: flex; align-items: center; gap: 5px; padding: 3px 2px; cursor: pointer; border-radius: 2px; }
+.sec-dl.has { background: color-mix(in srgb, var(--warn) 7%, transparent); }
+.dlh { color: var(--warn); font-weight: 700; }
+.sh .icon { font-size: 14px; }
+.cnt { margin-left: 2px; }
+.dls { display: flex; flex-direction: column; gap: 2px; }
+.dl { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 4px; cursor: pointer; border-radius: 2px; font-size: 13px; font-weight: 600; border-left: 2px solid var(--warn); background: var(--surface); }
 .dl:hover { background: var(--surface-2); }
-.dl.over .grow { color: var(--danger); }
+.dl .tm { font-size: 11px; color: var(--warn); }
+.dl.over { border-left-color: var(--danger); }
+.dl.over .grow, .dl.over .tm { color: var(--danger); }
+.dl.done { border-left-color: var(--border); font-weight: 400; }
+.dl.done .tm { color: var(--muted); }
 .addbtn { height: 18px; padding: 0 2px; }
 .dl.done span.grow { text-decoration: line-through; color: var(--muted); }
 .pad { padding: 2px; }

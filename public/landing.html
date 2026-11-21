@@ -15,20 +15,21 @@
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Life Console" />
 <meta property="og:url" content="https://life-console.dev/" />
-<meta property="og:title" content="Life Console — an open-source planner that shows what to do right now" />
-<meta property="og:description" content="Keyboard-first time-blocking, deadline countdowns and goal plans. Free to use, AGPL-3.0, self-hostable with Docker." />
+<meta property="og:title" content="Life Console — bring systems into your life" />
+<meta property="og:description" content="Too many tasks and deadlines? Start from the goal, level the week, then do the one thing in front of you. A free, open-source planner you can self-host." />
 <meta property="og:image" content="https://life-console.dev/media/og.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:image:alt" content="Life Console Command Center: the current block with a live countdown, today's schedule and the next deadline" />
-<meta property="og:video" content="https://life-console.dev/media/tour.mp4" />
+<meta property="og:video" content="https://life-console.dev/media/trailer.mp4" />
+<meta property="og:video:secure_url" content="https://life-console.dev/media/trailer.mp4" />
 <meta property="og:video:type" content="video/mp4" />
-<meta property="og:video:width" content="1440" />
-<meta property="og:video:height" content="900" />
+<meta property="og:video:width" content="1280" />
+<meta property="og:video:height" content="720" />
 <meta property="og:locale" content="en_US" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Life Console — an open-source planner that shows what to do right now" />
-<meta name="twitter:description" content="Keyboard-first time-blocking, deadline countdowns and goal plans. Free to use, AGPL-3.0, self-hostable with Docker." />
+<meta name="twitter:title" content="Life Console — bring systems into your life" />
+<meta name="twitter:description" content="Too many tasks and deadlines? Start from the goal, level the week, then do the one thing in front of you. A free, open-source planner you can self-host." />
 <meta name="twitter:image" content="https://life-console.dev/media/og.png" />
 <meta name="twitter:image:alt" content="Life Console Command Center with a live countdown" />
 
@@ -290,6 +291,30 @@ h1 { font: 700 clamp(34px, 5.4vw, 60px)/1.06 var(--sans); letter-spacing: -.03em
 figure { margin: 0; }
 figure > img, figure > video { width: 100%; border: 1px solid var(--border); border-radius: 6px; background: #0e1116; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
 figcaption { font: 13px/1.5 var(--mono); color: var(--muted); margin-top: 10px; }
+.trailer { margin: 0 0 56px; }
+.btn.discord { display: inline-flex; align-items: center; gap: 9px; background: #5865f2; border-color: #5865f2; color: #fff; box-shadow: 0 6px 22px -8px rgba(88,101,242,.8); transition: transform .15s, background .15s; }
+.btn.discord:hover { background: #4752c4; border-color: #4752c4; transform: translateY(-1px); }
+.btn.discord svg { width: 20px; height: 20px; fill: currentColor; }
+.dc-icon { display: inline-flex; align-items: center; } .dc-icon svg { width: 20px; height: 20px; fill: currentColor; transition: color .15s; } .dc-icon:hover svg { color: #8c95ff; } .gh-icon:hover svg { color: #fff; }
+.player { position: relative; border-radius: 14px; overflow: hidden; background: #111; border: 1px solid var(--border); box-shadow: 0 0 0 1px rgba(63,182,139,.08), 0 30px 80px -30px rgba(63,182,139,.35); isolation: isolate; }
+.player video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #111; cursor: pointer; }
+.player svg { width: 100%; height: 100%; fill: currentColor; }
+.p-start { position: absolute; left: 4%; bottom: 7%; display: flex; align-items: center; gap: 14px; padding: 8px 22px 8px 8px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; background: rgba(14,17,22,.72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: var(--text); font: 600 17px var(--sans); cursor: pointer; transition: transform .2s, background .2s; }
+.p-start:hover { transform: translateY(-2px); background: rgba(14,17,22,.88); }
+.p-ring { position: relative; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: #0e1116; padding: 14px 13px 14px 16px; box-shadow: 0 0 24px rgba(63,182,139,.55); }
+.p-ring::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--accent); opacity: 0; animation: p-pulse 2.2s ease-out infinite; }
+@keyframes p-pulse { 0% { transform: scale(.85); opacity: .7; } 100% { transform: scale(1.35); opacity: 0; } }
+.p-label { display: flex; align-items: baseline; gap: 10px; }
+.p-len { font: 500 13px var(--mono); color: var(--muted); }
+.player[data-state="playing"] .p-start { display: none; }
+.p-sound { position: absolute; right: 16px; bottom: 16px; width: 42px; height: 42px; padding: 10px; border: 1px solid rgba(255,255,255,.16); border-radius: 50%; background: rgba(14,17,22,.72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: var(--accent); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .3s, background .2s; }
+.p-sound:hover { background: rgba(14,17,22,.92); }
+.player[data-state="playing"].awake .p-sound, .player[data-state="playing"] .p-sound:focus-visible { opacity: 1; pointer-events: auto; }
+.player[data-state="playing"]:not(.awake) video { cursor: none; }
+.p-sound .i-off { display: none; }
+.p-sound[aria-pressed="false"] { color: var(--text); } .p-sound[aria-pressed="false"] .i-off { display: block; } .p-sound[aria-pressed="false"] .i-on { display: none; }
+@media (max-width: 640px) { .player { border-radius: 10px; } .p-start { left: 3%; bottom: 5%; padding: 4px 12px 4px 4px; font-size: 13px; gap: 8px; } .p-ring { width: 30px; height: 30px; padding: 8px 7px 8px 9px; } .p-len { display: none; } .p-sound { right: 8px; bottom: 8px; width: 34px; height: 34px; padding: 8px; } }
+@media (prefers-reduced-motion: reduce) { .p-ring::after { animation: none; } }
 figcaption b { color: var(--text); font-weight: 500; }
 
 /* sections */
@@ -395,7 +420,8 @@ footer a { color: var(--muted); }
       <a class="opt" href="#features">Features</a>
       <a class="opt" href="#self-host">Self-host</a>
       <a class="opt" href="#screens">Screenshots</a>
-      <a href="https://github.com/TJ-coding/life-console" rel="noopener" data-umami-event="github" data-umami-event-place="header">GitHub</a>
+      <a class="dc-icon gh-icon" href="https://github.com/TJ-coding/life-console" rel="noopener" aria-label="GitHub" title="Life Console on GitHub" data-umami-event="github" data-umami-event-place="header"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+      <a class="opt dc-icon" href="https://discord.gg/bWZS5QvPYd" rel="noopener" aria-label="Discord" title="Join the Discord" data-umami-event="discord" data-umami-event-place="header"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg></a>
     </nav>
     <a class="btn primary" href="/app" data-umami-event="open-app" data-umami-event-place="header">Try it now</a>
   </div>
@@ -430,6 +456,15 @@ footer a { color: var(--muted); }
 
   <section style="border-top:0;padding-top:72px">
     <div class="wrap">
+      <figure class="trailer">
+        <div class="player" data-state="idle">
+          <video loop playsinline preload="none" poster="/media/trailer-poster.webp" width="1280" height="720" aria-label="Life Console launch trailer: strategise, distribute, execute">
+            <source src="/media/trailer.mp4" type="video/mp4" />
+          </video>
+          <button type="button" class="p-start" aria-label="Play the launch trailer"><span class="p-ring"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg></span><span class="p-label">Play trailer<span class="p-len">0:28</span></span></button>
+          <button type="button" class="p-sound" aria-pressed="true" aria-label="Mute"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="i-off" d="M16 9.5l5 5m0-5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path class="i-on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
+        </div>
+      </figure>
       <p class="note">Life Console started as a set of paper planning sheets: a week plan with <b>a backlog, a 7-hour budget for each day and a timeline</b>, a deadline list, and a strategic plan running from vision down to milestones. It joins those sheets into one console, so the answer to <b>“what should I be doing now?”</b> is always on screen.</p>
     </div>
   </section>
@@ -705,6 +740,7 @@ footer a { color: var(--muted); }
           <div class="ctas">
             <a class="btn primary big" href="/app" data-umami-event="open-app" data-umami-event-place="end">Try it now</a>
             <a class="btn" href="https://github.com/TJ-coding/life-console" rel="noopener" data-umami-event="github" data-umami-event-place="end">★ Star on GitHub</a>
+            <a class="btn discord" href="https://discord.gg/bWZS5QvPYd" rel="noopener" data-umami-event="discord" data-umami-event-place="end"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>Join the Discord</a>
             <a class="bmc" href="https://buymeacoffee.com/tjcoding" rel="noopener" data-umami-event="coffee" data-umami-event-place="end"><img src="/media/bmc-button.png" alt="Buy me a coffee" width="146" height="41" /></a>
           </div>
         </div>
@@ -716,7 +752,7 @@ footer a { color: var(--muted); }
 <footer>
   <div class="wrap">
     <span>Life Console · free software under AGPL-3.0</span>
-    <nav aria-label="Footer"><a href="/app" data-umami-event="open-app" data-umami-event-place="footer">App</a><a href="https://github.com/TJ-coding/life-console" rel="noopener" data-umami-event="github" data-umami-event-place="footer">GitHub</a><a href="/docs/self-hosting" rel="noopener">Self-hosting</a><a href="/docs/guide">Guide</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://buymeacoffee.com/tjcoding" rel="noopener">Buy me a coffee</a></nav>
+    <nav aria-label="Footer"><a href="/app" data-umami-event="open-app" data-umami-event-place="footer">App</a><a href="https://github.com/TJ-coding/life-console" rel="noopener" data-umami-event="github" data-umami-event-place="footer">GitHub</a><a href="https://discord.gg/bWZS5QvPYd" rel="noopener" data-umami-event="discord" data-umami-event-place="footer">Discord</a><a href="/docs/self-hosting" rel="noopener">Self-hosting</a><a href="/docs/guide">Guide</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://buymeacoffee.com/tjcoding" rel="noopener">Buy me a coffee</a></nav>
   </div>
 </footer>
 
@@ -761,6 +797,25 @@ footer a { color: var(--muted); }
   // videos play only while on screen; with reduced motion they get controls instead
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
   const vo = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting ? e.target.play().catch(() => {}) : e.target.pause()), { threshold: 0.35 })
+  const player = document.querySelector('.player')
+  if (player) {
+    const v = player.querySelector('video'), sound = player.querySelector('.p-sound')
+    let sleep
+    const wake = () => { player.classList.add('awake'); clearTimeout(sleep); sleep = setTimeout(() => player.classList.remove('awake'), 2000) }
+    const play = () => { if (!v.dataset.played) { v.dataset.played = '1'; window.umami?.track('trailer-play') } v.play() }
+    player.querySelector('.p-start').onclick = play
+    v.onclick = () => (v.paused ? play() : v.pause())
+    v.onplay = () => { player.dataset.state = 'playing'; wake() }
+    v.onpause = () => { player.dataset.state = 'paused' }
+    player.addEventListener('pointermove', wake); player.addEventListener('pointerdown', wake)
+    player.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') { clearTimeout(sleep); player.classList.remove('awake') } })
+    sound.onclick = () => {
+      v.muted = !v.muted; wake()
+      sound.setAttribute('aria-pressed', String(!v.muted)); sound.setAttribute('aria-label', v.muted ? 'Turn sound on' : 'Mute')
+    }
+    // stops when scrolled away; the play button brings it back
+    new IntersectionObserver(([e]) => { if (!e.isIntersecting && !v.paused) v.pause() }, { threshold: 0.2 }).observe(v)
+  }
   if (!framed) document.querySelectorAll('video.auto').forEach((v) => reduce ? (v.controls = true) : vo.observe(v))
 
   // gallery: dark / light

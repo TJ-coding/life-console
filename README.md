@@ -4,7 +4,7 @@
 
 **Know what to do right now.** An open-source, keyboard-first planner for your week, your deadlines and your goals. Use it free at [life-console.dev](https://life-console.dev), or run it on your own server.
 
-[Website](https://life-console.dev) · [Self-hosting](docs/SELF_HOSTING.md) · [User guide](docs/GUIDE.md) · [License: AGPL-3.0](LICENSE) · [★ Star on GitHub](https://github.com/TJ-coding/life-console) · [☕ Buy me a coffee](https://buymeacoffee.com/tjcoding)
+[Website](https://life-console.dev) · [Self-hosting](docs/SELF_HOSTING.md) · [User guide](docs/GUIDE.md) · [License: AGPL-3.0](LICENSE) · [★ Star on GitHub](https://github.com/TJ-coding/life-console) · [Discord](https://discord.gg/bWZS5QvPYd) · [☕ Buy me a coffee](https://buymeacoffee.com/tjcoding)
 
 <a href="https://life-console.dev/app?from=github"><img src="public/media/try-button.png" alt="Try it now" height="41"></a> <a href="https://buymeacoffee.com/tjcoding"><img src="public/media/bmc-button.png" alt="Buy me a coffee" height="41"></a>
 

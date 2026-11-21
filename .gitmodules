@@ -1,0 +1,3 @@
+[submodule "trailers/kit"]
+	path = trailers/kit
+	url = https://github.com/TJ-coding/launch-trailers.git

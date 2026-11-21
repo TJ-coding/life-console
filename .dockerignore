@@ -10,3 +10,5 @@ backups
 test
 !docs/GUIDE.md
 !docs/SELF_HOSTING.md
+trailers
+.claude

@@ -245,6 +245,16 @@ const dayName = computed(() => {
 .audit div { display: flex; justify-content: space-between; }
 .df { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
 .df .btn { height: 34px; justify-content: center; }
+/* phones (ISS-1 on the public server): in the installed app the page runs under the status bar
+   (viewport-fit=cover), so keep the header (and its close button) below it, the footer above the
+   home indicator, and give the close button a thumb-sized target */
+.drawer { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+@media (max-width: 640px) {
+  .drawer { border-left: 0; }
+  .dh { height: 52px; padding: 0 6px 0 16px; }
+  .dh .icon-only { width: 44px; height: 44px; }
+  .dh .icon-only .icon { font-size: 24px; }
+}
 .slide-enter-active, .slide-leave-active { transition: transform 0.15s ease; }
 .slide-enter-from, .slide-leave-to { transform: translateX(100%); }
 </style>
