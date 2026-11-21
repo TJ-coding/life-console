@@ -3,7 +3,7 @@
 import { computed } from 'vue'
 import {
   state, wd, workload, capH, psgPct, nextSig, diffDays, relDay, toMin, fromMin, pad, mondayOf,
-  routineDone, monthGroup, nextCheckDate, activePlans, toast, ui,
+  routineDone, monthGroup, nextCheckDate, activePlans, shownReviews, toast, ui,
 } from '../store'
 import Gauge from './Gauge.vue'
 import Stamps from './Stamps.vue'
@@ -35,7 +35,7 @@ function addCaffeine(what, amount) {
   if (cutoffLeft.value < 0) toast('Past caffeine cutoff')
 }
 const reviews = computed(() =>
-  [...activePlans().map((p) => ({ id: p.id, title: `Plan ${p.planNo} check`, date: nextCheckDate(p) })), ...state.reviews]
+  [...activePlans().map((p) => ({ id: p.id, title: `Plan ${p.planNo} check`, date: nextCheckDate(p) })), ...shownReviews()] // reviews: a prototype, hidden for now
     .sort((a, b) => a.date.localeCompare(b.date)))
 const lectures = computed(() => state.lectures.filter((l) => l.date === T.value))
 </script>

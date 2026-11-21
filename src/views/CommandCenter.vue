@@ -7,7 +7,7 @@ import { computed, ref, watch, watchEffect, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, capH,
-  diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, nextCheckDate, activePlans,
+  diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, nextCheckDate, activePlans, shownReviews,
   updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash, setScheduleLock, LOCK_HELP, touchUI,
   isLeaf, byPriority, findTodo, unscheduleTodo, deleteBlock,
 } from '../store'
@@ -114,7 +114,7 @@ function addCoffee() {
 /** Reviews / plan checks / lectures only surface when they're due now-ish. */
 const alerts = computed(() => [
   ...activePlans().map((p) => ({ id: p.id, text: `Plan ${p.planNo} check`, date: nextCheckDate(p), to: `/strategy/${p.id}` })),
-  ...state.reviews.map((r) => ({ id: r.id, text: r.title, date: r.date, to: null })),
+  ...shownReviews().map((r) => ({ id: r.id, text: r.title, date: r.date, to: null })), // reviews: a prototype, hidden for now
 ].filter((a) => diffDays(T.value, a.date) <= 1).sort((a, b) => a.date.localeCompare(b.date)))
 const lectures = computed(() => state.lectures.filter((l) => l.date === T.value))
 

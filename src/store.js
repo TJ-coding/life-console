@@ -1739,3 +1739,8 @@ if (typeof window !== 'undefined' && window.addEventListener) {
   window.addEventListener('mousemove', track, { passive: true })
   window.addEventListener('blur', () => { ui.cutHeld = false })
 }
+
+/** Reviews (state.reviews) are a prototype: no screen yet to do or dismiss one, so old demo entries sat on
+ *  Today as "n days overdue" for good. Hidden until the review feature is built; the data stays as it is. */
+export const SHOW_REVIEWS = false
+export const shownReviews = () => (SHOW_REVIEWS ? state.reviews ?? [] : [])
