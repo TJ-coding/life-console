@@ -100,6 +100,14 @@ curl -s -X PATCH -H "$H" "$B/api/issues/ISS-3" -H 'Content-Type: application/jso
 
 ---
 
+### Reporters check the fix, and can reopen
+
+When an issue is marked `fixed`, its reporter sees a thank-you note in the app (with confetti) listing what changed and asking them to try it. **Try it** opens the screen; **Not fixed for me** reopens the issue with their reply saying why. They can also reply or reopen from `#/issues`.
+
+- `replies[]` on each issue: `{ by: 'reporter' | 'admin', text, at, reopened?, was? }` (`was` = the resolution that didn't hold). `npm run issues` prints them under the issue (`↳ reporter (reopened) …`). **Read the replies of a reopened issue before fixing it again.**
+- `seenAt`: when the reporter saw the note (null = they'll see it next time they open the app). Marking an issue `fixed` again resets it, so they get asked again.
+- API: `POST /api/issues/ISS-n/reply { text, reopen }` (the reporter, own issues only, or an admin) · `POST /api/issues/seen { ids }` (the reporter's own).
+
 ## 4. Workflow for working through issues
 
 1. **Fetch** the open issues (§2). Highest severity first. Group them by screen so related fixes go in together.

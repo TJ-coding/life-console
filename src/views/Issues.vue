@@ -2,7 +2,7 @@
 // S-95 · Issues — things to fix or improve, reported per screen. Agents read the same list
 // (`npm run issues`) and mark items fixed with the commit that fixed them.
 import { computed, ref, onMounted } from 'vue'
-import { issues, loadIssues, updateIssue, deleteIssue, openIssueDialog, KINDS, STATUSES } from '../issues'
+import { issues, loadIssues, updateIssue, deleteIssue, openIssueDialog, replyIssue, KINDS, STATUSES } from '../issues'
 import { toast } from '../store'
 import { auth, isAdmin } from '../auth'
 import { useRoute } from 'vue-router'
@@ -39,6 +39,18 @@ const when = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { month
 
 async function setStatus(i, status) {
   try { await updateIssue(i.id, { status }); toast(`${i.id} → ${status}`) } catch (e) { toast(`Couldn't update: ${e.message}`) }
+}
+/* replies: the reporter (or an admin) answers; the reporter can reopen a fixed issue that isn't fixed for them */
+const draft = ref({}) // id → text
+const canReopen = (i) => i.mine && ['fixed', 'wontfix'].includes(i.status)
+async function sendReply(i, reopen = false) {
+  const text = (draft.value[i.id] || '').trim()
+  if (!text) return
+  try {
+    await replyIssue(i.id, text, reopen)
+    draft.value = { ...draft.value, [i.id]: '' }
+    toast(reopen ? `${i.id} reopened · thanks for checking` : 'Reply sent')
+  } catch (e) { toast(`Couldn't send: ${e.message}`) }
 }
 async function remove(i) {
   if (!confirm(`Delete ${i.id} "${i.title}"?`)) return
@@ -103,6 +115,19 @@ async function remove(i) {
             <span v-if="i.commit" class="mono tiny muted"> · {{ i.commit }}</span>
             <span v-if="i.resolvedAt" class="mono tiny muted"> · {{ when(i.resolvedAt) }}</span>
           </p>
+          <ul v-if="i.replies?.length" class="replies">
+            <li v-for="(r, k) in i.replies" :key="k" :class="r.by">
+              <span class="mono tiny muted">{{ r.by === 'reporter' ? (i.mine ? 'You' : 'Reporter') : 'Life Console' }} · {{ when(r.at) }}<template v-if="r.reopened"> · reopened</template></span>
+              <span class="rt">{{ r.text }}</span>
+            </li>
+          </ul>
+          <div v-if="i.mine || admin" class="reply col">
+            <textarea v-model="draft[i.id]" class="textarea small" rows="2" :placeholder="canReopen(i) ? 'Not fixed for you? Say what is still wrong…' : 'Reply…'"></textarea>
+            <div class="row"><span class="spacer"></span>
+              <button class="btn sm" :disabled="!(draft[i.id] || '').trim()" @click="sendReply(i)">Reply</button>
+              <button v-if="canReopen(i)" class="btn sm primary" :disabled="!(draft[i.id] || '').trim()" @click="sendReply(i, true)"><span class="icon sm">replay</span>Reopen</button>
+            </div>
+          </div>
           <div v-if="admin" class="row">
             <span v-if="i.reporter" class="mono tiny muted">reported by {{ i.reporter }}</span>
             <span class="spacer"></span>
@@ -137,6 +162,12 @@ async function remove(i) {
 .details { white-space: pre-wrap; margin: 0; }
 .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .res { margin: 0; display: flex; align-items: center; gap: 6px; }
+.replies { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.replies li { display: flex; flex-direction: column; gap: 1px; padding-left: 8px; border-left: 2px solid var(--border); }
+.replies li.reporter { border-left-color: var(--info); }
+.rt { white-space: pre-wrap; }
+.reply { gap: 6px; max-width: 560px; }
+.reply textarea { width: 100%; }
 @media (max-width: 640px) {
   .toolbar { padding: 8px 10px; gap: 8px; }
   .grp, .hint { padding-left: 10px; padding-right: 10px; }

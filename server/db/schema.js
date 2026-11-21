@@ -113,6 +113,10 @@ export const issues = pgTable('issues', {
   createdAt: created(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
   resolvedAt: ts('resolved_at'),
+  // when the reporter saw the "your issue is fixed" note (null = not yet; the app then shows it)
+  reporterSeenAt: ts('reporter_seen_at'),
+  // the conversation after the report: [{ by: 'reporter' | 'admin', text, at, reopened? }]
+  replies: jsonb('replies').notNull().default(sql`'[]'::jsonb`),
 }, (t) => [index('issues_status_idx').on(t.status)])
 
 /**

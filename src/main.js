@@ -38,3 +38,10 @@ startSync().then(() => {
   if (auth.status === 'signed-in') analyticsReady(router.currentRoute.value)
   if (auth.status === 'signed-in' && swReady) navigator.serviceWorker.ready.then(() => refreshPush()).catch(() => {})
 })
+// a fix may land while the app is open: check again when you come back to the tab (at most every 5 min)
+let issuesAt = Date.now()
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || Date.now() - issuesAt < 5 * 60000) return
+  issuesAt = Date.now()
+  if (auth.status === 'signed-in') loadIssues()
+})

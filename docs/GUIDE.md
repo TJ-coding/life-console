@@ -77,6 +77,9 @@ Anything not given to a day stays in the backlog. **Estimate − / +** changes t
 - **Weekly tasks:** tick *Repeat weekly* in a task's drawer and marking it done puts a copy on the same weekday and time next week (or in next week's backlog if it had no day), due date moved a week, subtasks included; the copy repeats too. Any other task asks in the done toast: *Yes, next week* does the same once. *Duplicate* in a task's right-click menu makes a plain copy in the backlog. Undo in the toast.
 - **Draw a task on the timeline:** a dashed crosshair follows the mouse over a day's timeline (15-minute steps); drag down an empty stretch of a day's timeline (Today or Plan week) to draw a new task; it snaps to 15 minutes and shows its time range. Release, type the title (quick-add syntax works: `p2`, `#link`), Enter adds it at that time, Esc cancels. A drag that touches a block selects blocks as before.
 
+## Your reports
+When something you reported (key `I`) is fixed, the app thanks you with a note (and confetti) showing what changed. Please **Try it**; if it isn't fixed for you, **Not fixed for me** reopens it with a short note on what's still wrong. You can also reply to or reopen your own reports at `#/issues`.
+
 ## Durations, capacity and blocked-out times
 - **Estimates take hours too:** type `5h`, `1.5h`, `1h30`, `1:30` or plain minutes (`90`) in a task's estimate, a subtask's estimate or a sitting's length; ↑/↓ step 5 minutes (⇧ 15).
 - **Daily workload capacity** (Settings → *Scheduling*, default 7h): how many hours of tasks a day holds before it's over-full. The workload buckets, ⚠ warnings, Rebalance and the briefing use it.
