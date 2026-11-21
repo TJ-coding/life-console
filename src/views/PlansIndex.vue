@@ -82,14 +82,14 @@ function remove(p) {
 
     <!-- every active goal: one row each -->
     <section v-for="x in plansAtGlance" :key="x.plan.id" class="panel plan">
-      <div class="panel-h plan-h">
+      <div class="panel-h plan-h" role="link" tabindex="0" :title="`Open ${x.plan.planNo} ${x.plan.title}`" @click="router.push(`/strategy/${x.plan.id}`)" @keydown.enter="router.push(`/strategy/${x.plan.id}`)">
         <span class="mono plan-no">{{ x.plan.planNo }}</span>
         <h2 class="plan-title ellipsis">{{ x.plan.title }}</h2>
         <span class="plan-bar bar"><i :style="{ width: x.pct + '%' }"></i></span>
         <span class="mono small">{{ x.pct }}%</span>
         <span class="spacer"></span>
         <span class="mono small" :class="diffDays(T, x.check) <= 1 ? 'warn' : 'muted'"><span class="icon sm">event_repeat</span> check {{ relDay(x.check, T).toLowerCase() }}</span>
-        <router-link :to="`/strategy/${x.plan.id}`" class="btn sm">Open<span class="icon sm">chevron_right</span></router-link>
+        <router-link :to="`/strategy/${x.plan.id}`" class="btn sm" @click.stop>Open<span class="icon sm">chevron_right</span></router-link>
       </div>
       <template v-for="g in x.goals" :key="g.no">
         <!-- PSG -->
@@ -239,4 +239,8 @@ function remove(p) {
   .g-dl:empty { display: none; }
   .sig-row .g-id, .sig-row .g-name { padding-left: 12px; }
 }
+/* the whole heading bar opens the plan */
+.plan-h { cursor: pointer; }
+.plan-h:hover { background: var(--surface-2); }
+.plan-h:hover .plan-title { color: var(--accent); }
 </style>
