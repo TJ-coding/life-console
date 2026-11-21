@@ -70,20 +70,23 @@ function onDrop(e) {
         <span class="icon sm" :class="{ info: focus }">{{ focus ? 'close_fullscreen' : 'calendar_view_week' }}</span>
       </button>
     </header>
-    <label v-if="open" class="srch" :class="{ on: q }" title="Search the backlog: title, ID, notes, links · / to focus · Esc to clear">
+    <!-- search, then the add bar (search first: it narrows the list); side by side in Backlog by week -->
+    <div v-if="open" class="bars">
+      <label class="srch" :class="{ on: q }" title="Search the backlog: title, ID, notes, links · / to focus · Esc to clear">
         <span class="icon sm">search</span>
         <input ref="search" v-model="q" class="small" placeholder="Search…" data-search @keydown.esc.stop="q = ''; $event.target.blur()" />
         <button v-if="q" type="button" class="clr" title="Clear search" @click="q = ''"><span class="icon sm">close</span></button>
       </label>
-    <form v-if="open" class="qa" @submit.prevent="add">
-      <span class="icon sm plus">add</span>
-      <input
-        ref="input" v-model="draft" class="mono" placeholder="New task… 45m p2 due:fri #tag"
-        title="Syntax: title 45m p1–p5 due:fri #course @BASE [L|S|D] · Enter to add · Esc to leave"
-        @keydown.esc="draft = ''; $event.target.blur()"
-      />
-      <span class="kbd">N</span>
-    </form>
+      <form class="qa" @submit.prevent="add">
+        <span class="icon sm plus">add</span>
+        <input
+          ref="input" v-model="draft" class="mono" placeholder="New task… 45m p2 due:fri #tag"
+          title="Syntax: title 45m p1–p5 due:fri #course @BASE [L|S|D] · Enter to add · Esc to leave"
+          @keydown.esc="draft = ''; $event.target.blur()"
+        />
+        <span class="kbd">N</span>
+      </form>
+    </div>
     <div v-if="draft && open" class="preview">
       <span class="pc"><b>{{ parsed.title || '—' }}</b></span>
       <span class="pc mono">{{ parsed.timeMin ?? 30 }}m</span>
@@ -142,7 +145,11 @@ function onDrop(e) {
 
 <style scoped>
 .backlog.only { border-right: 0; }
-.backlog.only .qa, .backlog.only .preview { max-width: 720px; }
+.backlog.only .preview { max-width: 720px; }
+.bars { display: flex; flex-direction: column; }
+.backlog.only .bars { flex-direction: row; gap: 8px; margin: 10px 8px 0; }
+.backlog.only .bars .qa { flex: 0 1 720px; margin: 0; }
+.backlog.only .bars .srch { flex: 0 1 320px; margin: 0; height: 32px; }
 .crumb { font-size: 11px; margin-bottom: 2px; }
 .backlog { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-right: 1px solid var(--border); }
 .bh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
