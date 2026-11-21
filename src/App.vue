@@ -168,8 +168,10 @@ function onKey(e) {
       break
     case '/': { // a screen's search box (Plan week backlog, Todos: ISS-44); elsewhere the command palette
       e.preventDefault()
-      const box = document.querySelector('[data-search]')
+      const box = [...document.querySelectorAll('[data-search]')].find((el) => el.offsetParent) // the one on screen
+      const tog = document.querySelector('.srch-tog')
       if (box) box.focus()
+      else if (tog?.offsetParent) tog.click() // Todos on a narrow screen: open its search row
       else openPalette('cmd')
       break
     }
