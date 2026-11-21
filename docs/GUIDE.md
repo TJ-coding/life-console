@@ -73,8 +73,8 @@ Anything not given to a day stays in the backlog. **Estimate − / +** changes t
 - **Move:** drag any selected block and they all move by the same amount (to another day too), or use ↑/↓ (15 min, Shift = 1 h) and ←/→ (a day). **Delete** takes them off the schedule (tasks stay on their day). The bar at the bottom has the same actions, and every action has one Undo.
 
 ## Splitting and duplicating
-- **Cut a block on the timeline:** hover a task block and a dashed cut line follows the cursor (with its time, in 5-minute steps); ⌥/Alt-click cuts the block there into two parts you can move or resize one by one (a pomodoro sitting keeps the work before the cut in the first part). Right-click a block for *Split in 2* / *Split in 3* (back-to-back parts) or *Plan over days / times…*. Undo in the toast.
-- **Duplicate a task** (done or not): *Duplicate* in its drawer or its right-click menu makes a fresh open copy in the backlog with the same title, notes, estimate, priority and links (and its subtasks), and opens it.
+- **Cut a block on the timeline:** hover a task block and a dashed cut line follows the cursor (its time on the left, in 5-minute steps); ⌥/Alt-click cuts the block there into two parts you can move or resize one by one (a pomodoro sitting keeps the work before the cut in the first part). Right-click a block for *Split in 2* / *Split in 3* (back-to-back parts) or *Plan over days / times…*. Undo in the toast.
+- **Again next week:** ticking a task done offers *Again next week* in the toast: a fresh copy on the same weekday and time next week (or in next week's backlog if it had no day), due date moved a week, subtasks included. *Duplicate* in a task's drawer or right-click menu makes a plain copy in the backlog. Undo in the toast.
 
 ## Durations, capacity and blocked-out times
 - **Estimates take hours too:** type `5h`, `1.5h`, `1h30`, `1:30` or plain minutes (`90`) in a task's estimate, a subtask's estimate or a sitting's length; ↑/↓ step 5 minutes (⇧ 15).

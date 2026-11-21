@@ -1670,18 +1670,22 @@ export function sliceBlock(id, n = 2) {
   return made
 }
 
-/** Public ISS-4: duplicate a task (done or not) as a fresh open task in the backlog: same title, notes,
- *  estimate, priority, scope and links; no day, no done, no split. A task with subtasks is copied with
- *  its whole tree. The due date is kept only if it's still ahead. Undo in the toast; returns the copy. */
-export function duplicateTodo(id) {
+/** Public ISS-4: copy a task (done or not) as a fresh open task: same title, notes, estimate, priority,
+ *  scope and links, with its subtasks. Plain duplicate: into the backlog, no day; due kept only if
+ *  still ahead. nextWeek: the same thing a week later — its day (and start time) + 7 days, or, if it had
+ *  no day, planned for next week; a due date moves a week too. Undo in the toast; returns the copy. */
+export function duplicateTodo(id, { nextWeek = false } = {}) {
   const src = findTodo(id)
   if (!src) return null
   const T = todayISO()
   const made = []
   const copy = (t, parent) => {
+    const scheduled = nextWeek && t.scheduled ? { date: addDays(t.scheduled.date, 7), start: t.scheduled.start ?? null } : null
     const c = addTodo({
       title: t.title, vital: t.vital, notes: t.notes, timeMin: t.timeMin, lsd: t.lsd, priority: t.priority,
-      links: [...(t.links || [])], due: t.due && t.due >= T ? t.due : null, scheduled: null,
+      links: [...(t.links || [])], due: nextWeek ? (t.due ? addDays(t.due, 7) : null) : (t.due && t.due >= T ? t.due : null),
+      scheduled, ...(nextWeek && !scheduled ? { week: addDays(mondayOf(t.week || T), 7) } : {}),
+      ...(t.pomo && scheduled ? { pomo: true } : {}),
       ...(parent ? { parent } : {}), order: (t.order ?? 0) + 0.0005,
     })
     made.push(c.id)
@@ -1690,11 +1694,19 @@ export function duplicateTodo(id) {
   }
   const top = copy(src, src.parent && findTodo(src.parent) && !findTodo(src.parent).done ? src.parent : null)
   syncContainers()
-  toast(`${src.id} duplicated as ${top.id}${made.length > 1 ? ` (+${made.length - 1} subtasks)` : ''} · in the backlog`, {
+  const where = nextWeek ? (top.scheduled ? `${wd(top.scheduled.date)} ${fmtSlash(top.scheduled.date)}${top.scheduled.start ? ' ' + top.scheduled.start : ''}` : `W${isoWeek(top.week)}'s backlog`) : 'the backlog'
+  toast(`${top.id} · ${src.title} again ${nextWeek ? 'on ' + where : 'in ' + where}${made.length > 1 ? ` (+${made.length - 1} subtasks)` : ''}`, {
     label: 'Undo',
     run: () => { const ids = new Set(made); for (let i = state.todos.length - 1; i >= 0; i--) if (ids.has(state.todos[i].id)) state.todos.splice(i, 1); if (ids.has(ui.drawerId)) ui.drawerId = null },
   })
   return top
+}
+/** A tick from the UI (not the briefing's simulations): toggle done, and when the task becomes done offer
+ *  to do it again next week (public ISS-4) in the toast. */
+export function tickTodo(id) {
+  toggleTodo(id)
+  const t = findTodo(id)
+  if (t?.done) toast(`${t.id} done`, { label: 'Again next week', run: () => duplicateTodo(id, { nextWeek: true }) })
 }
 /** ISS-39: cut a timed task block at clock minute `atMin` into two parts (before / from the cut), the
  *  way the hover cut line on the timeline shows it. A pomodoro sitting is cut by wall time: the first

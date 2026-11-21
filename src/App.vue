@@ -4,7 +4,7 @@ import { installBoxSelect } from './boxSelect'
 installBoxSelect() // ISS-29: drag a box on a timeline to select blocks
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ui, state, todayISO, sendToNextDay, wd, isoWeek, pad, stampNext, toggleTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf } from './store'
+import { ui, state, todayISO, sendToNextDay, wd, isoWeek, pad, stampNext, tickTodo, updateTodo, addDays, toast, toggleTheme, STAMPS, moveSelected, isOverdue, shiftSelected, removeSelected, clearBlockSel, isLeaf } from './store'
 import { NAV } from './nav'
 import CommandPalette from './components/CommandPalette.vue'
 import TodoDrawer from './components/TodoDrawer.vue'
@@ -185,7 +185,7 @@ function onKey(e) {
     case 'x': {
       // X = done on the selected todo, else on the todo you're currently doing
       const id = ui.selectedId ?? (now.current.value?.kind === 'todo' ? now.current.value.todoId : null)
-      if (id) { toggleTodo(id); toast(`${id} toggled`) }
+      if (id) tickTodo(id) // a done task's toast offers Again next week
       break
     }
     case 'enter': if (ui.selectedId) ui.drawerId = ui.selectedId; break
@@ -206,7 +206,7 @@ function onKey(e) {
     default:
       if (route.name === 'focus' && /^[1-3]$/.test(k)) {
         const id = ui.focusIds[+k - 1]
-        if (id) { toggleTodo(id); toast(`${id} done`) }
+        if (id) tickTodo(id)
         return
       }
       if (/^[1-5]$/.test(k) && ui.selectedId) {

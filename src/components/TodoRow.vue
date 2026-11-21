@@ -2,7 +2,7 @@
 // Compact todo row: checkbox · title + vital points · time · L/S/D · linked chips. Draggable.
 import PartBadge from './PartBadge.vue'
 import { computed } from 'vue'
-import { ui, toggleTodo, updateTodo, partLabel, isContainer, subCount, parentPath, sendToNextDay, addDays, todayISO, wd, fmtSlash, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
+import { ui, tickTodo, updateTodo, partLabel, isContainer, subCount, parentPath, sendToNextDay, addDays, todayISO, wd, fmtSlash, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import { startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import LsdToggle from './LsdToggle.vue'
 import Chip from './Chip.vue'
@@ -24,7 +24,7 @@ const crumb = computed(() => (props.todo.parent ? parentPath(props.todo) : ''))
     @dragstart="startDrag($event, todo)" @dragend="endDrag"
     @dragover="overRow($event, todo)" @dragleave="leaveRow($event, todo)" @drop="dropOnRow($event, todo, { adoptDate })" @click="rowSelectClick($event, todo) || (ui.selectedId = todo.id)" @contextmenu.prevent="openCtxMenu($event, ['todo:' + todo.id])" @dblclick="ui.drawerId = todo.id"
   >
-    <input type="checkbox" :checked="todo.done" @click.stop @change="toggleTodo(todo.id)" />
+    <input type="checkbox" :checked="todo.done" @click.stop @change="tickTodo(todo.id)" />
     <span v-if="showStart" class="mono small start" :class="{ muted: !todo.scheduled?.start }">{{ todo.scheduled?.start ?? '--:--' }}</span>
     <Prio v-if="showPrio" :p="todo.priority" />
     <div class="grow">

@@ -4,7 +4,7 @@ import DateInput from '../components/DateInput.vue'
 import AddDeadline from '../components/AddDeadline.vue'
 import { computed, ref, nextTick, reactive, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, toggleTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel, moveSig, renameGoalNo, nextSigNo, isPsgNo, GOAL_NO_MAX } from '../store'
+import { state, ui, todayISO, sigsOf, psgPct, nextCheckDate, relDay, diffDays, planIds, addTodo, tickTodo, toast, byPriority, findPlan, nextPsgNo, deletePlan, addDays, addDeadline, allSigs, sigWouldCycle, unlinkGoal, linkLabel, moveSig, renameGoalNo, nextSigNo, isPsgNo, GOAL_NO_MAX } from '../store'
 import PlanTabs from '../components/PlanTabs.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -508,7 +508,7 @@ const print = () => window.print()
             <div class="panel-h"><span class="icon sm ok">checklist</span><h3>Linked todos</h3><span class="spacer"></span><span class="mono small muted">{{ linked.filter((t) => !t.done).length }} pending</span></div>
             <div class="lt">
               <div v-for="t in linked" :key="t.id" class="lt-row" :class="[fx('todos', t.id), { done: t.done }]" @click="ui.drawerId = t.id">
-                <input type="checkbox" :checked="t.done" @click.stop @change="toggleTodo(t.id)" />
+                <input type="checkbox" :checked="t.done" @click.stop @change="tickTodo(t.id)" />
                 <span class="grow ellipsis">{{ t.title }}</span>
                 <Chip :id="t.links.find((l) => planIds(plan).includes(l))" />
               </div>

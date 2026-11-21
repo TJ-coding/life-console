@@ -4,7 +4,7 @@ import DurationInput from './DurationInput.vue'
 import LinkTrail from './LinkTrail.vue'
 import DateInput from './DateInput.vue'
 import { computed, ref } from 'vue'
-import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergePartsUndo, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, addSubtask, parseQuick, pomo, duplicateTodo } from '../store'
+import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, tickTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergePartsUndo, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, addSubtask, parseQuick, pomo, duplicateTodo } from '../store'
 import Chip from './Chip.vue'
 
 const t = computed(() => (ui.drawerId ? findTodo(ui.drawerId) : null))
@@ -114,7 +114,7 @@ function dup() { const c = duplicateTodo(t.value.id); if (c) ui.drawerId = c.id 
           </div>
           <div v-if="box" class="subs">
             <div v-for="k in kids" :key="k.id" class="sub row" :class="{ done: k.done }" @click="ui.drawerId = k.id">
-              <input type="checkbox" :checked="k.done" title="Done" @click.stop @change="toggleTodo(k.id)" />
+              <input type="checkbox" :checked="k.done" title="Done" @click.stop @change="tickTodo(k.id)" />
               <span class="grow ellipsis">{{ k.title }}</span>
               <DurationInput :model-value="k.timeMin" class="sub-min" @click.stop @change="(v) => updateTodo(k.id, { timeMin: v })" />
               <span class="mono small sub-when" :class="k.scheduled ? 'ok' : 'muted'">{{ whenOf(k) }}</span>
@@ -198,7 +198,7 @@ function dup() { const c = duplicateTodo(t.value.id); if (c) ui.drawerId = c.id 
         </div>
       </div>
       <footer class="df">
-        <button class="btn primary grow" @click="toggleTodo(t.id)"><span class="icon sm">done_all</span>{{ t.done ? 'Reopen' : 'Mark completed' }} <span class="kbd">X</span></button>
+        <button class="btn primary grow" @click="tickTodo(t.id)"><span class="icon sm">done_all</span>{{ t.done ? 'Reopen' : 'Mark completed' }} <span class="kbd">X</span></button>
         <button class="btn" title="Duplicate: a fresh open copy in the backlog (with its subtasks), opened here" @click="dup"><span class="icon sm">content_copy</span>Duplicate</button>
         <button class="btn danger-ghost" title="Delete this task (undo in the toast)" @click="remove"><span class="icon sm">delete</span>Delete</button>
       </footer>

@@ -1,7 +1,7 @@
 <script setup>
 // S-01 Focus mode — one thing at a glance: the current block, the next one, top 3 actions.
 import { computed, watchEffect, onBeforeUnmount } from 'vue'
-import { state, ui, wd, workload, getStamps, capH, toggleTodo, toast } from '../store'
+import { state, ui, wd, workload, getStamps, capH, tickTodo, toast } from '../store'
 import { useNow, fmtDur, fmtClock, toggleClockMode } from '../now'
 import Stamps from '../components/Stamps.vue'
 import Prio from '../components/Prio.vue'
@@ -38,7 +38,7 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
         <span class="mono muted">WINDOW {{ current.start }} – {{ current.end }}</span>
         <Chip v-if="current.link" :id="current.link" />
         <span class="spacer"></span>
-        <button v-if="current.kind === 'todo'" class="btn primary" @click="toggleTodo(current.todoId)"><span class="icon sm">check</span>Done <span class="kbd">X</span></button>
+        <button v-if="current.kind === 'todo'" class="btn primary" @click="tickTodo(current.todoId)"><span class="icon sm">check</span>Done <span class="kbd">X</span></button>
       </div>
       <h1>{{ current.title }}</h1>
       <!-- ISS-25: one countdown; in a pomodoro sitting, click it to switch between the break and the whole block -->
@@ -79,7 +79,7 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
       <div class="row qh"><span class="icon sm">checklist</span><span class="mono upper small">Top 3 actions</span><span class="spacer"></span><span class="mono tiny muted">KEYS 1–3 CHECK</span></div>
       <div v-for="(t, i) in top3" :key="t.id" class="qrow panel">
         <span class="kbd">{{ i + 1 }}</span>
-        <input type="checkbox" :checked="t.done" @change="toggleTodo(t.id)" />
+        <input type="checkbox" :checked="t.done" @change="tickTodo(t.id)" />
         <Prio :p="t.priority" />
         <div class="grow">
           <div>{{ t.title }}</div>

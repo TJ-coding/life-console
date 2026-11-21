@@ -92,11 +92,11 @@ function openBlock(e, b) {
         </div>
         <div
           v-for="b in laid.blocks" :key="b.id" :data-bkey="blockKey(b)" class="block tl-block" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b) }]"
-          :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag right edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!ui.scheduleLock"
+          :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag right edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline · ' + altLabel + '-click cuts it at the line' : 'removes it')}`" :draggable="!ui.scheduleLock"
           @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock($event, b)" @contextmenu.prevent="openCtxMenu($event, [blockKey(b)])"
           @mousemove="trackCut($event, b)" @mouseleave="cut = null"
         >
-          <i v-if="cut?.id === b.id" class="cutline" :style="{ left: cut.left + 'px' }"><span class="mono">✂ {{ fromMin(cut.at) }} · {{ altLabel }}-click</span></i>
+          <i v-if="cut?.id === b.id" class="cutline" :style="{ left: cut.left + 'px' }"><span class="mono">{{ fromMin(cut.at) }}</span></i>
           <span class="mono t"><span v-if="b.done" class="icon dn" title="Completed">check_circle</span>{{ b.start }}–{{ b.end }}</span>
           <span class="nm">{{ b.title }}</span>
           <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
@@ -140,6 +140,6 @@ function openBlock(e, b) {
 /* multi-selected (Shift/⌘-click or long-press): moved together */
 .block.bsel { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 5; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
 .cutline { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed color-mix(in srgb, var(--text) 70%, transparent); pointer-events: none; z-index: 3; } /* ISS-39 */
-.cutline span { position: absolute; left: 3px; bottom: 1px; padding: 0 3px; font-size: 9px; line-height: 14px; font-style: normal; border-radius: 2px; background: var(--surface); color: var(--text); white-space: nowrap; }
+.cutline span { position: absolute; left: 2px; top: 1px; padding: 0 3px; font-size: 9px; line-height: 14px; font-style: normal; border-radius: 2px; background: var(--surface); color: var(--text); white-space: nowrap; }
 @media (hover: none) { .cutline { display: none; } }
 </style>
