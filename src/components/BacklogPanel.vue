@@ -5,7 +5,7 @@
 // then the next weeks, with week buttons instead of day buttons. Drop a task here to send it back.
 import PartBadge from './PartBadge.vue'
 import { computed, ref, watch, nextTick } from 'vue'
-import { ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, parentPath, planWeek, backlogTodos, backlogFor, isoWeek, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
+import { ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, parentPath, planWeek, backlogTodos, backlogFor, isoWeek, todoMatches, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
@@ -18,7 +18,9 @@ const prio = ref(0)
 const open = ref(true) // collapses the backlog to header + quick-add (handy on phones)
 // a task with subtasks is planned through them (backlogTodos keeps leaves only)
 const all = computed(() => (props.focus ? backlogTodos().filter((t) => !planWeek(t)).sort(byPriority) : backlogFor(ui.weekStart)))
-const list = computed(() => all.value.filter((t) => !prio.value || t.priority === prio.value))
+const q = ref('') // ISS-44: search the backlog (title, id, notes, links…)
+const search = ref(null)
+const list = computed(() => all.value.filter((t) => (!prio.value || t.priority === prio.value) && todoMatches(t, q.value)))
 const plannedN = computed(() => (props.focus ? 0 : list.value.filter((t) => planWeek(t)).length)) // the first n rows
 const elsewhere = computed(() => (props.focus ? 0 : backlogTodos().filter((t) => planWeek(t) && planWeek(t) !== ui.weekStart).length))
 const total = computed(() => list.value.reduce((s, t) => s + t.timeMin / 60, 0))
@@ -88,9 +90,14 @@ function onDrop(e) {
     <div v-if="open" class="pf">
       <button class="btn sm" :class="{ active: !prio }" @click="prio = 0">All</button>
       <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: prio === p }" @click="prio = p">P{{ p }}</button>
+      <label class="srch" :class="{ on: q }" title="Search the backlog: title, ID, notes, links · / to focus · Esc to clear">
+        <span class="icon sm">search</span>
+        <input ref="search" v-model="q" class="small" placeholder="Search…" data-backlog-search @keydown.esc.stop="q = ''; $event.target.blur()" />
+        <button v-if="q" type="button" class="clr" title="Clear search" @click="q = ''"><span class="icon sm">close</span></button>
+      </label>
     </div>
 
-    <WeekBoard v-if="open && focus" :prio="prio" />
+    <WeekBoard v-if="open && focus" :prio="prio" :q="q" />
     <div v-else-if="open" class="list" data-sellist>
       <template v-for="(t, i) in list" :key="t.id">
       <div v-if="plannedN && (i === 0 || i === plannedN)" class="grp tiny upper muted mono">{{ i ? 'Unplanned' : `Planned for W${isoWeek(ui.weekStart)}` }}</div>
@@ -123,7 +130,8 @@ function onDrop(e) {
         </div>
       </div>
       </template>
-      <div v-if="!list.length" class="empty">Backlog clear ✓<br />Type above to capture a task.</div>
+      <div v-if="!list.length && q" class="empty">No backlog task matches “{{ q }}”.</div>
+      <div v-else-if="!list.length" class="empty">Backlog clear ✓<br />Type above to capture a task.</div>
     </div>
     <div v-if="open" class="foot small muted">
       <template v-if="focus">Put tasks into a week so ② Assign day only shows that week's share. Hover a task → click a week, or drag it onto one.</template>
@@ -154,7 +162,11 @@ function onDrop(e) {
 .pc { border: 1px solid var(--border); border-radius: 2px; padding: 1px 6px; font-size: 11px; color: var(--muted); }
 .pc b { color: var(--text); font-weight: 500; }
 .enter { margin-left: auto; }
-.pf { display: flex; gap: 3px; padding: 8px 10px; flex-wrap: wrap; }
+.pf { display: flex; gap: 3px; padding: 8px 10px; flex-wrap: wrap; align-items: center; }
+.srch { flex: 1 1 110px; min-width: 90px; display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface-2); color: var(--muted); }
+.srch:focus-within, .srch.on { border-color: var(--info); color: var(--info); }
+.srch input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); }
+.clr { border: 0; background: none; padding: 0; display: flex; color: var(--muted); cursor: pointer; }
 .list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; }
 .card { border: 1px solid var(--border); border-radius: 2px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; cursor: grab; background: var(--bg); }
 .card:hover, .card.linked { border-color: var(--info); }

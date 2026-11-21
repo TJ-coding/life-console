@@ -1,7 +1,7 @@
 // Briefing / Debrief: what needs the driver before and after the day, as what-if choices.
 // A choice is a "sim": changes to todos ({ patch: {id: fields}, add: [new todos] }). The preview draws the
 // real schedule from the todos with the sim applied; picking it applies the same sim, with an undo.
-import { state, todayISO, todosForDay, isLeaf, CAPACITY_H, addTodo, updateTodo, toggleTodo, deleteTodo, findTodo, activePlans, blocksFrom, loadsDay, toMin, fromMin, newBlockMin, WORK_FROM, WORK_TO, byPriority, wd, addDays } from './store'
+import { state, todayISO, todosForDay, isLeaf, CAPACITY_H, addTodo, updateTodo, toggleTodo, deleteTodo, findTodo, activePlans, blocksFrom, loadsDay, toMin, fromMin, newBlockMin, WORK_FROM, WORK_TO, blockedRanges, byPriority, wd, addDays } from './store'
 import { openDeadlines, effDue, minsTo, sigState, daysTo } from './glance'
 
 /** Open tasks linked to a deadline and scheduled between `from` (any day if null) and the day it looms. */
@@ -45,7 +45,7 @@ export const objectiveIn = (todos, date) => dayTasks(todos, date).sort((a, b) =>
 
 /** Earliest free start for `mins` of work on `date` (not in the past for today), from `after` on; 'HH:MM' or null. */
 export function freeSlot(todos, date, mins, after = WORK_FROM, to = WORK_TO) {
-  const busy = blocksFrom(date, todos).filter((b) => !(b.done && date > todayISO())).map((b) => [toMin(b.start), toMin(b.end)])
+  const busy = blocksFrom(date, todos).filter((b) => !(b.done && date > todayISO())).map((b) => [toMin(b.start), toMin(b.end)]).concat(blockedRanges(date))
   let s = toMin(after)
   if (date === todayISO()) { const n = new Date(); s = Math.max(s, Math.ceil((n.getHours() * 60 + n.getMinutes()) / 15) * 15) }
   const len = newBlockMin(mins || 30)

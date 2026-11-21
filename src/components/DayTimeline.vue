@@ -1,7 +1,7 @@
 <script setup>
 // Vertical hourly schedule used in each Weekly Planner day column.
 import { computed, ref } from 'vue'
-import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
+import { ui, todayISO, blockedRanges, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 6 }, to: { type: Number, default: 23 }, pxh: { type: Number, default: 22 }, dimFn: Function,
   // preview mode (Briefing / Debrief): no editing; markFn(b) adds classes (pv-new, pv-ghost, pv-late, pv-star); lineAt draws a line (minutes)
@@ -15,6 +15,11 @@ const style = (b) => {
   const w = 100 / laid.value.lanes
   return { top: y(s) + 'px', height: Math.max(12, y(e) - y(s) - 1) + 'px', left: `calc(28px + (100% - 28px) * ${(b.lane * w) / 100})`, width: `calc((100% - 28px) * ${w / 100} - 2px)` }
 }
+// ISS-3 (public): blocked-out times as hatched bands behind the blocks
+const blocked = computed(() => blockedRanges(props.date)
+  .map(([a, b]) => [Math.max(a, props.from * 60), Math.min(b, props.to * 60)])
+  .filter(([a, b]) => b > a)
+  .map(([a, b]) => ({ top: y(a) + 'px', height: y(b) - y(a) + 'px' })))
 const visible = computed(() => laid.value.blocks.filter((b) => toMin(b.end) > props.from * 60 && toMin(b.start) < props.to * 60))
 const nowY = computed(() => {
   if (props.date !== todayISO()) return null
@@ -52,6 +57,7 @@ function pomos(b) {
     <div v-for="h in to - from" :key="h" class="hr" :style="{ top: (h - 1) * pxh + 'px', height: pxh + 'px' }">
       <span class="mono">{{ String(from + h - 1).padStart(2, '0') }}</span>
     </div>
+    <div v-for="(z, k) in blocked" :key="'bo' + k" class="bo" :style="z" title="Blocked out (Settings → Blocked-out times): auto-scheduling leaves this free"></div>
     <div
       v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b) }, markFn ? markFn(b) : '', { moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b), linked: isHoverLinked(b.todoId) }]"
       :style="style(b)" :data-tid="b.todoId || null" :data-bkey="blockKey(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!readonly && !ui.scheduleLock"
@@ -119,4 +125,5 @@ function pomos(b) {
 .vb:hover .handle::after, .vb.sizing .handle::after { opacity: 0.9; }
 /* multi-selected (Shift/⌘-click or long-press): moved together */
 .block.bsel { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 5; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+.bo { position: absolute; left: 28px; right: 0; pointer-events: none; background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--muted) 16%, transparent) 0 4px, transparent 4px 9px); border-top: 1px dashed color-mix(in srgb, var(--muted) 40%, transparent); border-bottom: 1px dashed color-mix(in srgb, var(--muted) 40%, transparent); }
 </style>

@@ -161,7 +161,13 @@ function onKey(e) {
       if (route.name === 'week') ui.backlogFocus++ // Plan week: capture straight into the backlog panel
       else openPalette('add')
       break
-    case '/': e.preventDefault(); openPalette('cmd'); break
+    case '/': { // Plan week: search the backlog (ISS-44); elsewhere the command palette
+      e.preventDefault()
+      const box = document.querySelector('[data-backlog-search]')
+      if (box) box.focus()
+      else openPalette('cmd')
+      break
+    }
     case 's': {
       const i = stampNext(T.value)
       toast(i < 0 ? 'Today is fully stamped 完' : `Stamped ${STAMPS[i]} for ${T.value}`)

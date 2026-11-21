@@ -1,7 +1,7 @@
 <script setup>
 // S-90 · Settings — install on phone, notifications, sync, appearance, data.
 import { computed, onMounted, ref } from 'vue'
-import { state, ui, toggleTheme, setAccent, ACCENTS, resetDemo, clearPlanner, toast, normalizeState } from '../store'
+import { state, ui, toggleTheme, setAccent, ACCENTS, resetDemo, clearPlanner, toast, normalizeState, addBlockout } from '../store'
 import { sync, pull, deviceName, setDeviceName, leaveGuest } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
 import { rhythm, wallMin } from '../../server/pomodoro.mjs'
@@ -122,6 +122,12 @@ const SYNC_LABEL = { outdated: 'Update needed', choose: 'Choose copy', starting:
 const fmtTime = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—')
 const isThis = (d) => d.endpoint === push.endpoint
 const reload = () => window.location.reload()
+// blocked-out days: an empty list means every day; picking a day from "every day" keeps the others
+function toggleBoDay(b, i) {
+  const cur = b.days.length ? b.days : [0, 1, 2, 3, 4, 5, 6]
+  const next = cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i].sort()
+  b.days = next.length === 7 ? [] : next
+}
 </script>
 
 <template>
@@ -375,6 +381,26 @@ const reload = () => window.location.reload()
       </div>
     </section>
 
+    <!-- ISS-3 (public): blocked-out times -->
+    <section id="blockouts" class="panel">
+      <div class="panel-h"><span class="icon sm">block</span><h2>Blocked-out times</h2><span class="spacer"></span><span class="tiny muted">applies to all your devices</span></div>
+      <div class="panel-b col">
+        <p class="small muted">Times <b>Auto time-box</b> and <b>Plan over days / times</b> never fill with tasks: lunch, the school run, an evening off. They show as hatched bands on the schedule; you can still drag a task there yourself.</p>
+        <div v-for="b in state.settings.blockouts" :key="b.id" class="bo">
+          <input v-model="b.label" class="input bo-l" placeholder="Label" aria-label="Label" />
+          <input v-model="b.start" type="time" step="900" class="input mono bo-t" aria-label="From" />
+          <span class="muted">–</span>
+          <input v-model="b.end" type="time" step="900" class="input mono bo-t" aria-label="To" />
+          <span class="bo-d" role="group" aria-label="Days">
+            <button v-for="(d, i) in ['M', 'T', 'W', 'T', 'F', 'S', 'S']" :key="i" type="button" class="btn sm mono" :class="{ active: !b.days.length || b.days.includes(i) }" :title="!b.days.length ? 'Every day · click to pick days' : ''" @click="toggleBoDay(b, i)">{{ d }}</button>
+          </span>
+          <span v-if="b.start >= b.end" class="tiny danger">ends before it starts</span>
+          <button class="btn sm icon-only" title="Remove" @click="state.settings.blockouts.splice(state.settings.blockouts.indexOf(b), 1)"><span class="icon sm">delete</span></button>
+        </div>
+        <div><button class="btn sm" @click="addBlockout()"><span class="icon sm">add</span>Block out a time</button></div>
+      </div>
+    </section>
+
     <!-- sync -->
     <section class="panel">
       <div class="panel-h"><span class="icon sm">sync</span><h2>Sync</h2><span class="spacer"></span>
@@ -439,6 +465,11 @@ const reload = () => window.location.reload()
 .step ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .kind { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
 .kind input { margin-top: 3px; }
+.bo { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.bo-l { width: 160px; }
+.bo-t { width: 104px; }
+.bo-d { display: flex; gap: 2px; }
+.bo-d .btn { width: 24px; justify-content: center; padding: 0; }
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
 .phone-help { border: 1px solid var(--border); border-radius: 2px; padding: 8px 12px; }
 .phone-help summary { cursor: pointer; }

@@ -117,6 +117,7 @@ export function ensureSettingsDoc(doc) {
   for (const [k, v] of Object.entries(NOTIFY_DEFAULTS)) if (s[k] === undefined) s[k] = typeof v === 'object' ? { ...v } : v
   for (const [k, v] of Object.entries(NOTIFY_DEFAULTS.notify)) if (s.notify[k] === undefined) s.notify[k] = v
   for (const [k, v] of Object.entries(POMODORO_DEFAULTS)) if (s.pomodoro[k] === undefined) s.pomodoro[k] = v
+  if (!Array.isArray(s.blockouts)) s.blockouts = [] // ISS-3 (public): times auto-scheduling leaves free
 }
 /**
  * The document part of normalizeState(): migrations plus the defaults of optional fields. Runs in place.

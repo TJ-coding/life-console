@@ -1,5 +1,6 @@
 <script setup>
 // Right 480px side drawer for editing a todo (spec §2.4 "Side drawer").
+import DurationInput from './DurationInput.vue'
 import DateInput from './DateInput.vue'
 import { computed, ref } from 'vue'
 import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergePartsUndo, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, ancestorsOf, addSubtask, parseQuick, pomo } from '../store'
@@ -93,7 +94,7 @@ const dayName = computed(() => {
         <label class="field"><span>Task title</span><input v-model="t.title" class="input big" /></label>
         <label class="field"><span>Vital points</span><input v-model="t.vital" class="input" placeholder="Key notes shown under the title" /></label>
         <div class="grid2">
-          <label class="field"><span>{{ box ? 'Budget, min (for its subtasks)' : 'Est. min (takt)' }}</span><input v-model.number="t.timeMin" type="number" min="0" step="5" class="input mono" /></label>
+          <label class="field"><span>{{ box ? 'Budget (for its subtasks)' : 'Estimate (takt)' }}</span><DurationInput v-model="t.timeMin" /></label>
           <label class="field"><span>Due</span><DateInput v-model="t.due" class="input mono" /></label>
           <template v-if="!box">
             <label class="field"><span>Scheduled day</span><DateInput v-model="schedDate" class="input mono" /></label>
@@ -115,7 +116,7 @@ const dayName = computed(() => {
             <div v-for="k in kids" :key="k.id" class="sub row" :class="{ done: k.done }" @click="ui.drawerId = k.id">
               <input type="checkbox" :checked="k.done" title="Done" @click.stop @change="toggleTodo(k.id)" />
               <span class="grow ellipsis">{{ k.title }}</span>
-              <input :value="k.timeMin" type="number" min="0" step="5" class="input mono sub-min" title="Estimate (min)" @click.stop @change="updateTodo(k.id, { timeMin: Math.max(0, Number($event.target.value) || 0) })" />
+              <DurationInput :model-value="k.timeMin" class="sub-min" @click.stop @change="(v) => updateTodo(k.id, { timeMin: v })" />
               <span class="mono small sub-when" :class="k.scheduled ? 'ok' : 'muted'">{{ whenOf(k) }}</span>
               <span class="icon sm muted">chevron_right</span>
             </div>
