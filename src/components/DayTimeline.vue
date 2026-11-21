@@ -46,8 +46,7 @@ function openBlock(e, b) {
   else emit('edit', b) // a fixed block: detail + delete dialog (ISS-8)
 }
 const removeBlock = removeTimelineBlock
-/* ISS-47: a horizontal crosshair follows the cursor over empty timeline (15-minute steps, its time on the
-   left), so you can see where a drawn task will start; over a task block the cut line takes over */
+/* ISS-47: a horizontal crosshair follows the cursor over empty timeline (15-minute steps), so you can see where a drawn task will start; over a task block the cut line takes over */
 const hair = ref(null) // { top, at }
 function trackHair(e) {
   if (props.readonly || ui.scheduleLock || e.target.closest?.('.vb, .draft')) { hair.value = null; return }
@@ -117,7 +116,7 @@ function pomos(b) {
     </div>
     <div v-if="lineAt != null && lineAt > from * 60 && lineAt < to * 60" class="wline" :style="{ top: y(lineAt) + 'px' }"><span class="mono">{{ lineLabel }}</span></div>
     <div v-if="nowY !== null" class="now" :style="{ top: nowY + 'px' }"></div>
-    <div v-if="hair && !draft" class="xhair" :style="{ top: hair.top + 'px' }"><span class="mono">{{ fromMin(hair.at) }}</span></div>
+    <div v-if="hair && !draft" class="xhair" :style="{ top: hair.top + 'px' }"></div>
     <div v-if="draft" class="draft" :style="{ top: y(draft.start) + 'px', height: Math.max(22, y(draft.end) - y(draft.start)) + 'px' }" @pointerdown.stop @click.stop>
       <span class="mono dt">{{ fromMin(draft.start) }}–{{ fromMin(draft.end) }}</span>
       <input ref="draftInput" v-model="draft.text" class="mono" placeholder="New task… p2 #link" @keydown.enter.prevent="saveDraft" @keydown.esc.stop.prevent="draft = null" @blur="saveDraft" />
@@ -181,7 +180,6 @@ function pomos(b) {
 .cutline span { position: absolute; left: 2px; top: -7px; padding: 0 3px; font-size: 9px; line-height: 14px; font-style: normal; border-radius: 2px; background: var(--surface); color: var(--text); white-space: nowrap; }
 @media (hover: none) { .cutline { display: none; } }
 .xhair { position: absolute; left: 28px; right: 0; height: 0; border-top: 1px dashed color-mix(in srgb, var(--info) 70%, transparent); pointer-events: none; z-index: 4; } /* ISS-47 crosshair */
-.xhair span { position: absolute; left: 2px; top: -7px; padding: 0 3px; font-size: 9px; line-height: 13px; color: var(--info); background: var(--surface); border-radius: 2px; }
 @media (hover: none) { .xhair { display: none; } }
 .draft { position: absolute; left: 28px; right: 2px; z-index: 5; display: flex; flex-direction: column; gap: 2px; padding: 2px 4px; border: 1px dashed var(--info); border-radius: 2px; background: color-mix(in srgb, var(--info) 14%, var(--surface)); } /* ISS-47 */
 .draft .dt { position: absolute; left: -1px; top: -14px; padding: 0 3px; font-size: 9px; line-height: 13px; color: var(--info); background: var(--surface); border-radius: 2px 2px 0 0; }
