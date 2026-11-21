@@ -38,7 +38,7 @@ All the settings are in [`.env.example`](../.env.example), with comments. These 
 | `APP_URL` | `http://localhost:8080` | The public address. It's used in reset emails, the cookie `Secure` flag and the origin check. |
 | `SIGNUPS` | `open` | The default for new sign-ups: `open`, or `closed` (also `off`, `false`, `no`, `0`). Any other value counts as `closed` and is logged. With sign-ups closed, only the first account on an empty server (with `ADMIN_EMAILS` set: only those emails) and the admin CLI can create accounts. Admins can override this in **Settings → Sign-ups**. |
 | `ADMIN_EMAILS` | none | Emails that are always admin. |
-| `SMTP_URL`, `MAIL_FROM` | none | Turns on "Forgot password?" emails. |
+| `SMTP_URL`, `MAIL_FROM` | none | Turns on "Forgot password?" emails (see *Email (password resets)* below). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | none | Turns on "Continue with Google" (see below). |
 | `AUTH_PASSWORD` | `on` | `off` = Google only: no passwords are accepted or stored. |
 | `LANDING` | `off` | `on` shows the life-console.dev landing page at `/` to visitors who aren't signed in and lets search engines index it. Off, `robots.txt` asks crawlers to stay out. `/app` always opens the app. |
@@ -60,6 +60,15 @@ Advanced settings (set them under `app: environment:`): `SESSION_DAYS` (90), `MA
 
 Existing accounts are linked by their (verified) email at their first Google sign-in. Add `AUTH_PASSWORD=off` to make Google the only way in. Each remaining password hash is then deleted at that user's next Google sign-in. Google sign-in works only on the `APP_URL` host, because the redirect URI is fixed.
 
+**Email (password resets):** without it, "Forgot password?" isn't offered and an admin resets passwords with the CLI (section 5). To let people reset their own by email:
+
+1. Set `SMTP_URL` to your mail provider's SMTP server, with the login in the URL: `smtps://user:password@smtp.example.com:465` (port 465, TLS) or `smtp://user:password@smtp.example.com:587` (STARTTLS). URL-encode special characters in the password (`@` → `%40`).
+2. Set `MAIL_FROM` to a sender your provider allows, e.g. `Life Console <no-reply@example.com>`.
+3. Run `docker compose up -d`. The log line `life-console listening on …` then says `password-reset emails on`.
+4. Check it: `docker compose exec app node server/cli.mjs test-mail --to you@example.com`.
+
+The sign-in screen then shows **Forgot password?**, which emails a link that works for one hour. It does nothing with `AUTH_PASSWORD=off` (Google only, no passwords). Nothing else sends email.
+
 **Using Supabase or another managed Postgres:** drop the `db` service and set `DATABASE_URL` for `app` and `backup` to that database's connection string (Supabase: *Project Settings → Database → Connection string*, the **session** pooler or a direct connection, not the transaction pooler, because migrations use advisory locks). Nothing else changes.
 
 **Privacy policy and terms:** `/privacy` and `/terms` serve `public/privacy.html` and `public/terms.html`, which are written for the public service at life-console.dev. If other people use your server, replace them with your own (same file names) and build from source.
@@ -78,13 +87,16 @@ Here's what happens on each update:
 
 **Update notices:** admins see *A newer Life Console is out* at the top of the app, and the changes in **Settings → Server updates**. Every 6 hours the server asks GitHub which commits came after its own build, and asks the image registry which of them have a published image, so it only announces versions you can actually pull. Nothing about your server or its users is sent: only the commit hash, in the URL. Set `UPDATE_CHECK=off` to stop it. Images you build yourself (`--build`) don't know their commit, so they get no notice.
 
-**Auto-update (on by default):** the compose file includes a small `updater` service. When a new version is published, the app asks it to install that version (within a few hours of release). The updater runs the same `docker compose pull` and `docker compose up -d` as above, in the folder with your `docker-compose.yml`. Expect a few seconds of downtime, with the usual backup before any migration. If an update fails, the old version keeps running, Settings shows the output, and that version isn't retried automatically.
+**Auto-update (optional, off by default):** the compose file has a small `updater` service that can install new versions for you: automatically when one is published (within a few hours), or when an admin presses **Update now**. It runs the same `docker compose pull` and `docker compose up -d` as above, in the folder with your `docker-compose.yml`. Expect a few seconds of downtime, with the usual backup before any migration. If an update fails, the old version keeps running, Settings shows the output, and that version isn't retried automatically.
 
-- **Turn auto-update off:** untick *Install updates automatically* in Settings → Server updates (an admin's choice; it's kept in the `updates` volume). `AUTO_UPDATE=off` in `.env` sets the starting value. With auto-update off, admins still get the notice and an **Update now** button.
-- **Turn the updater off altogether:** set `LC_UPDATER=0` in `.env`, then run `docker compose up -d --remove-orphans`. You update with the commands above.
-- **Installs from before the updater existed:** download the newest `docker-compose.yml`, then run `docker compose pull && docker compose up -d` once.
+It's **off unless you opt in**, because it needs the Docker socket (`/var/run/docker.sock`), and access to it is root access on that machine. Without it, nothing else changes: admins still get the update notice with the command to copy.
 
-The updater needs the Docker socket (`/var/run/docker.sock`), and access to it is root access on that machine. That's why it runs in its own container. The app never gets the socket. The app and the updater share only a small volume: the app can leave a request there, and the updater's command is fixed, so a compromised app can't make it run anything else. It doesn't apply to a pinned `LC_VERSION` (edit `.env` instead), or to setups that don't use this compose file, such as Portainer stacks, Kubernetes or Dokploy. Those get the notice and update the way they usually do.
+- **Turn it on:** add `COMPOSE_PROFILES=updater` to `.env`, then run `docker compose up -d`.
+- **Turn auto-update off but keep Update now:** untick *Install updates automatically* in Settings → Server updates (kept in the `updates` volume). `AUTO_UPDATE=off` in `.env` sets the starting value.
+- **Turn it off again:** remove `COMPOSE_PROFILES=updater` (or set `LC_UPDATER=0`), then run `docker compose stop updater && docker compose rm -f updater`.
+- **Installs from before November 2026** ran the updater by default. Your setup keeps working exactly as it is: the old `docker-compose.yml` you have still starts it. If you download the new compose file, add `COMPOSE_PROFILES=updater` to keep auto-update, or remove the old updater container with the command above.
+
+Why it's built like this: the updater is its own container, and the app never gets the socket. The app and the updater share only a small volume: the app can leave a request there, and the updater's command is fixed, so a compromised app can't make it run anything else. It doesn't apply to a pinned `LC_VERSION` (edit `.env` instead), or to setups that don't use this compose file, such as Portainer stacks, Kubernetes, Dokploy or the app-store listings. Those get the notice and update the way they usually do.
 
 **Roll back:** set `LC_VERSION=sha-<previous>` in `.env` and run `docker compose up -d`. Database migrations are additive, so an older app version keeps working on a newer database (see *Database migrations* in [OPERATIONS.md](OPERATIONS.md)). If you ever need the database itself back, restore the pre-migration dump (section 6).
 
@@ -95,6 +107,7 @@ docker compose exec app node server/cli.mjs            # list commands
 docker compose exec app node server/cli.mjs users
 docker compose exec app node server/cli.mjs create-user --email a@b.c [--admin]
 docker compose exec app node server/cli.mjs set-password --email a@b.c        # prints a new password, signs them out everywhere
+docker compose exec app node server/cli.mjs test-mail --to you@example.com     # check SMTP_URL / MAIL_FROM
 docker compose exec app node server/cli.mjs set-role --email a@b.c --role admin
 docker compose exec app node server/cli.mjs disable --email a@b.c
 docker compose exec app node server/cli.mjs create-token --email a@b.c        # API token for scripts (npm run issues)

@@ -4,8 +4,10 @@
 #   docker compose up -d      # → http://localhost:8080 (the first account you create is the admin)
 #
 # Update:   docker compose pull && docker compose up -d     (migrations run automatically, after a backup)
-#           The `updater` service does this for you: new versions install themselves (auto-update, switchable in
-#           Settings → Server updates), or with the "Update now" button. LC_UPDATER=0 in .env turns the updater off.
+#           Admins see a notice in the app when a new version is out, with this command to copy.
+#           Optional, off by default: the `updater` service installs new versions for you (auto-update / "Update now"
+#           in Settings → Server updates). It needs the Docker socket, i.e. root on this host, so you opt in with
+#           COMPOSE_PROFILES=updater in .env. See docs/SELF_HOSTING.md §4.
 # Pin/roll back the app: set LC_VERSION in .env (e.g. sha-1a2b3c4) and `docker compose up -d`.
 # Full guide: docs/SELF_HOSTING.md
 name: life-console
@@ -62,7 +64,7 @@ services:
       LC_IMAGE: ${LC_IMAGE:-ghcr.io/tj-coding/life-console}
       LC_VERSION: ${LC_VERSION:-latest}
       UPDATE_DIR: /updates
-      AUTO_UPDATE: ${AUTO_UPDATE:-on} # the default of the auto-update switch in Settings → Server updates
+      AUTO_UPDATE: ${AUTO_UPDATE:-on} # the auto-update switch's starting value; it only acts while the updater runs
     ports:
       # host port; "127.0.0.1:18080" keeps it local when a reverse proxy on the same Docker network serves it
       - "${LC_PORT:-8080}:8080"
@@ -87,13 +89,15 @@ services:
       - backups:/backups
     healthcheck: { disable: true }
 
-  # Updates from inside the app: auto-update (on by default, switchable in Settings → Server updates) and the
-  # "Update now" button. LC_UPDATER=0 in .env turns this service off (then update with the commands above).
-  # It holds the Docker socket (root on this host), so it's its own container that does exactly one thing: when the
-  # app leaves an update request in the shared `updates` volume, it runs, in this folder (mounted read-only),
+  # OPTIONAL, OFF BY DEFAULT: updates from inside the app (auto-update and the "Update now" button).
+  # It mounts the Docker socket, which is root access to this host, so it only runs if you opt in:
+  #   COMPOSE_PROFILES=updater   in .env, then  docker compose up -d
+  # It's its own container that does exactly one thing: when the app leaves an update request in the shared
+  # `updates` volume, it runs, in this folder (mounted read-only),
   #   docker compose pull app backup && docker compose up -d --wait app backup
-  # The app never gets the socket, and can't make the updater run anything else.
+  # The app never gets the socket, and can't make the updater run anything else. (LC_UPDATER=0 also keeps it off.)
   updater:
+    profiles: ["updater"]
     image: docker:cli
     scale: ${LC_UPDATER:-1}
     restart: unless-stopped

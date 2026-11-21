@@ -15,6 +15,7 @@
 //                                              users, active users (DAU/WAU/MAU) and churn (default: yesterday, UTC);
 //                                              --days N: the last N days; --send: also report that day to Umami
 //   backup [--dir D]                           pg_dump the database now (default BACKUP_DIR or ./backups)
+//   test-mail --to E                           send a test email with SMTP_URL / MAIL_FROM (the "Forgot password?" emails)
 //   import-legacy --dir D --email E [--password P] [--force]
 //                                              move a pre-database install (/data JSON files) into an account
 import fs from 'node:fs'
@@ -23,6 +24,7 @@ import crypto from 'node:crypto'
 import { eq, sql } from 'drizzle-orm'
 import { loadConfig } from './config.mjs'
 import { connect, runMigrations, dumpDatabase } from './db/index.mjs'
+import { createMailer } from './mail.mjs'
 import { users, plannerDocs, plannerRevisions, pushSubscriptions, issues, appKv, sessions } from './db/schema.js'
 import { createAuth, normEmail } from './auth.mjs'
 import { createPlanner } from './planner.mjs'
@@ -59,6 +61,18 @@ const commands = {
       await sendToUmami(cfg, 'daily-metrics', labelled(rows[rows.length - 1]))
       console.log(`sent ${last} to ${cfg.umamiUrl}`)
     }
+  },
+  async 'test-mail'() {
+    const to = need('to')
+    const mailer = createMailer(cfg)
+    if (!mailer) throw new Error('SMTP_URL is not set: "Forgot password?" emails are off on this server')
+    if (!cfg.passwordAuth) console.log('note: AUTH_PASSWORD=off, so the sign-in screen offers no password resets anyway')
+    try {
+      await mailer.send({ to, subject: 'Life Console test email', text: `This is a test from ${cfg.appUrl}. "Forgot password?" emails will be sent the same way, from ${cfg.mailFrom}.` })
+    } catch (e) {
+      throw new Error(`couldn't send through SMTP_URL: ${e.message || e.code || e.errors?.[0]?.code || e}`)
+    }
+    console.log(`sent to ${to}`)
   },
   async migrate() { await runMigrations(pool, { databaseUrl: cfg.databaseUrl, backupDir: cfg.backupDir }) },
   async users() {
