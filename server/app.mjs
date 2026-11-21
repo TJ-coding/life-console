@@ -361,9 +361,10 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const LANDING_HEADERS = cfg.analyticsDashboard
     ? { ...NO_XFO, 'Content-Security-Policy': `frame-ancestors 'self' ${cfg.analyticsDashboard}` }
     : SECURITY_HEADERS
-  // data-tag names the landing-page variant, so Umami can split every statistic by it (filter: Tag)
-  const analyticsTag = (variant) => cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
-    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}" data-tag="landing-${variant}"></script>` +
+  // data-tag="landing" sets the landing page apart in Umami (filter: Tag); the A/B test used landing-a / landing-b
+  // (an edition's page: landing-<edition>)
+  const analyticsTag = (edition) => cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
+    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}" data-tag="landing${edition ? `-${edition}` : ''}"></script>` +
       // heatmap (click positions, scroll depth) and, if switched on in Umami's settings for the website, session replays of this page
       (cfg.analyticsRecorder ? `\n<script defer src="${attr(cfg.analyticsRecorder)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` : '')
     : ''
@@ -409,20 +410,10 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
 `
   }
 
-  // landing-page A/B test: which page a visitor sees, kept in a cookie the app also reads (sign-in funnel per variant)
-  const LP_COOKIE = 'lc_lp'
-  const LANDING_FILES = { a: '/landing.html', b: '/landing-b.html' }
+  // the landing page; /landing-b.html is the A/B test's B page (now landing.html), kept only to redirect old links
   // editions' landing pages as paths on the main domain (/minimalist → landing-minimalist.html)
   const EDITION_FILES = Object.fromEntries(Object.values(EDITION_LANDINGS).map((id) => [`/landing-${id}.html`, id]))
-  const LANDING_PAGES = new Set([...Object.values(LANDING_FILES), ...Object.keys(EDITION_FILES)])
-  /** ?lp=a|b forces a variant (previews, links in posts); otherwise the remembered one; otherwise a coin flip. */
-  function landingVariant(cookies, query) {
-    const forced = query.get('lp')
-    if (LANDING_FILES[forced]) return forced
-    if (!cfg.landingAb) return 'a'
-    if (LANDING_FILES[cookies[LP_COOKIE]]) return cookies[LP_COOKIE]
-    return Math.random() < 0.5 ? 'a' : 'b'
-  }
+  const LANDING_PAGES = new Set(['/landing.html', '/landing-b.html', ...Object.keys(EDITION_FILES)])
 
   // GitHub star count for the landing pages' Star button: fetched by the server at most hourly, never per visitor
   const stars = { n: null, at: 0 }
@@ -463,13 +454,7 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
     if (rel === '/' && cfg.landing) {
       // the landing page for visitors without a session (and crawlers); signed-in people get the app as before
       vary = true
-      const cookies = parseCookies(req.headers.cookie)
-      if (cookies[COOKIE]) rel = '/index.html'
-      else {
-        const variant = landingVariant(cookies, query)
-        rel = LANDING_FILES[variant]
-        if (cfg.landingAb || query.get('lp')) extra['Set-Cookie'] = `${LP_COOKIE}=${variant}; Path=/; Max-Age=${90 * 86400}; SameSite=Lax${secureFor(req) ? '; Secure' : ''}`
-      }
+      rel = parseCookies(req.headers.cookie)[COOKIE] ? '/index.html' : '/landing.html'
     } else if (EDITION_LANDINGS[rel]) {
       // an edition's page: visitors read about it; people already signed in, and servers without landing pages
       // (self-hosted), go straight into the app in that edition
@@ -491,7 +476,7 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
       refreshStars()
       return fs.readFile(file, 'utf8', (err, html) => {
         if (err) return send(res, 404, 'not found')
-        const tag = analyticsTag(EDITION_FILES[rel] ?? (rel === LANDING_FILES.b ? 'b' : 'a')) // data-tag landing-a|b|<edition>
+        const tag = analyticsTag(EDITION_FILES[rel]) // data-tag landing | landing-<edition>
         let body = html.replaceAll('<!--stars-->', starText())
         if (tag) body = body.replace('</head>', `${tag}\n</head>`)
         res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), Vary: 'Cookie', 'X-LC-Page': 'landing', ...LANDING_HEADERS, ...extra })

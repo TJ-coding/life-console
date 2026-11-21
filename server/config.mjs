@@ -53,9 +53,6 @@ export function loadConfig(over = {}) {
     // public landing page at / for visitors who aren't signed in, plus a search-engine-friendly robots.txt/sitemap.
     // Off (the default) keeps a self-hosted server private: / is the app and robots.txt asks crawlers to stay out.
     landing: bool(e.LANDING),
-    // A/B test of the landing page: on = each new visitor gets landing.html (A) or landing-b.html (B) at random,
-    // remembered in the lc_lp cookie. Off: everyone gets A; /?lp=b still previews B
-    landingAb: bool(e.LANDING_AB),
     // the GitHub repository whose star count the landing pages show (fetched hourly by the server, so visitors'
     // browsers never contact GitHub). Empty = no count
     githubRepo: 'GITHUB_REPO' in e ? e.GITHUB_REPO : 'TJ-coding/life-console',

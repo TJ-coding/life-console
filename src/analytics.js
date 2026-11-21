@@ -58,14 +58,6 @@ export function linkSource(search = location.search) {
   return SOURCES.includes(from) ? from : undefined
 }
 
-// The landing-page A/B test (server: LANDING_AB) remembers the variant a visitor saw in the lc_lp cookie ('a' | 'b');
-// the sign-in screen passes it on so the funnel can be split by variant all the way to "Continue with Google".
-export function landingVariant(cookie = typeof document === 'undefined' ? '' : document.cookie) {
-  const m = /(?:^|;\s*)lc_lp=([ab])(?:;|$)/.exec(cookie)
-  return m ? m[1] : undefined
-}
-const withVariant = (data) => { const lp = landingVariant(); return lp ? { ...data, lp } : data }
-
 /**
  * The sign-in screen was shown. `inApp`: an in-app browser (Reddit, Instagram…) where Google refuses to sign in.
  * `fromGuest`: they tried the app without an account first and came back to keep their planner.
@@ -73,14 +65,13 @@ const withVariant = (data) => { const lp = landingVariant(); return lp ? { ...da
 export function trackSignInScreen(inApp, fromGuest = false) {
   if (!signedOutAllowed()) return
   const from = linkSource()
-  const data = withVariant({ inApp, ...(from && { from }), ...(fromGuest && { fromGuest }) })
+  const data = { inApp, ...(from && { from }), ...(fromGuest && { fromGuest }) }
   load().then(() => window.umami?.track((p) => ({ ...p, url: '/app/sign-in', title: 'Sign in', referrer: '', data }))).catch(() => {})
 }
 
 /** A button on the sign-in screen: 'signin-google', 'signin-open-browser', 'signin-copy-link', 'signin-error', 'signin-guest' (Try the demo), 'signin-guest-back'. */
 export function trackSignInEvent(name, data = {}) {
   if (!signedOutAllowed()) return
-  data = withVariant(data)
   load().then(() => window.umami?.track((p) => ({ ...p, url: '/app/sign-in', title: 'Sign in', referrer: '', name, data }))).catch(() => {})
 }
 
