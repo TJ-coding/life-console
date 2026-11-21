@@ -191,6 +191,7 @@ final class Model: ObservableObject {
   var onConnect: (() -> Void)?
   var onPlan: (() -> Void)?
   var onSettings: (() -> Void)?
+  var onReport: (() -> Void)?
   @Published var showHUD = defaults.object(forKey: "hud") as? Bool ?? false { didSet { defaults.set(showHUD, forKey: "hud"); onChange?() } }
   /** The floating widget's size, 0.75…3 (the slider in the panel; 1 = the original size). */
   @Published var hudScale = defaults.object(forKey: "hudScale") as? Double ?? 1 { didSet { defaults.set(hudScale, forKey: "hudScale"); onChange?() } }
@@ -287,6 +288,20 @@ final class Model: ObservableObject {
     URLSession.shared.dataTask(with: req) { data, resp, _ in
       DispatchQueue.main.async { done((resp as? HTTPURLResponse)?.statusCode ?? 0, data) }
     }.resume()
+  }
+
+  /** Report an issue about Life Console from here (the in-app I key's report), with the Mac app as its context.
+   *  done(nil, "ISS-12") when it's filed, done(error, nil) when not. */
+  func reportIssue(title: String, details: String, kind: String, severity: String, done: @escaping (String?, String?) -> Void) {
+    var ctx: [String: Any] = ["device": Host.current().localizedName ?? "Mac", "app": "mac-app", "build": "Life Console Now \(Model.version)",
+                              "theme": NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? "dark" : "light"]
+    if let id = snapshot?.current?.todoId ?? snapshot?.current?.id { ctx["selectedId"] = id }
+    let body: [String: Any] = ["title": title, "details": details, "kind": kind, "severity": severity,
+                               "screen": "MAC", "screenTitle": "Mac menu-bar app", "route": "", "platform": "web", "context": ctx]
+    request("/api/issues", method: "POST", body: body) { code, data in
+      if code == 201, let d = data, let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any] { return done(nil, j["id"] as? String ?? "") }
+      done(code == 0 ? "Couldn't reach \(self.url). Check your connection and try again." : code == 401 ? "This Mac isn't connected any more: reconnect in Settings…" : "The server said \(code). Try again.", nil)
+    }
   }
 
   func fetch() {
@@ -563,6 +578,7 @@ struct Panel: View {
         Button("Refresh") { m.fetch() }
         Button(m.checkedNoUpdate && m.update == nil ? "Up to Date (\(Model.version))" : "Check for Updates") { m.checkUpdate(force: true) }
         Divider()
+        Button("Report an Issue…") { m.onReport?() }.disabled(!m.connected)
         Button("Settings…") { m.onSettings?() }.keyboardShortcut(",")
         Divider()
         Button("Quit Life Console Now", action: quit)
@@ -572,6 +588,53 @@ struct Panel: View {
   }
 }
 
+
+/** Report window (gear menu → Report an Issue…): the same report as the I key in the app, filed from the Mac. */
+struct ReportView: View {
+  @ObservedObject var m: Model
+  let close: () -> Void
+  @State private var title = ""
+  @State private var details = ""
+  @State private var kind = "bug"
+  @State private var severity = "medium"
+  @State private var sending = false
+  @State private var error: String?
+  @State private var sent: String?
+  var body: some View {
+    Form {
+      Section {
+        TextField("What should change?", text: $title)
+        ZStack(alignment: .topLeading) {
+          if details.isEmpty { Text("Details (optional): what you did, what you expected").foregroundColor(.secondary).padding(.top, 1).padding(.leading, 5) }
+          TextEditor(text: $details).font(.body).frame(minHeight: 90).scrollContentBackground(.hidden)
+        }
+        Picker("Kind", selection: $kind) { Text("Bug").tag("bug"); Text("UX / layout").tag("ux"); Text("Idea").tag("idea") }.pickerStyle(.segmented)
+        Picker("Severity", selection: $severity) { Text("Low").tag("low"); Text("Medium").tag("medium"); Text("High").tag("high") }.pickerStyle(.segmented)
+      } footer: {
+        Text("It goes to the issue list on \(m.url), marked as from the Mac app. You'll be thanked in the app when it's fixed.")
+          .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+      }
+      HStack {
+        if let e = error { Label(e, systemImage: "exclamationmark.triangle").foregroundColor(.orange).font(.caption) }
+        if let id = sent { Label("Sent as \(id). Thank you!", systemImage: "checkmark.circle").foregroundColor(.green).font(.caption) }
+        Spacer()
+        Button("Cancel", action: close).keyboardShortcut(.cancelAction)
+        Button(sending ? "Sending…" : "Send") { send() }.keyboardShortcut(.defaultAction)
+          .disabled(sending || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sent != nil)
+      }
+    }
+    .formStyle(.grouped).frame(width: 460)
+  }
+  func send() {
+    sending = true; error = nil
+    m.reportIssue(title: title.trimmingCharacters(in: .whitespacesAndNewlines), details: details, kind: kind, severity: severity) { err, id in
+      sending = false
+      if let e = err { error = e; return }
+      sent = id
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { close() }
+    }
+  }
+}
 
 /** Settings window (gear menu → Settings…): the widget, the menu bar, login, account. */
 struct SettingsView: View {
@@ -988,6 +1051,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     model.onConnect = { [weak self] in self?.openConnectPage() }
     model.onPlan = { [weak self] in self?.openPath("/app#/week") }
     model.onSettings = { [weak self] in self?.openSettings() }
+    model.onReport = { [weak self] in self?.openReport() }
     model.onDeadlines = { [weak self] in self?.openPath("/app#/deadlines") }
     if !defaults.bool(forKey: "loginAsked") { defaults.set(true, forKey: "loginAsked"); try? SMAppService.mainApp.register() }
 
@@ -1128,6 +1192,7 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
   func openFocus() { openPath(model.snapshot?.planning == true ? "/app#/week" : "/app#/focus") }
   func openPath(_ p: String) { popover.performClose(nil); if let u = URL(string: model.url + p) { NSWorkspace.shared.open(u) } }
   var settingsWindow: NSWindow?
+  var reportWindow: NSWindow?
   func openSettings() {
     popover.performClose(nil)
     if settingsWindow == nil {
@@ -1141,6 +1206,19 @@ final class App: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelega
     }
     NSApp.activate(ignoringOtherApps: true)
     settingsWindow?.makeKeyAndOrderFront(nil)
+  }
+
+  /** A fresh report window each time (the form starts empty). */
+  func openReport() {
+    popover.performClose(nil)
+    reportWindow?.close()
+    let hc = NSHostingController(rootView: ReportView(m: model, close: { [weak self] in self?.reportWindow?.close() }))
+    hc.sizingOptions = .preferredContentSize
+    let w = NSWindow(contentViewController: hc)
+    w.title = "Report an Issue"; w.styleMask = [.titled, .closable]; w.isReleasedWhenClosed = false
+    w.center(); reportWindow = w
+    NSApp.activate(ignoringOtherApps: true)
+    w.makeKeyAndOrderFront(nil)
   }
 
   func showPanel() {
