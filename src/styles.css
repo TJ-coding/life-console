@@ -263,6 +263,7 @@ label.field > span { font: 600 10px/12px 'JetBrains Mono', monospace; letter-spa
 
 /* ISS-29: box selection on the schedule (src/boxSelect.js) */
 .boxsel { position: fixed; z-index: 70; pointer-events: none; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.boxsel.draw { border-style: dashed; border-color: var(--info); background: color-mix(in srgb, var(--info) 14%, transparent); } /* ISS-47 */
-.boxsel.draw::after { content: attr(data-label); position: absolute; left: 4px; top: 2px; font: 600 10px/14px 'JetBrains Mono', monospace; color: var(--info); white-space: nowrap; }
+.boxsel.draw { overflow: hidden; border-style: dashed; border-color: var(--info); background: color-mix(in srgb, var(--info) 14%, transparent); } /* ISS-47 */
+.boxsel.draw::after { content: attr(data-label); position: absolute; left: 4px; right: 4px; top: 2px; overflow: hidden; text-overflow: ellipsis; font: 600 10px/14px 'JetBrains Mono', monospace; color: var(--info); white-space: nowrap; }
+body.boxselecting .xhair { display: none; } /* the box shows the range while drawing */
 body.boxselecting, body.boxselecting * { user-select: none !important; cursor: crosshair !important; }
