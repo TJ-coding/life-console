@@ -64,7 +64,16 @@ function auto() {
 </script>
 
 <template>
-  <div class="day panel" :class="{ today: isToday, past }" :data-date="date">
+  <div class="day panel" :class="{ today: isToday, past, hasdl: deadlines.length }" :data-date="date">
+    <!-- ISS-41: a day with a deadline wears a solid banner above its date (red once overdue), so the
+         week's deadline days stand out at a glance; every column reserves the busiest day's number of
+         rows (dlRows) so the dates and everything below stay level -->
+    <div class="dlband" :class="{ has: deadlines.length, over: deadlines.some((d) => !d.done && isOverdue(d)), alldone: deadlines.length && deadlines.every((d) => d.done) }" :style="{ minHeight: dlRows ? dlRows * 22 + 6 + 'px' : 0 }">
+      <div v-for="d in deadlines" :key="d.id" class="dlb" :class="{ done: d.done, over: isOverdue(d) }" :title="`Deadline: ${d.title}${d.vital ? ' · ' + d.vital : ''} — click to edit`" @click="ui.deadlineId = d.id">
+        <span class="icon">flag</span><span class="ellipsis grow">{{ d.title }}</span><span class="mono tm">{{ d.due.slice(11) }}</span>
+        <input v-model="d.done" type="checkbox" title="Done" @click.stop />
+      </div>
+    </div>
     <header class="dh" role="link" tabindex="0" :title="`Plan ${wd(date)} ${fmtSlash(date)}: open it with the backlog beside it`" @click="openDay" @keydown.enter="openDay">
       <div class="row">
         <span class="ja">{{ wdJa(date) }}</span>
@@ -72,6 +81,7 @@ function auto() {
         <span class="mono tiny muted">{{ wd(date) }}</span>
         <span class="spacer"></span>
         <span v-if="isToday" class="mono tiny ok">● NOW</span>
+        <button class="btn sm icon-only addbtn" :class="{ active: adding }" :title="`Add a deadline on ${wd(date)}`" @click.stop="adding = !adding" @keydown.enter.stop><span class="icon sm">flag</span></button>
         <span class="icon sm open">open_in_new</span>
       </div>
       <div class="row">
@@ -85,22 +95,7 @@ function auto() {
       </div>
     </header>
 
-    <!-- ISS-41: deadlines sit at the top of the day, and every day reserves the same number of rows
-         (dlRows, the week's busiest day), so the sections below stay level across the columns -->
-    <div class="sec sec-dl" :class="{ has: deadlines.length }">
-      <div class="sh tiny upper" :class="deadlines.length ? 'dlh' : 'muted'">
-        <span class="icon sm">flag</span>Deadlines<span v-if="deadlines.length" class="mono cnt">{{ deadlines.length }}</span><span class="spacer"></span>
-        <button class="btn sm icon-only addbtn" :class="{ active: adding }" :title="`Add a deadline on ${wd(date)}`" @click="adding = !adding"><span class="icon sm">add</span></button>
-      </div>
-      <div class="dls" :style="{ minHeight: dlRows * 24 + 'px' }">
-        <div v-for="d in deadlines" :key="d.id" class="dl" :class="{ done: d.done, over: isOverdue(d) }" :title="`${d.title}${d.vital ? ' · ' + d.vital : ''} — click to edit`" @click="ui.deadlineId = d.id">
-          <input v-model="d.done" type="checkbox" @click.stop />
-          <span class="ellipsis grow">{{ d.title }}</span>
-          <span class="mono tm">{{ d.due.slice(11) }}</span>
-        </div>
-      </div>
-      <DeadlineQuickAdd v-if="adding" :date="date" compact autofocus @cancel="adding = false" />
-    </div>
+    <div v-if="adding" class="sec"><DeadlineQuickAdd :date="date" compact autofocus @cancel="adding = false" /></div>
 
     <div class="sec sec-load">
       <div class="sh tiny upper muted"><span class="n">②</span> Workload<span class="spacer"></span>{{ todos.filter((t) => t.done).length }}/{{ todos.length }} done</div>
@@ -183,20 +178,25 @@ function auto() {
 .sh { display: flex; align-items: center; gap: 4px; padding: 0 2px 5px; min-height: 22px; white-space: nowrap; overflow: hidden; }
 .n { font-size: 12px; }
 .auto { height: 20px; padding: 0 5px; font-size: 10px; color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--border)); }
-.sec-dl.has { background: color-mix(in srgb, var(--warn) 7%, transparent); }
-.dlh { color: var(--warn); font-weight: 700; }
-.sh .icon { font-size: 14px; }
-.cnt { margin-left: 2px; }
-.dls { display: flex; flex-direction: column; gap: 2px; }
-.dl { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 4px; cursor: pointer; border-radius: 2px; font-size: 13px; font-weight: 600; border-left: 2px solid var(--warn); background: var(--surface); }
-.dl:hover { background: var(--surface-2); }
-.dl .tm { font-size: 11px; color: var(--warn); }
-.dl.over { border-left-color: var(--danger); }
-.dl.over .grow, .dl.over .tm { color: var(--danger); }
-.dl.done { border-left-color: var(--border); font-weight: 400; }
-.dl.done .tm { color: var(--muted); }
+.dlband { display: flex; flex-direction: column; gap: 2px; padding: 0; box-sizing: border-box; }
+.dlband.has { padding: 3px; background: var(--warn); }
+.dlband.over { background: var(--danger); }
+.dlband.alldone { background: var(--surface-2); }
+.day.hasdl:not(.today) { border-color: color-mix(in srgb, var(--warn) 60%, var(--border)); }
+.dlb { display: flex; align-items: center; gap: 4px; height: 22px; padding: 0 4px; border-radius: 2px; cursor: pointer; font-size: 13px; font-weight: 700; color: #16120a; }
+.dlb:hover { background: color-mix(in srgb, #000 14%, transparent); }
+.dlb .icon { font-size: 15px; }
+.dlb .tm { font-size: 11px; font-weight: 700; }
+.dlb input { margin: 0; accent-color: #16120a; }
+.dlband.over .dlb.over { color: var(--bg); }
+.dlband.over .dlb.over input { accent-color: var(--bg); }
+.dlband.over .dlb:not(.over) { background: var(--warn); }
+.dlb.done { color: var(--muted); font-weight: 400; }
+.dlb.done .grow { text-decoration: line-through; }
+.dlband.has .dlb.done { background: color-mix(in srgb, var(--surface) 55%, transparent); }
+.addbtn { opacity: 0; }
+.day:hover .addbtn, .addbtn:focus-visible, .addbtn.active { opacity: 1; }
 .addbtn { height: 18px; padding: 0 2px; }
-.dl.done span.grow { text-decoration: line-through; color: var(--muted); }
 .pad { padding: 2px; }
 .notes { width: 100%; font-size: 11px; line-height: 15px; }
 .stamps-sec { display: flex; justify-content: center; border-bottom: 0; padding: 8px; }
