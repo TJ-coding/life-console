@@ -4,7 +4,7 @@
 // from tomorrow on? do tomorrow's tasks have times? what is tomorrow's one thing? Then sign off.
 // Before 04:00 it debriefs the previous day. The set of steps is fixed when the screen opens.
 import { useRouter } from 'vue-router'
-import { state, ui, todayISO, addDays, wd, todosForDay, isLeaf, CAPACITY_H } from '../store'
+import { state, ui, todayISO, addDays, wd, todosForDay, isLeaf, capH } from '../store'
 import { effDue, countdown, minsTo } from '../glance'
 import { threats, coverFor, untimedOn, openIn, objectiveIn, freeSlot, timeboxSim, deadlineTaskSim, objectiveSim, noSim, overloadStep, fitsWith, loadOf, dur } from '../review'
 import BriefingFlow from '../components/BriefingFlow.vue'
@@ -41,7 +41,7 @@ notDone.forEach((t0, i) => {
 })
 
 /* tomorrow over capacity (unfinished tasks moved there count too) */
-if (loadOf(state.todos, N) > CAPACITY_H || notDone.length) steps.push(overloadStep(N, addDays(N, 1)))
+if (loadOf(state.todos, N) > capH() || notDone.length) steps.push(overloadStep(N, addDays(N, 1)))
 
 /* deadlines before the end of the day after tomorrow with nothing scheduled from tomorrow on */
 // (one due before tomorrow can't be scheduled any more: it stays on the Command Center)

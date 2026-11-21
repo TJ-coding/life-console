@@ -63,7 +63,13 @@ let stateReady = false // see goalMap()
 /* ───────────── domain constants ───────────── */
 export const STAMPS = ['印', '印', '確認', '完']
 export const STAMP_NAMES = ['Draft', 'Self-check', 'Confirmed', 'Complete']
-export const CAPACITY_H = 7
+export const DEFAULT_CAPACITY_H = 7
+/** ISS-2 (public): hours of tasks a day holds (Settings → Scheduling, whole hours 1–16; default 7).
+ *  A function so screens follow a change at once. */
+export const capH = () => {
+  const v = Math.round(Number(state.settings?.capacityH))
+  return v >= 1 && v <= 16 ? v : DEFAULT_CAPACITY_H
+}
 
 /* number → 'psg' | 'sig', built lazily: linkType also runs inside migrations while `state` is still loading */
 let goalIndex = null
@@ -1100,7 +1106,7 @@ export function dayLoad(date, withBlocks = false) {
  * not due before the target day) from the heaviest remaining day to the lightest,
  * choosing the todo that best evens the pair. Only today and future days are touched.
  */
-export function suggestRebalance(days, withBlocks = false, cap = CAPACITY_H) {
+export function suggestRebalance(days, withBlocks = false, cap = capH()) {
   const cand = days.filter((d) => d >= todayISO())
   const loads = Object.fromEntries(cand.map((d) => [d, dayLoad(d, withBlocks).total]))
   const moved = new Set()
@@ -1147,9 +1153,9 @@ export function weekBalance(weekStart) {
   const v = Object.values(loads)
   const avg = v.reduce((a, b) => a + b, 0) / v.length
   const spread = Math.max(...v) - Math.min(...v)
-  const over = days.filter((d) => loads[d] > CAPACITY_H)
+  const over = days.filter((d) => loads[d] > capH())
   const level = over.length || spread > 3 ? 'unbalanced' : spread > 1.5 ? 'uneven' : 'balanced'
-  const free = v.reduce((s, x) => s + Math.max(0, CAPACITY_H - x), 0)
+  const free = v.reduce((s, x) => s + Math.max(0, capH() - x), 0)
   return { days, loads, avg, spread, over, level, free }
 }
 
@@ -1189,7 +1195,7 @@ export function evenParts(total, n) {
  * by this split, then earlier days. `days` are candidate dates; the task's own current load is excluded.
  * Returned dates are sorted so part 1 is the earliest.
  */
-export function autoSpread(todo, minutes, days, cap = CAPACITY_H) {
+export function autoSpread(todo, minutes, days, cap = capH()) {
   const free = Object.fromEntries(days.map((d) => [d, cap - dayLoad(d).total + (todo.scheduled?.date === d ? todo.timeMin / 60 : 0)]))
   const used = new Set()
   const picks = minutes.map((m) => {
@@ -1344,7 +1350,7 @@ export const WORK_FROM = '08:00'
 export const WORK_TO = '21:00'
 
 /** Free hours left on a day (todo estimates vs capacity). */
-export const freeHours = (date, cap = CAPACITY_H) => cap - dayLoad(date).total
+export const freeHours = (date, cap = capH()) => cap - dayLoad(date).total
 
 /* Step ① (backlog-only view): a backlog task can get a week before it gets a day. t.week is that
    week's Monday; once the week has passed the task rolls over into the current one. */
@@ -1360,7 +1366,7 @@ export const backlogFor = (weekStart) => backlogTodos()
   .sort((a, b) => Number(!planWeek(a)) - Number(!planWeek(b)) || byPriority(a, b))
 /** Hours left in a week: free time on its weekdays still ahead (the weekend if none are), minus the
    backlog already planned for it. Negative = over-planned. */
-export function weekFree(weekStart, cap = CAPACITY_H) {
+export function weekFree(weekStart, cap = capH()) {
   const T = todayISO()
   const ahead = (ids) => ids.map((i) => addDays(weekStart, i)).filter((d) => d >= T)
   const ds = ahead([0, 1, 2, 3, 4]).length ? ahead([0, 1, 2, 3, 4]) : ahead([5, 6])
@@ -1389,7 +1395,7 @@ export function assignToWeek(id, week) {
  * Step ②: put a task on a day (keeps its time only if it stays on the same day).
  * If that overfills the day, offers to split it instead.
  */
-export function assignToDay(id, date, cap = CAPACITY_H) {
+export function assignToDay(id, date, cap = capH()) {
   const t = findTodo(id)
   if (!t) return
   if (isContainer(t)) { toast(`${id} has subtasks: plan those instead`); return }
@@ -1570,3 +1576,15 @@ export const fmtDuration = (min) => {
   const h = Math.floor(n / 60), r = n % 60
   return h ? `${h}h${r ? `${r}m` : ''}` : `${r}m`
 }
+
+/** ISS-43: the plan a goal (PSG/SIG, any name) or a plan link (SP-…) belongs to, or null. */
+export function planOfLink(id) {
+  if (linkType(id) === 'plan') return state.plans.find((p) => p.id === id || p.planNo === id) ?? null
+  return state.plans.find((p) => p.psgs.some((g) => g.no === id) || p.sigs.some((s) => s.no === id)) ?? null
+}
+/** ISS-46: links that place a task in the big picture (deadlines, then goals and plans), for the trail on task cards. */
+export const trailLinks = (t) => [
+  ...(t.links || []).filter((l) => linkType(l) === 'deadline'),
+  ...(t.links || []).filter((l) => linkType(l) === 'plan'),
+  ...(t.links || []).filter((l) => linkType(l) === 'goal'),
+]

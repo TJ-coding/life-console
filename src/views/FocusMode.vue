@@ -1,7 +1,7 @@
 <script setup>
 // S-01 Focus mode — one thing at a glance: the current block, the next one, top 3 actions.
 import { computed, watchEffect, onBeforeUnmount } from 'vue'
-import { state, ui, wd, workload, getStamps, CAPACITY_H, toggleTodo, toast } from '../store'
+import { state, ui, wd, workload, getStamps, capH, toggleTodo, toast } from '../store'
 import { useNow, fmtDur, fmtClock, toggleClockMode } from '../now'
 import Stamps from '../components/Stamps.vue'
 import Prio from '../components/Prio.vue'
@@ -92,8 +92,8 @@ function start(t) { n.startNow(t); toast(`Started ${t.id} now`) }
 
     <section class="tiles">
       <div class="panel tile">
-        <div class="row tiny upper muted">Workload<span class="spacer"></span><span class="mono">{{ hours.toFixed(1) }} / {{ CAPACITY_H }}h</span></div>
-        <div class="bar" :class="hours > CAPACITY_H ? 'warn' : ''"><i :style="{ width: Math.min(100, (hours / CAPACITY_H) * 100) + '%' }"></i></div>
+        <div class="row tiny upper muted">Workload<span class="spacer"></span><span class="mono">{{ hours.toFixed(1) }} / {{ capH() }}h</span></div>
+        <div class="bar" :class="hours > capH() ? 'warn' : ''"><i :style="{ width: Math.min(100, (hours / capH()) * 100) + '%' }"></i></div>
       </div>
       <div class="panel tile center">
         <div class="row tiny upper muted">Sign-off<span class="spacer"></span><span class="mono" style="color: var(--stamp)">{{ stamped }}/4</span></div>

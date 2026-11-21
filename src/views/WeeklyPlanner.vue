@@ -5,7 +5,7 @@
 import { computed, ref, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-  state, ui, todayISO, addDays, wd, todosForDay, workload, CAPACITY_H, toast, autoTimebox,
+  state, ui, todayISO, addDays, wd, todosForDay, workload, capH, toast, autoTimebox,
   routineDone, toggleRoutine, monthGroup, toggleMonthly, suggestRebalance,
   weekBalance, backlogFor, backlogTodos, planWeek,
 } from '../store'
@@ -40,7 +40,7 @@ watchEffect(() => { ui.visibleIds = weekTodos.value.map((t) => t.id) })
 /* ── what to do next ── */
 const backlogN = computed(() => backlogFor(ui.weekStart).length) // planned for this week + unplanned
 const untimed = computed(() => weekTodos.value.filter((t) => !t.done && !t.scheduled.start && t.scheduled.date >= T.value))
-const overDays = computed(() => days.value.filter((d) => workload(d) > CAPACITY_H))
+const overDays = computed(() => days.value.filter((d) => workload(d) > capH()))
 const balance = computed(() => weekBalance(ui.weekStart))
 const moves = computed(() => suggestRebalance(balance.value.days))
 const rebalanceN = computed(() => moves.value.length)
@@ -66,7 +66,7 @@ const placement = computed(() => {
   for (const t of backlog) {
     const h = (t.timeMin || 0) / 60
     for (const tier of tiers) {
-      const d = tier.filter((x) => (!t.due || x <= t.due) && load[x] + h <= CAPACITY_H).sort((a, b) => load[a] - load[b])[0]
+      const d = tier.filter((x) => (!t.due || x <= t.due) && load[x] + h <= capH()).sort((a, b) => load[a] - load[b])[0]
       if (d) { out[d].push(t); load[d] += h; break }
     }
   }
@@ -80,13 +80,13 @@ const dayBalance = computed(() => (balancing.value
   ? {
       avg: balance.value.avg,
       counts: balance.value.days,
-      rows: Math.max(CAPACITY_H, ...week.value.map(bucketRows)),
+      rows: Math.max(capH(), ...week.value.map(bucketRows)),
       place: placement.value,
       moves: Object.fromEntries(moves.value.map((s) => [s.todo.id, s])),
     }
   : null))
 const next = computed(() => {
-  if (overDays.value.length) return { icon: 'warning', cls: 'danger', text: `${overDays.value.map(wd).join(', ')} over ${CAPACITY_H}h — move or split a task`, action: 'balance' }
+  if (overDays.value.length) return { icon: 'warning', cls: 'danger', text: `${overDays.value.map(wd).join(', ')} over ${capH()}h — move or split a task`, action: 'balance' }
   if (ui.backlogOnly) {
     const n = backlogTodos().filter((t) => !planWeek(t)).length
     return n
@@ -199,7 +199,7 @@ const print = () => window.print()
               <div class="kpis mono small">
                 <div><span class="muted">Todos done</span><b>{{ kpi.done }}/{{ kpi.total }} · {{ kpi.pct }}%</b></div>
                 <div class="bar"><i :style="{ width: kpi.pct + '%' }"></i></div>
-                <div><span class="muted">Planned hours</span><b>{{ kpi.planned.toFixed(1) }}h / {{ CAPACITY_H * 5 }}h</b></div>
+                <div><span class="muted">Planned hours</span><b>{{ kpi.planned.toFixed(1) }}h / {{ capH() * 5 }}h</b></div>
                 <div><span class="muted">Days stamped 完</span><b>{{ kpi.stamped }}/7</b></div>
               </div>
             </template>

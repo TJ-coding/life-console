@@ -3,7 +3,7 @@
 import PartBadge from '../components/PartBadge.vue'
 import { computed, ref, reactive, watch, watchEffect, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel, isContainer, subCount, parentPath, todoMatches, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
+import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, capH, fmtSlash, wd, partLabel, isContainer, subCount, parentPath, todoMatches, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import LsdToggle from '../components/LsdToggle.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -248,7 +248,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
       </div>
 
       <footer class="stats mono small">
-        <span><span class="muted">TAKT CAPACITY TODAY</span> {{ stats.todayMin }}m / {{ CAPACITY_H * 60 }}m</span>
+        <span><span class="muted">TAKT CAPACITY TODAY</span> {{ stats.todayMin }}m / {{ capH() * 60 }}m</span>
         <span><span class="muted">OVERDUE</span> <b :class="stats.overdue ? 'danger' : ''">{{ stats.overdue }}</b></span>
         <span><span class="muted">DUE TODAY</span> <b :class="stats.dueToday ? 'warn' : ''">{{ stats.dueToday }}</b></span>
         <span><span class="muted">HIGH PRIO (P1/P2)</span> {{ stats.high }}</span>

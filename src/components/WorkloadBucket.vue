@@ -4,18 +4,19 @@
 // Lives inside DayColumn directly above that day's timeline — drag a block down onto a time.
 import PartBadge from './PartBadge.vue'
 import { computed, ref } from 'vue'
-import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, CAPACITY_H, partLabel, assignToDay, toast, isHoverLinked, loadsDay, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
+import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, capH, partLabel, assignToDay, toast, isHoverLinked, loadsDay, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 
 const props = defineProps({
   date: { type: String, required: true },
   withBlocks: Boolean, // also show fixed calendar blocks as a grey base layer
-  cap: { type: Number, default: CAPACITY_H },
+  cap: { type: Number, default: null },
   hourPx: { type: Number, default: 30 },
   dimFn: Function,
   minRows: Number, // ② Assign day: every bucket in the week gets the same height so their lines line up
   avg: { type: Number, default: null }, // ② Assign day: the week's average load, drawn as a line
 })
+const cap = computed(() => props.cap ?? capH()) // ISS-2: the capacity setting unless a caller passes one
 
 const todos = computed(() => {
   const ts = todosForDay(props.date)
@@ -42,7 +43,7 @@ const fixedH = computed(() => (props.withBlocks
 // minutes a card adds to the gauge: work finished ahead of a future day no longer loads it (its card shrinks to a strip)
 const loadMin = (t) => (t.grouped ? t.grouped.parts : [t]).reduce((s, p) => s + (loadsDay(p, props.date) ? p.timeMin || 0 : 0), 0)
 const total = computed(() => fixedH.value + todos.value.reduce((s, t) => s + loadMin(t) / 60, 0))
-const rows = computed(() => Math.max(props.cap, Math.ceil(total.value), props.minRows || 0))
+const rows = computed(() => Math.max(cap.value, Math.ceil(total.value), props.minRows || 0))
 const blockH = (min) => Math.max(16, (min / 60) * props.hourPx - 2)
 const cardH = (t) => blockH(loadMin(t))
 // small blocks have a minimum height; let the bucket grow so they never spill over the header
@@ -56,7 +57,7 @@ const hot = ref(false)
 function onDrop(e) {
   hot.value = false
   const id = e.dataTransfer.getData(TODO_MIME)
-  if (id) assignToDay(id, props.date, props.cap)
+  if (id) assignToDay(id, props.date, cap.value)
 }
 const hm = (m) => { const h = Math.floor(m / 60); return h ? `${h}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` : `${m}m` }
 /** Second line of a merged card: "3 sittings · 1h30" (+ untimed rest). */
