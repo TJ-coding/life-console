@@ -1,7 +1,8 @@
 <script setup>
 // Vertical hourly schedule used in each Weekly Planner day column.
-import { computed, ref } from 'vue'
-import { ui, todayISO, blockedRanges, cutBlockAt, findTodo, altLabel, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
+import { computed, ref, nextTick } from 'vue'
+import { workIn } from '../../server/pomodoro.mjs'
+import { ui, todayISO, blockedRanges, cutBlockAt, findTodo, altLabel, addTodo, parseQuick, pomo, toast, state, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 6 }, to: { type: Number, default: 23 }, pxh: { type: Number, default: 22 }, dimFn: Function,
   // preview mode (Briefing / Debrief): no editing; markFn(b) adds classes (pv-new, pv-ghost, pv-late, pv-star); lineAt draws a line (minutes)
@@ -45,6 +46,30 @@ function openBlock(e, b) {
   else emit('edit', b) // a fixed block: detail + delete dialog (ISS-8)
 }
 const removeBlock = removeTimelineBlock
+/* ISS-47: a box drawn on empty timeline (boxSelect.js) becomes a new task: type its title (quick-add syntax
+   works: p2, #link…), Enter adds it at the drawn time, Esc cancels. The drawn length is its time on the
+   clock (with pomodoros on, the work inside it). */
+const draft = ref(null) // { start, end, text }
+const draftInput = ref(null)
+async function startDraft(e) {
+  draft.value = { ...e.detail, text: '' }
+  await nextTick()
+  draftInput.value?.focus()
+}
+function saveDraft() {
+  const d = draft.value
+  draft.value = null
+  if (!d || !d.text.trim()) return
+  const p = parseQuick(d.text)
+  const P = pomo()
+  const dur = d.end - d.start
+  const t = addTodo({
+    title: p.title || d.text.trim(), links: p.links, priority: p.priority ?? 3, lsd: p.lsd ?? 'S', due: p.due ?? null,
+    timeMin: P.on ? Math.max(5, workIn(dur, P)) : dur, scheduled: { date: props.date, start: fromMin(d.start) },
+  })
+  const id = t.id
+  toast(`${id} added ${fromMin(d.start)}–${fromMin(d.end)}`, { label: 'Undo', run: () => { const i = state.todos.findIndex((x) => x.id === id); if (i >= 0) state.todos.splice(i, 1) } })
+}
 /* ISS-39: hovering an open task block shows a cut line at the cursor (snapped to 5 min); ⌥/Alt-click cuts there */
 const cut = ref(null) // { id, top (px inside the block), at (clock minute) }
 function trackCut(e, b) {
@@ -64,7 +89,7 @@ function pomos(b) {
 }
 </script>
 <template>
-  <div class="vt" :class="{ ro: readonly }" :data-boxsel="readonly ? null : ''" :style="{ height: (to - from) * pxh + 'px' }" @dragover="!readonly && ed.onOver($event)" @dragleave="!readonly && ed.onLeave($event)" @drop.stop="!readonly && ed.onDrop($event)">
+  <div class="vt" :class="{ ro: readonly }" :data-boxsel="readonly ? null : ''" :data-draw="readonly || ui.scheduleLock ? null : date" :data-from="from" :data-pxh="pxh" @lc-draw="startDraft" :style="{ height: (to - from) * pxh + 'px' }" @dragover="!readonly && ed.onOver($event)" @dragleave="!readonly && ed.onLeave($event)" @drop.stop="!readonly && ed.onDrop($event)">
     <div v-for="h in to - from" :key="h" class="hr" :style="{ top: (h - 1) * pxh + 'px', height: pxh + 'px' }">
       <span class="mono">{{ String(from + h - 1).padStart(2, '0') }}</span>
     </div>
@@ -83,6 +108,10 @@ function pomos(b) {
     </div>
     <div v-if="lineAt != null && lineAt > from * 60 && lineAt < to * 60" class="wline" :style="{ top: y(lineAt) + 'px' }"><span class="mono">{{ lineLabel }}</span></div>
     <div v-if="nowY !== null" class="now" :style="{ top: nowY + 'px' }"></div>
+    <div v-if="draft" class="draft" :style="{ top: y(draft.start) + 'px', height: Math.max(22, y(draft.end) - y(draft.start)) + 'px' }" @pointerdown.stop @click.stop>
+      <span class="mono dt">{{ fromMin(draft.start) }}–{{ fromMin(draft.end) }}</span>
+      <input ref="draftInput" v-model="draft.text" class="mono" placeholder="New task… p2 #link" @keydown.enter.prevent="saveDraft" @keydown.esc.stop.prevent="draft = null" @blur="saveDraft" />
+    </div>
     <div v-if="hover" class="ghost" :style="{ top: y(hover.start) + 'px', height: Math.max(4, y(hover.start + hover.dur) - y(hover.start)) + 'px' }">
       <span class="mono">{{ fromMin(hover.start) }}</span>
     </div>
@@ -141,4 +170,7 @@ function pomos(b) {
 .cutline { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed color-mix(in srgb, var(--text) 70%, transparent); pointer-events: none; z-index: 3; } /* ISS-39 */
 .cutline span { position: absolute; left: 2px; top: -7px; padding: 0 3px; font-size: 9px; line-height: 14px; font-style: normal; border-radius: 2px; background: var(--surface); color: var(--text); white-space: nowrap; }
 @media (hover: none) { .cutline { display: none; } }
+.draft { position: absolute; left: 28px; right: 2px; z-index: 5; display: flex; flex-direction: column; gap: 2px; padding: 2px 4px; border: 1px dashed var(--info); border-radius: 2px; background: color-mix(in srgb, var(--info) 14%, var(--surface)); } /* ISS-47 */
+.draft .dt { position: absolute; left: -1px; top: -14px; padding: 0 3px; font-size: 9px; line-height: 13px; color: var(--info); background: var(--surface); border-radius: 2px 2px 0 0; }
+.draft input { width: 100%; min-width: 0; height: 16px; padding: 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: 11px; }
 </style>

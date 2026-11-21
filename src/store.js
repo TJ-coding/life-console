@@ -1685,7 +1685,7 @@ export function duplicateTodo(id, { nextWeek = false } = {}) {
       title: t.title, vital: t.vital, notes: t.notes, timeMin: t.timeMin, lsd: t.lsd, priority: t.priority,
       links: [...(t.links || [])], due: nextWeek ? (t.due ? addDays(t.due, 7) : null) : (t.due && t.due >= T ? t.due : null),
       scheduled, ...(nextWeek && !scheduled ? { week: addDays(mondayOf(t.week || T), 7) } : {}),
-      ...(t.pomo && scheduled ? { pomo: true } : {}),
+      ...(t.pomo && scheduled ? { pomo: true } : {}), ...(nextWeek && t.repeatWeekly ? { repeatWeekly: true } : {}),
       ...(parent ? { parent } : {}), order: (t.order ?? 0) + 0.0005,
     })
     made.push(c.id)
@@ -1695,18 +1695,21 @@ export function duplicateTodo(id, { nextWeek = false } = {}) {
   const top = copy(src, src.parent && findTodo(src.parent) && !findTodo(src.parent).done ? src.parent : null)
   syncContainers()
   const where = nextWeek ? (top.scheduled ? `${wd(top.scheduled.date)} ${fmtSlash(top.scheduled.date)}${top.scheduled.start ? ' ' + top.scheduled.start : ''}` : `W${isoWeek(top.week)}'s backlog`) : 'the backlog'
-  toast(`${top.id} · ${src.title} again ${nextWeek ? 'on ' + where : 'in ' + where}${made.length > 1 ? ` (+${made.length - 1} subtasks)` : ''}`, {
+  toast(`${nextWeek && src.done ? src.id + ' done · ' : ''}${top.id} · ${src.title} ${nextWeek ? 'next week: ' + where : 'copied to ' + where}${made.length > 1 ? ` (+${made.length - 1} subtasks)` : ''}`, {
     label: 'Undo',
     run: () => { const ids = new Set(made); for (let i = state.todos.length - 1; i >= 0; i--) if (ids.has(state.todos[i].id)) state.todos.splice(i, 1); if (ids.has(ui.drawerId)) ui.drawerId = null },
   })
   return top
 }
-/** A tick from the UI (not the briefing's simulations): toggle done, and when the task becomes done offer
- *  to do it again next week (public ISS-4) in the toast. */
+/** A tick from the UI (not the briefing's simulations). When the task becomes done (public ISS-4): a task
+ *  marked Repeat weekly copies itself to next week at once (Undo in the toast); any other task's toast
+ *  asks whether to duplicate it for next week. */
 export function tickTodo(id) {
   toggleTodo(id)
   const t = findTodo(id)
-  if (t?.done) toast(`${t.id} done`, { label: 'Again next week', run: () => duplicateTodo(id, { nextWeek: true }) })
+  if (!t?.done) return
+  if (t.repeatWeekly) duplicateTodo(id, { nextWeek: true })
+  else toast(`${t.id} done · duplicate it for next week?`, { label: 'Yes, next week', run: () => duplicateTodo(id, { nextWeek: true }) })
 }
 /** ISS-39: cut a timed task block at clock minute `atMin` into two parts (before / from the cut), the
  *  way the hover cut line on the timeline shows it. A pomodoro sitting is cut by wall time: the first

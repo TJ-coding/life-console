@@ -144,6 +144,11 @@ function dup() { const c = duplicateTodo(t.value.id); if (c) ui.drawerId = c.id 
           <input type="checkbox" :checked="!!t.pomo" @change="updateTodo(t.id, { pomo: $event.target.checked || undefined })" />
           <span>Pomodoro sitting</span><span class="mono muted">{{ pomo().work }}/{{ pomo().short }}m · breaks on the schedule</span>
         </label>
+        <!-- public ISS-4: a task you do every week copies itself to next week when you tick it done -->
+        <label class="pomo-sw row small" title="When you mark this task done, a copy is put on the same weekday and time next week (or next week's backlog), and that copy repeats too">
+          <input type="checkbox" :checked="!!t.repeatWeekly" @change="updateTodo(t.id, { repeatWeekly: $event.target.checked || undefined })" />
+          <span>Repeat weekly</span><span class="mono muted">duplicate for next week when done</span>
+        </label>
         <div class="field">
           <span class="lbl">Priority</span>
           <div class="row">
