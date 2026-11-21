@@ -438,9 +438,21 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
   refreshStars()
   const starText = () => stars.n == null ? '' : stars.n >= 1000 ? `${(stars.n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(stars.n)
 
+  /** 301 to the one URL search engines should index (Search Console: "Alternative page with proper canonical tag"). */
+  const moved = (res, location) => { res.writeHead(301, { Location: location, 'Cache-Control': 'public, max-age=86400', ...SECURITY_HEADERS }); res.end() }
+  /** Cloudflare tells us the visitor's scheme in CF-Visitor (X-Forwarded-Proto is rewritten by Traefik behind the tunnel). */
+  const plainHttp = (req) => /"scheme"\s*:\s*"http"/.test(String(req.headers['cf-visitor'] || ''))
+
   function serveStatic(req, res, pathname, query = new URLSearchParams()) {
     let rel
     try { rel = decodeURIComponent(pathname) } catch { return send(res, 400, 'bad path') }
+    if (cfg.landing) {
+      // duplicates of indexed pages: http://, the landing files by name, the .html of the plain URLs
+      const search = query.size ? `?${query}` : ''
+      if (plainHttp(req) && site.startsWith('https://') && req.headers.host === appHost) return moved(res, site + pathname + search)
+      if (LANDING_PAGES.has(rel)) return moved(res, `/${search}`)
+      if (rel.endsWith('.html') && (LEGAL.has(rel.slice(0, -5)) || DOCS.has(rel.slice(0, -5)))) return moved(res, rel.slice(0, -5) + search)
+    }
     if (rel === '/robots.txt') return send(res, 200, robots(), { 'Cache-Control': 'public, max-age=3600' })
     if (rel === '/sitemap.xml' || rel === '/llms.txt') {
       if (!cfg.landing) return send(res, 404, 'not found')

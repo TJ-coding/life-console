@@ -343,3 +343,20 @@ test('scripts/compare-pages.mjs: front matter is checked, pages link to each oth
   assert.throws(() => parsePage('---\npath: /vs/x\n---\n'), /needs "title"/)
   assert.throws(() => parsePage('# no front matter'), /no front matter/)
 })
+
+test('LANDING=on: duplicate URLs 301 to the canonical one (http://, landing files by name, .html of plain URLs)', async () => {
+  // http.request, not fetch: fetch won't send a custom Host header
+  const moved = (base, p, headers = {}) => new Promise((resolve, reject) => {
+    http.get(base + p, { headers }, (r) => { r.resume(); resolve([r.statusCode, r.headers.location ?? null]) }).on('error', reject)
+  })
+  assert.deepEqual(await moved(on, '/landing.html'), [301, '/'])
+  assert.deepEqual(await moved(on, '/landing-b.html?lp=b'), [301, '/?lp=b'])
+  assert.deepEqual(await moved(on, '/privacy.html'), [301, '/privacy'])
+  assert.deepEqual(await moved(on, '/docs/guide.html'), [301, '/docs/guide'])
+  // Cloudflare's CF-Visitor says the visitor came over plain http: send them to the https site
+  assert.deepEqual(await moved(on, '/docs/guide?x=1', { Host: 'lc.test', 'CF-Visitor': '{"scheme":"http"}' }), [301, 'https://lc.test/docs/guide?x=1'])
+  assert.deepEqual(await moved(on, '/', { Host: 'lc.test', 'CF-Visitor': '{"scheme":"https"}' }), [200, null])
+  assert.deepEqual(await moved(on, '/', { 'CF-Visitor': '{"scheme":"http"}' }), [200, null]) // another host (e.g. a private address): no redirect
+  // a private server keeps serving its files as before
+  assert.match((await get(off, '/docs/guide.html')).body.toString(), /GUIDE/)
+})
