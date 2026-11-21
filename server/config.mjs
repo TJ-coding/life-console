@@ -59,6 +59,8 @@ export function loadConfig(over = {}) {
     // the GitHub repository whose star count the landing pages show (fetched hourly by the server, so visitors'
     // browsers never contact GitHub). Empty = no count
     githubRepo: 'GITHUB_REPO' in e ? e.GITHUB_REPO : 'TJ-coding/life-console',
+    // after a report, offer a pre-filled GitHub issue for the Life Console project (off on the project's own servers)
+    upstreamIssues: bool(e.UPSTREAM_ISSUES, true),
     githubApi: e.GITHUB_API || 'https://api.github.com', // overridable for tests
     // optional Umami analytics: the tracker script URL and the website ID. The landing page (LANDING=on) gets the tag;
     // the app loads it itself, sends screen names only, and each person can turn it off in Settings → Privacy

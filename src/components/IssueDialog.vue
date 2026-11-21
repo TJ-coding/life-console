@@ -1,7 +1,7 @@
 <script setup>
 // Report an issue on the current screen (opened with I, the bug button, or the command palette).
 import { ref, computed, watch, nextTick } from 'vue'
-import { issues, reportIssue, KINDS, SEVERITIES } from '../issues'
+import { issues, reportIssue, KINDS, SEVERITIES, selfHosted, upstreamUrl } from '../issues'
 import { toast } from '../store'
 
 const titleEl = ref(null)
@@ -21,10 +21,14 @@ const close = () => { issues.dialog = null }
 async function submit() {
   if (!form.value.title.trim() || sending.value) return
   sending.value = true
-  const r = await reportIssue({ ...form.value })
+  const report = { ...form.value }
+  const r = await reportIssue(report)
   sending.value = false
   close()
-  toast(r === 'sent' ? 'Issue saved ✓' : 'Offline — issue saved on this device, will send later')
+  const msg = r === 'sent' ? 'Issue saved ✓' : 'Offline — issue saved on this device, will send later'
+  // on a self-hosted server the report goes to its admin only: offer to tell the Life Console project too
+  if (selfHosted()) toast(`${msg} · it goes to this server's admin`, { label: 'Also tell the Life Console project', run: () => window.open(upstreamUrl(report), '_blank', 'noopener') })
+  else toast(msg)
 }
 function onKey(e) {
   if (e.key === 'Escape') { e.stopPropagation(); close() }

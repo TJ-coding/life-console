@@ -38,6 +38,7 @@ All the settings are in [`.env.example`](../.env.example), with comments. These 
 | `APP_URL` | `http://localhost:8080` | The public address. It's used in reset emails, the cookie `Secure` flag and the origin check. |
 | `SIGNUPS` | `open` | The default for new sign-ups: `open`, or `closed` (also `off`, `false`, `no`, `0`). Any other value counts as `closed` and is logged. With sign-ups closed, only the first account on an empty server (with `ADMIN_EMAILS` set: only those emails) and the admin CLI can create accounts. Admins can override this in **Settings → Sign-ups**. |
 | `ADMIN_EMAILS` | none | Emails that are always admin. |
+| `UPSTREAM_ISSUES` | `on` | After a report, offer *Also tell the Life Console project* (a pre-filled GitHub issue the person can submit). `off` hides it: reports only go to your admins. |
 | `SMTP_URL`, `MAIL_FROM` | none | Turns on "Forgot password?" emails (see *Email (password resets)* below). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | none | Turns on "Continue with Google" (see below). |
 | `AUTH_PASSWORD` | `on` | `off` = Google only: no passwords are accepted or stored. |
@@ -70,6 +71,8 @@ Existing accounts are linked by their (verified) email at their first Google sig
 The sign-in screen then shows **Forgot password?**, which emails a link that works for one hour. It does nothing with `AUTH_PASSWORD=off` (Google only, no passwords). Nothing else sends email.
 
 **Using Supabase or another managed Postgres:** drop the `db` service and set `DATABASE_URL` for `app` and `backup` to that database's connection string (Supabase: *Project Settings → Database → Connection string*, the **session** pooler or a direct connection, not the transaction pooler, because migrations use advisory locks). Nothing else changes.
+
+**Issue reports:** what people report with key `I` (or the Mac app's *Report an Issue…*) is stored in your server's database and shows at `#/issues` for your admins; nothing goes to the Life Console project. After each report the app offers *Also tell the Life Console project* (unless `UPSTREAM_ISSUES=off`), which opens a pre-filled GitHub issue (the report, screen and build; never the account, email or device name) in the browser. Nothing is sent unless the person submits it there.
 
 **Privacy policy and terms:** `/privacy` and `/terms` serve `public/privacy.html` and `public/terms.html`, which are written for the public service at life-console.dev. If other people use your server, replace them with your own (same file names) and build from source.
 
