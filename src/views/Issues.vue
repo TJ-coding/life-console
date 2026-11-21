@@ -2,7 +2,7 @@
 // S-95 · Issues — things to fix or improve, reported per screen. Agents read the same list
 // (`npm run issues`) and mark items fixed with the commit that fixed them.
 import { computed, ref, onMounted } from 'vue'
-import { issues, loadIssues, updateIssue, deleteIssue, openIssueDialog, replyIssue, KINDS, STATUSES } from '../issues'
+import { issues, loadIssues, updateIssue, deleteIssue, openIssueDialog, replyIssue, selfHosted, upstreamUrl, KINDS, STATUSES } from '../issues'
 import { toast } from '../store'
 import { auth, isAdmin } from '../auth'
 import { useRoute } from 'vue-router'
@@ -115,6 +115,9 @@ async function remove(i) {
             <span v-if="i.commit" class="mono tiny muted"> · {{ i.commit }}</span>
             <span v-if="i.resolvedAt" class="mono tiny muted"> · {{ when(i.resolvedAt) }}</span>
           </p>
+          <a v-if="i.mine && selfHosted()" class="tiny upstream" :href="upstreamUrl(i)" target="_blank" rel="noopener" title="Opens a pre-filled GitHub issue for the Life Console project; nothing is sent until you submit it there">
+            <span class="icon sm">open_in_new</span>Also tell the Life Console project (GitHub)
+          </a>
           <ul v-if="i.replies?.length" class="replies">
             <li v-for="(r, k) in i.replies" :key="k" :class="r.by">
               <span class="mono tiny muted">{{ r.by === 'reporter' ? (i.mine ? 'You' : 'Reporter') : 'Life Console' }} · {{ when(r.at) }}<template v-if="r.reopened"> · reopened</template></span>
@@ -162,6 +165,7 @@ async function remove(i) {
 .details { white-space: pre-wrap; margin: 0; }
 .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .res { margin: 0; display: flex; align-items: center; gap: 6px; }
+.upstream { display: inline-flex; align-items: center; gap: 4px; color: var(--info); }
 .replies { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .replies li { display: flex; flex-direction: column; gap: 1px; padding-left: 8px; border-left: 2px solid var(--border); }
 .replies li.reporter { border-left-color: var(--info); }

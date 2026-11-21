@@ -134,3 +134,25 @@ export async function replyIssue(id, text, reopen = false) {
   if (k >= 0) issues.list[k] = i
   return i
 }
+
+/* Self-hosted servers keep their issues to themselves (they go to that server's admin). So the reporter can
+   also tell the Life Console project: a pre-filled GitHub issue, opened in the browser only when they ask.
+   It carries the report and the app context, never the account, email or device name. */
+const UPSTREAM = 'https://github.com/TJ-coding/life-console/issues/new'
+/** On someone else's server (not life-console.dev, nor the project's own test server). */
+export const selfHosted = () => !/(^|\.)life-console\.dev$|(^|\.)tj-coding\.uk$/i.test(location.hostname)
+/** The GitHub "new issue" link for a report: { title, details, kind, severity, screen, screenTitle, route }. */
+export function upstreamUrl(r) {
+  const c = context()
+  const body = [
+    (r.details || '').trim().slice(0, 3000) || '_No details._',
+    '',
+    '---',
+    `- **Kind / severity:** ${r.kind} / ${r.severity}`,
+    `- **Screen:** ${[r.screen, r.screenTitle].filter(Boolean).join(' · ') || '—'}${r.route ? ` (\`#${r.route}\`)` : ''}`,
+    `- **Build:** ${c.build} · ${platform()} · ${c.app} · ${c.viewport} · ${c.theme} theme`,
+    '',
+    '_Reported from a self-hosted Life Console._',
+  ].join('\n')
+  return `${UPSTREAM}?${new URLSearchParams({ title: r.title, body })}`
+}
