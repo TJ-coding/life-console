@@ -1,7 +1,7 @@
 <script setup>
 // One linked task in the strategy tree, with its open subtasks nested under it (any depth).
 import { computed } from 'vue'
-import { ui, toggleTodo, childrenOf, subCount } from '../store'
+import { ui, tickTodo, childrenOf, subCount } from '../store'
 
 defineOptions({ name: 'TaskNode' })
 const props = defineProps({ todo: { type: Object, required: true }, depth: { type: Number, default: 0 }, focus: { type: Set, default: null } })
@@ -16,7 +16,7 @@ const fmtMin = (m) => (!m ? '' : m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? Str
 <template>
   <div class="task" :class="[fx, { done: todo.done }]" :style="{ paddingLeft: 4 + depth * 14 + 'px' }" @click="ui.drawerId = todo.id">
     <span v-if="depth" class="muted mk">↳</span>
-    <input type="checkbox" :checked="todo.done" :title="sub ? 'Mark it and all its subtasks done' : 'Mark done'" @click.stop @change="toggleTodo(todo.id)" />
+    <input type="checkbox" :checked="todo.done" :title="sub ? 'Mark it and all its subtasks done' : 'Mark done'" @click.stop @change="tickTodo(todo.id)" />
     <span class="grow ellipsis" :title="todo.title">{{ todo.title }}</span>
     <span v-if="sub" class="mono tiny info" :title="`${sub.done} of ${sub.total} subtasks done`">{{ sub.done }}/{{ sub.total }}</span>
     <span v-else class="mono tiny muted">{{ fmtMin(todo.timeMin) }}</span>

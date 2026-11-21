@@ -71,11 +71,11 @@ function pomos(b) {
     <div v-for="(z, k) in blocked" :key="'bo' + k" class="bo" :style="z" title="Blocked out (Settings → Blocked-out times): auto-scheduling leaves this free"></div>
     <div
       v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b) }, markFn ? markFn(b) : '', { moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b), linked: isHoverLinked(b.todoId) }]"
-      :style="style(b)" :data-tid="b.todoId || null" :data-bkey="blockKey(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!readonly && !ui.scheduleLock"
+      :style="style(b)" :data-tid="b.todoId || null" :data-bkey="blockKey(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline · ' + altLabel + '-click cuts it at the line' : 'removes it')}`" :draggable="!readonly && !ui.scheduleLock"
       @dragstart="!readonly && ed.dragStartBlock($event, b)" @dragend="!readonly && ed.dragEnd($event)" @click="!readonly && openBlock($event, b)" @contextmenu.prevent="!readonly && openCtxMenu($event, [blockKey(b)])"
       @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null; cut = null" @mousemove="trackCut($event, b)"
     >
-      <i v-if="cut?.id === b.id" class="cutline" :style="{ top: cut.top + 'px' }"><span class="mono">✂ {{ fromMin(cut.at) }} · {{ altLabel }}-click</span></i>
+      <i v-if="cut?.id === b.id" class="cutline" :style="{ top: cut.top + 'px' }"><span class="mono">{{ fromMin(cut.at) }}</span></i>
       <i v-for="(g, k) in pomos(b)" :key="'pm' + k" class="pm" :style="g"></i>
       <span v-if="b.done" class="icon dn" title="Completed">check_circle</span><span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> <span class="bt">{{ b.title }}</span><span v-if="b.pomo && b.pomo.length > 1" class="mono pc" :title="`${b.pomo.length} pomodoros`"><span class="icon">timer</span>{{ b.pomo.length }}</span>
       <button v-if="!readonly && !ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
@@ -139,6 +139,6 @@ function pomos(b) {
 .block.bsel { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 5; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
 .bo { position: absolute; left: 28px; right: 0; pointer-events: none; background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--muted) 16%, transparent) 0 4px, transparent 4px 9px); border-top: 1px dashed color-mix(in srgb, var(--muted) 40%, transparent); border-bottom: 1px dashed color-mix(in srgb, var(--muted) 40%, transparent); }
 .cutline { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed color-mix(in srgb, var(--text) 70%, transparent); pointer-events: none; z-index: 3; } /* ISS-39 */
-.cutline span { position: absolute; right: 2px; top: -8px; padding: 0 3px; font-size: 9px; line-height: 14px; font-style: normal; border-radius: 2px; background: var(--surface); color: var(--text); white-space: nowrap; }
+.cutline span { position: absolute; left: 2px; top: -7px; padding: 0 3px; font-size: 9px; line-height: 14px; font-style: normal; border-radius: 2px; background: var(--surface); color: var(--text); white-space: nowrap; }
 @media (hover: none) { .cutline { display: none; } }
 </style>

@@ -3,7 +3,7 @@
 import PartBadge from '../components/PartBadge.vue'
 import { computed, ref, reactive, watch, watchEffect, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, capH, fmtSlash, wd, partLabel, isContainer, subCount, parentPath, todoMatches, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
+import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, tickTodo, toast, capH, fmtSlash, wd, partLabel, isContainer, subCount, parentPath, todoMatches, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import LsdToggle from '../components/LsdToggle.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -201,7 +201,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
               @click="rowSelectClick($event, t) || open(t)" @contextmenu.prevent="openCtxMenu($event, ['todo:' + t.id])" @dragstart="startDrag($event, t)" @dragend="endDrag" @dragover="overRow($event, t)" @dragleave="leaveRow($event, t)" @drop="dropOnRow($event, t)"
             >
               <td @click.stop><input v-model="picked" type="checkbox" :value="t.id" /></td>
-              <td @click.stop><input type="checkbox" :checked="t.done" @change="toggleTodo(t.id)" /></td>
+              <td @click.stop><input type="checkbox" :checked="t.done" @change="tickTodo(t.id)" /></td>
               <td><Prio :p="t.priority" /></td>
               <td class="mono small muted"><span class="icon sm grip">drag_indicator</span>{{ t.id }}</td>
               <td :style="{ paddingLeft: 8 + depthOf(t) * 18 + 'px' }">
@@ -232,7 +232,7 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
         <div v-if="rows.length" class="cards" data-sellist>
           <div v-for="t in rows" :key="t.id" class="card" :class="{ done: t.done, msel: isTodoSel(t) }" :data-bkey="'todo:' + t.id" @click="rowSelectClick($event, t) || open(t)" @contextmenu.prevent="openCtxMenu($event, ['todo:' + t.id])">
             <div class="r1 row">
-              <input type="checkbox" :checked="t.done" title="Done" @click.stop @change="toggleTodo(t.id)" />
+              <input type="checkbox" :checked="t.done" title="Done" @click.stop @change="tickTodo(t.id)" />
               <Prio :p="t.priority" />
               <span class="ttl grow ellipsis" :style="{ paddingLeft: depthOf(t) * 14 + 'px' }"><span v-if="depthOf(t)" class="sub-mark muted">↳ </span><PartBadge v-if="partLabel(t)" :todo="t" class="part mono" />{{ t.title }}<span v-if="isContainer(t)" class="subc mono">{{ subCount(t).done }}/{{ subCount(t).total }}</span></span>
               <span class="mono small muted">{{ t.timeMin }}m</span>

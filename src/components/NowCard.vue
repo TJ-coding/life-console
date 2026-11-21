@@ -4,7 +4,7 @@
 // Between blocks the headline is just "Free" (the clock says how long, the label row until when); the
 // task you could pick up is the UP NEXT bottom line with Start now, so it never reads as already running.
 import { computed } from 'vue'
-import { ui, toggleTodo, toast, findTodo } from '../store'
+import { ui, tickTodo, toast, findTodo } from '../store'
 import { useNow, fmtDur, fmtClock, toggleClockMode } from '../now'
 import Prio from './Prio.vue'
 import PomoBar from './PomoBar.vue'
@@ -58,7 +58,7 @@ function start(t) {
         <div v-else-if="current" class="readout"><span class="inst-big mono">{{ fmtClock(readout.sec) }}</span><span class="muted">{{ readout.label }}</span></div>
         <div v-else class="readout"><span class="inst-big mono">{{ fmtClock(gap) }}</span><span class="muted">left</span></div>
         <div class="actions">
-          <button v-if="current?.kind === 'todo'" class="btn primary" @click="toggleTodo(current.todoId)"><span class="icon sm">check</span>Done <span class="kbd">X</span></button>
+          <button v-if="current?.kind === 'todo'" class="btn primary" @click="tickTodo(current.todoId)"><span class="icon sm">check</span>Done <span class="kbd">X</span></button>
           <router-link to="/focus" class="btn"><span class="icon sm">center_focus_strong</span>Focus <span class="kbd">F</span></router-link>
         </div>
       </div>

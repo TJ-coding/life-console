@@ -4,7 +4,7 @@
 // Lives inside DayColumn directly above that day's timeline — drag a block down onto a time.
 import PartBadge from './PartBadge.vue'
 import { computed, ref } from 'vue'
-import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, toggleTodo, capH, partLabel, assignToDay, toast, isHoverLinked, loadsDay, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
+import { state, ui, todosForDay, categoryOf, toMin, splitSiblings, tickTodo, capH, partLabel, assignToDay, toast, isHoverLinked, loadsDay, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 
 const props = defineProps({
@@ -69,7 +69,7 @@ function groupMeta(g) {
 /** On a merged card, done applies to every part of the split on this day. */
 function toggleParts(t) {
   const to = !t.grouped.parts.every((x) => x.done)
-  t.grouped.parts.forEach((x) => { if (x.done !== to) toggleTodo(x.id) })
+  t.grouped.parts.forEach((x) => { if (x.done !== to) tickTodo(x.id) })
   toast(to ? `Marked ${t.grouped.n} parts done ✓` : `Reopened ${t.grouped.n} parts`)
 }
 </script>
@@ -104,7 +104,7 @@ function toggleParts(t) {
         @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
         @click="rowSelectClick($event, t) || (ui.selectedId = t.id)" @contextmenu.prevent="openCtxMenu($event, t.grouped ? t.grouped.parts.map((p) => 'todo:' + p.id) : ['todo:' + t.id])" @dblclick="t.grouped ? (ui.splitId = t.id) : (ui.drawerId = t.id)"
       >
-        <input type="checkbox" class="ck" :checked="t.grouped ? t.grouped.parts.every((p) => p.done) : t.done" :title="t.grouped ? 'Done: all of this task today' : 'Done'" @click.stop @change="t.grouped ? toggleParts(t) : toggleTodo(t.id)" />
+        <input type="checkbox" class="ck" :checked="t.grouped ? t.grouped.parts.every((p) => p.done) : t.done" :title="t.grouped ? 'Done: all of this task today' : 'Done'" @click.stop @change="t.grouped ? toggleParts(t) : tickTodo(t.id)" />
         <span class="ttl"><PartBadge v-if="partLabel(t) && !t.grouped" :todo="t" class="part mono" />{{ t.title }}</span>
         <span class="meta mono">
           <template v-if="t.grouped">{{ groupMeta(t.grouped) }}</template>
