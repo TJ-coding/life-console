@@ -1728,3 +1728,12 @@ export function cutBlockAt(id, atMin) {
 }
 /** The Option / Alt key's name on this device, for hints like "⌥-click" */
 export const altLabel = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌥' : 'Alt'
+
+/** ISS-39: is the Option/Alt key held right now? The timeline's cut line shows its time only then. */
+if (typeof window !== 'undefined' && window.addEventListener) {
+  const setAlt = (e) => { ui.altHeld = !!e.altKey }
+  window.addEventListener('keydown', setAlt, true)
+  window.addEventListener('keyup', setAlt, true)
+  window.addEventListener('mousemove', (e) => { if (ui.altHeld !== e.altKey) ui.altHeld = e.altKey }, { passive: true })
+  window.addEventListener('blur', () => { ui.altHeld = false })
+}
