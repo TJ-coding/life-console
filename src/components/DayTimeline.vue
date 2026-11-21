@@ -1,7 +1,7 @@
 <script setup>
 // Vertical hourly schedule used in each Weekly Planner day column.
 import { computed, ref } from 'vue'
-import { ui, todayISO, blockedRanges, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
+import { ui, todayISO, blockedRanges, cutBlockAt, findTodo, altLabel, toMin, fromMin, layoutLanes, removeTimelineBlock, isHoverLinked, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 6 }, to: { type: Number, default: 23 }, pxh: { type: Number, default: 22 }, dimFn: Function,
   // preview mode (Briefing / Debrief): no editing; markFn(b) adds classes (pv-new, pv-ghost, pv-late, pv-star); lineAt draws a line (minutes)
@@ -34,6 +34,7 @@ const ed = useTimelineEdit({
 const hover = ed.hover
 function openBlock(e, b) {
   if (ed.isResizing()) return
+  if (e.altKey && cut.value?.id === b.id) { cutBlockAt(b.todoId, cut.value.at); cut.value = null; return }
   // Shift/⌘/Ctrl-click — or any click while a selection is open — adds/removes it from the selection
   // ISS-29: modifier-click adds/removes; on touch screens a tap does too while a selection is open; a plain
   // mouse click opens the block and clears the selection
@@ -44,6 +45,16 @@ function openBlock(e, b) {
   else emit('edit', b) // a fixed block: detail + delete dialog (ISS-8)
 }
 const removeBlock = removeTimelineBlock
+/* ISS-39: hovering an open task block shows a cut line at the cursor (snapped to 5 min); ⌥/Alt-click cuts there */
+const cut = ref(null) // { id, top (px inside the block), at (clock minute) }
+function trackCut(e, b) {
+  const t = b.todoId && findTodo(b.todoId)
+  if (props.readonly || ui.scheduleLock || ed.isResizing() || !t || t.done || !t.scheduled?.start) { cut.value = null; return }
+  const r = e.currentTarget.getBoundingClientRect()
+  const s = toMin(b.start), en = toMin(b.end)
+  const at = Math.round((s + ((e.clientY - r.top) / r.height) * (en - s)) / 5) * 5
+  cut.value = at - s >= 5 && en - at >= 5 ? { id: b.id, top: ((at - s) / (en - s)) * r.height, at } : null
+}
 /** A pomodoro sitting's pomodoros, as segments of a slim rail (gaps = breaks), in % of the block's height. */
 function pomos(b) {
   if (!b.pomo || b.pomo.length < 2 || ed.resize.value?.id === b.id) return []
@@ -62,11 +73,11 @@ function pomos(b) {
       v-for="b in visible" :key="b.id" class="block vb" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, dim: dimFn && dimFn(b) }, markFn ? markFn(b) : '', { moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b), linked: isHoverLinked(b.todoId) }]"
       :style="style(b)" :data-tid="b.todoId || null" :data-bkey="blockKey(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag bottom edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!readonly && !ui.scheduleLock"
       @dragstart="!readonly && ed.dragStartBlock($event, b)" @dragend="!readonly && ed.dragEnd($event)" @click="!readonly && openBlock($event, b)" @contextmenu.prevent="!readonly && openCtxMenu($event, [blockKey(b)])"
-      @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null"
+      @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null; cut = null" @mousemove="trackCut($event, b)"
     >
+      <i v-if="cut?.id === b.id" class="cutline" :style="{ top: cut.top + 'px' }"><span class="mono">✂ {{ fromMin(cut.at) }} · {{ altLabel }}-click</span></i>
       <i v-for="(g, k) in pomos(b)" :key="'pm' + k" class="pm" :style="g"></i>
       <span v-if="b.done" class="icon dn" title="Completed">check_circle</span><span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> <span class="bt">{{ b.title }}</span><span v-if="b.pomo && b.pomo.length > 1" class="mono pc" :title="`${b.pomo.length} pomodoros`"><span class="icon">timer</span>{{ b.pomo.length }}</span>
-      <button v-if="!readonly && b.todoId && !b.done" class="sb icon" title="Split this block…" :aria-label="'Split ' + b.title" @click.stop="openCtxMenu($event, [blockKey(b)])" @mousedown.stop>vertical_split</button>
       <button v-if="!readonly && !ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
       <span v-if="!readonly && !ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
     </div>
@@ -121,14 +132,13 @@ function pomos(b) {
 /* touch screens have no hover: the ✕ is always there (only shown while the schedule is unlocked) */
 @media (hover: none) {
   .xb { display: block; opacity: 0.85; width: 18px; height: 18px; font-size: 14px; top: 0; right: 0; color: var(--text); }
-  .sb { display: block; opacity: 0.85; width: 18px; height: 18px; font-size: 14px; top: 0; right: 20px; color: var(--text); }
 }
 .handle::after { content: ''; position: absolute; left: 35%; right: 35%; bottom: 1px; height: 2px; border-radius: 1px; background: var(--c); opacity: 0; }
 .vb:hover .handle::after, .vb.sizing .handle::after { opacity: 0.9; }
 /* multi-selected (Shift/⌘-click or long-press): moved together */
 .block.bsel { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 5; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
 .bo { position: absolute; left: 28px; right: 0; pointer-events: none; background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--muted) 16%, transparent) 0 4px, transparent 4px 9px); border-top: 1px dashed color-mix(in srgb, var(--muted) 40%, transparent); border-bottom: 1px dashed color-mix(in srgb, var(--muted) 40%, transparent); }
-.sb { position: absolute; top: 1px; right: 16px; width: 14px; height: 14px; font-size: 12px; color: var(--muted); background: transparent; border: 0; padding: 0; cursor: pointer; display: none; } /* ISS-39: split menu */
-.vb:hover .sb { display: block; opacity: 0.7; }
-.sb:hover { opacity: 1; color: var(--info); }
+.cutline { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed color-mix(in srgb, var(--text) 70%, transparent); pointer-events: none; z-index: 3; } /* ISS-39 */
+.cutline span { position: absolute; right: 2px; top: -8px; padding: 0 3px; font-size: 9px; line-height: 14px; font-style: normal; border-radius: 2px; background: var(--surface); color: var(--text); white-space: nowrap; }
+@media (hover: none) { .cutline { display: none; } }
 </style>
