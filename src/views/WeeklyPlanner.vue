@@ -72,6 +72,8 @@ const placement = computed(() => {
   }
   return out
 })
+// ISS-41: deadline rows every column reserves at the top (the busiest day's count), so columns stay level
+const dlRows = computed(() => Math.max(0, ...week.value.map((d) => state.deadlines.filter((x) => x.due.slice(0, 10) === d).length)))
 const balancing = computed(() => ui.planMode === 'days' && !ui.backlogOnly)
 const dayBalance = computed(() => (balancing.value
   ? {
@@ -154,9 +156,9 @@ const print = () => window.print()
 
       <template v-if="!ui.backlogOnly">
       <div class="days" :class="'mode-' + ui.planMode">
-        <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" :balance="dayBalance" />
+        <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" />
         <div class="weekend">
-          <DayColumn :date="sat" :filter="filter" :mode="ui.planMode" :balance="dayBalance" />
+          <DayColumn :date="sat" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" />
           <DayColumn :date="sun" :filter="filter" :mode="ui.planMode" :balance="dayBalance" />
         </div>
       </div>
