@@ -5,7 +5,7 @@ import { reactive } from 'vue'
 const USER_KEY = 'life-console/user'
 const GUEST_KEY = 'life-console/guest' // '1': trying the app without an account (planner kept in this browser only)
 /** Everything that belongs to the signed-in person's planner (UI preferences are kept). */
-const DATA_KEYS = ['life-console/v1', 'life-console/sync-base', 'life-console/sync-version', 'life-console/sync-dirty', 'life-console/sync-edited', 'life-console/issue-queue', 'life-console/last-plan']
+const DATA_KEYS = ['life-console/v1', 'life-console/sync-base', 'life-console/sync-version', 'life-console/sync-dirty', 'life-console/sync-edited', 'life-console/issue-queue', 'life-console/last-plan', 'life-console/fixes-celebrated']
 const ls = {
   get: (k) => { try { return localStorage.getItem(k) } catch { return null } },
   set: (k, v) => { try { localStorage.setItem(k, v) } catch { /* ignore */ } },
