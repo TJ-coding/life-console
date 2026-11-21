@@ -4,7 +4,7 @@
 // (overload)? where does each task without a time go (unscheduled)? what is the one thing today (objective)?
 // Only the steps that apply are asked; the set is fixed when the screen opens.
 import { useRouter } from 'vue-router'
-import { state, todayISO, addDays, wd, toMin, fromMin, CAPACITY_H } from '../store'
+import { state, todayISO, addDays, wd, toMin, fromMin, capH } from '../store'
 import { effDue, countdown, minsTo } from '../glance'
 import { threats, coverFor, untimedOn, loadOf, openIn, objectiveIn, freeSlot, deadlineTaskSim, objectiveSim, noSim, overloadStep, dur } from '../review'
 import BriefingFlow from '../components/BriefingFlow.vue'
@@ -36,7 +36,7 @@ for (const d of threats(72).slice(0, 3)) {
 }
 
 /* today over capacity */
-if (loadOf(state.todos, T) > CAPACITY_H) steps.push(overloadStep(T, N, { who: 'Today' }))
+if (loadOf(state.todos, T) > capH()) steps.push(overloadStep(T, N, { who: 'Today' }))
 
 /* today's tasks with no time */
 const untimed = untimedOn(T).slice(0, 8)

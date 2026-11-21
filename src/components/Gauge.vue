@@ -1,9 +1,10 @@
 <script setup>
 import { computed } from 'vue'
-import { CAPACITY_H } from '../store'
-const props = defineProps({ hours: Number, cap: { type: Number, default: CAPACITY_H }, height: { type: Number, default: 96 }, width: { type: Number, default: 14 }, horizontal: Boolean })
-const pct = computed(() => Math.min(100, (props.hours / props.cap) * 100))
-const level = computed(() => (props.hours > props.cap + 1 ? 'danger' : props.hours > props.cap ? 'warn' : 'ok'))
+import { capH } from '../store'
+const props = defineProps({ hours: Number, cap: { type: Number, default: null }, height: { type: Number, default: 96 }, width: { type: Number, default: 14 }, horizontal: Boolean })
+const cap = computed(() => props.cap ?? capH()) // ISS-2: the capacity setting unless a caller passes one
+const pct = computed(() => Math.min(100, (props.hours / cap.value) * 100))
+const level = computed(() => (props.hours > cap.value + 1 ? 'danger' : props.hours > cap.value ? 'warn' : 'ok'))
 </script>
 <template>
   <div v-if="horizontal" class="bar" :class="level === 'ok' ? '' : level" :title="`${hours.toFixed(1)} / ${cap} h`"><i :style="{ width: pct + '%' }"></i></div>

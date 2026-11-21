@@ -10,10 +10,11 @@ import PartBadge from './PartBadge.vue'
 import { computed, ref } from 'vue'
 
 const props = defineProps({ prio: { type: Number, default: 0 }, q: { type: String, default: '' } }) // the panel's P1–P5 filter and search
-import { state, ui, todayISO, addDays, mondayOf, wd, fmtMD, isoWeek, byPriority, partLabel, isHoverLinked, parentPath, planWeek, backlogTodos, planWeeks, weekFree, assignToWeek, todoMatches } from '../store'
+import { state, ui, todayISO, addDays, mondayOf, wd, fmtMD, isoWeek, byPriority, partLabel, isHoverLinked, planWeek, backlogTodos, planWeeks, weekFree, assignToWeek, todoMatches, trailLinks } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
+import LinkTrail from './LinkTrail.vue'
 
 const weeks = computed(() => planWeeks())
 const thisWeek = computed(() => mondayOf(todayISO()))
@@ -94,11 +95,11 @@ const leave = (e, w) => { if (hot.value === w && !e.currentTarget.contains(e.rel
       >
         <Prio :p="t.priority" />
         <span class="grow ellipsis ttl">
-          <span v-if="t.parent && parentPath(t)" class="small muted">{{ parentPath(t) }} › </span>
+          <LinkTrail :todo="t" inline />
           <PartBadge v-if="partLabel(t)" :todo="t" class="part mono" />{{ t.title }}
         </span>
         <span class="meta row">
-          <Chip v-for="l in t.links" :key="l" :id="l" />
+          <Chip v-for="l in t.links.filter((x) => !trailLinks(t).includes(x))" :key="l" :id="l" />
           <span v-if="t.due" class="mono small" :class="!c.w || weekOk(t, c.w) ? 'muted' : 'danger'">due {{ wd(t.due) }} {{ fmtMD(t.due) }}</span>
         </span>
         <span class="mono small muted tm">{{ t.timeMin }}m</span>

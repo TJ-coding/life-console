@@ -6,7 +6,7 @@
 import DurationInput from './DurationInput.vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import {
-  ui, findTodo, todayISO, addDays, mondayOf, wd, fmtSlash, dayLoad, CAPACITY_H, evenParts, planDaySpread,
+  ui, findTodo, todayISO, addDays, mondayOf, wd, fmtSlash, dayLoad, capH, evenParts, planDaySpread,
   replanTodo, splitSiblings, blocksForDay, toMin, fromMin, WORK_FROM, WORK_TO, pomo, planPomodoroDay,
 } from '../store'
 import { wallMin, count as pomoCount } from '../../server/pomodoro.mjs'
@@ -148,7 +148,7 @@ function fillFree() {
   for (const d of weekDays.value) {
     if (rest <= 0) break
     const unit = P.value.on ? P.value.work : 15
-    const free = Math.floor(((CAPACITY_H - base(d)) * 60) / unit) * unit
+    const free = Math.floor(((capH() - base(d)) * 60) / unit) * unit
     const take = Math.min(rest, Math.max(0, free))
     if (take > 0) { plan.value[d] = { min: take, sittings: [] }; rest -= take }
   }
@@ -248,8 +248,8 @@ function pomoNote(s) {
             </div>
             <button v-if="left > STEP" class="btn sm rest" :title="`Put the remaining ${hm(left)} on ${wd(d)}`" @click="restHere(d)">+ all {{ hm(left) }}</button>
             <span class="spacer"></span>
-            <span class="mono small load" :class="after(d) > CAPACITY_H ? 'danger' : 'muted'" :title="`${wd(d)}'s workload after this plan`">
-              {{ after(d).toFixed(1) }}/{{ CAPACITY_H }}h
+            <span class="mono small load" :class="after(d) > capH() ? 'danger' : 'muted'" :title="`${wd(d)}'s workload after this plan`">
+              {{ after(d).toFixed(1) }}/{{ capH() }}h
             </span>
           </div>
 

@@ -5,7 +5,7 @@
 import PartBadge from './PartBadge.vue'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, diffDays, CAPACITY_H, autoTimebox, toast, isOverdue, moveBlock, toMin, byPriority, categoryOf, partLabel, isHoverLinked, isLeaf, assignToDay, updateTodo } from '../store'
+import { state, ui, todayISO, wd, wdJa, fmtSlash, todosForDay, blocksForDay, workload, diffDays, capH, autoTimebox, toast, isOverdue, moveBlock, toMin, byPriority, categoryOf, partLabel, isHoverLinked, isLeaf, assignToDay, updateTodo } from '../store'
 import { startDrag, endDrag } from '../dnd'
 import DayTimeline from './DayTimeline.vue'
 import DeadlineQuickAdd from './DeadlineQuickAdd.vue'
@@ -21,8 +21,8 @@ const openDay = () => { ui.dayPlanning = true; router.push(props.date === todayI
 const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object, dlRows: { type: Number, default: 0 } })
 /* ② Assign day: the space under the day does that day's job — on an over-full day, what to move out
    (the planner's rebalance moves); on a day with room, the backlog tasks the planner gives it */
-const free = computed(() => CAPACITY_H - hours.value)
-const moveOut = computed(() => (props.balance && !past.value && hours.value > CAPACITY_H ? Object.values(props.balance.moves).filter((s) => s.from === props.date) : []))
+const free = computed(() => capH() - hours.value)
+const moveOut = computed(() => (props.balance && !past.value && hours.value > capH() ? Object.values(props.balance.moves).filter((s) => s.from === props.date) : []))
 const fits = computed(() => (props.balance && !past.value ? props.balance.place[props.date] ?? [] : []))
 function moveTo(s) {
   updateTodo(s.todo.id, { scheduled: { date: s.to, start: null } })
@@ -87,12 +87,12 @@ function auto() {
         <span class="icon sm open">open_in_new</span>
       </div>
       <div class="row">
-        <span v-if="hours > CAPACITY_H" class="icon sm danger" title="Over capacity">warning</span>
-        <span class="mono small" :class="hours > CAPACITY_H ? 'danger' : ''">{{ hours.toFixed(1) }}<span class="muted">/{{ CAPACITY_H }}h</span></span>
+        <span v-if="hours > capH()" class="icon sm danger" title="Over capacity">warning</span>
+        <span class="mono small" :class="hours > capH() ? 'danger' : ''">{{ hours.toFixed(1) }}<span class="muted">/{{ capH() }}h</span></span>
         <div class="grow"><Gauge :hours="hours" horizontal /></div>
       </div>
       <div v-if="balance && delta === null" class="delta mono muted" title="Not counted in the week's average">{{ date < todayISO() ? 'past' : 'weekend' }}</div>
-      <div v-else-if="delta !== null" class="delta mono" :class="hours > CAPACITY_H ? 'danger' : delta > 1 ? 'warn' : delta < -1 ? 'room' : 'muted'" :title="`${Math.abs(delta).toFixed(1)}h ${delta >= 0 ? 'above' : 'below'} this week's average of ${balance.avg.toFixed(1)}h a day${delta < -1 && hours <= CAPACITY_H ? ' · room for more' : ''}`">
+      <div v-else-if="delta !== null" class="delta mono" :class="hours > capH() ? 'danger' : delta > 1 ? 'warn' : delta < -1 ? 'room' : 'muted'" :title="`${Math.abs(delta).toFixed(1)}h ${delta >= 0 ? 'above' : 'below'} this week's average of ${balance.avg.toFixed(1)}h a day${delta < -1 && hours <= capH() ? ' · room for more' : ''}`">
         <span class="icon sm">{{ delta >= 0 ? 'arrow_upward' : 'arrow_downward' }}</span>{{ delta >= 0 ? '+' : '−' }}{{ Math.abs(delta).toFixed(1) }}h
       </div>
     </header>
@@ -126,7 +126,7 @@ function auto() {
     </div>
 
     <div v-if="moveOut.length" class="sec sec-out">
-      <div class="sh tiny upper danger">Move out<span class="spacer"></span><span class="mono">{{ (hours - CAPACITY_H).toFixed(1) }}h over</span></div>
+      <div class="sh tiny upper danger">Move out<span class="spacer"></span><span class="mono">{{ (hours - capH()).toFixed(1) }}h over</span></div>
       <button v-for="s in moveOut" :key="s.todo.id" class="pick" :title="`Move ${s.todo.title} to ${wd(s.to)} ${fmtSlash(s.to)}`" @click="moveTo(s)" @mouseenter="ui.hoverId = s.todo.id" @mouseleave="ui.hoverId = null">
         <span class="ellipsis grow">{{ s.todo.title }}</span><span class="mono to">→ {{ wd(s.to) }}</span>
       </button>

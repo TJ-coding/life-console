@@ -6,7 +6,7 @@
 import { computed, ref, watch, watchEffect, nextTick, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, CAPACITY_H,
+  state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, capH,
   diffDays, relDay, toMin, fromMin, pad, mondayOf, routineDone, nextCheckDate, activePlans,
   updateTodo, addTodo, deleteTodo, parseQuick, toast, addDays, fmtSlash, setScheduleLock, LOCK_HELP, touchUI,
   isLeaf, byPriority, findTodo, unscheduleTodo, deleteBlock,
@@ -52,8 +52,8 @@ const showDone = ref(false)
 watchEffect(() => { ui.visibleIds = [...pending.value, ...(showDone.value ? done.value : [])].map((t) => t.id) })
 const remainingMin = computed(() => pending.value.reduce((s, t) => s + (t.timeMin || 0), 0))
 const doneMin = computed(() => done.value.reduce((s, t) => s + (t.timeMin || 0), 0))
-const pctOf = (m) => Math.min(100, (m / 60 / CAPACITY_H) * 100)
-const loadLevel = computed(() => (hours.value > CAPACITY_H + 1 ? 'danger' : hours.value > CAPACITY_H ? 'warn' : 'ok'))
+const pctOf = (m) => Math.min(100, (m / 60 / capH()) * 100)
+const loadLevel = computed(() => (hours.value > capH() + 1 ? 'danger' : hours.value > capH() ? 'warn' : 'ok'))
 const fmtH = (m) => `${Math.floor(m / 60)}h ${pad(m % 60)}m`
 
 /** One click to delete (ISS-7), with an undo in the toast instead of a confirm step. */
@@ -191,7 +191,7 @@ const backlog = computed(() => state.todos.filter((t) => !t.done && !t.scheduled
 const backlogMin = computed(() => backlog.value.reduce((s, t) => s + (t.timeMin || 0), 0))
 function pull(t) {
   updateTodo(t.id, { scheduled: { date: T.value, start: null } })
-  toast(`${t.id} → ${isToday.value ? 'today' : wd(T.value)} · ${hours.value.toFixed(1)}/${CAPACITY_H}h`, { label: 'Undo', run: () => updateTodo(t.id, { scheduled: null }) })
+  toast(`${t.id} → ${isToday.value ? 'today' : wd(T.value)} · ${hours.value.toFixed(1)}/${capH()}h`, { label: 'Undo', run: () => updateTodo(t.id, { scheduled: null }) })
 }
 
 const quick = ref('')
@@ -283,8 +283,8 @@ function quickAdd() {
             <span class="icon sm">inventory_2</span>{{ tlDrag === 'todo' ? 'Drop: back to backlog' : 'Backlog' }}<span v-if="backlog.length" class="mono n">{{ backlog.length }}</span>
           </button>
           <button v-if="done.length" class="btn sm ghost-btn" @click="showDone = !showDone">{{ showDone ? 'Hide' : 'Show' }} {{ done.length }} done</button>
-          <span class="load" :title="`Workload: ${hours.toFixed(1)}h planned of ${CAPACITY_H}h (${fmtH(doneMin)} done)`">
-            <span class="mono tiny" :class="loadLevel === 'ok' ? 'muted' : loadLevel">{{ hours.toFixed(1) }}/{{ CAPACITY_H }}h</span>
+          <span class="load" :title="`Workload: ${hours.toFixed(1)}h planned of ${capH()}h (${fmtH(doneMin)} done)`">
+            <span class="mono tiny" :class="loadLevel === 'ok' ? 'muted' : loadLevel">{{ hours.toFixed(1) }}/{{ capH() }}h</span>
             <span class="load-bar" :class="loadLevel">
               <i class="fill done-part" :style="{ height: pctOf(doneMin) + '%' }"></i>
               <i class="fill" :style="{ bottom: pctOf(doneMin) + '%', height: Math.max(0, Math.min(pctOf(doneMin + remainingMin), 100) - pctOf(doneMin)) + '%' }"></i>

@@ -1,7 +1,7 @@
 <script setup>
 // S-90 · Settings — install on phone, notifications, sync, appearance, data.
 import { computed, onMounted, ref } from 'vue'
-import { state, ui, toggleTheme, setAccent, ACCENTS, resetDemo, clearPlanner, toast, normalizeState, addBlockout } from '../store'
+import { state, ui, toggleTheme, setAccent, ACCENTS, resetDemo, clearPlanner, toast, normalizeState, addBlockout, capH, DEFAULT_CAPACITY_H } from '../store'
 import { sync, pull, deviceName, setDeviceName, leaveGuest } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
 import { rhythm, wallMin } from '../../server/pomodoro.mjs'
@@ -122,6 +122,11 @@ const SYNC_LABEL = { outdated: 'Update needed', choose: 'Choose copy', starting:
 const fmtTime = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—')
 const isThis = (d) => d.endpoint === push.endpoint
 const reload = () => window.location.reload()
+function setCap(e) {
+  const v = Math.round(Number(e.target.value))
+  if (v >= 1 && v <= 16) state.settings.capacityH = v
+  e.target.value = capH()
+}
 // blocked-out days: an empty list means every day; picking a day from "every day" keeps the others
 function toggleBoDay(b, i) {
   const cur = b.days.length ? b.days : [0, 1, 2, 3, 4, 5, 6]
@@ -383,8 +388,14 @@ function toggleBoDay(b, i) {
 
     <!-- ISS-3 (public): blocked-out times -->
     <section id="blockouts" class="panel">
-      <div class="panel-h"><span class="icon sm">block</span><h2>Blocked-out times</h2><span class="spacer"></span><span class="tiny muted">applies to all your devices</span></div>
+      <div class="panel-h"><span class="icon sm">event_available</span><h2>Scheduling</h2><span class="spacer"></span><span class="tiny muted">applies to all your devices</span></div>
       <div class="panel-b col">
+        <!-- ISS-2 (public): how much a day holds -->
+        <label class="field cap"><span>Daily workload capacity (hours)</span>
+          <input :value="capH()" type="number" min="1" max="16" step="1" class="input mono" @change="setCap($event)" />
+        </label>
+        <p class="small muted">How many hours of tasks a day holds before it counts as over-full: the line in each day's workload bucket, the ⚠ warnings, Rebalance and the briefing all use it. Default {{ DEFAULT_CAPACITY_H }}h.</p>
+        <div class="tiny upper muted bo-h">Blocked-out times</div>
         <p class="small muted">Times <b>Auto time-box</b> and <b>Plan over days / times</b> never fill with tasks: lunch, the school run, an evening off. They show as hatched bands on the schedule; you can still drag a task there yourself.</p>
         <div v-for="b in state.settings.blockouts" :key="b.id" class="bo">
           <input v-model="b.label" class="input bo-l" placeholder="Label" aria-label="Label" />
@@ -465,6 +476,8 @@ function toggleBoDay(b, i) {
 .step ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .kind { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
 .kind input { margin-top: 3px; }
+.cap { max-width: 260px; }
+.bo-h { margin-top: 8px; }
 .bo { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .bo-l { width: 160px; }
 .bo-t { width: 104px; }

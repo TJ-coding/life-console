@@ -2,7 +2,7 @@
 // S-01 "More": the full briefing from the earlier Command Center layout, shown on demand under the cockpit.
 import { computed } from 'vue'
 import {
-  state, wd, workload, CAPACITY_H, psgPct, nextSig, diffDays, relDay, toMin, fromMin, pad, mondayOf,
+  state, wd, workload, capH, psgPct, nextSig, diffDays, relDay, toMin, fromMin, pad, mondayOf,
   routineDone, monthGroup, nextCheckDate, activePlans, toast, ui,
 } from '../store'
 import Gauge from './Gauge.vue'
@@ -76,7 +76,7 @@ const lectures = computed(() => state.lectures.filter((l) => l.date === T.value)
         <div class="wl">
           <div class="tiny upper muted">Workload</div>
           <Gauge :hours="hours" :height="88" :width="18" />
-          <div class="mono small">{{ hours.toFixed(1) }}h / {{ CAPACITY_H }}h</div>
+          <div class="mono small">{{ hours.toFixed(1) }}h / {{ capH() }}h</div>
         </div>
         <div class="grow ledger-seals">
           <div class="tiny upper muted">Daily seals · 印 → 印 → 確認 → 完</div>

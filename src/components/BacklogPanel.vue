@@ -5,10 +5,11 @@
 // then the next weeks, with week buttons instead of day buttons. Drop a task here to send it back.
 import PartBadge from './PartBadge.vue'
 import { computed, ref, watch, nextTick } from 'vue'
-import { ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, parentPath, planWeek, backlogTodos, backlogFor, isoWeek, todoMatches, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
+import { ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, planWeek, backlogTodos, backlogFor, isoWeek, todoMatches, trailLinks, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
+import LinkTrail from './LinkTrail.vue'
 import WeekBoard from './WeekBoard.vue'
 
 const props = defineProps({ focus: Boolean }) // ISS-16: backlog-only mode is on (header shows the way back)
@@ -18,6 +19,7 @@ const prio = ref(0)
 const open = ref(true) // collapses the backlog to header + quick-add (handy on phones)
 // a task with subtasks is planned through them (backlogTodos keeps leaves only)
 const all = computed(() => (props.focus ? backlogTodos().filter((t) => !planWeek(t)).sort(byPriority) : backlogFor(ui.weekStart)))
+const otherLinks = (t) => t.links.filter((l) => !trailLinks(t).includes(l)) // the trail shows deadlines and goals
 const q = ref('') // ISS-44: search the backlog (title, id, notes, links…)
 const search = ref(null)
 const list = computed(() => all.value.filter((t) => (!prio.value || t.priority === prio.value) && todoMatches(t, q.value)))
@@ -110,14 +112,14 @@ function onDrop(e) {
         @drop="dropOnRow($event, t, { unschedule: true, week: t.week ?? null })" @mouseenter="ui.hoverId = t.id" @mouseleave="ui.hoverId = null"
         @click="rowSelectClick($event, t) || (ui.selectedId = t.id)" @contextmenu.prevent="openCtxMenu($event, ['todo:' + t.id])" @dblclick="ui.drawerId = t.id"
       >
-        <div v-if="t.parent && parentPath(t)" class="crumb small muted ellipsis" :title="parentPath(t)">↳ {{ parentPath(t) }}</div>
+        <LinkTrail :todo="t" />
         <div class="row">
           <Prio :p="t.priority" />
           <span class="grow ellipsis"><PartBadge v-if="partLabel(t)" :todo="t" class="part mono" />{{ t.title }}</span>
           <span class="mono small muted">{{ t.timeMin }}m</span>
         </div>
-        <div v-if="t.links.length || t.due" class="row small meta">
-          <Chip v-for="l in t.links" :key="l" :id="l" />
+        <div v-if="otherLinks(t).length || t.due" class="row small meta">
+          <Chip v-for="l in otherLinks(t)" :key="l" :id="l" />
           <span v-if="t.due" class="mono muted">due {{ wd(t.due) }} {{ fmtSlash(t.due) }}</span>
         </div>
         <!-- quick assign: one click puts it on a day -->

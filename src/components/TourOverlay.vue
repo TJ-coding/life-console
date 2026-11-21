@@ -8,7 +8,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { state, ui, toast, clearPlanner, todayISO, isLeaf, workload, CAPACITY_H, addDays, mondayOf, diffDays } from '../store'
+import { state, ui, toast, clearPlanner, todayISO, isLeaf, workload, capH, addDays, mondayOf, diffDays } from '../store'
 
 const isPhone = () => innerWidth <= 640
 const T = () => todayISO()
@@ -29,7 +29,7 @@ const count = (key) => curPlan()?.[key]?.length ?? 0
 const bounds = () => JSON.stringify([...(curPlan()?.psgs ?? []), ...(curPlan()?.sigs ?? [])].map((g) => g.timeBound ?? ''))
 /* Plan week: the over-full day (the demo's tomorrow) and the lightest day left this week to move work to */
 const weekLeft = () => { const T = todayISO(), M = mondayOf(T); return [0, 1, 2, 3, 4, 5, 6].map((k) => addDays(M, k)).filter((d) => diffDays(T, d) >= 0) }
-const heavyDay = () => weekLeft().find((d) => workload(d) > CAPACITY_H) ?? null
+const heavyDay = () => weekLeft().find((d) => workload(d) > capH()) ?? null
 const lightDay = (not) => weekLeft().filter((d) => d !== not).sort((a, b) => workload(a) - workload(b))[0] ?? null
 const dayEl = (d, part = '') => (d ? document.querySelector(`.days .day[data-date="${d}"]${part ? ' ' + part : ''}`) : null)
 let heavyAtStart = null // remembered so the check still knows which day it was once it's levelled
@@ -37,7 +37,7 @@ const lvDay = () => heavyAtStart ?? heavyDay()
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const dayName = (d) => (d ? DAYS[new Date(`${d}T12:00:00`).getDay()] : '')
 /** the over-full day's load as a meter in the card: red over the 7h limit, green once levelled */
-const loadMeter = () => { const d = lvDay(); return d && { label: dayName(d), value: workload(d), max: CAPACITY_H } }
+const loadMeter = () => { const d = lvDay(); return d && { label: dayName(d), value: workload(d), max: capH() } }
 const timedCount = () => state.todos.filter((t) => t.scheduled?.start).length
 const mid = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + Math.min(r.height, 60) / 2 } }
 /** A drag hint from one element to another: { x, y, dx, dy } in viewport px. */
@@ -68,14 +68,14 @@ const STEPS = [
     action: { start: () => { const ids = backlogIds(); ui.selectedId = firstBacklogId(); return ids }, done: (ids) => ids.some((id) => { const t = state.todos.find((x) => x.id === id); return t && (t.scheduled || t.week) }) } },
   { move: 1, route: '/week', planMode: 'days', target: '.days', icon: 'balance', title: 'Heijunka: level the load', body: 'Give every day about the same amount of work. A steady week beats one heroic day followed by a crash.' },
   { move: 1, route: '/week', planMode: 'days', skipIf: () => !lvDay(), target: () => [dayEl(lvDay(), '.dh'), dayEl(lvDay(), '.sec-load')], meter: loadMeter, icon: 'speed', title: 'How to read a day',
-    body: () => `${dayName(lvDay())} has ${workload(lvDay()).toFixed(1)}h of tasks. Over the 7-hour limit the number turns red with ⚠, and work spills above the 7h line. The arrow shows how far it is above the week’s average.` },
+    body: () => `${dayName(lvDay())} has ${workload(lvDay()).toFixed(1)}h of tasks. Over the ${capH()}-hour limit the number turns red with ⚠, and work spills above the ${capH()}h line. The arrow shows how far it is above the week’s average.` },
   { move: 1, route: '/week', planMode: 'days', skipIf: () => !lvDay(), target: () => (isPhone() ? dayEl(lvDay(), '.sec-out') ?? dayEl(lvDay(), '.dh') : [dayEl(lvDay()), dayEl(lightDay(lvDay()), '.sec-load')]),
     hint: () => (isPhone() ? null : dragHint(dayEl(lvDay(), '.card.block'), dayEl(lightDay(lvDay()), '.sec-load'))), meter: loadMeter,
     icon: 'swap_horiz', title: 'Your turn: level the week',
     body: () => `Drag one of ${dayName(lvDay())}’s tasks onto ${dayName(lightDay(lvDay()))}, or tap a task under Move out at the bottom of ${dayName(lvDay())}. Done when the meter below turns green.`,
     phoneBody: () => `Tap a task under Move out to send it to a lighter day. Done when the meter below turns green.`,
-    doneBody: () => `${dayName(lvDay())} is back under 7 hours. That’s levelling.`,
-    action: { start: () => { heavyAtStart = heavyDay(); return heavyAtStart }, done: (d) => !!d && workload(d) <= CAPACITY_H } },
+    doneBody: () => `${dayName(lvDay())} is back under ${capH()} hours. That’s levelling.`,
+    action: { start: () => { heavyAtStart = heavyDay(); return heavyAtStart }, done: (d) => !!d && workload(d) <= capH() } },
   { move: 1, route: '/week', target: () => dayEl(todayISO()), hint: () => (isPhone() ? null : dragHint(dayEl(todayISO(), '.card.block.untimed'), [...(dayEl(todayISO())?.querySelectorAll('.vt .hr') ?? [])].find((h) => h.textContent.trim() === '19'))),
     icon: 'schedule', title: 'Your turn: plan the day', body: 'Drag a task from the bucket down onto the schedule to give it a time, or tap ⚡ to fit them all in.', phoneBody: 'Tap ⚡ to fit today’s tasks into your free time.', doneBody: 'Your day has a plan.',
     action: { start: () => timedCount(), done: (n) => timedCount() > n } },
