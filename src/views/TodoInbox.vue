@@ -3,7 +3,7 @@
 import PartBadge from '../components/PartBadge.vue'
 import { computed, ref, reactive, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
-import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel, isContainer, subCount, parentPath, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
+import { state, ui, todayISO, mondayOf, addDays, diffDays, relDay, linkType, linkLabel, parseQuick, addTodo, updateTodo, toggleTodo, toast, CAPACITY_H, fmtSlash, wd, partLabel, isContainer, subCount, parentPath, todoMatches, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import LsdToggle from '../components/LsdToggle.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -24,10 +24,10 @@ const VIEWS = {
 const LINK_TYPES = { goal: 'Strategic (PSG/SIG)', course: 'Coursework', plan: 'Research plans', risk: 'Risks', ipb: 'IPB', kaizen: 'Kaizen' }
 
 const route = useRoute()
-const f = reactive({ view: VIEWS[route.query.view] ? route.query.view : 'inbox', links: [], lsd: [], prio: [] })
+const f = reactive({ view: VIEWS[route.query.view] ? route.query.view : 'inbox', links: [], lsd: [], prio: [], q: '' })
 watch(() => route.query.view, (v) => { if (VIEWS[v]) f.view = v })
 const toggleIn = (arr, v) => { const i = arr.indexOf(v); i >= 0 ? arr.splice(i, 1) : arr.push(v) }
-function resetFilters() { f.links = []; f.lsd = []; f.prio = [] }
+function resetFilters() { f.links = []; f.lsd = []; f.prio = []; f.q = '' }
 
 /* matching todos as a tree: subtasks right under their parent (indented); a subtask whose parent isn't
    in the view shows at the top level with its parent path as a breadcrumb */
@@ -37,6 +37,7 @@ const tree = computed(() => {
     .filter((t) => !f.links.length || t.links.some((l) => f.links.includes(linkType(l))))
     .filter((t) => !f.lsd.length || f.lsd.includes(t.lsd))
     .filter((t) => !f.prio.length || f.prio.includes(t.priority))
+    .filter((t) => todoMatches(t, f.q)) // search (ISS-44, as in the Plan week backlog)
   const cmp = (a, b) => Number(a.done) - Number(b.done) || a.priority - b.priority || a.order - b.order
   const ids = new Set(m.map((t) => t.id))
   const out = []
@@ -141,6 +142,12 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
         <input v-model="quick" class="mono grow" placeholder="Read chapter 3 #RUN 30m due:fri p2 @BASE" />
         <button class="btn primary" type="submit"><span class="icon sm">add_task</span>Add to inbox <span class="kbd">↵</span></button>
       </form>
+      <label class="srch" :class="{ on: f.q }" title="Search todos: title, ID, notes, links · / to focus · Esc to clear">
+        <span class="icon sm">search</span>
+        <input v-model="f.q" class="small grow" placeholder="Search todos…" data-search @keydown.esc.stop="f.q = ''; $event.target.blur()" />
+        <span v-if="f.q" class="mono tiny muted">{{ rows.length }} match{{ rows.length === 1 ? '' : 'es' }}</span>
+        <button v-if="f.q" type="button" class="clr" title="Clear search" @click="f.q = ''"><span class="icon sm">close</span></button>
+      </label>
       <div v-if="quick" class="parser">
         <span class="tiny upper muted">Live parser</span>
         <span class="pc">Title: <b>{{ parsed.title || '—' }}</b></span>
@@ -201,7 +208,8 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
             </tr>
           </tbody>
         </table>
-        <div v-if="!rows.length" class="empty">No todos match. Type above to add one, or press <span class="kbd">N</span>.</div>
+        <div v-if="!rows.length && f.q" class="empty">No todos match “{{ f.q }}” in this view. <button class="btn sm" @click="f.q = ''">Clear search</button></div>
+        <div v-else-if="!rows.length" class="empty">No todos match. Type above to add one, or press <span class="kbd">N</span>.</div>
 
         <!-- phone (ISS-10): the table's select/id columns waste the width, so cards instead —
              the name leads, then what's next: done · P · time · when · links; open = tap -->
@@ -256,6 +264,10 @@ function open(t) { ui.selectedId = t.id; ui.drawerId = t.id }
 .qa input { height: 34px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 2px; padding: 0 10px; outline: none; font-size: 13px; }
 .qa input:focus { border-color: var(--info); }
 .prompt { font-size: 16px; font-weight: 700; }
+.srch { display: flex; align-items: center; gap: 6px; margin: 8px 16px 0; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface-2); color: var(--muted); }
+.srch:focus-within, .srch.on { border-color: var(--info); color: var(--info); }
+.srch input { min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); }
+.clr { border: 0; background: none; padding: 0; display: flex; color: var(--muted); cursor: pointer; }
 .parser { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .pc { border: 1px solid var(--border); border-radius: 2px; padding: 2px 8px; font-size: 11px; color: var(--muted); }
 .pc b { color: var(--text); }
