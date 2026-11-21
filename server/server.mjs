@@ -30,7 +30,7 @@ if (!cfg.skipMigrations) await runMigrations(pool, { databaseUrl: cfg.databaseUr
 const app = await createApp({ cfg, db, pool, log })
 const server = http.createServer(app.handler)
 server.keepAliveTimeout = 65000
-server.listen(cfg.port, () => log(`life-console listening on :${cfg.port} · build ${app.build} · sign-ups default ${cfg.signups}${cfg.pushDryRun ? ' · PUSH DRY RUN' : ''}`))
+server.listen(cfg.port, () => log(`life-console listening on :${cfg.port} · build ${app.build} · sign-ups default ${cfg.signups} · password-reset emails ${cfg.passwordAuth && cfg.smtpUrl ? 'on' : 'off (no SMTP_URL)'}${cfg.pushDryRun ? ' · PUSH DRY RUN' : ''}`))
 app.scheduler.start()
 
 let stopping = false
