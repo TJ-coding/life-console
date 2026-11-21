@@ -218,8 +218,8 @@ const reload = () => window.location.reload()
               <p>On the server, in the folder with <span class="mono">docker-compose.yml</span>, run:</p>
               <div class="cmd row"><code class="mono grow">{{ UPDATE_CMD }}</code><button class="btn sm" @click="copy(UPDATE_CMD)"><span class="icon sm">content_copy</span>Copy</button></div>
               <details class="phone-help">
-                <summary>Update automatically, or with one click from here (optional)</summary>
-                <p class="tiny">That needs the optional <b>updater</b> service, which is off by default: it mounts the Docker socket, and that is root access to the server. If you're happy with that, take the newest <a href="https://github.com/TJ-coding/life-console/blob/main/docker-compose.yml" target="_blank" rel="noopener">docker-compose.yml</a>, add <span class="mono">COMPOSE_PROFILES=updater</span> to <span class="mono">.env</span>, then run the command above once. It only ever pulls and restarts Life Console, and only when the app asks. <a href="/docs/self-hosting#4-updating" target="_blank" rel="noopener">Details</a></p>
+                <summary>Update automatically, or with one click from here</summary>
+                <p class="tiny">Run the <b>updater</b> service: take the newest <a href="https://github.com/TJ-coding/life-console/blob/main/docker-compose.yml" target="_blank" rel="noopener">docker-compose.yml</a> (and remove <span class="mono">LC_UPDATER=0</span> from <span class="mono">.env</span> if it's there), then run the command above once. From then on this server can update itself automatically, or when you press Update here. The updater is a small, locked-down container with access to Docker (no network, read-only); it only ever pulls and restarts Life Console, and only when the app asks. Rather keep Docker out of every container? Use the host updater instead. <a href="/docs/self-hosting#4-updating" target="_blank" rel="noopener">Details</a></p>
               </details>
             </template>
           </template>

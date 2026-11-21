@@ -4,10 +4,10 @@
 #   docker compose up -d      # → http://localhost:8080 (the first account you create is the admin)
 #
 # Update:   docker compose pull && docker compose up -d     (migrations run automatically, after a backup)
-#           Admins see a notice in the app when a new version is out, with this command to copy.
-#           Optional, off by default: the `updater` service installs new versions for you (auto-update / "Update now"
-#           in Settings → Server updates). It needs the Docker socket, i.e. root on this host, so you opt in with
-#           COMPOSE_PROFILES=updater in .env. See docs/SELF_HOSTING.md §4.
+#           The `updater` service does this for you: new versions install themselves (auto-update, switchable in
+#           Settings → Server updates), or with the "Update now" button. It needs the Docker socket, so it's a
+#           locked-down container that can only run that one command. LC_UPDATER=0 in .env turns it off; for a setup
+#           where no container holds the socket, see docs/SELF_HOSTING.md §4 (host updater).
 # Pin/roll back the app: set LC_VERSION in .env (e.g. sha-1a2b3c4) and `docker compose up -d`.
 # Full guide: docs/SELF_HOSTING.md
 name: life-console
@@ -89,15 +89,18 @@ services:
       - backups:/backups
     healthcheck: { disable: true }
 
-  # OPTIONAL, OFF BY DEFAULT: updates from inside the app (auto-update and the "Update now" button).
-  # It mounts the Docker socket, which is root access to this host, so it only runs if you opt in:
-  #   COMPOSE_PROFILES=updater   in .env, then  docker compose up -d
-  # It's its own container that does exactly one thing: when the app leaves an update request in the shared
-  # `updates` volume, it runs, in this folder (mounted read-only),
+  # Updates from inside the app: auto-update (on by default, switchable in Settings → Server updates) and the
+  # "Update now" button. LC_UPDATER=0 in .env turns this service off (then update with the commands above, or use
+  # the host updater in docs/SELF_HOSTING.md §4, which keeps the socket out of every container).
+  # It holds the Docker socket, and whatever holds it can control Docker (root on this host), so it's its own
+  # container that does exactly one thing: when the app leaves an update request in the shared `updates` volume,
+  # it runs, in this folder (mounted read-only),
   #   docker compose pull app backup && docker compose up -d --wait app backup
-  # The app never gets the socket, and can't make the updater run anything else. (LC_UPDATER=0 also keeps it off.)
+  # The app never gets the socket and can't change that command; nothing the app writes is ever read as input.
+  # And the container is locked down, so there's little in it to attack: no network (the Docker daemon does the
+  # pulling, not the container), a read-only filesystem, no Linux capabilities beyond the three it needs to own
+  # and write its shared folder, no privilege escalation, and small memory/process limits.
   updater:
-    profiles: ["updater"]
     image: docker:cli
     scale: ${LC_UPDATER:-1}
     restart: unless-stopped
@@ -107,6 +110,15 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./:/project:ro
       - updates:/updates
+    # locked down: it only talks to the local Docker socket and writes to /updates
+    network_mode: none
+    read_only: true
+    tmpfs: [/tmp, /root]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER] # own the shared folder and write the app's files in it, nothing more
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 256m
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |

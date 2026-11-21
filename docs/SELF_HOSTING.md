@@ -87,16 +87,41 @@ Here's what happens on each update:
 
 **Update notices:** admins see *A newer Life Console is out* at the top of the app, and the changes in **Settings → Server updates**. Every 6 hours the server asks GitHub which commits came after its own build, and asks the image registry which of them have a published image, so it only announces versions you can actually pull. Nothing about your server or its users is sent: only the commit hash, in the URL. Set `UPDATE_CHECK=off` to stop it. Images you build yourself (`--build`) don't know their commit, so they get no notice.
 
-**Auto-update (optional, off by default):** the compose file has a small `updater` service that can install new versions for you: automatically when one is published (within a few hours), or when an admin presses **Update now**. It runs the same `docker compose pull` and `docker compose up -d` as above, in the folder with your `docker-compose.yml`. Expect a few seconds of downtime, with the usual backup before any migration. If an update fails, the old version keeps running, Settings shows the output, and that version isn't retried automatically.
+**Auto-update (on by default):** the compose file includes a small `updater` service. When a new version is published, the app asks it to install that version (within a few hours of release). The updater runs the same `docker compose pull` and `docker compose up -d` as above, in the folder with your `docker-compose.yml`. Expect a few seconds of downtime, with the usual backup before any migration. If an update fails, the old version keeps running, Settings shows the output, and that version isn't retried automatically.
 
-It's **off unless you opt in**, because it needs the Docker socket (`/var/run/docker.sock`), and access to it is root access on that machine. Without it, nothing else changes: admins still get the update notice with the command to copy.
+- **Turn auto-update off:** untick *Install updates automatically* in Settings → Server updates (an admin's choice; it's kept in the `updates` volume). `AUTO_UPDATE=off` in `.env` sets the starting value. With auto-update off, admins still get the notice and an **Update now** button.
+- **Turn the updater off altogether:** set `LC_UPDATER=0` in `.env`, then run `docker compose up -d --remove-orphans`. You update with the commands above, or use the host updater below.
+- **Installs from before the updater existed:** download the newest `docker-compose.yml`, then run `docker compose pull && docker compose up -d` once.
 
-- **Turn it on:** add `COMPOSE_PROFILES=updater` to `.env`, then run `docker compose up -d`.
-- **Turn auto-update off but keep Update now:** untick *Install updates automatically* in Settings → Server updates (kept in the `updates` volume). `AUTO_UPDATE=off` in `.env` sets the starting value.
-- **Turn it off again:** remove `COMPOSE_PROFILES=updater` (or set `LC_UPDATER=0`), then run `docker compose stop updater && docker compose rm -f updater`.
-- **Installs from before November 2026** ran the updater by default. Your setup keeps working exactly as it is: the old `docker-compose.yml` you have still starts it. If you download the new compose file, add `COMPOSE_PROFILES=updater` to keep auto-update, or remove the old updater container with the command above.
+**How the updater is secured.** To restart containers it needs the Docker socket (`/var/run/docker.sock`), and whatever can use the socket can control Docker, which is root on that machine. No proxy changes that: creating a container is enough. So the design keeps the socket away from everything that faces the internet, and leaves almost nothing in the updater to attack:
 
-Why it's built like this: the updater is its own container, and the app never gets the socket. The app and the updater share only a small volume: the app can leave a request there, and the updater's command is fixed, so a compromised app can't make it run anything else. It doesn't apply to a pinned `LC_VERSION` (edit `.env` instead), or to setups that don't use this compose file, such as Portainer stacks, Kubernetes, Dokploy or the app-store listings. Those get the notice and update the way they usually do.
+- The app never gets the socket. The app and the updater share only a small volume. The app can leave an update request there, but the updater reads nothing from it: its command is fixed in the compose file, which it sees read-only. A compromised app can ask for the same update again, nothing else.
+- The updater container has **no network** (the Docker daemon does the pulling, not the container), a **read-only filesystem**, **no Linux capabilities** except the three it needs to own and write its shared folder, **no privilege escalation** (`no-new-privileges`), and small memory and process limits. It opens no ports and runs no server.
+- It pulls only the image named in your `.env` (`LC_IMAGE`, `LC_VERSION`). A pinned `LC_VERSION` is never changed by it (edit `.env` instead).
+
+It doesn't apply to setups that don't use this compose file, such as Portainer stacks, Kubernetes, Dokploy or the app-store listings. Those get the notice and update the way they usually do.
+
+**Host updater (no socket in any container):** if you'd rather no container hold the socket at all, run the updater's loop on the host instead. `scripts/host-updater.sh` does exactly the same job (same heartbeat, same fixed command, same results in Settings), as root or as a user in the `docker` group:
+
+1. Set `LC_UPDATER=0` in `.env` and run `docker compose up -d --remove-orphans`.
+2. `sudo cp scripts/host-updater.sh /usr/local/bin/life-console-updater`, then try it: `sudo life-console-updater /path/to/life-console` (Ctrl-C to stop). Settings → Server updates should show **Update now** within a few seconds.
+3. Run it as a service, e.g. `/etc/systemd/system/life-console-updater.service`:
+
+   ```ini
+   [Unit]
+   Description=Life Console updater
+   After=docker.service
+   Requires=docker.service
+
+   [Service]
+   ExecStart=/usr/local/bin/life-console-updater /path/to/life-console
+   Restart=always
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+   then `sudo systemctl enable --now life-console-updater`.
 
 **Roll back:** set `LC_VERSION=sha-<previous>` in `.env` and run `docker compose up -d`. Database migrations are additive, so an older app version keeps working on a newer database (see *Database migrations* in [OPERATIONS.md](OPERATIONS.md)). If you ever need the database itself back, restore the pre-migration dump (section 6).
 
