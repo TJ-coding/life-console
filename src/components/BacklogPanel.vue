@@ -70,7 +70,8 @@ function onDrop(e) {
         <span class="icon sm" :class="{ info: focus }">{{ focus ? 'close_fullscreen' : 'calendar_view_week' }}</span>
       </button>
     </header>
-    <!-- search, then the add bar (search first: it narrows the list); side by side in Backlog by week -->
+    <!-- search, the add bar, its preview and the P1–P5 filters: stacked in the week view's narrow panel;
+         one row in Backlog by week (filters, search, add bar), with the preview below -->
     <div v-if="open" class="bars">
       <label class="srch" :class="{ on: q }" title="Search the backlog: title, ID, notes, links · / to focus · Esc to clear">
         <span class="icon sm">search</span>
@@ -86,18 +87,18 @@ function onDrop(e) {
         />
         <span class="kbd">N</span>
       </form>
-    </div>
-    <div v-if="draft && open" class="preview">
-      <span class="pc"><b>{{ parsed.title || '—' }}</b></span>
-      <span class="pc mono">{{ parsed.timeMin ?? 30 }}m</span>
-      <span class="pc mono">P{{ parsed.priority ?? 3 }}</span>
-      <span v-if="parsed.due" class="pc mono">due {{ wd(parsed.due) }} {{ fmtSlash(parsed.due) }}</span>
-      <Chip v-for="l in parsed.links" :key="l" :id="l" />
-      <span class="small muted enter">↵ add</span>
-    </div>
-    <div v-if="open" class="pf">
-      <button class="btn sm" :class="{ active: !prio }" @click="prio = 0">All</button>
-      <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: prio === p }" @click="prio = p">P{{ p }}</button>
+      <div v-if="draft" class="preview">
+        <span class="pc"><b>{{ parsed.title || '—' }}</b></span>
+        <span class="pc mono">{{ parsed.timeMin ?? 30 }}m</span>
+        <span class="pc mono">P{{ parsed.priority ?? 3 }}</span>
+        <span v-if="parsed.due" class="pc mono">due {{ wd(parsed.due) }} {{ fmtSlash(parsed.due) }}</span>
+        <Chip v-for="l in parsed.links" :key="l" :id="l" />
+        <span class="small muted enter">↵ add</span>
+      </div>
+      <div class="pf">
+        <button class="btn sm" :class="{ active: !prio }" @click="prio = 0">All</button>
+        <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: prio === p }" @click="prio = p">P{{ p }}</button>
+      </div>
     </div>
 
     <WeekBoard v-if="open && focus" :prio="prio" :q="q" />
@@ -145,11 +146,12 @@ function onDrop(e) {
 
 <style scoped>
 .backlog.only { border-right: 0; }
-.backlog.only .preview { max-width: 720px; }
 .bars { display: flex; flex-direction: column; }
-.backlog.only .bars { flex-direction: row; gap: 8px; margin: 10px 8px 0; }
-.backlog.only .bars .qa { flex: 0 1 720px; margin: 0; }
-.backlog.only .bars .srch { flex: 0 1 320px; margin: 0; height: 32px; }
+.backlog.only .bars { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 8px 8px; }
+.backlog.only .bars .pf { order: 1; padding: 0; flex-wrap: nowrap; }
+.backlog.only .bars .srch { order: 2; flex: 0 1 320px; margin: 0; height: 32px; }
+.backlog.only .bars .qa { order: 3; flex: 0 1 720px; margin: 0; }
+.backlog.only .bars .preview { order: 4; flex-basis: 100%; padding: 0; }
 .crumb { font-size: 11px; margin-bottom: 2px; }
 .backlog { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-right: 1px solid var(--border); }
 .bh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
