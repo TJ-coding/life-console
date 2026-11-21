@@ -161,9 +161,9 @@ function onKey(e) {
       if (route.name === 'week') ui.backlogFocus++ // Plan week: capture straight into the backlog panel
       else openPalette('add')
       break
-    case '/': { // Plan week: search the backlog (ISS-44); elsewhere the command palette
+    case '/': { // a screen's search box (Plan week backlog, Todos: ISS-44); elsewhere the command palette
       e.preventDefault()
-      const box = document.querySelector('[data-backlog-search]')
+      const box = document.querySelector('[data-search]')
       if (box) box.focus()
       else openPalette('cmd')
       break

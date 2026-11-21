@@ -92,7 +92,7 @@ function onDrop(e) {
       <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: prio === p }" @click="prio = p">P{{ p }}</button>
       <label class="srch" :class="{ on: q }" title="Search the backlog: title, ID, notes, links · / to focus · Esc to clear">
         <span class="icon sm">search</span>
-        <input ref="search" v-model="q" class="small" placeholder="Search…" data-backlog-search @keydown.esc.stop="q = ''; $event.target.blur()" />
+        <input ref="search" v-model="q" class="small" placeholder="Search…" data-search @keydown.esc.stop="q = ''; $event.target.blur()" />
         <button v-if="q" type="button" class="clr" title="Clear search" @click="q = ''"><span class="icon sm">close</span></button>
       </label>
     </div>
