@@ -763,8 +763,17 @@ struct HUD: View {
         }
       }
       .onHover { hover = $0 }
+      // 5 minutes into the running block the widget greys out so it doesn't pull at you while you work;
+      // pointing at it brings it back
+      .saturation(calm(n) ? 0 : 1)
+      .opacity(calm(n) ? 0.35 : 1)
+      .animation(.easeInOut(duration: 0.6), value: calm(n))
       .fixedSize()
     }
+  }
+  func calm(_ n: Now) -> Bool {
+    guard n.bar.mode == .busy, let c = n.current, !hover, !m.hudPointerOver else { return false }
+    return n.nowSec - toMin(c.start) * 60 >= 300
   }
 }
 
