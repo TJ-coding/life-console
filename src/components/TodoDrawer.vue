@@ -4,7 +4,7 @@ import DurationInput from './DurationInput.vue'
 import LinkTrail from './LinkTrail.vue'
 import DateInput from './DateInput.vue'
 import { computed, ref } from 'vue'
-import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergePartsUndo, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, addSubtask, parseQuick, pomo } from '../store'
+import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergePartsUndo, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, addSubtask, parseQuick, pomo, duplicateTodo } from '../store'
 import Chip from './Chip.vue'
 
 const t = computed(() => (ui.drawerId ? findTodo(ui.drawerId) : null))
@@ -73,6 +73,8 @@ const dayName = computed(() => {
   const d = t.value?.scheduled?.date
   return !d ? '' : d === todayISO() ? 'today' : `${wd(d)} ${fmtSlash(d)}`
 })
+// public ISS-4: duplicate (handy for done tasks you do again) and open the copy
+function dup() { const c = duplicateTodo(t.value.id); if (c) ui.drawerId = c.id }
 </script>
 
 <template>
@@ -197,6 +199,7 @@ const dayName = computed(() => {
       </div>
       <footer class="df">
         <button class="btn primary grow" @click="toggleTodo(t.id)"><span class="icon sm">done_all</span>{{ t.done ? 'Reopen' : 'Mark completed' }} <span class="kbd">X</span></button>
+        <button class="btn" title="Duplicate: a fresh open copy in the backlog (with its subtasks), opened here" @click="dup"><span class="icon sm">content_copy</span>Duplicate</button>
         <button class="btn danger-ghost" title="Delete this task (undo in the toast)" @click="remove"><span class="icon sm">delete</span>Delete</button>
       </footer>
     </aside>

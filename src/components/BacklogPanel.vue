@@ -5,7 +5,7 @@
 // then the next weeks, with week buttons instead of day buttons. Drop a task here to send it back.
 import PartBadge from './PartBadge.vue'
 import { computed, ref, watch, nextTick } from 'vue'
-import { ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, planWeek, backlogTodos, backlogFor, isoWeek, todoMatches, trailLinks, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
+import { state, isLeaf, toggleTodo, ui, todayISO, addDays, mondayOf, wd, fmtSlash, byPriority, partLabel, freeHours, assignToDay, updateTodo, toast, parseQuick, addTodo, isHoverLinked, planWeek, backlogTodos, backlogFor, isoWeek, todoMatches, trailLinks, rowSelectClick, isTodoSel, openCtxMenu } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
 import Chip from './Chip.vue'
@@ -23,6 +23,13 @@ const otherLinks = (t) => t.links.filter((l) => !trailLinks(t).includes(l)) // t
 const q = ref('') // ISS-44: search the backlog (title, id, notes, links…)
 const search = ref(null)
 const list = computed(() => all.value.filter((t) => (!prio.value || t.priority === prio.value) && todoMatches(t, q.value)))
+// ISS-42: done tasks that never got a day (finished from the backlog), newest first, on request
+const showDone = ref(false)
+const doneAll = computed(() => state.todos.filter((t) => t.done && !t.scheduled && isLeaf(t)))
+const doneList = computed(() => (showDone.value
+  ? doneAll.value.filter((t) => (!prio.value || t.priority === prio.value) && todoMatches(t, q.value))
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))).slice(0, 40)
+  : []))
 const plannedN = computed(() => (props.focus ? 0 : list.value.filter((t) => planWeek(t)).length)) // the first n rows
 const elsewhere = computed(() => (props.focus ? 0 : backlogTodos().filter((t) => planWeek(t) && planWeek(t) !== ui.weekStart).length))
 const total = computed(() => list.value.reduce((s, t) => s + t.timeMin / 60, 0))
@@ -100,6 +107,7 @@ function onDrop(e) {
       <div class="pf">
         <button class="btn sm" :class="{ active: !prio }" @click="prio = 0">All</button>
         <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: prio === p }" @click="prio = p">P{{ p }}</button>
+        <button v-if="!focus && doneAll.length" class="btn sm donebtn" :class="{ active: showDone }" :title="showDone ? 'Hide completed tasks' : 'Show completed backlog tasks (newest first)'" @click="showDone = !showDone"><span class="icon sm">done_all</span>{{ doneAll.length }}</button>
       </div>
     </div>
 
@@ -138,6 +146,16 @@ function onDrop(e) {
       </template>
       <div v-if="!list.length && q" class="empty">No backlog task matches “{{ q }}”.</div>
       <div v-else-if="!list.length" class="empty">Backlog clear ✓<br />Type above to capture a task.</div>
+      <template v-if="doneList.length">
+        <div class="grp tiny upper muted mono">Done · {{ doneList.length }}{{ doneAll.length > doneList.length && !q && !prio ? ` of ${doneAll.length}` : '' }}</div>
+        <div v-for="t in doneList" :key="t.id" class="card done" :class="{ sel: ui.selectedId === t.id }" @click="ui.selectedId = t.id" @dblclick="ui.drawerId = t.id">
+          <div class="row">
+            <input type="checkbox" checked title="Reopen" @click.stop="toggleTodo(t.id)" />
+            <span class="grow ellipsis">{{ t.title }}</span>
+            <span class="mono small muted">{{ t.timeMin }}m</span>
+          </div>
+        </div>
+      </template>
     </div>
     <div v-if="open" class="foot small muted">
       <template v-if="focus">Put tasks into a week so ② Assign day only shows that week's share. Hover a task → click a week, or drag it onto one.</template>
@@ -199,4 +217,7 @@ function onDrop(e) {
 .foot { padding: 8px 12px; border-top: 1px solid var(--border); }
 .lnk { display: block; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--info); font: inherit; cursor: pointer; }
 .grp { padding: 4px 2px 0; }
+.donebtn { margin-left: auto; gap: 3px; }
+.card.done { cursor: default; opacity: 0.75; }
+.card.done .grow { text-decoration: line-through; color: var(--muted); }
 </style>

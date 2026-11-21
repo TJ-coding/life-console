@@ -86,6 +86,7 @@ function openBlock(e, b) {
         >
           <span class="mono t"><span v-if="b.done" class="icon dn" title="Completed">check_circle</span>{{ b.start }}–{{ b.end }}</span>
           <span class="nm">{{ b.title }}</span>
+          <button v-if="b.todoId && !b.done" class="sb icon" title="Split this block…" :aria-label="'Split ' + b.title" @click.stop="openCtxMenu($event, [blockKey(b)])" @mousedown.stop>vertical_split</button>
           <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
           <span v-if="!ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
         </div>
@@ -121,9 +122,12 @@ function openBlock(e, b) {
 .xb { position: absolute; top: 2px; right: 3px; width: 16px; height: 16px; font-size: 13px; color: var(--muted); background: transparent; border: 0; padding: 0; cursor: pointer; opacity: 0; }
 .tl-block:hover .xb { opacity: 0.7; }
 .xb:hover { opacity: 1; color: var(--danger); }
-@media (hover: none) { .xb { opacity: 0.85; width: 22px; height: 22px; font-size: 16px; top: 1px; right: 1px; color: var(--text); } }
+@media (hover: none) { .xb { opacity: 0.85; width: 22px; height: 22px; font-size: 16px; top: 1px; right: 1px; color: var(--text); } .sb { opacity: 0.85; width: 22px; height: 22px; font-size: 16px; top: 1px; right: 24px; color: var(--text); } }
 .handle::after { content: ''; position: absolute; top: 30%; bottom: 30%; right: 2px; width: 2px; border-radius: 1px; background: var(--c); opacity: 0; }
 .tl-block:hover .handle::after, .tl-block.sizing .handle::after { opacity: 0.9; }
 /* multi-selected (Shift/⌘-click or long-press): moved together */
 .block.bsel { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 5; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+.sb { position: absolute; top: 2px; right: 20px; width: 16px; height: 16px; font-size: 13px; color: var(--muted); background: transparent; border: 0; padding: 0; cursor: pointer; opacity: 0; } /* ISS-39: split menu */
+.tl-block:hover .sb { opacity: 0.7; }
+.sb:hover { opacity: 1; color: var(--info); }
 </style>

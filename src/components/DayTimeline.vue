@@ -66,6 +66,7 @@ function pomos(b) {
     >
       <i v-for="(g, k) in pomos(b)" :key="'pm' + k" class="pm" :style="g"></i>
       <span v-if="b.done" class="icon dn" title="Completed">check_circle</span><span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> <span class="bt">{{ b.title }}</span><span v-if="b.pomo && b.pomo.length > 1" class="mono pc" :title="`${b.pomo.length} pomodoros`"><span class="icon">timer</span>{{ b.pomo.length }}</span>
+      <button v-if="!readonly && b.todoId && !b.done" class="sb icon" title="Split this block…" :aria-label="'Split ' + b.title" @click.stop="openCtxMenu($event, [blockKey(b)])" @mousedown.stop>vertical_split</button>
       <button v-if="!readonly && !ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
       <span v-if="!readonly && !ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
     </div>
@@ -120,10 +121,14 @@ function pomos(b) {
 /* touch screens have no hover: the ✕ is always there (only shown while the schedule is unlocked) */
 @media (hover: none) {
   .xb { display: block; opacity: 0.85; width: 18px; height: 18px; font-size: 14px; top: 0; right: 0; color: var(--text); }
+  .sb { display: block; opacity: 0.85; width: 18px; height: 18px; font-size: 14px; top: 0; right: 20px; color: var(--text); }
 }
 .handle::after { content: ''; position: absolute; left: 35%; right: 35%; bottom: 1px; height: 2px; border-radius: 1px; background: var(--c); opacity: 0; }
 .vb:hover .handle::after, .vb.sizing .handle::after { opacity: 0.9; }
 /* multi-selected (Shift/⌘-click or long-press): moved together */
 .block.bsel { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 5; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
 .bo { position: absolute; left: 28px; right: 0; pointer-events: none; background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--muted) 16%, transparent) 0 4px, transparent 4px 9px); border-top: 1px dashed color-mix(in srgb, var(--muted) 40%, transparent); border-bottom: 1px dashed color-mix(in srgb, var(--muted) 40%, transparent); }
+.sb { position: absolute; top: 1px; right: 16px; width: 14px; height: 14px; font-size: 12px; color: var(--muted); background: transparent; border: 0; padding: 0; cursor: pointer; display: none; } /* ISS-39: split menu */
+.vb:hover .sb { display: block; opacity: 0.7; }
+.sb:hover { opacity: 1; color: var(--info); }
 </style>
