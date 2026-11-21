@@ -3,7 +3,7 @@
 // Fixed px-per-hour so block text stays readable; scrolls horizontally and
 // auto-centres on "now". Todos can be dropped onto it to get a start time.
 import { computed, ref, onMounted, nextTick, watch } from 'vue'
-import { ui, todayISO, toMin, fromMin, layoutLanes, removeTimelineBlock, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
+import { ui, todayISO, cutBlockAt, findTodo, altLabel, toMin, fromMin, layoutLanes, removeTimelineBlock, isBlockSel, toggleBlockSel, blockKey, clearBlockSel, openCtxMenu } from '../store'
 import { useTimelineEdit } from '../timelineEdit'
 
 const props = defineProps({ date: String, blocks: Array, from: { type: Number, default: 0 }, to: { type: Number, default: 24 } })
@@ -54,8 +54,19 @@ const ed = useTimelineEdit({
 })
 const hover = ed.hover
 const removeBlock = removeTimelineBlock
+/* ISS-39: hovering an open task block shows a cut line at the cursor (snapped to 5 min); ⌥/Alt-click cuts there */
+const cut = ref(null) // { id, left (px inside the block), at (clock minute) }
+function trackCut(e, b) {
+  const t = b.todoId && findTodo(b.todoId)
+  if (ui.scheduleLock || ed.isResizing() || !t || t.done || !t.scheduled?.start) { cut.value = null; return }
+  const r = e.currentTarget.getBoundingClientRect()
+  const s = toMin(b.start), en = toMin(b.end)
+  const at = Math.round((s + ((e.clientX - r.left) / r.width) * (en - s)) / 5) * 5
+  cut.value = at - s >= 5 && en - at >= 5 ? { id: b.id, left: ((at - s) / (en - s)) * r.width, at } : null
+}
 function openBlock(e, b) {
   if (ed.isResizing()) return
+  if (e.altKey && cut.value?.id === b.id) { cutBlockAt(b.todoId, cut.value.at); cut.value = null; return }
   // Shift/⌘/Ctrl-click — or any click while a selection is open — adds/removes it from the selection
   // ISS-29: modifier-click adds/removes; on touch screens a tap does too while a selection is open; a plain
   // mouse click opens the block and clears the selection
@@ -83,10 +94,11 @@ function openBlock(e, b) {
           v-for="b in laid.blocks" :key="b.id" :data-bkey="blockKey(b)" class="block tl-block" :class="['cat-' + b.category, { todo: b.kind === 'todo', 'is-done': b.done, moving: ui.dragBlock?.id === (b.todoId ?? b.id), sizing: ed.resize.value?.id === b.id, bsel: isBlockSel(b) }]"
           :style="style(b)" :title="`${b.start}–${b.end}  ${b.title}\n${ui.scheduleLock ? 'Schedule locked · tap to edit or remove' : 'Drag to move · drag right edge to resize · ✕ ' + (b.todoId ? 'takes it off the timeline' : 'removes it')}`" :draggable="!ui.scheduleLock"
           @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock($event, b)" @contextmenu.prevent="openCtxMenu($event, [blockKey(b)])"
+          @mousemove="trackCut($event, b)" @mouseleave="cut = null"
         >
+          <i v-if="cut?.id === b.id" class="cutline" :style="{ left: cut.left + 'px' }"><span class="mono">✂ {{ fromMin(cut.at) }} · {{ altLabel }}-click</span></i>
           <span class="mono t"><span v-if="b.done" class="icon dn" title="Completed">check_circle</span>{{ b.start }}–{{ b.end }}</span>
           <span class="nm">{{ b.title }}</span>
-          <button v-if="b.todoId && !b.done" class="sb icon" title="Split this block…" :aria-label="'Split ' + b.title" @click.stop="openCtxMenu($event, [blockKey(b)])" @mousedown.stop>vertical_split</button>
           <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
           <span v-if="!ui.scheduleLock" class="handle" title="Drag to change end time" @pointerdown="ed.startResize($event, b)" @click.stop></span>
         </div>
@@ -122,12 +134,12 @@ function openBlock(e, b) {
 .xb { position: absolute; top: 2px; right: 3px; width: 16px; height: 16px; font-size: 13px; color: var(--muted); background: transparent; border: 0; padding: 0; cursor: pointer; opacity: 0; }
 .tl-block:hover .xb { opacity: 0.7; }
 .xb:hover { opacity: 1; color: var(--danger); }
-@media (hover: none) { .xb { opacity: 0.85; width: 22px; height: 22px; font-size: 16px; top: 1px; right: 1px; color: var(--text); } .sb { opacity: 0.85; width: 22px; height: 22px; font-size: 16px; top: 1px; right: 24px; color: var(--text); } }
+@media (hover: none) { .xb { opacity: 0.85; width: 22px; height: 22px; font-size: 16px; top: 1px; right: 1px; color: var(--text); } }
 .handle::after { content: ''; position: absolute; top: 30%; bottom: 30%; right: 2px; width: 2px; border-radius: 1px; background: var(--c); opacity: 0; }
 .tl-block:hover .handle::after, .tl-block.sizing .handle::after { opacity: 0.9; }
 /* multi-selected (Shift/⌘-click or long-press): moved together */
 .block.bsel { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 5; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
-.sb { position: absolute; top: 2px; right: 20px; width: 16px; height: 16px; font-size: 13px; color: var(--muted); background: transparent; border: 0; padding: 0; cursor: pointer; opacity: 0; } /* ISS-39: split menu */
-.tl-block:hover .sb { opacity: 0.7; }
-.sb:hover { opacity: 1; color: var(--info); }
+.cutline { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed color-mix(in srgb, var(--text) 70%, transparent); pointer-events: none; z-index: 3; } /* ISS-39 */
+.cutline span { position: absolute; left: 3px; bottom: 1px; padding: 0 3px; font-size: 9px; line-height: 14px; font-style: normal; border-radius: 2px; background: var(--surface); color: var(--text); white-space: nowrap; }
+@media (hover: none) { .cutline { display: none; } }
 </style>

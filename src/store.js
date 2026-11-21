@@ -1696,3 +1696,20 @@ export function duplicateTodo(id) {
   })
   return top
 }
+/** ISS-39: cut a timed task block at clock minute `atMin` into two parts (before / from the cut), the
+ *  way the hover cut line on the timeline shows it. A pomodoro sitting is cut by wall time: the first
+ *  part keeps the work done before the cut. Each part ≥ 5 min of work. Undo in the toast. */
+export function cutBlockAt(id, atMin) {
+  const t = findTodo(id)
+  if (!t || t.done || !t.scheduled?.start || !isLeaf(t)) return []
+  const P = pomo()
+  const start = toMin(t.scheduled.start)
+  const first = t.pomo ? workIn(atMin - start, P) : atMin - start
+  const second = (t.timeMin || 0) - first
+  if (first < 5 || second < 5) return []
+  const made = splitWithUndo(id, [{ min: first, date: t.scheduled.date, start: fromMin(start) }, { min: second, date: t.scheduled.date, start: fromMin(atMin) }])
+  if (t.pomo) made.forEach((x) => { if (!x.pomo) x.pomo = true })
+  return made
+}
+/** The Option / Alt key's name on this device, for hints like "⌥-click" */
+export const altLabel = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌥' : 'Alt'

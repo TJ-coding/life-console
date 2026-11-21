@@ -107,7 +107,6 @@ function onDrop(e) {
       <div class="pf">
         <button class="btn sm" :class="{ active: !prio }" @click="prio = 0">All</button>
         <button v-for="p in 5" :key="p" class="btn sm" :class="{ active: prio === p }" @click="prio = p">P{{ p }}</button>
-        <button v-if="!focus && doneAll.length" class="btn sm donebtn" :class="{ active: showDone }" :title="showDone ? 'Hide completed tasks' : 'Show completed backlog tasks (newest first)'" @click="showDone = !showDone"><span class="icon sm">done_all</span>{{ doneAll.length }}</button>
       </div>
     </div>
 
@@ -146,8 +145,11 @@ function onDrop(e) {
       </template>
       <div v-if="!list.length && q" class="empty">No backlog task matches “{{ q }}”.</div>
       <div v-else-if="!list.length" class="empty">Backlog clear ✓<br />Type above to capture a task.</div>
+      <!-- ISS-42: a quiet switch at the end of the list for done backlog tasks -->
+      <button v-if="!focus && doneAll.length" type="button" class="donelnk mono" :title="showDone ? 'Hide completed tasks' : 'Show completed backlog tasks, newest first'" @click="showDone = !showDone">
+        <span class="icon">{{ showDone ? 'expand_less' : 'expand_more' }}</span>{{ showDone ? 'Hide' : 'Show' }} {{ doneAll.length }} done
+      </button>
       <template v-if="doneList.length">
-        <div class="grp tiny upper muted mono">Done · {{ doneList.length }}{{ doneAll.length > doneList.length && !q && !prio ? ` of ${doneAll.length}` : '' }}</div>
         <div v-for="t in doneList" :key="t.id" class="card done" :class="{ sel: ui.selectedId === t.id }" @click="ui.selectedId = t.id" @dblclick="ui.drawerId = t.id">
           <div class="row">
             <input type="checkbox" checked title="Reopen" @click.stop="toggleTodo(t.id)" />
@@ -217,7 +219,9 @@ function onDrop(e) {
 .foot { padding: 8px 12px; border-top: 1px solid var(--border); }
 .lnk { display: block; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--info); font: inherit; cursor: pointer; }
 .grp { padding: 4px 2px 0; }
-.donebtn { margin-left: auto; gap: 3px; }
+.donelnk { display: flex; align-items: center; gap: 2px; align-self: flex-start; margin-top: 2px; padding: 2px 0; border: 0; background: none; color: var(--muted); font-size: 11px; cursor: pointer; }
+.donelnk .icon { font-size: 14px; }
+.donelnk:hover { color: var(--text); }
 .card.done { cursor: default; opacity: 0.75; }
 .card.done .grow { text-decoration: line-through; color: var(--muted); }
 </style>
