@@ -150,7 +150,7 @@ function onDrop(e) {
 .backlog.only .bars { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 8px 8px; }
 .backlog.only .bars .pf { order: 1; padding: 0; flex-wrap: nowrap; }
 .backlog.only .bars .srch { order: 2; flex: 0 1 320px; margin: 0; height: 32px; }
-.backlog.only .bars .qa { order: 3; flex: 0 1 720px; margin: 0; }
+.backlog.only .bars .qa { order: 3; flex: 1 1 320px; margin: 0; }
 .backlog.only .bars .preview { order: 4; flex-basis: 100%; padding: 0; }
 .crumb { font-size: 11px; margin-bottom: 2px; }
 .backlog { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-right: 1px solid var(--border); }
