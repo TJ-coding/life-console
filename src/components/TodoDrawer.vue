@@ -1,9 +1,10 @@
 <script setup>
 // Right 480px side drawer for editing a todo (spec §2.4 "Side drawer").
 import DurationInput from './DurationInput.vue'
+import LinkTrail from './LinkTrail.vue'
 import DateInput from './DateInput.vue'
 import { computed, ref } from 'vue'
-import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergePartsUndo, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, ancestorsOf, addSubtask, parseQuick, pomo } from '../store'
+import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, toggleTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergePartsUndo, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, addSubtask, parseQuick, pomo } from '../store'
 import Chip from './Chip.vue'
 
 const t = computed(() => (ui.drawerId ? findTodo(ui.drawerId) : null))
@@ -48,7 +49,6 @@ const kids = computed(() => (t.value ? childrenOf(t.value.id) : []))
 const box = computed(() => kids.value.length > 0)
 const left = computed(() => (t.value ? budgetLeft(t.value) : 0))
 const counts = computed(() => (t.value ? subCount(t.value) : { done: 0, total: 0 }))
-const crumbs = computed(() => (t.value ? ancestorsOf(t.value).reverse() : []))
 const subDraft = ref('')
 const subParsed = computed(() => parseQuick(subDraft.value))
 function addSub() {
@@ -87,10 +87,8 @@ const dayName = computed(() => {
         <button class="btn icon-only" title="Close (Esc)" @click="ui.drawerId = null"><span class="icon">close</span></button>
       </header>
       <div class="db">
-        <nav v-if="crumbs.length" class="crumbs small">
-          <span class="icon sm muted">subdirectory_arrow_right</span>
-          <template v-for="(a, i) in crumbs" :key="a.id"><span v-if="i" class="muted">›</span><button class="crumb" :title="`Open ${a.id}`" @click="ui.drawerId = a.id"><span class="mono muted">{{ a.id }}</span> {{ a.title }}</button></template>
-        </nav>
+        <!-- ISS-46: where this task sits: deadline › goal / plan › parent tasks; each step opens -->
+        <LinkTrail :todo="t" full class="dtrail" />
         <label class="field"><span>Task title</span><input v-model="t.title" class="input big" /></label>
         <label class="field"><span>Vital points</span><input v-model="t.vital" class="input" placeholder="Key notes shown under the title" /></label>
         <div class="grid2">
@@ -228,9 +226,7 @@ const dayName = computed(() => {
 .prt.cur { box-shadow: inset 2px 0 0 var(--info); }
 .prt.done .grow { text-decoration: line-through; color: var(--muted); }
 .unsched { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -6px; }
-.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: -6px; }
-.crumb { border: 0; background: transparent; color: var(--text); cursor: pointer; padding: 0; font: inherit; }
-.crumb:hover { color: var(--accent); }
+.dtrail { flex: none; margin-top: -4px; margin-bottom: -6px; } /* flex: none — the drawer body is a column that would squeeze it to 0 */
 .sub-h { gap: 8px; margin-bottom: 4px; }
 .sub-h .lbl { margin-bottom: 0; }
 .subs { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 2px; margin-bottom: 6px; }
