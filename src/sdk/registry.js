@@ -12,6 +12,8 @@
 //     chords: [{ key: 'c', to: '/' }],     // extra G-chords that aren't a sidebar entry
 //     commands: [{ label, icon, hint?, run: ({ router, route }) => … }],          // command palette
 //     planned: ['S-55 Courses Index', …],  // spec screens not built yet: /m/<id> shows them
+//     plugin: { desc },                    // a plugin: no screen, just parts of other screens (isEnabled(id)); listed
+//                                          // in Settings → Console so an account can switch it on (off unless an edition lists it)
 //   })
 //
 // Rules (buildRegistry throws when one is broken; test/registry.test.mjs builds the real list):
@@ -71,6 +73,7 @@ export function buildRegistry(list) {
   }
   return {
     modules: list,
+    plugins: list.filter((m) => m.plugin).map((m) => ({ module: m.id, label: m.title, icon: m.icon, desc: m.plugin.desc ?? '' })),
     byId: Object.fromEntries(list.map((m) => [m.id, m])),
     routes,
     nav,

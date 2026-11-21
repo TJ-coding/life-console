@@ -74,10 +74,10 @@ test('module data: duplicate ids and prefixes are refused', () => {
 /* ───────────── editions (platform phase 3) ───────────── */
 const { EDITIONS, EDITION_LIST, EDITION_LANDINGS, editionSeed, enabledModules, checkEditions } = await import('../editions/index.js')
 
-test('editions name only real modules, and base shows every module', () => {
+test('editions name only real modules, and base shows every module but the plugins (off by default)', () => {
   const ids = MODULES.map((m) => m.id)
   assert.equal(checkEditions(ids), true)
-  assert.deepEqual([...EDITIONS.base.modules].sort(), [...ids].sort())
+  assert.deepEqual([...EDITIONS.base.modules].sort(), MODULES.filter((m) => !m.plugin).map((m) => m.id).sort())
   assert.deepEqual(EDITION_LANDINGS, { '/minimalist': 'minimalist' })
   assert.throws(() => checkEditions(ids, [...EDITION_LIST, { id: 'x', modules: ['nope'] }]), /unknown module "nope"/)
   assert.throws(() => checkEditions(ids, [...EDITION_LIST, { id: 'minimalist', modules: [] }]), /used twice/)
@@ -104,4 +104,18 @@ test('a new account’s demo: base unchanged; Minimalist gets its demo, starting
   assert.equal(n.settings.notify.daily, false)
   assert.equal(n.settings.notify.blocks, true)
   assert.equal(n.settings.edition, 'minimalist')
+})
+
+test('sleep, caffeine and routines are plugins: listed, no sidebar entry, off until switched on', async () => {
+  const { EDITION_LIST, enabledModules } = await import('../editions/index.js')
+  const reg = buildRegistry([core, ...MODULES])
+  const ids = ['sleep', 'caffeine', 'routines']
+  assert.deepEqual(reg.plugins.map((p) => p.module), ids)
+  for (const p of reg.plugins) assert.ok(p.desc, `${p.module} has a description for Settings`)
+  for (const id of ids) assert.ok(!reg.nav.some((n) => n.module === id), `${id} has no sidebar entry`)
+  for (const e of EDITION_LIST) {
+    for (const id of ids) assert.ok(!enabledModules(e.id, {}).has(id), `${id} is off by default in ${e.id}`)
+    assert.ok(enabledModules(e.id, { addOns: { [e.id]: { caffeine: true } } }).has('caffeine'), `caffeine switches on in ${e.id}`)
+    assert.ok(!enabledModules(e.id, { addOns: { [e.id]: { caffeine: false } } }).has('caffeine'))
+  }
 })

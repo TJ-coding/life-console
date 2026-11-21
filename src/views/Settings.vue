@@ -109,6 +109,7 @@ async function test() {
 }
 const n = computed(() => state.settings)
 // Console (editions): which one this device shows, and modules added to it for this account
+const plugins = computed(() => registry.plugins.filter((p) => !isDefault(p.module)))
 const addOnCandidates = computed(() => registry.nav.filter((x) => x.module !== 'core' && !isDefault(x.module)))
 const setWall = computed(() => {
   const r = rhythm(state.settings)
@@ -142,6 +143,12 @@ const reload = () => window.location.reload()
         <label v-for="e in editions" :key="e.id" class="row ed-opt">
           <input type="radio" name="edition" :checked="edition.id === e.id" @change="setEdition(e.id)" />
           <div><b>{{ e.name }}</b><div class="small muted">{{ e.tagline }}</div></div>
+        </label>
+        <!-- plugins: parts of other screens (sleep, caffeine, routines), off unless switched on -->
+        <div class="tiny upper muted">Plugins<span class="muted"> · {{ edition.name }} · all your devices</span></div>
+        <label v-for="p in plugins" :key="p.module" class="row ed-opt">
+          <input type="checkbox" :checked="isEnabled(p.module)" @change="setAddOn(p.module, $event.target.checked)" />
+          <span class="icon sm muted">{{ p.icon }}</span><div><b>{{ p.label }}</b><div class="small muted">{{ p.desc }}</div></div>
         </label>
         <template v-if="addOnCandidates.length">
           <div class="tiny upper muted">Add to {{ edition.name }}<span class="muted"> · all your devices</span></div>
@@ -372,7 +379,7 @@ const reload = () => window.location.reload()
           <label class="field"><span>Debrief</span><input v-model="n.eveningTime" type="time" class="input mono" /></label>
           <label class="field"><span>Bedtime</span><input v-model="n.bedTime" type="time" class="input mono" /></label>
           <label class="field"><span>Wind-down (min before bed)</span><input v-model.number="n.windDownMin" type="number" min="0" max="240" class="input mono" /></label>
-          <label class="field"><span>Caffeine cutoff</span><input v-model="state.caffeineCutoff" type="time" class="input mono" /></label>
+          <label v-if="isEnabled('caffeine')" class="field"><span>Caffeine cutoff</span><input v-model="state.caffeineCutoff" type="time" class="input mono" /></label>
         </div>
         <p class="tiny muted">Times are in <b class="mono">{{ n.timezone }}</b> (taken from the device you last used).</p>
       </div>
@@ -429,7 +436,7 @@ const reload = () => window.location.reload()
       </div>
     </section>
 
-    <section class="panel">
+    <section v-if="isEnabled('caffeine')" class="panel">
       <div class="panel-h"><span class="icon sm">local_cafe</span><h2>Wellbeing limits</h2></div>
       <div class="panel-b row">
         <label class="field"><span>Caffeine limit (mg)</span><input v-model.number="state.caffeineLimit" type="number" class="input mono" /></label>
