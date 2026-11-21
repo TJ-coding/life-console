@@ -96,7 +96,7 @@ function openBlock(e, b) {
           @dragstart="ed.dragStartBlock($event, b)" @dragend="ed.dragEnd" @click="openBlock($event, b)" @contextmenu.prevent="openCtxMenu($event, [blockKey(b)])"
           @mousemove="trackCut($event, b)" @mouseleave="cut = null"
         >
-          <i v-if="cut?.id === b.id" class="cutline" :style="{ left: cut.left + 'px' }"><span class="mono">{{ fromMin(cut.at) }}</span></i>
+          <i v-if="cut?.id === b.id" class="cutline" :style="{ left: cut.left + 'px' }"><span v-if="ui.altHeld" class="mono">{{ fromMin(cut.at) }}</span></i>
           <span class="mono t"><span v-if="b.done" class="icon dn" title="Completed">check_circle</span>{{ b.start }}–{{ b.end }}</span>
           <span class="nm">{{ b.title }}</span>
           <button v-if="!ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>

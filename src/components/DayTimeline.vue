@@ -108,7 +108,7 @@ function pomos(b) {
       @dragstart="!readonly && ed.dragStartBlock($event, b)" @dragend="!readonly && ed.dragEnd($event)" @click="!readonly && openBlock($event, b)" @contextmenu.prevent="!readonly && openCtxMenu($event, [blockKey(b)])"
       @mouseenter="b.todoId && (ui.hoverId = b.todoId)" @mouseleave="ui.hoverId = null; cut = null" @mousemove="trackCut($event, b)"
     >
-      <i v-if="cut?.id === b.id" class="cutline" :style="{ top: cut.top + 'px' }"><span class="mono">{{ fromMin(cut.at) }}</span></i>
+      <i v-if="cut?.id === b.id" class="cutline" :style="{ top: cut.top + 'px' }"><span v-if="ui.altHeld" class="mono">{{ fromMin(cut.at) }}</span></i>
       <i v-for="(g, k) in pomos(b)" :key="'pm' + k" class="pm" :style="g"></i>
       <span v-if="b.done" class="icon dn" title="Completed">check_circle</span><span class="mono t">{{ b.start }}<template v-if="ed.resize.value?.id === b.id">–{{ b.end }}</template></span> <span class="bt">{{ b.title }}</span><span v-if="b.pomo && b.pomo.length > 1" class="mono pc" :title="`${b.pomo.length} pomodoros`"><span class="icon">timer</span>{{ b.pomo.length }}</span>
       <button v-if="!readonly && !ui.scheduleLock" class="xb icon" :title="b.todoId ? 'Off the timeline (task stays on the day) · undo in the toast' : 'Remove block · undo in the toast'" :aria-label="'Remove ' + b.title + ' from the schedule'" @click.stop="removeBlock(b)">close</button>
