@@ -36,6 +36,8 @@ fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify([{ path: 
 fs.mkdirSync(path.join(dist, 'media'))
 const VIDEO = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 256))
 fs.writeFileSync(path.join(dist, 'media', 'clip.mp4'), VIDEO)
+fs.mkdirSync(path.join(dist, 'media', 'templates'))
+fs.writeFileSync(path.join(dist, 'media', 'templates', 'weekly.pdf'), '%PDF-1.4 test')
 
 let conn
 const servers = []
@@ -287,6 +289,14 @@ test('edition landing paths: /minimalist is its page for visitors; signed-in peo
   assert.equal(selfHosted.headers.get('location'), '/app?edition=minimalist')
   assert.equal((await get(off, '/landing-minimalist.html')).status, 404)
   assert.match((await get(on, '/sitemap.xml')).body.toString(), /<loc>https:\/\/lc.test\/minimalist<\/loc>/)
+})
+
+test('printable templates: PDFs are served as application/pdf, cached like other media', async () => {
+  const r = await get(on, '/media/templates/weekly.pdf')
+  assert.equal(r.status, 200)
+  assert.equal(r.headers.get('content-type'), 'application/pdf')
+  assert.equal(r.headers.get('cache-control'), 'public, max-age=86400')
+  assert.equal(r.body.toString(), '%PDF-1.4 test')
 })
 
 test('comparison pages: served and listed in the sitemap on the public site only, tagged "compare"', async () => {

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Personal strategic plan template</title>
+<link rel="stylesheet" href="sheet.css" />
+<style>
+@page { size: A4 landscape; margin: 10mm; }
+.page { height: 190mm; }
+.vision { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 3mm; }
+.vision .box { height: 19mm; }
+.goals col.n { width: 9mm; } .goals col.tb { width: 26mm; } .goals col.pct { width: 16mm; }
+.goals td { height: 9mm; }
+.ms col.n { width: 9mm; } .ms col.g { width: 14mm; } .ms col.tb { width: 26mm; } .ms col.st { width: 18mm; } .ms col.pct { width: 16mm; }
+.ms td { height: 7.4mm; }
+.two { flex: 1; display: grid; grid-template-columns: 1.25fr 1fr; gap: 5mm; min-height: 0; }
+.col { display: flex; flex-direction: column; gap: 3mm; min-height: 0; }
+.diagram { flex: 1; border: 0.25mm solid var(--line); border-radius: 0.6mm; display: grid; grid-template-rows: auto 1fr 1fr 1fr; padding: 2mm; gap: 2mm; }
+.tier { display: flex; justify-content: center; gap: 4mm; align-items: center; }
+.tier div { border: 0.25mm dashed var(--soft); border-radius: 0.6mm; height: 11mm; flex: 0 1 46mm; font-size: 6.5pt; color: var(--soft); text-transform: uppercase; letter-spacing: 0.04em; padding: 1mm 1.4mm; }
+.tier.ms div { flex-basis: 24mm; }
+.every { font-size: 8.5pt; color: var(--muted); margin-bottom: 1.4mm; }
+.small td { height: 7.2mm; }
+.small col.d { width: 24mm; }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <div class="top"><h1>Personal strategic plan</h1><div class="fill"><span>Title<span class="blankline" style="min-width:70mm"></span></span><span>Next check<span class="blankline" style="min-width:24mm"></span></span><span class="mono">1 / 2</span></div></div>
+  <div class="vision">
+    <div class="box"><span class="label">Vision</span> <span class="hint">where you want to be, by when</span></div>
+    <div class="box"><span class="label">Intent</span> <span class="hint">why it matters to you</span></div>
+    <div class="box"><span class="label">Values</span> <span class="hint">what you won't trade for it</span></div>
+  </div>
+  <div>
+    <h2>Prioritised goals <small>(three at most, most important first)</small></h2>
+    <table class="goals"><colgroup><col class="n" /><col /><col /><col class="tb" /><col class="pct" /></colgroup>
+      <tr><th>#</th><th>Goal</th><th>Indicators of success: what you'd see if it worked</th><th>Time bound</th><th>% done</th></tr>
+      <tr><td class="n">1</td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="n">2</td><td></td><td></td><td></td><td></td></tr>
+      <tr><td class="n">3</td><td></td><td></td><td></td><td></td></tr>
+    </table>
+  </div>
+  <div>
+    <h2>Milestones <small>(specific and measurable; a goal's % done is the average of its milestones')</small></h2>
+    <table class="ms"><colgroup><col class="n" /><col /><col class="g" /><col /><col class="tb" /><col class="st" /><col class="pct" /></colgroup>
+      <tr><th>#</th><th>Milestone</th><th>Goal #</th><th>Specific and measurable criteria</th><th>Time bound</th><th>Doing</th><th>% done</th></tr>
+      <tbody id="ms"></tbody>
+    </table>
+  </div>
+  <div class="foot"><span>Free personal strategic plan template · print and share freely</span><span>Do it digitally, free: life-console.dev</span></div>
+</section>
+
+<section class="page">
+  <div class="top"><h1>Personal strategic plan</h1><div class="fill"><span>Title<span class="blankline" style="min-width:70mm"></span></span><span class="mono">2 / 2</span></div></div>
+  <div class="two">
+    <div class="col">
+      <h2>Goal map <small>(draw what depends on what: milestones feed goals, goals feed the vision)</small></h2>
+      <div class="diagram">
+        <div class="tier"><div>Vision</div></div>
+        <div class="tier"><div>Goal 1</div><div>Goal 2</div><div>Goal 3</div></div>
+        <div class="tier ms"><div>Milestone</div><div>Milestone</div><div>Milestone</div><div>Milestone</div><div>Milestone</div></div>
+        <div class="tier ms"><div>Milestone</div><div>Milestone</div><div>Milestone</div><div>Milestone</div><div>Milestone</div></div>
+      </div>
+    </div>
+    <div class="col">
+      <div>
+        <h2>Check schedule</h2>
+        <p class="every">Check every<span class="blankline" style="min-width:20mm"></span> &nbsp; Reminder set <span class="check"></span></p>
+        <table class="small"><colgroup><col class="d" /><col /><col /></colgroup>
+          <tr><th>Date</th><th>What I checked</th><th>What I'll change</th></tr>
+          <tbody id="checks"></tbody>
+        </table>
+      </div>
+      <div>
+        <h2>Decision points <small>(decide the next move in advance)</small></h2>
+        <table class="small"><colgroup><col class="d" /><col /><col /></colgroup>
+          <tr><th>Goal / milestone</th><th>If it succeeds</th><th>If it fails</th></tr>
+          <tbody id="decisions"></tbody>
+        </table>
+      </div>
+      <div>
+        <h2>Key dates</h2>
+        <table class="small"><colgroup><col class="d" /><col /></colgroup>
+          <tr><th>Date</th><th>Event</th></tr>
+          <tbody id="events"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Free personal strategic plan template · print and share freely</span><span>Do it digitally, free: life-console.dev</span></div>
+</section>
+
+<script>
+const rows = (id, n, cells) => { document.getElementById(id).innerHTML = Array.from({ length: n }, (_, i) => `<tr>${cells(i)}</tr>`).join('') }
+rows('ms', 12, (i) => `<td class="n">${i + 1}</td><td></td><td></td><td></td><td></td><td></td><td></td>`)
+rows('checks', 5, () => '<td></td><td></td><td></td>')
+rows('decisions', 4, () => '<td></td><td></td><td></td>')
+rows('events', 6, () => '<td></td><td></td>')
+</script>
+</body>
+</html>
