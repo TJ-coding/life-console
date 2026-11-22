@@ -77,8 +77,10 @@ const placement = computed(() => {
 // ISS-41: the busiest day's deadline count this week. Columns with fewer start lower by the
 // difference, so every date lines up under the banners
 const dlRows = computed(() => Math.max(0, ...week.value.map((d) => state.deadlines.filter((x) => x.due.slice(0, 10) === d).length)))
-// goal dates get one quiet line under each day's date; when any day this week has one, every day keeps the line so the rows stay level
-const goalRow = computed(() => { const gs = goalDates(state); return week.value.some((d) => gs.some((g) => g.date === d)) })
+// goal dates get a softer banner under the deadline one (same 22px rows): the tallest day's pair of banners sets
+// how far every column starts down, so the dates stay level
+const bandPx = (n) => (n ? n * 22 + (n - 1) * 2 + 6 : 0)
+const bandTop = computed(() => { const gs = goalDates(state); return Math.max(0, ...week.value.map((d) => bandPx(state.deadlines.filter((x) => x.due.slice(0, 10) === d).length) + bandPx(gs.filter((g) => g.date === d).length))) })
 const balancing = computed(() => ui.planMode === 'days' && !ui.backlogOnly)
 const dayBalance = computed(() => (balancing.value
   ? {
@@ -161,10 +163,10 @@ const print = () => window.print()
 
       <template v-if="!ui.backlogOnly">
       <div class="days" :class="'mode-' + ui.planMode">
-        <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" :goal-row="goalRow" />
+        <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" :band-top="bandTop" />
         <div class="weekend">
-          <DayColumn :date="sat" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" :goal-row="goalRow" />
-          <DayColumn :date="sun" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" :goal-row="goalRow" />
+          <DayColumn :date="sat" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" :band-top="bandTop" />
+          <DayColumn :date="sun" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" :band-top="bandTop" />
         </div>
       </div>
       </template>
