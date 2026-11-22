@@ -188,12 +188,12 @@ const at = (o) => ({ left: o.x + 'px', top: o.y + 'px', width: o.w + 'px', ...(o
     <div class="cmap" :style="{ width: layout.W + 'px', height: layout.H + 'px' }">
       <span v-for="l in layout.labels" :key="l.t" class="lvl tiny upper muted" :class="{ tip: l.tip }" :title="l.tip" :style="{ left: l.x + 'px', top: l.y + 'px' }">{{ l.t }}</span>
 
-      <svg class="wires" :width="layout.W" :height="layout.H" aria-hidden="true">
+      <svg class="wires" data-fade :width="layout.W" :height="layout.H" aria-hidden="true">
         <path v-for="(w, i) in layout.wires" :key="i" :d="w.d" :class="{ on: wireOn(w) }" />
       </svg>
 
       <template v-for="n in layout.nodes" :key="n.kind + (n.s?.no ?? n.g?.psg.no ?? '')">
-        <div v-if="n.kind === 'vision'" class="node vision" :style="at(n)">
+        <div v-if="n.kind === 'vision'" class="node vision" data-goal="VISION" :style="at(n)">
           <div class="row tiny upper"><span class="chip goal">Vision</span><span class="spacer"></span><span class="muted mono">{{ plan.planNo }}</span></div>
           <input v-model="plan.vision" class="input ghost vis-in" :title="plan.vision" placeholder="Where you want to end up" aria-label="Vision" />
           <div class="row small mono"><span class="muted">AGGREGATE</span><span class="spacer"></span><span :class="pctClass(overall)">{{ overall }}%</span></div>
@@ -230,7 +230,7 @@ const at = (o) => ({ left: o.x + 'px', top: o.y + 'px', width: o.w + 'px', ...(o
         </div>
       </template>
 
-      <div v-for="(b, i) in layout.blocks" :key="'b' + i" class="tasks" :style="at(b)">
+      <div v-for="(b, i) in layout.blocks" :key="'b' + i" class="tasks" data-fade :style="at(b)">
         <div v-for="t in b.open" :key="t.id" class="task" :title="t.title" @click="ui.drawerId = t.id">
           <input type="checkbox" :checked="t.done" :aria-label="`Mark ${t.title} done`" @click.stop @change="tickTodo(t.id)" />
           <span class="grow ellipsis">{{ t.title }}</span>

@@ -122,7 +122,7 @@ function rowClick(no, e) {
 const selectInFlow = (no) => { selected.value = selected.value === no ? null : no }
 function showInTable(no) {
   selected.value = no
-  showTable.value = true
+  if (!showTable.value) morph(() => { showTable.value = true })
   nextTick(() => document.querySelector(`[data-row="${no}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
 }
 
@@ -309,6 +309,34 @@ watch(showTable, (v) => keep('table', v ? '1' : '0'))
 watch(tableMode, (v) => keep('table-mode', v))
 watch(mapDir, (v) => keep('map-dir', v))
 watch(showMore, (v) => keep('more', v ? '1' : '0'))
+/* the original tree is the narrow form of the diagram: with the table open, or sideways on a narrow screen */
+const narrowMq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 900px)') : null
+const narrow = ref(!!narrowMq?.matches)
+const onNarrow = (e) => { morph(() => { narrow.value = e.matches }) }
+onMounted(() => narrowMq?.addEventListener?.('change', onNarrow))
+onBeforeUnmount(() => narrowMq?.removeEventListener?.('change', onNarrow))
+const useTree = computed(() => showTable.value || (mapDir.value === 'side' && narrow.value))
+/* morph: every goal node glides from where it was to where it is in the new layout (FLIP), anything new fades in */
+const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const frame = () => new Promise((r) => requestAnimationFrame(() => r()))
+async function morph(change) {
+  if (reduceMotion() || typeof document === 'undefined') { change(); return }
+  const before = new Map()
+  document.querySelectorAll('.sp [data-goal]').forEach((el) => before.set(el.dataset.goal, el.getBoundingClientRect()))
+  change()
+  await nextTick(); await frame(); await nextTick() // the diagram measures its width after mounting, then lays out again
+  const ease = { duration: 420, easing: 'cubic-bezier(.2,.75,.25,1)' }
+  document.querySelectorAll('.sp [data-goal]').forEach((el) => {
+    const a = before.get(el.dataset.goal)
+    const b = el.getBoundingClientRect()
+    if (!a || !b.width || !b.height) { el.animate([{ opacity: 0 }, { opacity: 1 }], ease); return }
+    const t = `translate(${a.left - b.left}px, ${a.top - b.top}px) scale(${a.width / b.width}, ${a.height / b.height})`
+    el.animate([{ transformOrigin: '0 0', transform: t }, { transformOrigin: '0 0', transform: 'none' }], ease)
+  })
+  document.querySelectorAll('.sp [data-fade]').forEach((el) => el.animate([{ opacity: 0 }, { opacity: 1 }], { ...ease, duration: 300, delay: 120, fill: 'backwards' }))
+}
+const toggleTable = () => morph(() => { showTable.value = !showTable.value })
+const setDir = (d) => { if (mapDir.value !== d) morph(() => { mapDir.value = d }) }
 /* typing in a card's name selects it without toggling it off */
 const pickGoal = (no) => { selected.value = no }
 /* this plan's SIGs under one PSG, by priority (for the cascade table and the text view) */
@@ -334,7 +362,12 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
         <button class="btn" @click="print"><span class="icon sm">picture_as_pdf</span>Export A4</button>
         <button class="btn icon-only danger-ghost" title="Delete this plan" @click="removePlan"><span class="icon sm">delete</span></button>
       </div>
-      <div class="row wrap small">
+      <div v-if="showTable" class="row wrap small">
+        <span class="icon sm muted">schedule</span>
+        <span class="muted mono">Next check date:</span>
+        <b class="mono" :class="diffDays(T, nextCheckDate(plan)) <= 1 ? 'warn' : ''">{{ nextCheckDate(plan) }} ({{ relDay(nextCheckDate(plan), T) }})</b>
+      </div>
+      <div v-else class="row wrap small">
         <span class="icon sm muted">schedule</span>
         <span class="muted mono">Check every</span>
         <input v-model.number="plan.checkEveryDays" type="number" min="1" class="input mono num-in" aria-label="Check every how many days" />
@@ -347,17 +380,17 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
 
     <div class="sp-top" :class="{ 'with-table': showTable }">
       <!-- cascading goal diagram: the pyramid -->
-      <section v-if="!showTable" class="tree panel map-panel">
+      <section v-if="!useTree" class="tree panel map-panel">
         <div class="panel-h">
           <span class="icon sm ok">account_tree</span><h2>Cascading goal diagram</h2>
           <span class="spacer"></span>
           <div class="seg" role="group" aria-label="Diagram direction">
-            <button class="btn sm" :class="{ on: mapDir === 'down' }" :aria-pressed="mapDir === 'down'" title="Vision at the top, widening downwards" @click="mapDir = 'down'"><span class="icon sm">south</span>Top-down</button>
-            <button class="btn sm" :class="{ on: mapDir === 'side' }" :aria-pressed="mapDir === 'side'" title="Vision on the left, widening to the right" @click="mapDir = 'side'"><span class="icon sm">east</span>Sideways</button>
+            <button class="btn sm" :class="{ on: mapDir === 'down' }" :aria-pressed="mapDir === 'down'" title="Vision at the top, widening downwards" @click="setDir('down')"><span class="icon sm">south</span>Top-down</button>
+            <button class="btn sm" :class="{ on: mapDir === 'side' }" :aria-pressed="mapDir === 'side'" title="Vision on the left, widening to the right" @click="setDir('side')"><span class="icon sm">east</span>Sideways</button>
           </div>
           <button class="btn sm" :class="{ on: showTasks }" title="Show the tasks linked to each goal" @click="showTasks = !showTasks"><span class="icon sm">checklist</span>Tasks</button>
           <button class="btn sm" @click="addPsg">+ PSG</button>
-          <button class="btn sm" :class="{ on: showTable }" :aria-pressed="showTable" title="Show the goals table beside the diagram" @click="showTable = !showTable"><span class="icon sm">table_rows</span>Table</button>
+          <button class="btn sm" :class="{ on: showTable }" :aria-pressed="showTable" title="Show the goals table beside the diagram" @click="toggleTable"><span class="icon sm">table_rows</span>Table</button>
         </div>
         <div v-if="focus" class="fx-bar small">
           <span class="icon sm info">filter_center_focus</span><b class="mono info fx-id">{{ focus.sel }}</b>
@@ -367,14 +400,15 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
         <CascadeMap :plan="plan" :selected="selected" :tasks="tasksOf" :dir="mapDir" :show-tasks="showTasks"
           @select="selectInFlow" @pick="pickGoal" @open="showInTable" @add-sig="addSig" @add-task="todoFor" />
       </section>
-        <!-- table open: the original cascading tree beside the table -->
+        <!-- the original cascading tree: the diagram's narrow form (table open, or sideways on a narrow screen) -->
         <section v-else class="tree panel orig-tree">
           <div class="panel-h">
             <span class="icon sm ok">account_tree</span><h2>Cascading goal diagram</h2>
             <span class="spacer"></span>
             <button class="btn sm" :class="{ on: showTasks }" title="Show the tasks linked to each goal" @click="showTasks = !showTasks"><span class="icon sm">checklist</span>Tasks</button>
             <button class="btn sm" @click="addPsg">+ PSG</button>
-            <button class="btn sm icon-only on" :aria-pressed="true" title="Close the table and show the diagram" aria-label="Close the table" @click="showTable = false"><span class="icon sm">table_rows</span></button>
+            <button v-if="!showTable" class="btn sm icon-only" title="Top-down" aria-label="Top-down diagram" @click="setDir('down')"><span class="icon sm">south</span></button>
+            <button class="btn sm icon-only" :class="{ on: showTable }" :aria-pressed="showTable" :title="showTable ? 'Close the table' : 'Show the goals table'" aria-label="Table" @click="toggleTable"><span class="icon sm">table_rows</span></button>
           </div>
           <div v-if="focus" class="fx-bar small">
             <span class="icon sm info">filter_center_focus</span><b class="mono info fx-id">{{ focus.sel }}</b>
@@ -382,31 +416,31 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
             <button class="btn sm icon-only" title="Show everything again (Esc)" @click="selected = null"><span class="icon sm">close</span></button>
           </div>
           <div class="canvas">
-            <div class="node vision">
+            <div class="node vision" data-goal="VISION">
               <div class="row tiny upper"><span class="chip goal">Vision</span><span class="spacer"></span><span class="muted mono">{{ plan.planNo }}</span></div>
               <input v-model="plan.vision" class="input ghost vis-in" />
               <div class="row small mono"><span class="muted">AGGREGATE</span><span class="spacer"></span><span :class="pctClass(overall)">{{ overall }}%</span></div>
               <div class="bar"><i :style="{ width: overall + '%' }"></i></div>
             </div>
-            <div class="trunk"></div>
+            <div class="trunk" data-fade></div>
             <div v-for="p in psgs" :key="p.no" class="branch">
-              <div class="node psg" :class="[fx('goals', p.no), { sel: selected === p.no }]" @click="select(p.no)">
+              <div class="node psg" :data-goal="p.no" :class="[fx('goals', p.no), { sel: selected === p.no }]" @click="select(p.no)">
                 <div class="row"><Prio :p="p.priority" /><span class="mono ok">{{ p.no }}</span><span class="spacer"></span><span class="mono small" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</span></div>
                 <input v-model="p.name" class="input ghost nm-in" placeholder="PSG name" title="Edit PSG name" @click.stop />
                 <div class="bar" :class="psgPct(p.no) < 40 ? 'warn' : ''"><i :style="{ width: psgPct(p.no) + '%' }"></i></div>
               </div>
-              <div v-if="dlOf(p.no).length" class="gdl psg-dl">
+              <div v-if="dlOf(p.no).length" class="gdl psg-dl" data-fade>
                 <button v-for="d in dlOf(p.no)" :key="d.id" class="gdl-row" :class="fx('deadlines', d.id)" :title="`${d.title} · due ${d.due.replace('T', ' ')} — click to edit`" @click.stop="ui.deadlineId = d.id">
                   <span class="icon sm" :class="urgency(effDue(d))">alarm</span><span class="mono gdl-cd" :class="urgency(effDue(d))">{{ dlLeft(d) }}</span><span class="ellipsis">{{ d.title }}</span>
                 </button>
               </div>
-              <div v-if="showTasks && (tasksOf(p.no).open.length || tasksOf(p.no).done)" class="tasks psg-tasks">
+              <div v-if="showTasks && (tasksOf(p.no).open.length || tasksOf(p.no).done)" class="tasks psg-tasks" data-fade>
                 <TaskNode v-for="t in tasksOf(p.no).open" :key="t.id" :todo="t" :focus="focus?.todos" />
                 <div v-if="tasksOf(p.no).done" class="tiny muted mono task-done">✓ {{ tasksOf(p.no).done }} done</div>
               </div>
               <div class="kids">
                 <template v-for="s in sigsOf(p.no)" :key="s.no">
-                <div class="node sig" :class="[s.status, fx('goals', s.no), { sel: selected === s.no }]" @click="select(s.no)">
+                <div class="node sig" :data-goal="s.no" :class="[s.status, fx('goals', s.no), { sel: selected === s.no }]" @click="select(s.no)">
                   <div class="grow">
                     <div class="row sig-nm"><span class="mono small" :class="s.status === 'done' ? 'ok' : 'info'">{{ s.no }}</span><input v-model="s.name" class="input ghost sig-in" placeholder="SIG name" title="Edit SIG name" @click.stop /></div>
                     <div class="small muted ellipsis">{{ s.criteria || '—' }}</div>
@@ -436,7 +470,8 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
         </section>
 
       <!-- goals table: three layouts -->
-      <section v-if="showTable" class="panel table-panel">
+      <div v-if="showTable" class="right" data-fade>
+      <section class="panel table-panel">
         <div class="panel-h">
           <span class="icon sm info">table_rows</span><h2>Goals</h2>
           <span class="spacer"></span>
@@ -445,7 +480,7 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
             <button class="btn sm" :class="{ on: tableMode === 'cascade' }" :aria-pressed="tableMode === 'cascade'" title="One table, SIGs indented under their PSG" @click="tableMode = 'cascade'">Cascade</button>
             <button class="btn sm" :class="{ on: tableMode === 'text' }" :aria-pressed="tableMode === 'text'" title="The plan written as sentences" @click="tableMode = 'text'">Text</button>
           </div>
-          <button class="btn sm icon-only" title="Close the table" @click="showTable = false"><span class="icon sm">close</span></button>
+          <button class="btn sm icon-only" title="Close the table" @click="toggleTable"><span class="icon sm">close</span></button>
         </div>
 
         <div v-if="tableMode === 'split'" class="split">
@@ -588,6 +623,8 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
           <div v-if="!psgs.length" class="empty">No goals yet. Use + PSG to add the first one.</div>
         </div>
       </section>
+      <div id="sp-widgets-home"></div>
+      </div>
     </div>
 
     <!-- goal flow: dependencies left → right, merging into PSGs and the vision -->
@@ -601,11 +638,12 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
       <GoalFlow :plan="plan" :selected="selected" @select="selectInFlow" @open="showInTable" />
     </section>
 
-    <!-- everything else, one click away -->
-    <div class="more-bar no-print">
-      <button class="btn sm" :class="{ on: showMore }" :aria-expanded="showMore" @click="showMore = !showMore"><span class="icon sm">{{ showMore ? 'expand_less' : 'expand_more' }}</span>More: deadlines, check log, linked todos, events</button>
+    <!-- everything else: beside the tables when the table is open, else one click away -->
+    <div v-if="!showTable" class="more-bar no-print">
+      <button class="btn sm" :class="{ on: showMore }" :aria-expanded="showMore" @click="showMore = !showMore"><span class="icon sm">{{ showMore ? 'expand_less' : 'expand_more' }}</span>More: deadlines, check schedule, linked todos, events</button>
     </div>
-    <div v-if="showMore" class="more">
+    <Teleport :key="showTable ? 'beside' : 'below'" defer to="#sp-widgets-home" :disabled="!showTable">
+        <div v-if="showTable || showMore" class="widgets" :class="{ wide: !showTable }">
           <!-- deadlines tied to this plan and its goals -->
           <section class="panel">
             <div class="panel-h"><span class="icon sm danger">alarm</span><h3>Deadlines</h3><span class="spacer"></span>
@@ -625,7 +663,7 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
 
           <!-- check schedule -->
           <section class="panel">
-            <div class="panel-h"><span class="icon sm warn">event_repeat</span><h3>Check log</h3><span class="spacer"></span><span class="mono small muted">last {{ recentChecks.length }}</span></div>
+            <div class="panel-h"><span class="icon sm warn">event_repeat</span><h3>Check schedule</h3><span class="spacer"></span><button class="btn sm" @click="logCheck">Log check today</button></div>
             <table class="tbl">
               <thead><tr><th>Date</th><th>Reminder</th><th>Checked</th><th>Updated</th></tr></thead>
               <tbody>
@@ -637,9 +675,15 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
                 </tr>
               </tbody>
             </table>
+            <div class="panel-b row small">
+              <span class="muted">Check frequency: every</span>
+              <input v-model.number="plan.checkEveryDays" type="number" min="1" class="input mono num-in" />
+              <span class="muted">days</span><span class="spacer"></span>
+              <span class="mono">next <b :class="diffDays(T, nextCheckDate(plan)) <= 1 ? 'warn' : 'ok'">{{ nextCheckDate(plan) }}</b></span>
+            </div>
           </section>
 
-          <!-- linked todos -->
+          <!-- linked todos: left of the events timetable in the widget grid -->
           <section class="panel">
             <div class="panel-h"><span class="icon sm ok">checklist</span><h3>Linked todos</h3><span class="spacer"></span><span class="mono small muted">{{ linked.filter((t) => !t.done).length }} pending</span></div>
             <div class="lt">
@@ -670,7 +714,19 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
             </form>
           </section>
 
-    </div>
+          <!-- acronym legend -->
+          <section class="panel">
+            <details open>
+              <summary class="panel-h"><span class="icon sm muted">info</span><h3>Acronym legend</h3></summary>
+              <div class="panel-b small legend-b">
+                <div><b class="mono ok">PSG</b> = Prioritised Strategic Goal</div>
+                <div><b class="mono info">SIG</b> = Specific Indicator Goal</div>
+                <div><b class="mono">◯ ! ✓</b> = Open · Doing · Done</div>
+              </div>
+            </details>
+          </section>
+        </div>
+    </Teleport>
   </div>
 </template>
 
@@ -804,7 +860,13 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 .sp-top { display: flex; gap: 12px; padding: 12px; align-items: flex-start; }
 .map-panel { flex: 1 1 100%; min-width: 0; }
 .orig-tree { flex: 0 0 340px; align-self: flex-start; }
-.table-panel { flex: 1 1 0; min-width: 0; }
+.right { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.widgets { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.widgets.wide { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0 12px 12px; align-items: start; }
+.legend-b { display: flex; flex-direction: column; gap: 6px; }
+details summary { list-style: none; cursor: pointer; }
+details summary::-webkit-details-marker { display: none; }
+.table-panel { min-width: 0; }
 .seg { display: inline-flex; gap: 2px; }
 .split { display: flex; flex-direction: column; }
 .sub + .sub { border-top: 1px solid var(--border); }
@@ -830,8 +892,8 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 /* goal flow under the map; More under that */
 .flow-panel { margin: 0 12px 12px; }
 .more-bar { display: flex; justify-content: flex-end; padding: 0 12px 12px; }
-.more { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 0 12px 12px; align-items: start; }
-@media (max-width: 1200px) { .sp-top { flex-direction: column; align-items: stretch; } .orig-tree { position: static; max-height: none; flex-basis: auto; } }
-@media (max-width: 1000px) { .more { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 700px) { .more { grid-template-columns: 1fr; } .flow-hint { display: none; } }
+@media (max-width: 1200px) { .sp-top { flex-direction: column; align-items: stretch; } .orig-tree { position: static; max-height: none; flex-basis: auto; align-self: stretch; } }
+@media (max-width: 1000px) { .widgets.wide { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 800px) { .widgets, .widgets.wide { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .flow-hint { display: none; } }
 </style>
