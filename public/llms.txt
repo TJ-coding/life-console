@@ -29,6 +29,7 @@
 - Free and open-source Sunsama alternatives: https://life-console.dev/alternatives/sunsama
 - Open-source and self-hosted planners compared: https://life-console.dev/alternatives/open-source-planners
 - Notion Life OS vs Life Console: https://life-console.dev/vs/notion-life-os
+- Life Console vs Amazing Marvin: https://life-console.dev/vs/amazing-marvin
 - What it doesn't do: no calendar sync, no integrations with other task apps, no AI scheduling, no native phone apps (installable web app instead; a Mac menu-bar app exists).
 
 ## Links
