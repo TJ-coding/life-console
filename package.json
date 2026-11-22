@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/docs-pages.mjs",
+    "build": "vite build && node scripts/docs-pages.mjs && node scripts/compare-pages.mjs",
     "preview": "vite preview",
     "start": "node server/server.mjs",
     "dev:server": "node --env-file-if-exists=.env server/server.mjs",

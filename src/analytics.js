@@ -50,9 +50,9 @@ export function analyticsReady(route) {
 // "open-app" click on the landing page → sign-in screen shown → "Continue with Google" → signed in (/app page views).
 const signedOutAllowed = () => config() && auth.status === 'signed-out'
 
-// Links we publish elsewhere point at /app?from=<source>, e.g. the README's "Try it now" (?from=github), so the
+// Links we publish elsewhere point at /app?from=<source>, e.g. the README's "Try it now" (?from=github) or the comparison pages' (?from=compare), so the
 // sign-in funnel shows which ones bring people in. Only these fixed names are sent; anything else is dropped.
-const SOURCES = ['github']
+const SOURCES = ['github', 'compare']
 export function linkSource(search = location.search) {
   const from = new URLSearchParams(search).get('from')
   return SOURCES.includes(from) ? from : undefined

@@ -26,7 +26,7 @@ const MIME = {
 const LEGAL = new Set(['/privacy', '/terms'])
 const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
 const DOCS_DATE = '2026-11-10' // sitemap <lastmod> for the docs pages: bump when they change
-const LANDING_DATE = '2026-11-16' // sitemap <lastmod> for the landing page: bump when it changes
+const LANDING_DATE = '2026-11-18' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
 function send(res, status, body, headers = {}) {
@@ -53,6 +53,13 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const dist = cfg.dist
   let BUILD = 'dev' // the content-hashed entry script names the deployed front-end build
   try { BUILD = (fs.readFileSync(path.join(dist, 'index.html'), 'utf8').match(/assets\/(index-[\w-]+\.js)/) || [])[1] || 'dev' } catch { /* no dist yet */ }
+
+  // comparison pages (/alternatives, /vs/…, /alternatives/…): built by scripts/compare-pages.mjs, public site only
+  let COMPARE = new Map()
+  try {
+    COMPARE = new Map(JSON.parse(fs.readFileSync(path.join(dist, 'compare-pages.json'), 'utf8'))
+      .filter((p) => p.path === '/alternatives' || /^\/(vs|alternatives)\/[a-z0-9-]+$/.test(p.path)).map((p) => [p.path, p.updated]))
+  } catch { /* not built yet */ }
 
   const signups = createSignups(db, cfg)
   const auth = createAuth(db, cfg, signups)
@@ -360,8 +367,9 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       (cfg.analyticsRecorder ? `\n<script defer src="${attr(cfg.analyticsRecorder)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` : '')
     : ''
   // the docs pages: page views only (tag "docs"), never the heatmap or replays
-  const docsTag = () => cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
-    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}" data-tag="docs"></script>`
+  // (the comparison pages the same way, tag "compare")
+  const docsTag = (tag = 'docs') => cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
+    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}" data-tag="${tag}"></script>`
     : ''
   /** robots.txt: crawlers may index the landing page only where it's on; a private server asks them to stay out. */
   const robots = () => cfg.landing
@@ -393,6 +401,7 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
 ${Object.keys(EDITION_LANDINGS).map((p) => `<url><loc>${site}${p}</loc><lastmod>${LANDING_DATE}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`).join('\n')}
 <url><loc>${site}/docs/self-hosting</loc><lastmod>${DOCS_DATE}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
 <url><loc>${site}/docs/guide</loc><lastmod>${DOCS_DATE}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmod><changefreq>monthly</changefreq><priority>${p === '/alternatives' ? '0.7' : '0.8'}</priority></url>`).join('\n')}
 <url><loc>${site}/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 <url><loc>${site}/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>
@@ -459,7 +468,7 @@ ${Object.keys(EDITION_LANDINGS).map((p) => `<url><loc>${site}${p}</loc><lastmod>
       vary = true
       rel = `/landing-${id}.html`
     } else if (LANDING_PAGES.has(rel) && !cfg.landing) return send(res, 404, 'not found')
-    else if (LEGAL.has(rel) || DOCS.has(rel)) rel += '.html' // /privacy, /terms, /docs/…: plain URLs for people, search engines and Google's consent screen
+    else if (LEGAL.has(rel) || DOCS.has(rel) || (cfg.landing && COMPARE.has(rel))) rel += '.html' // /privacy, /terms, /docs/…: plain URLs for people, search engines and Google's consent screen
     else if (rel === '/' || !path.extname(rel)) rel = '/index.html' // SPA fallback (routes use #, but be safe); /app always opens the app
     const file = path.normalize(path.join(dist, rel))
     if (!file.startsWith(dist)) return send(res, 403, 'forbidden')
@@ -476,10 +485,11 @@ ${Object.keys(EDITION_LANDINGS).map((p) => `<url><loc>${site}${p}</loc><lastmod>
         res.end(req.method === 'HEAD' ? undefined : body)
       })
     }
-    if (DOCS.has(rel.slice(0, -5)) && docsTag()) {
+    const pageTag = DOCS.has(rel.slice(0, -5)) ? 'docs' : COMPARE.has(rel.slice(0, -5)) ? 'compare' : null
+    if (pageTag && docsTag()) {
       return fs.readFile(file, 'utf8', (err, html) => {
         if (err) return send(res, 404, 'not found')
-        const body = html.replace('</head>', `${docsTag()}\n</head>`)
+        const body = html.replace('</head>', `${docsTag(pageTag)}\n</head>`)
         res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), 'X-LC-Page': 'page', ...SECURITY_HEADERS })
         res.end(req.method === 'HEAD' ? undefined : body)
       })

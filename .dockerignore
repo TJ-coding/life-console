@@ -12,3 +12,4 @@ test
 !docs/SELF_HOSTING.md
 trailers
 .claude
+!compare/*.md
