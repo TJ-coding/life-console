@@ -18,8 +18,8 @@ Life Console gets organic search traffic from "alternative to …" pages. Each p
 
 ## Queue (plan of 2026-11-18)
 
-Done: Sunsama (vs + roundup) · open-source / self-hosted planners roundup (2026-11-22).
-Next: Notion "Life OS" alternative · Motion · Akiflow · Amazing Marvin · Structured · then Tweek, Ellie, digital paper planner, Todoist and TickTick (open-source angle), Lunatask.
+Done: Sunsama (vs + roundup) · open-source / self-hosted planners roundup (2026-11-22) · Notion Life OS (vs, 2026-11-23).
+Next: Motion · Akiflow · Amazing Marvin · Structured · then Tweek, Ellie, digital paper planner, Todoist and TickTick (open-source angle), Lunatask.
 Leave out apps whose main feature Life Console lacks (Reclaim, Morgen: calendar-first).
 
 ## Off-site (the owner submits these)
