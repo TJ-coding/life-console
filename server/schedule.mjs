@@ -3,6 +3,7 @@
 //
 // All planner times are wall-clock times in the user's timezone (state.settings.timezone).
 import { rhythm, segments } from './pomodoro.mjs'
+import { goalDates } from './goaldates.mjs'
 
 export const DEFAULT_SETTINGS = {
   timezone: 'UTC',
@@ -143,6 +144,7 @@ export function computeEvents(state, fromMs, toMs) {
         `${blocks.length} block${blocks.length === 1 ? '' : 's'}${first ? `, first ${first.start} ${clip(first.title, 28)}` : ''}`,
         todos.length ? `Top: ${todos.slice(0, 3).map((t) => clip(t.title, 26)).join(' · ')}` : 'No tasks on today’s sheet',
         dls.length ? `Due: ${dls.slice(0, 2).map((d) => `${clip(d.title, 24)} (${d.due.slice(0, 10) === D ? 'today' : 'tomorrow'} ${d.due.slice(11)})`).join(' · ')}` : '',
+        ...(() => { const gs = goalDates(state).filter((g) => g.date === D || g.date === addDays(D, 1)); return gs.length ? [`Goal dates: ${gs.slice(0, 2).map((g) => `${clip(g.title, 24)} ${g.pct}% (${g.date === D ? 'today' : 'tomorrow'})`).join(' · ')}`] : [] })(),
       ].filter(Boolean)
       add({ key: `brief:${D}`, at: zoned(D, s.briefingTime, tz), title: `Briefing · ${wd(D)} ${D.slice(5)}`, body: bits.join('\n'), url: '/#/briefing', tag: `brief-${D}` })
 
@@ -182,6 +184,16 @@ export function computeEvents(state, fromMs, toMs) {
       add({ ...base, key: `dl:${d.id}:${d.due}:24h`, at: due - 24 * 3600000, title: `Due tomorrow · ${clip(d.title, 60)}`, body: `${when}${d.vital ? ' · ' + d.vital : ''}` })
       add({ ...base, key: `dl:${d.id}:${d.due}:1h`, at: due - 3600000, title: `Due in 1 hour · ${clip(d.title, 60)}`, body: `${when}${d.vital ? ' · ' + d.vital : ''}` })
       add({ ...base, key: `dl:${d.id}:${d.due}:due`, at: due, title: `Overdue now · ${clip(d.title, 60)}`, body: `Was due ${when}. Done? Tick it in Deadlines.` })
+    }
+  }
+  /* goal dates (a PSG's or SIG's time bound): your own targets, so a gentler nudge than a deadline's: the morning
+     before and the morning of, at the briefing time. Never an "overdue" alarm. */
+  if (s.notify.deadlines) {
+    for (const g of goalDates(state)) {
+      const base = { url: `/#/strategy/${g.planId}?goal=${encodeURIComponent(g.no)}`, tag: `goal-${g.no}` }
+      const body = `${g.no} · ${g.pct}% done · target ${wd(g.date)} ${g.date.slice(5)}`
+      add({ ...base, key: `goal:${g.key}:${g.date}:1d`, at: zoned(addDays(g.date, -1), s.briefingTime, tz), title: `Goal date tomorrow · ${clip(g.title, 60)}`, body })
+      add({ ...base, key: `goal:${g.key}:${g.date}:0d`, at: zoned(g.date, s.briefingTime, tz), title: `Goal date today · ${clip(g.title, 60)}`, body })
     }
   }
   return out.sort((a, b) => a.at - b.at)
