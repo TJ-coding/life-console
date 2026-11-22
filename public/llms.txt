@@ -35,7 +35,8 @@
 - What it doesn't do: no calendar sync, no integrations with other task apps, no AI scheduling, no native phone apps (installable web app instead; a Mac menu-bar app exists).
 
 ## Free templates
-- Personal strategic plan template (vision, prioritised goals, measurable milestones, check schedule; printable, with a worked example): https://life-console.dev/templates/personal-strategic-plan
+- Personal strategic plan template (vision, prioritised goals, measurable milestones, check schedule; printable, with a worked example): https://life-console.dev/templates/personal-strategic-plan (PDF: https://life-console.dev/media/templates/personal-strategic-plan.pdf)
+- Weekly planner template with time blocking (backlog, a 7-hour workload per day, hourly schedule): https://life-console.dev/templates/weekly-time-blocking-planner (PDFs: https://life-console.dev/media/templates/weekly-time-blocking-planner.pdf and the one-page daily sheet https://life-console.dev/media/templates/daily-time-blocking.pdf)
 
 ## Links
 - User guide (every screen and shortcut): https://life-console.dev/docs/guide

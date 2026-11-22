@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Daily time-blocking template</title>
+<link rel="stylesheet" href="sheet.css" />
+<style>
+@page { size: A4 portrait; margin: 10mm; }
+.page { height: 277mm; }
+.cols { flex: 1; display: grid; grid-template-columns: 1.15fr 1fr; gap: 5mm; min-height: 0; }
+.col { display: flex; flex-direction: column; gap: 3mm; min-height: 0; }
+.sched { flex: 1; display: grid; grid-template-rows: repeat(18, 1fr); border: 0.25mm solid var(--line); min-height: 0; }
+.sched div { display: grid; grid-template-columns: 11mm 1fr; border-top: 0.25mm solid var(--soft); }
+.sched div:first-child { border-top: 0; }
+.sched span { font: 7.5pt/1 'JetBrains Mono', monospace; color: var(--muted); padding: 1mm 0 0 1.4mm; border-right: 0.25mm solid var(--soft); }
+.sched i { position: relative; }
+.sched i::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 0.25mm dashed var(--soft); }
+.top3 td { height: 8mm; }
+.top3 col.n { width: 7mm; } .top3 col.min { width: 13mm; }
+.todo col.min { width: 13mm; } .todo col.ok { width: 8mm; }
+.load { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1mm; }
+.load div { border: 0.25mm solid var(--line); height: 7mm; font: 7pt/7mm 'JetBrains Mono', monospace; text-align: center; color: var(--muted); }
+.load div:last-child { border-color: var(--ink); border-width: 0.35mm; }
+.grow { flex: 1; }
+.review { display: grid; grid-template-rows: auto 1fr 1fr; gap: 1.5mm; height: 46mm; }
+.review .box { display: flex; flex-direction: column; }
+</style>
+</head>
+<body>
+<section class="page">
+  <div class="top"><h1>Daily time-blocking plan</h1><div class="fill"><span>Day<span class="blankline" style="min-width:22mm"></span></span><span>Date<span class="blankline"></span></span></div></div>
+  <div class="cols">
+    <div class="col">
+      <h2>Schedule <small>(block each task into a slot; leave gaps for the unexpected)</small></h2>
+      <div class="sched" id="sched"></div>
+    </div>
+    <div class="col">
+      <div>
+        <h2>Top 3 <small>(if only these get done, the day counts)</small></h2>
+        <table class="top3"><colgroup><col class="n" /><col /><col class="min" /></colgroup>
+          <tr><th>#</th><th>Task</th><th>Min</th></tr>
+          <tr><td class="n">1</td><td></td><td></td></tr><tr><td class="n">2</td><td></td><td></td></tr><tr><td class="n">3</td><td></td><td></td></tr>
+        </table>
+      </div>
+      <div>
+        <h2>Everything else</h2>
+        <table class="todo"><colgroup><col /><col class="min" /><col class="ok" /></colgroup>
+          <tr><th>Task</th><th>Min</th><th>✓</th></tr>
+          <tbody id="todo"></tbody>
+        </table>
+      </div>
+      <div>
+        <h2>Workload <small>(shade one box per hour planned; past 7 means too much)</small></h2>
+        <div class="load"><div>1h</div><div>2h</div><div>3h</div><div>4h</div><div>5h</div><div>6h</div><div>7h</div></div>
+      </div>
+      <div class="box grow"><span class="label">Notes</span></div>
+      <div class="review">
+        <h2>Evening review</h2>
+        <div class="box"><span class="label">Done today</span></div>
+        <div class="box"><span class="label">Moves to tomorrow</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Free daily time-blocking template · print and share freely</span><span>Do it digitally, free: life-console.dev</span></div>
+</section>
+<script>
+document.getElementById('sched').innerHTML = Array.from({ length: 18 }, (_, i) => `<div><span>${String(5 + i).padStart(2, '0')}:00</span><i></i></div>`).join('')
+document.getElementById('todo').innerHTML = Array.from({ length: 12 }, () => '<tr><td></td><td></td><td></td></tr>').join('')
+</script>
+</body>
+</html>

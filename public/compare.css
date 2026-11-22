@@ -125,6 +125,9 @@ table tbody td:first-child strong { color: var(--text); }
 }
 
 /* templates: blank tables to fill in, and a print layout that prints only the template */
+.downloads { display: flex; flex-wrap: wrap; gap: 12px; margin: -12px 0 32px; }
+.downloads .btn { white-space: normal; text-align: center; }
+article img[src^="/media/templates/"] { background: #fff; }
 .blank table { table-layout: fixed; }
 .blank th { white-space: normal; }
 .blank td { height: 44px; }

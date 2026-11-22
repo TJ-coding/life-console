@@ -15,9 +15,17 @@ updated: 2026-11-23
 
 <div class="no-print">
 
-<p class="meta">Free to print or copy. Adapted from the paper planner Life Console was built from.</p>
+<p class="meta">Free to print, copy and share. Adapted from the paper planner Life Console was built from.</p>
 
-<p class="summary">A personal strategic plan turns a vague ambition into a few <b>prioritised goals</b>, each broken into <b>milestones you can measure</b>, each with a date, plus a <b>schedule for checking</b> whether it's working. It fits on one page. Below are the blank template (press <b>⌘P</b> or <b>Ctrl+P</b>: only the template prints), how to fill it in, and a worked example.</p>
+<p class="summary">A personal strategic plan turns a vague ambition into a few <b>prioritised goals</b>, each broken into <b>milestones you can measure</b>, each with a date, plus a <b>schedule for checking</b> whether it's working. Download the PDF, or use the blank template below (press <b>⌘P</b> or <b>Ctrl+P</b>: only the template prints), with how to fill it in and a worked example.</p>
+
+<div class="downloads">
+<a class="btn primary big" href="/media/templates/personal-strategic-plan.pdf" download data-umami-event="template-download" data-umami-event-file="personal-strategic-plan">Download the template (PDF, 2 pages)</a>
+</div>
+
+![The personal strategic plan template: vision, intent and values, three prioritised goals and twelve measurable milestones](/media/templates/personal-strategic-plan.webp)
+
+<p class="meta">The PDF is A4 landscape. Page 2 adds a goal map to draw what depends on what, the check schedule, decision points and key dates.</p>
 
 </div>
 
@@ -116,5 +124,9 @@ Life Console is the free, open-source app this template turned into. The **Strat
 - **Reminders:** your goals' dates show up next to your deadlines, in Plan week and in the morning briefing, so the plan comes to you.
 
 [See the guide to the Strategy screen →](/docs/guide)
+
+## More free templates
+
+- [Weekly planner template with time blocking →](/templates/weekly-time-blocking-planner): a backlog, a 7-hour workload per day and an hourly schedule, plus a one-page daily sheet. PDF.
 
 </div>

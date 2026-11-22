@@ -22,6 +22,7 @@ const MIME = {
   '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
   '.webp': 'image/webp', '.gif': 'image/gif', '.mp4': 'video/mp4', '.xml': 'application/xml; charset=utf-8',
+  '.pdf': 'application/pdf', // printable templates in /media/templates/
 }
 const LEGAL = new Set(['/privacy', '/terms'])
 const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
