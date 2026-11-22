@@ -1,5 +1,10 @@
 <script setup>
-// S-30 · Strategic Plan (Goals Planner) — Vision → PSG → SIG cascade with tables and review widgets.
+// S-30 · Strategic Plan (Goals Planner). Questions, in order: how does the plan cascade (vision → goals → targets →
+// tasks)? When is each goal due, and what has to come first? Then, on demand, the details to edit.
+// Layout: the cascading goal diagram (a pyramid, CascadeMap) on top, the goal flow under it. The Table toggle
+// shrinks the map to the left and opens the goals table beside it, in one of three layouts: Decomposed (the PSG
+// and SIG tables), Cascade (one indented table) or Text (the plan as sentences). The rest (deadlines, check log,
+// linked todos, events) sits behind More.
 import DateInput from '../components/DateInput.vue'
 import AddDeadline from '../components/AddDeadline.vue'
 import { computed, ref, nextTick, reactive, watch, onMounted, onBeforeUnmount } from 'vue'
@@ -10,7 +15,7 @@ import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
 import TimeBound from '../components/TimeBound.vue'
 import GoalFlow from '../components/GoalFlow.vue'
-import TaskNode from '../components/TaskNode.vue'
+import CascadeMap from '../components/CascadeMap.vue'
 import { boundIssues, countdown, urgency, effDue, minsTo } from '../glance'
 
 const route = useRoute()
@@ -116,6 +121,7 @@ function rowClick(no, e) {
 const selectInFlow = (no) => { selected.value = selected.value === no ? null : no }
 function showInTable(no) {
   selected.value = no
+  showTable.value = true
   nextTick(() => document.querySelector(`[data-row="${no}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
 }
 
@@ -290,6 +296,26 @@ const flowIssues = computed(() => flowIssueList.value.length)
 const flowIssueText = computed(() => flowIssueList.value.join('\n'))
 const pctClass = (n) => (n >= 100 ? 'ok' : n >= 40 ? 'info' : n > 0 ? 'warn' : 'muted')
 const print = () => window.print()
+
+/* view choices, remembered per device */
+const pref = (k, d) => { try { return localStorage.getItem('life-console/strategy-' + k) ?? d } catch { return d } }
+const keep = (k, v) => { try { localStorage.setItem('life-console/strategy-' + k, v) } catch { /* ignore */ } }
+const showTable = ref(pref('table', '0') === '1')
+const tableMode = ref(['split', 'cascade', 'text'].includes(pref('table-mode', '')) ? pref('table-mode', '') : 'cascade')
+const mapDir = ref(pref('map-dir', 'side') === 'down' ? 'down' : 'side')
+const showMore = ref(pref('more', '0') === '1')
+watch(showTable, (v) => keep('table', v ? '1' : '0'))
+watch(tableMode, (v) => keep('table-mode', v))
+watch(mapDir, (v) => keep('map-dir', v))
+watch(showMore, (v) => keep('more', v ? '1' : '0'))
+/* typing in a card's name selects it without toggling it off */
+const pickGoal = (no) => { selected.value = no }
+/* this plan's SIGs under one PSG, by priority (for the cascade table and the text view) */
+/* the intent as a clause after "because": first letter lowered unless it starts an acronym, no full stop */
+const because = computed(() => { const t = (plan.value.intent ?? '').trim().replace(/\.$/, ''); return /^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t })
+const sigsHere = (psgNo) => plan.value.sigs.filter((s) => s.psg === psgNo).sort((a, b) => a.priority - b.priority)
+const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v ?? '')
+const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('en', { month: 'short', day: 'numeric', year: tb.slice(0, 4) === T.value.slice(0, 4) ? undefined : 'numeric' }) : tb ? 'no end date (continuous)' : 'a date still to set')
 </script>
 
 <template>
@@ -309,144 +335,159 @@ const print = () => window.print()
       </div>
       <div class="row wrap small">
         <span class="icon sm muted">schedule</span>
-        <span class="muted mono">Next check date:</span>
+        <span class="muted mono">Check every</span>
+        <input v-model.number="plan.checkEveryDays" type="number" min="1" class="input mono num-in" aria-label="Check every how many days" />
+        <span class="muted mono">days · next</span>
         <b class="mono" :class="diffDays(T, nextCheckDate(plan)) <= 1 ? 'warn' : ''">{{ nextCheckDate(plan) }} ({{ relDay(nextCheckDate(plan), T) }})</b>
+        <button class="btn sm" @click="logCheck">Log check today</button>
       </div>
       <div class="row intent"><b class="mono">INTENT:</b><input v-model="plan.intent" class="input ghost grow" /></div>
     </header>
 
-    <div class="sp-body">
-      <!-- cascading goal diagram -->
-      <section class="tree panel">
+    <div class="sp-top" :class="{ 'with-table': showTable }">
+      <!-- cascading goal diagram: the pyramid -->
+      <section class="tree panel map-panel">
         <div class="panel-h">
           <span class="icon sm ok">account_tree</span><h2>Cascading goal diagram</h2>
           <span class="spacer"></span>
-          <button class="btn sm" :class="{ on: showTasks }" title="Show the tasks linked to each goal" @click="showTasks = !showTasks"><span class="icon sm">checklist</span>Tasks</button>
+          <div v-if="!showTable" class="seg" role="group" aria-label="Diagram direction">
+            <button class="btn sm" :class="{ on: mapDir === 'side' }" :aria-pressed="mapDir === 'side'" title="Vision on the left, widening to the right" @click="mapDir = 'side'"><span class="icon sm">east</span>Sideways</button>
+            <button class="btn sm" :class="{ on: mapDir === 'down' }" :aria-pressed="mapDir === 'down'" title="Vision at the top, widening downwards" @click="mapDir = 'down'"><span class="icon sm">south</span>Top-down</button>
+          </div>
+          <button v-if="!showTable" class="btn sm" :class="{ on: showTasks }" title="Show the tasks linked to each goal" @click="showTasks = !showTasks"><span class="icon sm">checklist</span>Tasks</button>
           <button class="btn sm" @click="addPsg">+ PSG</button>
+          <button class="btn sm" :class="{ on: showTable }" :aria-pressed="showTable" title="Show the goals table beside the diagram" @click="showTable = !showTable"><span class="icon sm">table_rows</span>Table</button>
         </div>
         <div v-if="focus" class="fx-bar small">
           <span class="icon sm info">filter_center_focus</span><b class="mono info fx-id">{{ focus.sel }}</b>
           <span class="muted ellipsis">{{ focusSummary }}</span><span class="spacer"></span>
-          <button class="btn sm icon-only" title="Show everything again (Esc)" @click="selected = null"><span class="icon sm">close</span></button>
+          <button class="btn sm icon-only" title="Clear the selection (Esc)" @click="selected = null"><span class="icon sm">close</span></button>
         </div>
-        <div class="canvas">
-          <div class="node vision">
-            <div class="row tiny upper"><span class="chip goal">Vision</span><span class="spacer"></span><span class="muted mono">{{ plan.planNo }}</span></div>
-            <input v-model="plan.vision" class="input ghost vis-in" />
-            <div class="row small mono"><span class="muted">AGGREGATE</span><span class="spacer"></span><span :class="pctClass(overall)">{{ overall }}%</span></div>
-            <div class="bar"><i :style="{ width: overall + '%' }"></i></div>
-          </div>
-          <div class="trunk"></div>
-          <div v-for="p in psgs" :key="p.no" class="branch">
-            <div class="node psg" :class="[fx('goals', p.no), { sel: selected === p.no }]" @click="select(p.no)">
-              <div class="row"><Prio :p="p.priority" /><span class="mono ok">{{ p.no }}</span><span class="spacer"></span><span class="mono small" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</span></div>
-              <input v-model="p.name" class="input ghost nm-in" placeholder="PSG name" title="Edit PSG name" @click.stop />
-              <div class="bar" :class="psgPct(p.no) < 40 ? 'warn' : ''"><i :style="{ width: psgPct(p.no) + '%' }"></i></div>
-            </div>
-            <div v-if="dlOf(p.no).length" class="gdl psg-dl">
-              <button v-for="d in dlOf(p.no)" :key="d.id" class="gdl-row" :class="fx('deadlines', d.id)" :title="`${d.title} · due ${d.due.replace('T', ' ')} — click to edit`" @click.stop="ui.deadlineId = d.id">
-                <span class="icon sm" :class="urgency(effDue(d))">alarm</span><span class="mono gdl-cd" :class="urgency(effDue(d))">{{ dlLeft(d) }}</span><span class="ellipsis">{{ d.title }}</span>
-              </button>
-            </div>
-            <div v-if="showTasks && (tasksOf(p.no).open.length || tasksOf(p.no).done)" class="tasks psg-tasks">
-              <TaskNode v-for="t in tasksOf(p.no).open" :key="t.id" :todo="t" :focus="focus?.todos" />
-              <div v-if="tasksOf(p.no).done" class="tiny muted mono task-done">✓ {{ tasksOf(p.no).done }} done</div>
-            </div>
-            <div class="kids">
-              <template v-for="s in sigsOf(p.no)" :key="s.no">
-              <div class="node sig" :class="[s.status, fx('goals', s.no), { sel: selected === s.no }]" @click="select(s.no)">
-                <div class="grow">
-                  <div class="row sig-nm"><span class="mono small" :class="s.status === 'done' ? 'ok' : 'info'">{{ s.no }}</span><input v-model="s.name" class="input ghost sig-in" placeholder="SIG name" title="Edit SIG name" @click.stop /></div>
-                  <div class="small muted ellipsis">{{ s.criteria || '—' }}</div>
-                  <div v-if="(s.deps ?? []).length" class="tiny muted mono ellipsis" title="Depends on">⛓ {{ (s.deps ?? []).join(', ') }}</div>
-                </div>
-                <span class="status" :class="s.status">{{ s.pct }}% {{ s.status === 'done' ? '✓' : s.status === 'doing' ? '!' : '◯' }}</span>
-              </div>
-              <div v-if="dlOf(s.no).length" class="gdl">
-                <button v-for="d in dlOf(s.no)" :key="d.id" class="gdl-row" :class="fx('deadlines', d.id)" :title="`${d.title} · due ${d.due.replace('T', ' ')} — click to edit`" @click.stop="ui.deadlineId = d.id">
-                  <span class="icon sm" :class="urgency(effDue(d))">alarm</span><span class="mono gdl-cd" :class="urgency(effDue(d))">{{ dlLeft(d) }}</span><span class="ellipsis">{{ d.title }}</span>
-                </button>
-              </div>
-              <div v-if="showTasks" class="tasks">
-                <TaskNode v-for="t in tasksOf(s.no).open" :key="t.id" :todo="t" :focus="focus?.todos" />
-                <div class="row task-foot">
-                  <span v-if="tasksOf(s.no).done" class="tiny muted mono">✓ {{ tasksOf(s.no).done }} done</span>
-                  <span v-else-if="!tasksOf(s.no).open.length && s.status !== 'done'" class="tiny muted">No tasks yet</span>
-                  <span class="spacer"></span>
-                  <button v-if="s.status !== 'done'" class="add-task" :title="`Create a todo for ${s.no}`" @click.stop="todoFor(s)">+ task</button>
-                </div>
-              </div>
-              </template>
-              <button class="btn sm add-sig" @click="addSig(p.no)">+ SIG</button>
-            </div>
-          </div>
-        </div>
+        <CascadeMap :plan="plan" :selected="selected" :tasks="tasksOf" :dir="mapDir" :compact="showTable" :show-tasks="showTasks"
+          @select="selectInFlow" @pick="pickGoal" @open="showInTable" @add-sig="addSig" @add-task="todoFor" />
       </section>
 
-      <div class="right">
-        <!-- PSG table -->
-        <section class="panel">
-          <div class="panel-h"><span class="icon sm ok">flag</span><h2>Prioritised strategic goals (PSG)</h2><span class="spacer"></span><span class="mono small muted">PSG % = mean of SIGs</span></div>
-          <div class="tw">
-            <table class="tbl">
-              <colgroup><col style="width: 58px" /><col style="width: 100px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 80px" /></colgroup>
-              <thead><tr><th>Prio</th><th>PSG No.</th><th>PSG name</th><th>Indicators of success</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
-              <tbody>
-                <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="[fx('goals', p.no), { selected: selected === p.no }]" @click="rowClick(p.no, $event)">
+      <!-- goals table: three layouts -->
+      <section v-if="showTable" class="panel table-panel">
+        <div class="panel-h">
+          <span class="icon sm info">table_rows</span><h2>Goals</h2>
+          <span class="spacer"></span>
+          <div class="seg" role="group" aria-label="Table layout">
+            <button class="btn sm" :class="{ on: tableMode === 'split' }" :aria-pressed="tableMode === 'split'" title="Separate PSG and SIG tables" @click="tableMode = 'split'">Decomposed</button>
+            <button class="btn sm" :class="{ on: tableMode === 'cascade' }" :aria-pressed="tableMode === 'cascade'" title="One table, SIGs indented under their PSG" @click="tableMode = 'cascade'">Cascade</button>
+            <button class="btn sm" :class="{ on: tableMode === 'text' }" :aria-pressed="tableMode === 'text'" title="The plan written as sentences" @click="tableMode = 'text'">Text</button>
+          </div>
+          <button class="btn sm icon-only" title="Close the table" @click="showTable = false"><span class="icon sm">close</span></button>
+        </div>
+
+        <div v-if="tableMode === 'split'" class="split">
+            <!-- PSG table -->
+            <section class="sub">
+              <div class="panel-h"><span class="icon sm ok">flag</span><h2>Prioritised strategic goals (PSG)</h2><span class="spacer"></span><span class="mono small muted">PSG % = mean of SIGs</span></div>
+              <div class="tw">
+                <table class="tbl">
+                  <colgroup><col style="width: 58px" /><col style="width: 100px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 80px" /></colgroup>
+                  <thead><tr><th>Prio</th><th>PSG No.</th><th>PSG name</th><th>Indicators of success</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="p in psgs" :key="p.no" :data-row="p.no" :class="[fx('goals', p.no), { selected: selected === p.no }]" @click="rowClick(p.no, $event)">
+                      <td><select v-model.number="p.priority" class="input ghost mono prio-in" :class="'p' + p.priority" title="Priority"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
+                      <td class="mono ok" title="PSG number: type any short name (letters, digits, - . _); every link follows"><input :value="dv(p, 'no')" class="input ghost mono no-in" :maxlength="GOAL_NO_MAX" spellcheck="false" aria-label="PSG number" @focus="dFocus(p, 'no')" @input="draft.text = $event.target.value" @change="setNo(p, $event)" @blur="dBlur(p, 'no')" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetNo(p, $event)" /></td>
+                      <td><input v-model="p.name" class="input ghost w" /></td>
+                      <td><input v-model="p.indicators" class="input ghost w small" /></td>
+                      <td><TimeBound v-model="p.timeBound" v-model:locked="p.boundLocked" :issues="boundIssues(p)" /></td>
+                      <td><button class="status" :class="p.status" @click.stop="cycle(p)">{{ LABEL[p.status] }}</button></td>
+                      <td class="mono" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</td>
+                      <td>
+                        <div class="row acts">
+                          <AddDeadline :no="p.no" label="this PSG" @new="goalDeadline(p)" />
+                          <button class="btn sm icon-only danger-ghost" title="Delete this PSG (and its SIGs)" @click.stop="removePsg(p)"><span class="icon sm">delete</span></button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr><td colspan="8" class="td-add"><button class="add-row" @click="addPsg"><span class="icon sm">add</span>Add a new PSG…</button></td></tr>
+                  </tfoot>
+                </table>
+              </div>
+            </section>
+            <!-- SIG table -->
+            <section class="sub">
+              <div class="panel-h">
+                <span class="icon sm info">rule</span><h2>Specific indicator goals (SIG)</h2>
+                <span class="spacer"></span>
+                <select v-model="psgFilter" class="select mono small"><option value="">All PSGs</option><option v-for="p in psgs" :key="p.no" :value="p.no">{{ p.no }}</option></select>
+                <button class="btn sm" @click="addSig(psgFilter)">+ SIG</button>
+              </div>
+              <div class="tw">
+                <table class="tbl wide">
+                  <colgroup><col style="width: 58px" /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 24%" /><col /><col style="width: 160px" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 108px" /></colgroup>
+                  <thead><tr><th>Prio</th><th>SIG No.</th><th>PSG</th><th>SIG name</th><th>Specific &amp; measurable criteria</th><th>Depends on</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="[fx('goals', s.no), { selected: selected === s.no }]" @click="rowClick(s.no, $event)">
+                      <td><select v-model.number="s.priority" class="input ghost mono prio-in" :class="'p' + s.priority" title="Priority"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
+                      <td class="mono info" title="SIG number: type any short name (letters, digits, - . _); every link follows"><input :value="dv(s, 'no')" class="input ghost mono no-in" :maxlength="GOAL_NO_MAX" spellcheck="false" aria-label="SIG number" @focus="dFocus(s, 'no')" @input="draft.text = $event.target.value" @change="setNo(s, $event)" @blur="dBlur(s, 'no')" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetNo(s, $event)" /></td>
+                      <td><select :value="s.psg" class="input ghost mono small psg-in" title="Move this SIG under another PSG (it is renumbered; links follow)" @click.stop @change="changePsg(s, $event.target.value)"><option v-for="p in psgs" :key="p.no" :value="p.no">{{ p.no }}</option></select></td>
+                      <td><input v-model="s.name" class="input ghost w" /></td>
+                      <td><input v-model="s.criteria" class="input ghost w small" /></td>
+                      <td>
+                        <div class="deps">
+                          <Chip v-for="dp in s.deps ?? []" :key="dp" :id="dp" removable @remove="removeDep(s, dp)" />
+                          <select class="dep-add mono" title="Add a dependency — a PSG or another SIG this one needs" @click.stop @change="addDep(s, $event.target.value); $event.target.value = ''">
+                            <option value="">{{ s.deps?.length ? '＋' : '＋ dep' }}</option>
+                            <option v-for="p in psgs.filter((x) => x.no !== s.psg)" :key="p.no" :value="p.no" :disabled="sigWouldCycle(s.no, p.no)">✦ {{ optLabel(p) }}</option>
+                            <option v-for="o in sigOpts.filter((x) => x.no !== s.no)" :key="o.no" :value="o.no" :disabled="sigWouldCycle(s.no, o.no)">{{ optLabel(o) }}</option>
+                          </select>
+                        </div>
+                      </td>
+                      <td><TimeBound v-model="s.timeBound" v-model:locked="s.boundLocked" :issues="boundIssues(s)" /></td>
+                      <td><button class="status" :class="s.status" @click.stop="cycle(s)">{{ LABEL[s.status] }}</button></td>
+                      <td><input :value="dv(s, 'pct')" type="number" min="0" max="100" step="5" class="input ghost w mono" :class="pctClass(s.pct)" @focus="dFocus(s, 'pct')" @input="draft.text = $event.target.value" @change="draft.obj = null; setPct(s, $event.target.value)" @blur="dBlur(s, 'pct')" @keydown.enter="$event.target.blur()" /></td>
+                      <td>
+                        <div class="row acts">
+                          <AddDeadline :no="s.no" label="this SIG" @new="goalDeadline(s)" />
+                          <button class="btn sm icon-only" title="Create todo for this SIG" @click.stop="todoFor(s)"><span class="icon sm">add_task</span></button>
+                          <button class="btn sm icon-only danger-ghost" title="Delete this SIG" @click.stop="removeSig(s)"><span class="icon sm">delete</span></button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr><td colspan="10" class="td-add"><button class="add-row" @click="addSig(psgFilter)"><span class="icon sm">add</span>Add a new SIG{{ psgFilter ? ` under ${psgFilter}` : '…' }}</button></td></tr>
+                  </tfoot>
+                </table>
+              </div>
+            </section>
+        </div>
+
+        <div v-else-if="tableMode === 'cascade'" class="tw">
+          <table class="tbl casc">
+            <colgroup><col style="width: 58px" /><col /><col style="width: 30%" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 92px" /></colgroup>
+            <thead><tr><th>Prio</th><th>Goal</th><th>You'll know when</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
+            <tbody>
+              <template v-for="p in psgs" :key="p.no">
+                <tr class="g-row" :data-row="p.no" :class="[fx('goals', p.no), { selected: selected === p.no }]" @click="rowClick(p.no, $event)">
                   <td><select v-model.number="p.priority" class="input ghost mono prio-in" :class="'p' + p.priority" title="Priority"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
-                  <td class="mono ok" title="PSG number: type any short name (letters, digits, - . _); every link follows"><input :value="dv(p, 'no')" class="input ghost mono no-in" :maxlength="GOAL_NO_MAX" spellcheck="false" aria-label="PSG number" @focus="dFocus(p, 'no')" @input="draft.text = $event.target.value" @change="setNo(p, $event)" @blur="dBlur(p, 'no')" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetNo(p, $event)" /></td>
-                  <td><input v-model="p.name" class="input ghost w" /></td>
-                  <td><input v-model="p.indicators" class="input ghost w small" /></td>
+                  <td><div class="row nm-cell"><span class="mono small ok">{{ p.no }}</span><input v-model="p.name" class="input ghost w g-in" aria-label="PSG name" /></div></td>
+                  <td><input v-model="p.indicators" class="input ghost w small" placeholder="Indicators of success" aria-label="Indicators of success" /></td>
                   <td><TimeBound v-model="p.timeBound" v-model:locked="p.boundLocked" :issues="boundIssues(p)" /></td>
                   <td><button class="status" :class="p.status" @click.stop="cycle(p)">{{ LABEL[p.status] }}</button></td>
                   <td class="mono" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</td>
                   <td>
                     <div class="row acts">
                       <AddDeadline :no="p.no" label="this PSG" @new="goalDeadline(p)" />
+                      <button class="btn sm icon-only" title="Add a SIG under this PSG" @click.stop="addSig(p.no)"><span class="icon sm">add</span></button>
                       <button class="btn sm icon-only danger-ghost" title="Delete this PSG (and its SIGs)" @click.stop="removePsg(p)"><span class="icon sm">delete</span></button>
                     </div>
                   </td>
                 </tr>
-              </tbody>
-              <tfoot>
-                <tr><td colspan="8" class="td-add"><button class="add-row" @click="addPsg"><span class="icon sm">add</span>Add a new PSG…</button></td></tr>
-              </tfoot>
-            </table>
-          </div>
-        </section>
-
-        <!-- SIG table -->
-        <section class="panel">
-          <div class="panel-h">
-            <span class="icon sm info">rule</span><h2>Specific indicator goals (SIG)</h2>
-            <span class="spacer"></span>
-            <select v-model="psgFilter" class="select mono small"><option value="">All PSGs</option><option v-for="p in psgs" :key="p.no" :value="p.no">{{ p.no }}</option></select>
-            <button class="btn sm" @click="addSig(psgFilter)">+ SIG</button>
-          </div>
-          <div class="tw">
-            <table class="tbl wide">
-              <colgroup><col style="width: 58px" /><col style="width: 100px" /><col style="width: 84px" /><col style="width: 24%" /><col /><col style="width: 160px" /><col style="width: 164px" /><col style="width: 84px" /><col style="width: 64px" /><col style="width: 108px" /></colgroup>
-              <thead><tr><th>Prio</th><th>SIG No.</th><th>PSG</th><th>SIG name</th><th>Specific &amp; measurable criteria</th><th>Depends on</th><th>Time bound</th><th>Status</th><th>Done %</th><th></th></tr></thead>
-              <tbody>
-                <tr v-for="s in sigs" :key="s.no" :data-row="s.no" :class="[fx('goals', s.no), { selected: selected === s.no }]" @click="rowClick(s.no, $event)">
+                <tr v-for="s in sigsHere(p.no)" :key="s.no" :data-row="s.no" :class="[fx('goals', s.no), { selected: selected === s.no }]" @click="rowClick(s.no, $event)">
                   <td><select v-model.number="s.priority" class="input ghost mono prio-in" :class="'p' + s.priority" title="Priority"><option v-for="n in 5" :key="n" :value="n">P{{ n }}</option></select></td>
-                  <td class="mono info" title="SIG number: type any short name (letters, digits, - . _); every link follows"><input :value="dv(s, 'no')" class="input ghost mono no-in" :maxlength="GOAL_NO_MAX" spellcheck="false" aria-label="SIG number" @focus="dFocus(s, 'no')" @input="draft.text = $event.target.value" @change="setNo(s, $event)" @blur="dBlur(s, 'no')" @keydown.enter="$event.target.blur()" @keydown.esc.stop="resetNo(s, $event)" /></td>
-                  <td><select :value="s.psg" class="input ghost mono small psg-in" title="Move this SIG under another PSG (it is renumbered; links follow)" @click.stop @change="changePsg(s, $event.target.value)"><option v-for="p in psgs" :key="p.no" :value="p.no">{{ p.no }}</option></select></td>
-                  <td><input v-model="s.name" class="input ghost w" /></td>
-                  <td><input v-model="s.criteria" class="input ghost w small" /></td>
-                  <td>
-                    <div class="deps">
-                      <Chip v-for="dp in s.deps ?? []" :key="dp" :id="dp" removable @remove="removeDep(s, dp)" />
-                      <select class="dep-add mono" title="Add a dependency — a PSG or another SIG this one needs" @click.stop @change="addDep(s, $event.target.value); $event.target.value = ''">
-                        <option value="">{{ s.deps?.length ? '＋' : '＋ dep' }}</option>
-                        <option v-for="p in psgs.filter((x) => x.no !== s.psg)" :key="p.no" :value="p.no" :disabled="sigWouldCycle(s.no, p.no)">✦ {{ optLabel(p) }}</option>
-                        <option v-for="o in sigOpts.filter((x) => x.no !== s.no)" :key="o.no" :value="o.no" :disabled="sigWouldCycle(s.no, o.no)">{{ optLabel(o) }}</option>
-                      </select>
-                    </div>
-                  </td>
+                  <td><div class="row nm-cell sub-cell"><span class="mono small info">{{ s.no }}</span><input v-model="s.name" class="input ghost w" aria-label="SIG name" /><span v-if="(s.deps ?? []).length" class="icon sm muted" :title="`Starts after ${s.deps.join(', ')}`">link</span></div></td>
+                  <td><input v-model="s.criteria" class="input ghost w small" placeholder="Specific &amp; measurable criteria" aria-label="Criteria" /></td>
                   <td><TimeBound v-model="s.timeBound" v-model:locked="s.boundLocked" :issues="boundIssues(s)" /></td>
                   <td><button class="status" :class="s.status" @click.stop="cycle(s)">{{ LABEL[s.status] }}</button></td>
-                  <td><input :value="dv(s, 'pct')" type="number" min="0" max="100" step="5" class="input ghost w mono" :class="pctClass(s.pct)" @focus="dFocus(s, 'pct')" @input="draft.text = $event.target.value" @change="draft.obj = null; setPct(s, $event.target.value)" @blur="dBlur(s, 'pct')" @keydown.enter="$event.target.blur()" /></td>
+                  <td><input :value="dv(s, 'pct')" type="number" min="0" max="100" step="5" class="input ghost w mono" :class="pctClass(s.pct)" aria-label="Done %" @focus="dFocus(s, 'pct')" @input="draft.text = $event.target.value" @change="draft.obj = null; setPct(s, $event.target.value)" @blur="dBlur(s, 'pct')" @keydown.enter="$event.target.blur()" /></td>
                   <td>
                     <div class="row acts">
                       <AddDeadline :no="s.no" label="this SIG" @new="goalDeadline(s)" />
@@ -455,15 +496,48 @@ const print = () => window.print()
                     </div>
                   </td>
                 </tr>
-              </tbody>
-              <tfoot>
-                <tr><td colspan="10" class="td-add"><button class="add-row" @click="addSig(psgFilter)"><span class="icon sm">add</span>Add a new SIG{{ psgFilter ? ` under ${psgFilter}` : '…' }}</button></td></tr>
-              </tfoot>
-            </table>
-          </div>
-        </section>
+              </template>
+            </tbody>
+            <tfoot>
+              <tr><td colspan="7" class="td-add"><button class="add-row" @click="addPsg"><span class="icon sm">add</span>Add a new PSG…</button></td></tr>
+            </tfoot>
+          </table>
+        </div>
 
-        <div class="widgets">
+        <div v-else class="txt">
+          <p class="txt-vision">I want to <b>{{ plan.vision || 'say where this plan ends up' }}</b><template v-if="plan.intent">, because {{ because }}</template>.</p>
+          <div v-for="p in psgs" :key="p.no" class="txt-goal" :data-row="p.no" :class="{ sel: selected === p.no }">
+            <button class="txt-head" @click="selectInFlow(p.no)">
+              To <b>{{ p.name }}</b><template v-if="p.indicators"> ({{ p.indicators }})</template> by <b class="mono">{{ byText(p.timeBound) }}</b>, I'll know it's working when:
+              <span class="mono small" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</span>
+            </button>
+            <button v-for="s in sigsHere(p.no)" :key="s.no" class="txt-line" :data-row="s.no" :class="{ sel: selected === s.no }" @click="selectInFlow(s.no)">
+              <span class="mono small txt-pct" :class="pctClass(Number(s.pct) || 0)">{{ Number(s.pct) || 0 }}%</span>
+              <span class="grow"><b>{{ s.name }}</b><template v-if="s.criteria">: {{ s.criteria }}</template>, by <span class="mono small">{{ byText(s.timeBound) }}</span><template v-if="(s.deps ?? []).length"> (after {{ s.deps.join(', ') }})</template></span>
+            </button>
+            <button class="txt-add" @click="addSig(p.no)">+ …and when (add a SIG)</button>
+          </div>
+          <div v-if="!psgs.length" class="empty">No goals yet. Use + PSG to add the first one.</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- goal flow: dependencies left → right, merging into PSGs and the vision -->
+    <section class="panel flow-panel">
+      <div class="panel-h">
+        <span class="icon sm info">schema</span><h2>Goal flow</h2>
+        <span class="mono small muted flow-hint">click: trace what a goal needs · double-click: open it in the table</span>
+        <span class="spacer"></span>
+        <span v-if="flowIssues" class="mono small warn" :title="flowIssueText">{{ flowIssues }} time-bound issue{{ flowIssues > 1 ? 's' : '' }}</span>
+      </div>
+      <GoalFlow :plan="plan" :selected="selected" @select="selectInFlow" @open="showInTable" />
+    </section>
+
+    <!-- everything else, one click away -->
+    <div class="more-bar no-print">
+      <button class="btn sm" :class="{ on: showMore }" :aria-expanded="showMore" @click="showMore = !showMore"><span class="icon sm">{{ showMore ? 'expand_less' : 'expand_more' }}</span>More: deadlines, check log, linked todos, events</button>
+    </div>
+    <div v-if="showMore" class="more">
           <!-- deadlines tied to this plan and its goals -->
           <section class="panel">
             <div class="panel-h"><span class="icon sm danger">alarm</span><h3>Deadlines</h3><span class="spacer"></span>
@@ -483,7 +557,7 @@ const print = () => window.print()
 
           <!-- check schedule -->
           <section class="panel">
-            <div class="panel-h"><span class="icon sm warn">event_repeat</span><h3>Check schedule</h3><span class="spacer"></span><button class="btn sm" @click="logCheck">Log check today</button></div>
+            <div class="panel-h"><span class="icon sm warn">event_repeat</span><h3>Check log</h3><span class="spacer"></span><span class="mono small muted">last {{ recentChecks.length }}</span></div>
             <table class="tbl">
               <thead><tr><th>Date</th><th>Reminder</th><th>Checked</th><th>Updated</th></tr></thead>
               <tbody>
@@ -495,15 +569,9 @@ const print = () => window.print()
                 </tr>
               </tbody>
             </table>
-            <div class="panel-b row small">
-              <span class="muted">Check frequency: every</span>
-              <input v-model.number="plan.checkEveryDays" type="number" min="1" class="input mono num-in" />
-              <span class="muted">days</span><span class="spacer"></span>
-              <span class="mono">next <b :class="diffDays(T, nextCheckDate(plan)) <= 1 ? 'warn' : 'ok'">{{ nextCheckDate(plan) }}</b></span>
-            </div>
           </section>
 
-          <!-- linked todos: left of the events timetable in the widget grid -->
+          <!-- linked todos -->
           <section class="panel">
             <div class="panel-h"><span class="icon sm ok">checklist</span><h3>Linked todos</h3><span class="spacer"></span><span class="mono small muted">{{ linked.filter((t) => !t.done).length }} pending</span></div>
             <div class="lt">
@@ -534,31 +602,7 @@ const print = () => window.print()
             </form>
           </section>
 
-          <!-- acronym legend -->
-          <section class="panel">
-            <details open>
-              <summary class="panel-h"><span class="icon sm muted">info</span><h3>Acronym legend</h3></summary>
-              <div class="panel-b small legend-b">
-                <div><b class="mono ok">PSG</b> = Prioritised Strategic Goal</div>
-                <div><b class="mono info">SIG</b> = Specific Indicator Goal</div>
-                <div><b class="mono">◯ ! ✓</b> = Open · Doing · Done</div>
-              </div>
-            </details>
-          </section>
-        </div>
-      </div>
     </div>
-
-    <!-- goal flow: dependencies left → right, merging into PSGs and the vision -->
-    <section class="panel flow-panel">
-      <div class="panel-h">
-        <span class="icon sm info">schema</span><h2>Goal flow</h2>
-        <span class="mono small muted flow-hint">click: trace what a goal needs · double-click: open it in the table</span>
-        <span class="spacer"></span>
-        <span v-if="flowIssues" class="mono small warn" :title="flowIssueText">{{ flowIssues }} time-bound issue{{ flowIssues > 1 ? 's' : '' }}</span>
-      </div>
-      <GoalFlow :plan="plan" :selected="selected" @select="selectInFlow" @open="showInTable" />
-    </section>
   </div>
 </template>
 
@@ -573,23 +617,6 @@ const print = () => window.print()
 h1 { margin: 0; font-size: 18px; font-weight: 600; }
 .title-in { font-size: 16px; font-weight: 600; width: 260px; }
 .intent .input { font-size: 13px; }
-.sp-body { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 12px; padding: 12px; align-items: start; }
-.tree { position: sticky; top: 12px; max-height: calc(100vh - 140px); }
-.canvas {
-  overflow: auto; padding: 16px;
-  background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 16px 16px;
-}
-.node { background: var(--surface); border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
-.node:hover { border-color: var(--muted); }
-.node.sel { border-color: var(--info); box-shadow: 0 0 0 2px var(--info); background: color-mix(in srgb, var(--info) 14%, var(--surface)); }
-.vision { border-color: var(--accent); cursor: default; }
-.vis-in { font-weight: 600; font-size: 14px; height: 28px; }
-.trunk { width: 1px; height: 18px; background: var(--border); margin-left: 20px; }
-.branch { position: relative; margin-left: 20px; padding-left: 16px; border-left: 1px solid var(--border); padding-bottom: 14px; }
-.branch::before { content: ''; position: absolute; left: 0; top: 18px; width: 16px; border-top: 1px solid var(--border); }
-.nm-in { height: 24px; font-size: 13px; font-weight: 600; padding: 0 2px; }
-.sig-nm { gap: 6px; align-items: baseline; }
-.sig-in { height: 20px; font-size: 11px; flex: 1; min-width: 60px; padding: 0 2px; }
 /* ── table polish: quiet until you reach for it ── */
 .deps { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px 0; }
 .dep-add {
@@ -630,30 +657,10 @@ h1 { margin: 0; font-size: 18px; font-weight: 600; }
 tfoot .td-add { padding: 0; border-bottom: 0; }
 .add-row { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 0; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
 .add-row:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
-.kids { margin: 6px 0 0 14px; padding-left: 12px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
-/* tasks linked to a goal, hanging under its node */
-.tasks { margin: -3px 0 2px 10px; padding-left: 8px; border-left: 2px solid var(--surface-2); display: flex; flex-direction: column; }
-.psg-tasks { margin: 4px 0 0 24px; }
-.task { display: flex; align-items: center; gap: 6px; min-height: 24px; font-size: 12.5px; cursor: pointer; border-radius: 2px; padding: 0 4px; }
-.task:hover { background: var(--surface-2); }
-.task input { margin: 0; }
-.task-foot { gap: 6px; min-height: 20px; padding: 0 4px; }
-.task-done { padding: 2px 4px; }
-.add-task { border: 0; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; padding: 0 2px; }
-.add-task:hover { color: var(--accent); }
-/* deadlines hanging under a goal node */
-.gdl { margin: -3px 0 2px 10px; padding-left: 8px; border-left: 2px solid var(--surface-2); display: flex; flex-direction: column; }
-.psg-dl { margin: 4px 0 0 24px; }
-.gdl-row { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 4px; border: 0; border-radius: 2px; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; min-width: 0; }
-.gdl-row:hover { background: var(--surface-2); }
-.gdl-row .icon { font-size: 14px; }
-.gdl-cd { flex: none; min-width: 52px; font-size: 11.5px; }
 .dl-cd { flex: none; width: 62px; }
 /* focus: related items lit, the rest dimmed (names avoid the global .dim / .rel) */
 .fx-dim { opacity: 0.32; transition: opacity 0.15s; }
 .fx-dim:hover { opacity: 0.7; }
-.node.fx-rel { border-color: color-mix(in srgb, var(--info) 60%, var(--border)); }
-.gdl-row.fx-rel, .lt-row.fx-rel { background: color-mix(in srgb, var(--info) 8%, transparent); }
 .tbl tr.fx-rel { background: color-mix(in srgb, var(--info) 5%, transparent); }
 /* the selected goal itself: a solid ring and a stronger tint, so it stands out from the related rows it lights */
 .tbl tr.selected { outline: 2px solid var(--info); outline-offset: -2px; box-shadow: none; background: color-mix(in srgb, var(--info) 14%, transparent); }
@@ -663,12 +670,6 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 .input.ghost.no-in { width: 100%; height: 22px; padding: 0 3px; margin-left: -4px; color: inherit; font: inherit; }
 .fx-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--info) 6%, transparent); min-width: 0; }
 .btn.on { color: var(--accent); border-color: var(--accent); }
-.sig { flex-direction: row; align-items: center; gap: 8px; }
-.sig.doing { border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
-.sig.done { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.add-sig { align-self: flex-start; }
-.flow-panel { margin: 0 12px 12px; }
-.right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .tw { overflow-x: auto; }
 .tw .tbl { min-width: 760px; }
 .tw .tbl.wide { min-width: 900px; }
@@ -678,7 +679,6 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 .tw .tbl tbody tr.selected > td:has(> .acts) { background: color-mix(in srgb, var(--info) 14%, var(--surface)); }
 .input.w { width: 100%; }
 .select.small, .input.small { height: 24px; font-size: 11px; }
-.widgets { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .num-in { width: 52px; height: 24px; }
 .evs { display: flex; flex-direction: column; gap: 4px; padding: 8px; }
 .ev { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 2px; padding: 4px 8px; }
@@ -689,9 +689,37 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 .lt-row { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .lt-row:hover { background: var(--surface-2); }
 .lt-row.done span.grow { text-decoration: line-through; color: var(--muted); }
-details summary { list-style: none; cursor: pointer; }
-details summary::-webkit-details-marker { display: none; }
-.legend-b { display: flex; flex-direction: column; gap: 6px; }
-@media (max-width: 1200px) { .sp-body { grid-template-columns: 1fr; } .tree { position: static; max-height: none; } }
-@media (max-width: 800px) { .widgets { grid-template-columns: 1fr; } .flow-hint { display: none; } }
+/* map on top (full width); with the table open it shrinks to the left and the table takes the rest */
+.sp-top { display: flex; gap: 12px; padding: 12px; align-items: stretch; }
+.map-panel { flex: 1 1 100%; min-width: 0; transition: flex-basis 0.3s ease; }
+.with-table .map-panel { flex: 0 0 clamp(440px, 40%, 680px); }
+.table-panel { flex: 1 1 0; min-width: 0; }
+.seg { display: inline-flex; gap: 2px; }
+.split { display: flex; flex-direction: column; }
+.sub + .sub { border-top: 1px solid var(--border); }
+.sub .panel-h { border-bottom: 1px solid var(--border); }
+.casc .g-row > td { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
+.nm-cell { gap: 6px; min-width: 0; }
+.nm-cell .mono { flex: none; }
+.sub-cell { padding-left: 18px; }
+.g-in { font-weight: 600; }
+/* text view */
+.txt { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 22px; }
+.txt-vision { margin: 0; font-size: 16px; line-height: 24px; }
+.txt-goal { border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; display: flex; flex-direction: column; }
+.txt-goal.sel { border-color: var(--info); }
+.txt-head, .txt-line, .txt-add { border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; border-radius: 3px; }
+.txt-head { padding: 2px 4px 6px; }
+.txt-line { display: flex; gap: 10px; align-items: baseline; padding: 6px 4px; border-top: 1px solid var(--border); border-radius: 0; }
+.txt-line:hover, .txt-head:hover { background: var(--surface-2); }
+.txt-line.sel { background: color-mix(in srgb, var(--info) 14%, transparent); }
+.txt-pct { flex: none; width: 40px; }
+.txt-add { color: var(--muted); padding: 6px 4px 0 54px; font-size: 14px; }
+.txt-add:hover { color: var(--accent); }
+/* goal flow under the map; More under that */
+.flow-panel { margin: 0 12px 12px; }
+.more-bar { display: flex; justify-content: flex-end; padding: 0 12px 12px; }
+.more { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 0 12px 12px; align-items: start; }
+@media (max-width: 1000px) { .sp-top { flex-direction: column; align-items: stretch; } .with-table .map-panel { flex-basis: auto; } .more { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .more { grid-template-columns: 1fr; } .flow-hint { display: none; } }
 </style>
