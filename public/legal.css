@@ -24,13 +24,3 @@ code, kbd { font: 13px ui-monospace, Menlo, monospace; background: var(--surface
 .doc pre { overflow-wrap: normal; }
 @media (min-width: 561px) { .doc table { display: block; overflow-x: auto; } }
 .doc img { max-width: 100%; height: auto; }
-/* comparison pages (/vs/…, /alternatives/…, built from compare/*.md) */
-.compare .cta { margin: 36px 0 0; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 2px; display: flex; gap: 10px 16px; align-items: center; flex-wrap: wrap; }
-.compare .cta .btn { display: inline-block; padding: 9px 18px; background: var(--accent); color: var(--bg); font-weight: 600; text-decoration: none; border-radius: 2px; }
-.compare .cta span { color: var(--muted); font-size: 14px; }
-.compare td:first-child { font-weight: 600; }
-@media (max-width: 560px) {
-  .compare thead { display: none; }
-  .compare td[data-label]::before { content: attr(data-label); display: block; font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--muted); }
-  .compare td:first-child { background: var(--surface); }
-}

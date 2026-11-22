@@ -48,7 +48,26 @@ const appLd = JSON.stringify({
   isAccessibleForFree: true, codeRepository: REPO,
 })
 
-const cta = (place) => `<p class="cta"><a class="btn" href="/app?from=compare" data-umami-event="open-app" data-umami-event-place="${esc(place)}">Try it now</a> <span>Free, no account needed to try it. <a href="/docs/self-hosting">Or run it on your own server.</a></span></p>`
+const cta = (place) => `<aside class="closer"><div class="box"><div><p class="line">Try Life Console free</p><p class="sub">No account needed to try it. <a href="/docs/self-hosting">Or run it on your own server.</a></p></div><a class="btn primary big" href="/app?from=compare" data-umami-event="open-app" data-umami-event-place="${esc(place)}">Try it now</a></div></aside>`
+
+// the landing page's header and footer, so these pages feel like part of the site
+const header = (place) => `<header>
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Life Console home"><img src="/icons/brand-48.png" alt="" width="24" height="24" />LIFE CONSOLE</a>
+    <nav aria-label="Site">
+      <a class="opt" href="/alternatives"${place === '/alternatives' ? ' aria-current="page"' : ''}>Comparisons</a>
+      <a class="opt" href="/docs/guide">Guide</a>
+      <a class="opt" href="/docs/self-hosting">Self-host</a>
+    </nav>
+    <a class="btn primary" href="/app?from=compare" data-umami-event="open-app" data-umami-event-place="${esc(place)} header">Try it now</a>
+  </div>
+</header>`
+const footer = `<footer>
+  <div class="wrap">
+    <span>Life Console · free software under AGPL-3.0</span>
+    <nav aria-label="Footer"><a href="/">Home</a><a href="${REPO}" rel="noopener">GitHub</a><a href="/docs/self-hosting">Self-hosting</a><a href="/docs/guide">Guide</a><a href="/alternatives">Alternatives</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+  </div>
+</footer>`
 
 function shell({ title, description, canonical, body, place }) {
   return `<!doctype html>
@@ -68,15 +87,19 @@ function shell({ title, description, canonical, body, place }) {
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-<link rel="stylesheet" href="/legal.css" />
+<link rel="preload" as="font" type="font/woff2" href="/media/fonts/inter-latin.woff2" crossorigin />
+<link rel="stylesheet" href="/compare.css" />
 <script type="application/ld+json">${appLd}</script>
 </head>
 <body>
-<main class="doc compare">
-<p class="back"><a href="/">← Life Console</a> · <a href="/alternatives">Comparisons</a> · <a href="/docs/guide">User guide</a> · <a href="/docs/self-hosting">Self-hosting</a></p>
-${body}
+${header(place)}
+<main>
+<article>
+${place === '/alternatives' ? '' : '<p class="crumbs"><a href="/alternatives">Comparisons</a> /</p>\n'}${body}
+</article>
 ${cta(place)}
 </main>
+${footer}
 </body>
 </html>
 `
@@ -91,9 +114,22 @@ export function labelCells(html) {
       let i = 0
       return `<tr>${cells.replace(/<td([^>]*)>/g, (m, a) => { const h = heads[i++]; return h ? `<td${a} data-label="${h}">` : m })}</tr>`
     })
-    return `<table>${body}</table>`
+    const lcCol = heads[1] === 'Life Console' ? ' class="lc-col"' : ''
+    const rows = body.replace(/<tr>(\s*<td[^>]*>\s*(?:<strong>)?Life Console\b)/g, '<tr class="lc-row">$1')
+    return `<div class="table"><table${lcCol}>${rows}</table></div>`
   })
 }
+
+/** Puts consecutive "Pick … if" sections (an h2 and its list) side by side as cards; Life Console's is marked. */
+export function pickCards(html) {
+  return html.replace(/(?:<h2 id="pick-[^"]*">[\s\S]*?<\/h2>\s*<ul>[\s\S]*?<\/ul>\s*){2}/g, (group) => {
+    const cards = [...group.matchAll(/<h2 id="(pick-[^"]*)">([\s\S]*?)<\/h2>\s*(<ul>[\s\S]*?<\/ul>)/g)]
+      .map(([, id, h, ul]) => `<section class="pick${id.includes('life-console') ? ' lc' : ''}"><h2 id="${id}">${h}</h2>${ul}</section>`)
+    return `<div class="picks">${cards.join('')}</div>\n`
+  })
+}
+
+const cards = (list) => `<nav class="cards">${list.map((o) => `<a href="${o.path}">${esc(o.card)}</a>`).join('')}</nav>`
 
 /** One comparison page. `others`: the rest of the pages, linked at the bottom so each page leads to the next. */
 export function renderPage(page, others = []) {
@@ -104,24 +140,24 @@ export function renderPage(page, others = []) {
   }
   renderer.image = ({ href, title, text }) => `<img src="${esc(href)}" alt="${esc(text)}" loading="lazy"${title ? ` title="${esc(title)}"` : ''} />`
   const more = others.length
-    ? `<h2 id="more-comparisons">More comparisons</h2>\n<ul>${others.map((o) => `<li><a href="${o.path}">${esc(o.card)}</a></li>`).join('')}</ul>`
+    ? `<h2 id="more-comparisons">More comparisons</h2>\n${cards(others)}`
     : ''
-  const body = labelCells(marked.parse(page.body, { renderer, gfm: true })) + more
+  const body = pickCards(labelCells(marked.parse(page.body, { renderer, gfm: true }))) + more
   return shell({ title: page.title, description: page.description, canonical: page.path, body, place: page.path })
 }
 
 /** The /alternatives hub: every page, grouped into head-to-heads and roundups. */
 export function renderHub(pages) {
-  const list = (kind) => pages.filter((p) => p.path.startsWith(`/${kind}/`)).map((p) => `<li><a href="${p.path}">${esc(p.card)}</a></li>`).join('')
+  const list = (kind) => { const l = pages.filter((p) => p.path.startsWith(`/${kind}/`)); return l.length ? cards(l) : '' }
   const vs = list('vs'), alt = list('alternatives')
   const body = `<h1>Life Console compared with other planners</h1>
-<p>Life Console is a free, open-source planner: time-block your week, count down every deadline and link tasks to long-term goals. These pages compare it with the apps people usually look at instead, including where those apps are the better pick.</p>
-${alt ? `<h2 id="alternatives">Alternatives to…</h2>\n<ul>${alt}</ul>` : ''}
-${vs ? `<h2 id="head-to-head">Head to head</h2>\n<ul>${vs}</ul>` : ''}
+<p class="summary">Life Console is a free, open-source planner: time-block your week, count down every deadline and link tasks to long-term goals. These pages compare it with the apps people usually look at instead, including where those apps are the better pick.</p>
+${alt ? `<h2 id="alternatives">Alternatives to…</h2>\n${alt}` : ''}
+${vs ? `<h2 id="head-to-head">Head to head</h2>\n${vs}` : ''}
 <h2 id="what-life-console-doesnt-do">What Life Console doesn't do</h2>
 <p>No calendar sync, no integrations with other task apps, no AI scheduling and no native phone apps (it installs from the browser instead, and has a Mac menu-bar app). If you need those, the pages above say which app does them.</p>`
   return shell({
-    title: 'Life Console alternatives and comparisons: open-source planner vs Sunsama and others',
+    title: 'Life Console alternatives: open-source planner comparisons',
     description: 'How Life Console, the free and open-source time-blocking planner, compares with Sunsama and other daily planners: price, self-hosting, features and where each one is better.',
     canonical: '/alternatives', body, place: '/alternatives',
   })
