@@ -13,21 +13,21 @@ const props = defineProps({ prio: { type: Number, default: 0 }, q: { type: Strin
 import { state, ui, todayISO, addDays, mondayOf, wd, fmtMD, isoWeek, byPriority, partLabel, isHoverLinked, planWeek, backlogTodos, planWeeks, weekFree, assignToWeek, todoMatches, trailLinks } from '../store'
 import { TODO_MIME, startDrag, endDrag, overRow, leaveRow, dropOnRow, dropClass } from '../dnd'
 import Prio from './Prio.vue'
+import { useRouter } from 'vue-router'
+import { goalDates } from '../../server/goaldates.mjs'
 import Chip from './Chip.vue'
 import LinkTrail from './LinkTrail.vue'
 
 const weeks = computed(() => planWeeks())
 const thisWeek = computed(() => mondayOf(todayISO()))
 const inWeek = (s, w) => s >= w && s <= addDays(w, 6)
-const DATE = /^\d{4}-\d{2}-\d{2}$/
 
 const cols = computed(() => weeks.value.map((w) => {
   const dls = state.deadlines.filter((d) => !d.done && inWeek(d.due.slice(0, 10), w))
     .map((d) => ({ key: d.id, id: d.id, title: d.title, due: d.due.slice(0, 10), deadline: true }))
-  const goals = state.plans.filter((p) => p.status === 'active').flatMap((p) => [
-    ...p.sigs.filter((s) => s.status !== 'done' && DATE.test(s.timeBound ?? '')).map((s) => ({ key: `${p.id}/${s.no}`, id: s.no, title: s.name, due: s.timeBound })),
-    ...p.psgs.filter((g) => DATE.test(g.timeBound ?? '')).map((g) => ({ key: `${p.id}/${g.no}`, id: g.no, title: g.name, due: g.timeBound })),
-  ]).filter((g) => inWeek(g.due, w))
+  // goal dates (shared with Deadlines/Today: server/goaldates.mjs), shown quieter than the deadlines
+  const goals = goalDates(state).filter((g) => inWeek(g.date, w))
+    .map((g) => ({ key: g.key, id: g.no, title: g.title, due: g.date, planId: g.planId }))
   const { free, planned } = weekFree(w)
   return {
     w, free, planned,
@@ -35,6 +35,8 @@ const cols = computed(() => weeks.value.map((w) => {
     tasks: backlogTodos().filter((t) => planWeek(t) === w && shown(t)).sort(byPriority),
   }
 }))
+const router = useRouter()
+const openGoal = (g) => router.push(`/strategy/${g.planId}?goal=${encodeURIComponent(g.id)}`)
 const shown = (t) => (!props.prio || t.priority === props.prio) && todoMatches(t, props.q)
 const unplanned = computed(() => backlogTodos().filter((t) => !planWeek(t) && shown(t)).sort(byPriority))
 const uHours = computed(() => unplanned.value.reduce((s, t) => s + (t.timeMin || 0) / 60, 0))
@@ -78,8 +80,8 @@ const leave = (e, w) => { if (hot.value === w && !e.currentTarget.contains(e.rel
 
       <div v-if="c.due.length" class="due">
         <span
-          v-for="d in c.due" :key="d.key" class="dl" :class="{ click: d.deadline }" :title="d.deadline ? `Open ${d.id}` : 'Goal milestone'"
-          @click="d.deadline && (ui.deadlineId = d.id)"
+          v-for="d in c.due" :key="d.key" class="dl click" :class="{ goal: !d.deadline }" :title="d.deadline ? `Open ${d.id}` : `Goal date: ${d.id}'s target. Click to open the goal`"
+          @click="d.deadline ? (ui.deadlineId = d.id) : openGoal(d)"
         >
           <span class="icon sm">{{ d.deadline ? 'flag' : 'outlined_flag' }}</span>
           <span class="mono small dw">{{ wd(d.due).slice(0, 3) }}</span>
@@ -138,6 +140,9 @@ const leave = (e, w) => { if (hot.value === w && !e.currentTarget.contains(e.rel
 .dl.click { cursor: pointer; }
 .dl.click:hover { color: var(--accent); }
 .dw, .gid { color: var(--muted); }
+/* goal dates: quieter than deadlines */
+.dl.goal { color: var(--muted); font-size: 12px; }
+.dl.goal .icon { color: var(--info); font-size: 13px; }
 .trow { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 4px 12px; font-size: 15px; cursor: grab; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
 .trow:last-of-type { border-bottom: 0; }
 .trow:hover, .trow.linked { background: var(--surface-2); }
