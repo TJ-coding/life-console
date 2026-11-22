@@ -20,7 +20,7 @@
 ## Open source and self-hosting
 - License: GNU AGPL-3.0 (https://github.com/TJ-coding/life-console/blob/main/LICENSE). The hosted service runs the same code.
 - Source: https://github.com/TJ-coding/life-console
-- `git clone https://github.com/TJ-coding/life-console.git && cd life-console && cp .env.example .env && docker compose up -d` — PostgreSQL + app + backup job, about 300 MB RAM.
+- `git clone https://github.com/TJ-coding/life-console.git && cd life-console && cp .env.example .env && docker compose up -d`: PostgreSQL + app + backup job, about 300 MB RAM.
 - Self-hosting guide: https://life-console.dev/docs/self-hosting
 
 ## How it compares
@@ -30,7 +30,12 @@
 - Open-source and self-hosted planners compared: https://life-console.dev/alternatives/open-source-planners
 - Notion Life OS vs Life Console: https://life-console.dev/vs/notion-life-os
 - Life Console vs Amazing Marvin: https://life-console.dev/vs/amazing-marvin
+- Best time blocking apps compared (Life Console, Sunsama, Akiflow, Structured, TickTick, Super Productivity, Google Calendar): https://life-console.dev/alternatives/time-blocking-apps
+- Todoist alternatives for planning your day: https://life-console.dev/alternatives/todoist
 - What it doesn't do: no calendar sync, no integrations with other task apps, no AI scheduling, no native phone apps (installable web app instead; a Mac menu-bar app exists).
+
+## Free templates
+- Personal strategic plan template (vision, prioritised goals, measurable milestones, check schedule; printable, with a worked example): https://life-console.dev/templates/personal-strategic-plan
 
 ## Links
 - User guide (every screen and shortcut): https://life-console.dev/docs/guide

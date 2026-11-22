@@ -1,4 +1,4 @@
-/* Comparison pages (/vs/…, /alternatives/…, /alternatives), built by scripts/compare-pages.mjs.
+/* Comparison pages (/vs/…, /alternatives/…, /alternatives) and templates (/templates/…), built by scripts/compare-pages.mjs.
    Same look as the landing page: its tokens, header, buttons and self-hosted fonts (SIL OFL 1.1, /media/fonts/). */
 @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400 700; font-display: swap; src: url(/media/fonts/inter-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 400 700; font-display: swap; src: url(/media/fonts/jetbrains-mono-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
@@ -122,4 +122,24 @@ table tbody td:first-child strong { color: var(--text); }
   tbody td:first-child { color: var(--text); font-weight: 600; padding-top: 12px; }
   td[data-label]::before { content: attr(data-label); display: block; font: 500 11px/1.5 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
   table.lc-col tr > :nth-child(2) { background: var(--tint); }
+}
+
+/* templates: blank tables to fill in, and a print layout that prints only the template */
+.blank table { table-layout: fixed; }
+.blank th { white-space: normal; }
+.blank td { height: 44px; }
+.blank td:empty::after { content: ""; }
+.howto { border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; color: var(--muted); }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --text: #000; --muted: #333; --border: #999; --rule: #bbb; --accent: #000; --tint: transparent; color-scheme: light; }
+  header, footer, .closer, .crumbs, .no-print, article img { display: none !important; }
+  article { max-width: none; padding: 0 2px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  h2 { font-size: 15px; margin: 18px 0 6px; break-after: avoid; }
+  .table { border: 1px solid #999; border-radius: 0; break-inside: avoid; overflow: visible; }
+  table { font-size: 11px; }
+  .blank td { height: 34px; }
+  thead { display: table-header-group !important; }
+  table, tbody, tr, td { display: revert !important; }
+  td[data-label]::before { content: none !important; }
 }

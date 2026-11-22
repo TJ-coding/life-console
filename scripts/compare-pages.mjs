@@ -1,10 +1,10 @@
-// Builds the comparison pages (life-console.dev/vs/<app>, /alternatives/<app> and the /alternatives hub) from
-// compare/*.md. Runs after `vite build` and writes into dist/, plus dist/compare-pages.json, which the server reads
+// Builds the comparison pages (life-console.dev/vs/<app>, /alternatives/<app> and the /alternatives hub) and the
+// free planning templates (/templates/<name>) from compare/*.md. Runs after `vite build` and writes into dist/, plus dist/compare-pages.json, which the server reads
 // to route the pages and list them in the sitemap.
 //
 // Each source file starts with a front-matter block:
 //   ---
-//   path: /vs/sunsama                  (or /alternatives/sunsama)
+//   path: /vs/sunsama                  (or /alternatives/sunsama, or /templates/<name>)
 //   title: …                           (<title>, ~60 characters, the search phrase first)
 //   description: …                     (meta description, ~155 characters)
 //   card: …                            (one line for the hub)
@@ -20,7 +20,9 @@ import { marked } from 'marked'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SITE = 'https://life-console.dev'
 const REPO = 'https://github.com/TJ-coding/life-console'
-export const PATH_RE = /^\/(vs|alternatives)\/[a-z0-9-]+$/
+export const PATH_RE = /^\/(vs|alternatives|templates)\/[a-z0-9-]+$/
+/** Templates aren't comparisons: no Comparisons crumb, not on the hub, and they don't list the comparison pages. */
+export const isTemplate = (p) => p.startsWith('/templates/')
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const slugify = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -35,7 +37,7 @@ export function parsePage(src, name = 'page') {
     if (kv) meta[kv[1]] = kv[2].trim()
   }
   for (const k of ['path', 'title', 'description', 'card', 'updated']) if (!meta[k]) throw new Error(`${name}: front matter needs "${k}"`)
-  if (!PATH_RE.test(meta.path)) throw new Error(`${name}: path must look like /vs/<app> or /alternatives/<app>`)
+  if (!PATH_RE.test(meta.path)) throw new Error(`${name}: path must look like /vs/<app>, /alternatives/<app> or /templates/<name>`)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(meta.updated)) throw new Error(`${name}: updated must be YYYY-MM-DD`)
   return { ...meta, body: m[2] }
 }
@@ -95,7 +97,7 @@ function shell({ title, description, canonical, body, place }) {
 ${header(place)}
 <main>
 <article>
-${place === '/alternatives' ? '' : '<p class="crumbs"><a href="/alternatives">Comparisons</a> /</p>\n'}${body}
+${place === '/alternatives' || isTemplate(place) ? '' : '<p class="crumbs"><a href="/alternatives">Comparisons</a> /</p>\n'}${body}
 </article>
 ${cta(place)}
 </main>
@@ -158,7 +160,7 @@ ${vs ? `<h2 id="head-to-head">Head to head</h2>\n${vs}` : ''}
 <p>No calendar sync, no integrations with other task apps, no AI scheduling and no native phone apps (it installs from the browser instead, and has a Mac menu-bar app). If you need those, the pages above say which app does them.</p>`
   return shell({
     title: 'Life Console alternatives: open-source planner comparisons',
-    description: 'How Life Console, the free and open-source time-blocking planner, compares with Sunsama and other daily planners: price, self-hosting, features and where each one is better.',
+    description: 'How Life Console, the free and open-source time-blocking planner, compares with Sunsama, Todoist, Notion and other planners: price, self-hosting, features and where each is better.',
     canonical: '/alternatives', body, place: '/alternatives',
   })
 }
@@ -179,10 +181,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     seen.add(p.path)
     const file = path.join(dist, `${p.path}.html`)
     fs.mkdirSync(path.dirname(file), { recursive: true })
-    fs.writeFileSync(file, renderPage(p, pages.filter((o) => o !== p)))
+    fs.writeFileSync(file, renderPage(p, isTemplate(p.path) ? [] : pages.filter((o) => o !== p && !isTemplate(o.path))))
   }
-  fs.writeFileSync(path.join(dist, 'alternatives.html'), renderHub(pages))
-  const updated = pages.map((p) => p.updated).sort().at(-1)
+  const comparisons = pages.filter((p) => !isTemplate(p.path))
+  fs.writeFileSync(path.join(dist, 'alternatives.html'), renderHub(comparisons))
+  const updated = comparisons.map((p) => p.updated).sort().at(-1)
   const manifest = [{ path: '/alternatives', updated }, ...pages.map((p) => ({ path: p.path, updated: p.updated }))]
   fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify(manifest, null, 1) + '\n')
   console.log(`comparison pages: ${manifest.map((p) => p.path).join(', ')}`)
