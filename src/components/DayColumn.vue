@@ -14,12 +14,13 @@ import WorkloadBucket from './WorkloadBucket.vue'
 import Gauge from './Gauge.vue'
 import Stamps from './Stamps.vue'
 import Prio from './Prio.vue'
+import { goalDates } from '../../server/goaldates.mjs'
 
 const router = useRouter()
 // ISS-38: a day in Plan week opens it in the Command Center with the backlog beside it, to plan that day
 const openDay = () => { ui.dayPlanning = true; router.push(props.date === todayISO() ? '/?plan=1' : `/day/${props.date}?plan=1`) }
 // balance: ② Assign day only — { avg, counts (days the average covers), rows, moves } from the planner
-const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object, dlRows: { type: Number, default: 0 } })
+const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object, dlRows: { type: Number, default: 0 }, goalRow: { type: Boolean, default: false } })
 /* ② Assign day: the space under the day does that day's job — on an over-full day, what to move out
    (the planner's rebalance moves); on a day with room, the backlog tasks the planner gives it */
 const free = computed(() => capH() - hours.value)
@@ -39,6 +40,10 @@ const untimed = computed(() => todos.value.filter((t) => !t.done && !t.scheduled
 const blocks = computed(() => blocksForDay(props.date))
 const hours = computed(() => workload(props.date))
 const deadlines = computed(() => state.deadlines.filter((d) => d.due.slice(0, 10) === props.date).sort((a, b) => a.due.localeCompare(b.due)))
+/* goal dates on this day (PSG/SIG time bounds): a quiet mark in the date row, never a banner like a deadline */
+const goalsHere = computed(() => goalDates(state).filter((g) => g.date === props.date))
+const openGoal = (g) => router.push(`/strategy/${g.planId}?goal=${encodeURIComponent(g.no)}`)
+const goalsTitle = computed(() => goalsHere.value.map((g) => `Goal date: ${g.no} ${g.title} · ${g.pct}%`).join('\n') + '\nClick to open the goal')
 const matches = (links) => !props.filter || links.includes(props.filter)
 const dimBlock = (b) => props.filter && b.link !== props.filter && !(b.todoId && matches(state.todos.find((t) => t.id === b.todoId)?.links ?? []))
 const dimTodo = (t) => !matches(t.links)
@@ -86,6 +91,11 @@ function auto() {
         <span v-if="isToday" class="mono tiny ok">● NOW</span>
         <button class="btn sm icon-only addbtn" :class="{ active: adding }" :title="`Add a deadline on ${wd(date)}`" @click.stop="adding = !adding" @keydown.enter.stop><span class="icon sm">flag</span></button>
         <span class="icon sm open">open_in_new</span>
+      </div>
+      <div v-if="goalRow || goalsHere.length" class="grow-row">
+        <button v-if="goalsHere.length" type="button" class="gmk" :title="goalsTitle" @click.stop="openGoal(goalsHere[0])" @keydown.enter.stop>
+          <span class="icon">flag</span><span class="ellipsis">{{ goalsHere[0].title }}</span><span v-if="goalsHere.length > 1" class="mono">+{{ goalsHere.length - 1 }}</span>
+        </button>
       </div>
       <div class="row">
         <span v-if="hours > capH()" class="icon sm danger" title="Over capacity">warning</span>
@@ -203,4 +213,9 @@ function auto() {
 .pad { padding: 2px; }
 .notes { width: 100%; font-size: 11px; line-height: 15px; }
 .stamps-sec { display: flex; justify-content: center; border-bottom: 0; padding: 8px; }
+/* goal date: a quiet mark beside the date (deadlines get the banner above) */
+.grow-row { display: flex; height: 16px; min-width: 0; }
+.gmk { display: inline-flex; align-items: center; gap: 2px; min-width: 0; max-width: 100%; border: 0; background: transparent; padding: 0 2px; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.gmk .icon { font-size: 12px; color: var(--info); flex: none; }
+.gmk:hover { color: var(--text); }
 </style>

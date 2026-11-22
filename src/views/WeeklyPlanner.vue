@@ -1,4 +1,5 @@
 <script setup>
+import { goalDates } from '../../server/goaldates.mjs'
 import { feature, isEnabled } from '../edition'
 // S-10 · Plan week — the whole flow on one sheet, like the paper planner:
 //   ① Backlog (left) → ② Workload bucket per day (assign day) → ③ timeline right below it (assign time)
@@ -76,6 +77,8 @@ const placement = computed(() => {
 // ISS-41: the busiest day's deadline count this week. Columns with fewer start lower by the
 // difference, so every date lines up under the banners
 const dlRows = computed(() => Math.max(0, ...week.value.map((d) => state.deadlines.filter((x) => x.due.slice(0, 10) === d).length)))
+// goal dates get one quiet line under each day's date; when any day this week has one, every day keeps the line so the rows stay level
+const goalRow = computed(() => { const gs = goalDates(state); return week.value.some((d) => gs.some((g) => g.date === d)) })
 const balancing = computed(() => ui.planMode === 'days' && !ui.backlogOnly)
 const dayBalance = computed(() => (balancing.value
   ? {
@@ -158,10 +161,10 @@ const print = () => window.print()
 
       <template v-if="!ui.backlogOnly">
       <div class="days" :class="'mode-' + ui.planMode">
-        <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" />
+        <DayColumn v-for="d in days" :key="d" :date="d" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" :goal-row="goalRow" />
         <div class="weekend">
-          <DayColumn :date="sat" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" />
-          <DayColumn :date="sun" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" />
+          <DayColumn :date="sat" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" :goal-row="goalRow" />
+          <DayColumn :date="sun" :filter="filter" :mode="ui.planMode" :balance="dayBalance" :dl-rows="dlRows" :goal-row="goalRow" />
         </div>
       </div>
       </template>
