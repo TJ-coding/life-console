@@ -10,6 +10,7 @@ import Gauge from './Gauge.vue'
 import Stamps from './Stamps.vue'
 import Chip from './Chip.vue'
 import DeadlineQuickAdd from './DeadlineQuickAdd.vue'
+import { goalDates } from '../../server/goaldates.mjs'
 
 const props = defineProps({ date: { type: String, required: true }, isToday: Boolean })
 const T = computed(() => props.date)
@@ -18,6 +19,8 @@ const nowMin = computed(() => ui.now.getHours() * 60 + ui.now.getMinutes())
 
 const deadlines = computed(() =>
   state.deadlines.filter((d) => !d.done && diffDays(T.value, d.due) <= 7).sort((a, b) => a.due.localeCompare(b.due)))
+/* goal dates in the same 7 days (and any that have passed), flagged so they read as targets, not deadlines */
+const goalsSoon = computed(() => goalDates(state).filter((g) => diffDays(T.value, g.date) <= 7))
 const psgs = computed(() =>
   activePlans().flatMap((pl) => pl.psgs.map((p) => ({ ...p, plan: pl.id, planNo: pl.planNo })))
     .sort((a, b) => a.priority - b.priority).slice(0, 3).map((p) => ({ ...p, pct: psgPct(p.no), next: nextSig(p.no) })))
@@ -53,7 +56,13 @@ const lectures = computed(() => state.lectures.filter((l) => l.date === T.value)
           <span class="mono small nowrap" :class="diffDays(T, d.due) < 0 ? 'danger' : diffDays(T, d.due) <= 1 ? 'warn' : 'muted'">{{ relDay(d.due, T) }} · {{ d.due.slice(11) }}</span>
           <Chip v-if="d.source" :id="d.source" />
         </label>
-        <div v-if="!deadlines.length" class="empty">No deadlines in the next 7 days.</div>
+        <router-link v-for="g in goalsSoon" :key="g.key" class="dline gline" :to="`/strategy/${g.planId}?goal=${encodeURIComponent(g.no)}`" :title="`Goal date: ${g.no}'s target`">
+          <span class="icon sm gflag">flag</span>
+          <span class="grow ellipsis">{{ g.title }}</span>
+          <span class="mono small nowrap" :class="diffDays(T, g.date) < 0 ? 'warn' : 'muted'">{{ relDay(g.date, T) }} · {{ g.pct }}%</span>
+          <Chip :id="g.no" />
+        </router-link>
+        <div v-if="!deadlines.length && !goalsSoon.length" class="empty">No deadlines in the next 7 days.</div>
       </div>
       <DeadlineQuickAdd :date="T" />
     </section>
@@ -164,4 +173,6 @@ a.tile:hover { border-color: var(--accent); }
 .checks { flex-wrap: wrap; gap: 10px; }
 .checks label { display: flex; align-items: center; gap: 4px; }
 @media (max-width: 700px) { .c6 { grid-column: span 12; } .tiles { grid-template-columns: 1fr; } }
+.gline { color: var(--text); }
+.gflag { color: var(--info); width: 14px; flex: none; }
 </style>

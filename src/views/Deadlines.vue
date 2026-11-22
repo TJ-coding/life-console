@@ -1,8 +1,12 @@
 <script setup>
-// S-21 · Deadlines — hard due dates, as a grouped list or a month calendar.
+// S-21 · Deadlines — hard due dates, as a grouped list or a month calendar. Goal dates (a PSG's or SIG's time bound,
+// server/goaldates.mjs) sit among them as their own kind: a flag instead of a checkbox, progress instead of a
+// countdown, "late" instead of "overdue"; clicking one opens the goal. A switch in the toolbar hides them.
 // Questions, in order (docs/DESIGN.md): what's due soonest and how long do I have? what's overdue? what comes after?
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
-import { state, ui, todayISO, addDays, mondayOf, wd, fmtSlash, fmtMD, relDay, isOverdue, parseISO, pad, MONTHS } from '../store'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
+import { goalDates } from '../../server/goaldates.mjs'
+import { state, ui, todayISO, addDays, mondayOf, wd, fmtSlash, fmtMD, relDay, isOverdue, parseISO, pad, MONTHS, diffDays } from '../store'
 import DeadlineQuickAdd from '../components/DeadlineQuickAdd.vue'
 import Chip from '../components/Chip.vue'
 import Prio from '../components/Prio.vue'
@@ -23,18 +27,34 @@ const addingDay = ref(null) // month view: the day whose cell shows an inline ad
 const sources = computed(() => [...new Set(state.deadlines.map((d) => d.source).filter(Boolean))].sort())
 const visible = computed(() => state.deadlines.filter((d) => !source.value || d.source === source.value))
 
+/* ── goal dates ── */
+const router = useRouter()
+let goalsPref = true
+try { goalsPref = localStorage.getItem('life-console/deadlines-goals') !== '0' } catch { /* ignore */ }
+const showGoals = ref(goalsPref)
+watch(showGoals, (v) => { try { localStorage.setItem('life-console/deadlines-goals', v ? '1' : '0') } catch { /* ignore */ } })
+const goals = computed(() => (showGoals.value ? goalDates(state) : [])
+  .filter((g) => !source.value || g.no === source.value || g.psg === source.value)
+  .map((g) => ({ ...g, goal: true, due: `${g.date}T23:59` })))
+const goalLeft = (g) => { const n = diffDays(T.value, g.date); return n === 0 ? 'today' : n > 0 ? `${n}d` : `${-n}d late` }
+const goalCls = (g) => (g.date < T.value ? 'warn' : 'gcd')
+const openGoal = (g) => router.push(`/strategy/${g.planId}?goal=${encodeURIComponent(g.no)}`)
+const byDue = (a, b) => a.due.localeCompare(b.due)
+
 /* ── list groups ── */
 const groups = computed(() => {
   const sun = addDays(mondayOf(T.value), 6)
   const nextSun = addDays(sun, 7)
-  const open = visible.value.filter((d) => !d.done).sort((a, b) => a.due.localeCompare(b.due))
+  const open = visible.value.filter((d) => !d.done).sort(byDue)
   const day = (d) => d.due.slice(0, 10)
+  const gs = goals.value
   const g = [
     { key: 'overdue', label: 'Overdue', icon: 'warning', cls: 'danger', items: open.filter(isOverdue) },
-    { key: 'today', label: 'Today', icon: 'today', cls: 'warn', items: open.filter((d) => !isOverdue(d) && day(d) === T.value) },
-    { key: 'week', label: 'This week', icon: 'date_range', cls: '', items: open.filter((d) => !isOverdue(d) && day(d) > T.value && day(d) <= sun) },
-    { key: 'next', label: 'Next week', icon: 'event_upcoming', cls: '', items: open.filter((d) => day(d) > sun && day(d) <= nextSun) },
-    { key: 'later', label: 'Later', icon: 'schedule', cls: '', items: open.filter((d) => day(d) > nextSun) },
+    { key: 'late', label: 'Goal dates passed', icon: 'flag', cls: 'warn', items: gs.filter((x) => x.date < T.value) },
+    { key: 'today', label: 'Today', icon: 'today', cls: 'warn', items: [...open.filter((d) => !isOverdue(d) && day(d) === T.value), ...gs.filter((x) => x.date === T.value)].sort(byDue) },
+    { key: 'week', label: 'This week', icon: 'date_range', cls: '', items: [...open.filter((d) => !isOverdue(d) && day(d) > T.value && day(d) <= sun), ...gs.filter((x) => x.date > T.value && x.date <= sun)].sort(byDue) },
+    { key: 'next', label: 'Next week', icon: 'event_upcoming', cls: '', items: [...open.filter((d) => day(d) > sun && day(d) <= nextSun), ...gs.filter((x) => x.date > sun && x.date <= nextSun)].sort(byDue) },
+    { key: 'later', label: 'Later', icon: 'schedule', cls: '', items: [...open.filter((d) => day(d) > nextSun), ...gs.filter((x) => x.date > nextSun)].sort(byDue) },
   ]
   if (showDone.value) g.push({ key: 'done', label: 'Done', icon: 'task_alt', cls: 'muted', items: visible.value.filter((d) => d.done).sort((a, b) => b.due.localeCompare(a.due)) })
   return g
@@ -58,7 +78,7 @@ const cells = computed(() => {
   for (let i = 0; i < 42; i++) {
     const d = addDays(start, i)
     if (i >= 35 && d.slice(0, 7) !== month.value) break
-    out.push({ d, inMonth: d.slice(0, 7) === month.value, items: visible.value.filter((x) => x.due.slice(0, 10) === d && (showDone.value || !x.done)).sort((a, b) => a.due.localeCompare(b.due)) })
+    out.push({ d, inMonth: d.slice(0, 7) === month.value, items: [...visible.value.filter((x) => x.due.slice(0, 10) === d && (showDone.value || !x.done)), ...goals.value.filter((x) => x.date === d)].sort(byDue) })
   }
   return out
 })
@@ -84,6 +104,7 @@ const open = (d) => { ui.deadlineId = d.id }
         <span class="tiny upper muted">Source</span>
         <select v-model="source" class="select mono small"><option value="">All</option><option v-for="s in sources" :key="s" :value="s">{{ s }}</option></select>
       </div>
+      <label class="row small" title="Your goals' target dates (PSG / SIG time bounds), shown among the deadlines"><input v-model="showGoals" type="checkbox" /> <span class="icon sm gflag">flag</span>Goal dates<span v-if="showGoals" class="mono muted">{{ goals.length }}</span></label>
       <label class="row small"><input v-model="showDone" type="checkbox" /> Show done</label>
     </div>
 
@@ -102,7 +123,20 @@ const open = (d) => { ui.deadlineId = d.id }
     <div class="list">
       <section v-for="g in groups.filter((x) => x.items.length)" :key="g.key" class="grp">
         <div class="gh row" :class="g.cls"><span class="icon sm">{{ g.icon }}</span><b>{{ g.label }}</b><span class="mono small muted">{{ g.items.length }}</span></div>
-        <div v-for="d in g.items" :key="d.id" class="item" :class="{ over: isOverdue(d), done: d.done }" @click="open(d)">
+        <template v-for="d in g.items" :key="d.goal ? d.key : d.id">
+        <div v-if="d.goal" class="item goal" :title="`Goal date: ${d.no}'s target. Click to open the goal`" @click="openGoal(d)">
+          <span class="icon sm gflag">flag</span>
+          <span class="mono cd" :class="goalCls(d)">{{ goalLeft(d) }}</span>
+          <div class="grow main">
+            <div class="ttl">{{ d.title }}</div>
+            <div class="meta mono">
+              <span :class="d.date < T ? 'warn' : ''">Goal date · {{ wd(d.date) }} {{ fmtSlash(d.date) }}</span>
+              <Chip :id="d.no" />
+              <span class="gpct">{{ d.pct }}%</span><span class="gbar"><i :style="{ width: d.pct + '%' }"></i></span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="item" :class="{ over: isOverdue(d), done: d.done }" @click="open(d)">
           <input v-model="d.done" type="checkbox" title="Done" @click.stop />
           <span class="mono cd" :class="d.done ? 'muted' : urgency(d.due)">{{ d.done ? 'done' : minsTo(d.due) <= 0 ? 'overdue' : countdown(d.due) }}</span>
           <div class="grow main">
@@ -116,8 +150,9 @@ const open = (d) => { ui.deadlineId = d.id }
           </div>
           <Prio :p="d.priority" />
         </div>
+        </template>
       </section>
-      <div v-if="!groups.some((x) => x.items.length)" class="empty">No deadlines. Add one above.</div>
+      <div v-if="!groups.some((x) => x.items.length)" class="empty">No deadlines or goal dates. Add a deadline above, or give a goal a time bound on its plan.</div>
     </div>
 
     </div>
@@ -143,12 +178,15 @@ const open = (d) => { ui.deadlineId = d.id }
             <span class="spacer"></span>
             <button class="plus" :title="`Add a deadline on ${wd(c.d)} ${fmtMD(c.d)}`" @click.stop="pick(c.d)"><span class="icon">add</span></button>
           </div>
+          <template v-for="d in c.items" :key="d.goal ? d.key : d.id">
+          <button v-if="d.goal" class="ev goal" :title="`Goal date · ${d.no} ${d.title} · ${d.pct}%`" @click.stop="openGoal(d)"><span class="icon gflag">flag</span>{{ d.title }}</button>
           <button
-            v-for="d in c.items" :key="d.id" class="ev" :class="{ over: isOverdue(d), done: d.done }"
+            v-else class="ev" :class="{ over: isOverdue(d), done: d.done }"
             :title="`${d.title} · ${d.due.slice(11)}${d.internal ? ' · INT ' + d.internal : ''}${d.vital ? ' · ' + d.vital : ''}`" @click.stop="open(d)"
           >
             <span class="mono">{{ d.due.slice(11) }}</span> {{ d.title }}
           </button>
+          </template>
           <div v-if="addingDay === c.d" class="inline-add" @click.stop @focusout="onCellFocusOut">
             <DeadlineQuickAdd :date="c.d" compact autofocus :placeholder="`Title 17:00 p1…`" @cancel="addingDay = null" />
           </div>
@@ -210,6 +248,15 @@ const open = (d) => { ui.deadlineId = d.id }
 .ev .mono { color: var(--muted); font-size: 10px; }
 .ev.over { border-color: var(--danger); border-left-color: var(--danger); }
 .ev.done { opacity: 0.5; text-decoration: line-through; border-left-color: var(--muted); }
+/* goal dates: your own targets, told apart from hard deadlines by a flag, the info colour and a progress bar */
+.gflag { color: var(--info); }
+.item.goal > .gflag { flex: none; width: 14px; font-size: 15px; }
+.cd.gcd { color: var(--info); font-weight: 600; }
+.gpct { color: var(--text); }
+.gbar { display: inline-block; width: 56px; height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
+.gbar > i { display: block; height: 100%; background: var(--info); }
+.ev.goal { border-color: color-mix(in srgb, var(--info) 45%, var(--border)); border-left-color: var(--info); display: flex; align-items: center; gap: 3px; }
+.ev.goal .icon { font-size: 12px; }
 @media (max-width: 700px) {
   .hero { margin: 10px 12px 0; padding: 14px; }
   .list { padding: 10px 12px 20px; }

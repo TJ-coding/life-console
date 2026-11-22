@@ -5,6 +5,7 @@ import { feature, isEnabled } from '../edition'
 // next DEADLINES and the rest of TODAY.
 // Everything else is one quiet telemetry strip at the bottom, and only exceptions get colour.
 import { computed, ref, watch, watchEffect, nextTick, onMounted } from 'vue'
+import { goalDates } from '../../server/goaldates.mjs'
 import { useRoute, useRouter } from 'vue-router'
 import {
   state, ui, todayISO, wd, isoWeek, todosForDay, blocksForDay, workload, capH,
@@ -116,6 +117,8 @@ function addCoffee() {
 const alerts = computed(() => [
   ...activePlans().map((p) => ({ id: p.id, text: `Plan ${p.planNo} check`, date: nextCheckDate(p), to: `/strategy/${p.id}` })),
   ...shownReviews().map((r) => ({ id: r.id, text: r.title, date: r.date, to: null })), // reviews: a prototype, hidden for now
+  // goal dates (PSG/SIG time bounds): only once they're tomorrow, today or passed
+  ...goalDates(state).map((g) => ({ id: g.key, text: `Goal ${g.no} ${g.pct}%`, date: g.date, to: `/strategy/${g.planId}?goal=${encodeURIComponent(g.no)}` })),
 ].filter((a) => diffDays(T.value, a.date) <= 1).sort((a, b) => a.date.localeCompare(b.date)))
 const lectures = computed(() => state.lectures.filter((l) => l.date === T.value))
 
