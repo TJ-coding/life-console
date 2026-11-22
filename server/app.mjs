@@ -26,7 +26,7 @@ const MIME = {
 const LEGAL = new Set(['/privacy', '/terms'])
 const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
 const DOCS_DATE = '2026-11-10' // sitemap <lastmod> for the docs pages: bump when they change
-const LANDING_DATE = '2026-11-18' // sitemap <lastmod> for the landing page: bump when it changes
+const LANDING_DATE = '2026-11-23' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
 function send(res, status, body, headers = {}) {
@@ -54,11 +54,11 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   let BUILD = 'dev' // the content-hashed entry script names the deployed front-end build
   try { BUILD = (fs.readFileSync(path.join(dist, 'index.html'), 'utf8').match(/assets\/(index-[\w-]+\.js)/) || [])[1] || 'dev' } catch { /* no dist yet */ }
 
-  // comparison pages (/alternatives, /vs/…, /alternatives/…): built by scripts/compare-pages.mjs, public site only
+  // comparison pages (/alternatives, /vs/…, /alternatives/…) and templates (/templates/…): built by scripts/compare-pages.mjs, public site only
   let COMPARE = new Map()
   try {
     COMPARE = new Map(JSON.parse(fs.readFileSync(path.join(dist, 'compare-pages.json'), 'utf8'))
-      .filter((p) => p.path === '/alternatives' || /^\/(vs|alternatives)\/[a-z0-9-]+$/.test(p.path)).map((p) => [p.path, p.updated]))
+      .filter((p) => p.path === '/alternatives' || /^\/(vs|alternatives|templates)\/[a-z0-9-]+$/.test(p.path)).map((p) => [p.path, p.updated]))
   } catch { /* not built yet */ }
 
   const signups = createSignups(db, cfg)

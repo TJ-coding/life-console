@@ -30,7 +30,9 @@ fs.writeFileSync(path.join(dist, 'docs', 'self-hosting.html'), '<title>SELF-HOST
 fs.mkdirSync(path.join(dist, 'vs'))
 fs.writeFileSync(path.join(dist, 'vs', 'sunsama.html'), '<head><title>VS-SUNSAMA</title></head>')
 fs.writeFileSync(path.join(dist, 'alternatives.html'), '<head><title>HUB</title></head>')
-fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify([{ path: '/alternatives', updated: '2026-11-18' }, { path: '/vs/sunsama', updated: '2026-11-17' }, { path: '/../index', updated: 'x' }]))
+fs.mkdirSync(path.join(dist, 'templates'))
+fs.writeFileSync(path.join(dist, 'templates', 'personal-strategic-plan.html'), '<head><title>TEMPLATE</title></head>')
+fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify([{ path: '/alternatives', updated: '2026-11-18' }, { path: '/vs/sunsama', updated: '2026-11-17' }, { path: '/templates/personal-strategic-plan', updated: '2026-11-23' }, { path: '/../index', updated: 'x' }]))
 fs.mkdirSync(path.join(dist, 'media'))
 const VIDEO = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 256))
 fs.writeFileSync(path.join(dist, 'media', 'clip.mp4'), VIDEO)
@@ -288,7 +290,7 @@ test('edition landing paths: /minimalist is its page for visitors; signed-in peo
 })
 
 test('comparison pages: served and listed in the sitemap on the public site only, tagged "compare"', async () => {
-  for (const [p, title] of [['/vs/sunsama', 'VS-SUNSAMA'], ['/alternatives', 'HUB']]) {
+  for (const [p, title] of [['/vs/sunsama', 'VS-SUNSAMA'], ['/alternatives', 'HUB'], ['/templates/personal-strategic-plan', 'TEMPLATE']]) {
     const r = await get(on, p)
     assert.equal(r.status, 200, p)
     assert.match(r.body.toString(), new RegExp(`<title>${title}</title>`))
@@ -299,7 +301,8 @@ test('comparison pages: served and listed in the sitemap on the public site only
   const map = (await get(on, '/sitemap.xml')).body.toString()
   assert.ok(map.includes('<url><loc>https://lc.test/vs/sunsama</loc><lastmod>2026-11-17</lastmod>'))
   assert.ok(map.includes('<loc>https://lc.test/alternatives</loc>'))
-  assert.ok(!map.includes('index'), 'paths outside /vs/ and /alternatives/ are ignored')
+  assert.ok(map.includes('<loc>https://lc.test/templates/personal-strategic-plan</loc>'))
+  assert.ok(!map.includes('index'), 'paths outside /vs/, /alternatives/ and /templates/ are ignored')
   const html = (await get(heat, '/vs/sunsama')).body.toString()
   assert.ok(html.includes('data-tag="compare"></script>'))
   assert.doesNotMatch(html, /recorder/)
@@ -320,6 +323,13 @@ test('scripts/compare-pages.mjs: front matter is checked, pages link to each oth
   const hub = renderHub([a, b])
   assert.ok(hub.includes('href="/vs/sunsama"') && hub.includes('href="/alternatives/sunsama"'))
   assert.throws(() => parsePage(src('/sunsama')), /path must/)
+  // templates (/templates/…): allowed paths, no Comparisons crumb, left off the hub
+  const t = parsePage(src('/templates/personal-strategic-plan'))
+  const tHtml = renderPage(t, [])
+  assert.ok(tHtml.includes('<link rel="canonical" href="https://life-console.dev/templates/personal-strategic-plan" />'))
+  assert.ok(!tHtml.includes('href="/alternatives">Comparisons</a> /'), 'a template has no Comparisons crumb')
+  assert.ok(tHtml.includes('data-umami-event-place="/templates/personal-strategic-plan"'))
+  assert.ok(!renderHub([a, b]).includes('/templates/'))
   assert.throws(() => parsePage('---\npath: /vs/x\n---\n'), /needs "title"/)
   assert.throws(() => parsePage('# no front matter'), /no front matter/)
 })
