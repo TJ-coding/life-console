@@ -20,8 +20,7 @@ const quiet = () => {}
 // a fake build: the app shell, the landing page and one "video"
 const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-dist-'))
 fs.writeFileSync(path.join(dist, 'index.html'), '<title>APP</title>')
-fs.writeFileSync(path.join(dist, 'landing.html'), '<head><title>LANDING</title></head>')
-fs.writeFileSync(path.join(dist, 'landing-b.html'), '<head><title>LANDING-B</title></head><b class="stars"><!--stars--></b>')
+fs.writeFileSync(path.join(dist, 'landing.html'), '<head><title>LANDING</title></head><b class="stars"><!--stars--></b>')
 fs.writeFileSync(path.join(dist, 'landing-minimalist.html'), '<head><title>MINIMALIST</title></head>')
 fs.writeFileSync(path.join(dist, 'llms.txt'), '# Life Console')
 fs.mkdirSync(path.join(dist, 'docs'))
@@ -49,7 +48,7 @@ async function start(env) {
   servers.push([app, s])
   return `http://127.0.0.1:${s.address().port}`
 }
-let on, off, tracked, heat, framed, ab
+let on, off, tracked, heat, framed
 
 before(async () => {
   const admin = new pg.Client({ connectionString: ADMIN_URL })
@@ -63,7 +62,6 @@ before(async () => {
   tracked = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123' })
   heat = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123', ANALYTICS_RECORDER: '/stats/recorder.js' })
   framed = await start({ LANDING: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123', ANALYTICS_DASHBOARD: 'http://umami.lan:3100/websites' })
-  ab = await start({ LANDING: 'on', LANDING_AB: 'on', ANALYTICS_SCRIPT: '/stats/lc.js', ANALYTICS_SITE_ID: 'abc-123' })
 })
 after(async () => {
   for (const [app, s] of servers) { app.close(); s.close() }
@@ -135,7 +133,7 @@ test('static files support byte ranges (Safari needs them for <video>)', async (
 })
 
 test('ANALYTICS_SCRIPT + ANALYTICS_SITE_ID: the landing page gets the tracker tag, the app and a plain landing page never do', async () => {
-  const tag = '<script defer src="/stats/lc.js" data-website-id="abc-123" data-tag="landing-a"></script>'
+  const tag = '<script defer src="/stats/lc.js" data-website-id="abc-123" data-tag="landing"></script>'
   const visitor = await get(tracked, '/')
   assert.equal(visitor.status, 200)
   assert.equal(visitor.headers.get('x-lc-page'), 'landing')
@@ -150,7 +148,7 @@ test('ANALYTICS_SCRIPT + ANALYTICS_SITE_ID: the landing page gets the tracker ta
 test('ANALYTICS_RECORDER: the heatmap recorder goes on the landing page only, never the app or /api/health', async () => {
   const rec = '<script defer src="/stats/recorder.js" data-website-id="abc-123"></script>'
   const visitor = (await get(heat, '/')).body.toString()
-  assert.ok(visitor.includes('data-tag="landing-a"></script>\n' + rec + '\n</head>'), 'tracker first, then the recorder')
+  assert.ok(visitor.includes('data-tag="landing"></script>\n' + rec + '\n</head>'), 'tracker first, then the recorder')
   assert.doesNotMatch((await get(heat, '/', { Cookie: 'lc_session=abc' })).body.toString(), /recorder/)
   assert.doesNotMatch((await get(heat, '/app')).body.toString(), /recorder/)
   assert.doesNotMatch((await get(heat, '/api/health')).body.toString(), /recorder/)
@@ -174,38 +172,13 @@ test('ANALYTICS_DASHBOARD: only that origin may frame the landing page (heatmap 
   assert.throws(() => loadConfig({ DATABASE_URL: dbUrl, ANALYTICS_DASHBOARD: 'umami.lan' }), /ANALYTICS_DASHBOARD/)
 })
 
-test('LANDING_AB=on: a visitor gets A or B at random, keeps it via lc_lp, and Umami is tagged with the variant', async () => {
-  const seen = new Set()
-  for (let i = 0; i < 40 && seen.size < 2; i++) {
-    const r = await get(ab, '/')
-    const lp = /^lc_lp=([ab]); Path=\/; Max-Age=7776000; SameSite=Lax(; Secure)?$/.exec(r.headers.get('set-cookie'))?.[1]
-    assert.ok(lp, r.headers.get('set-cookie'))
-    assert.match(r.body.toString(), lp === 'b' ? /LANDING-B/ : /<title>LANDING<\/title>/)
-    assert.ok(r.body.toString().includes(`data-tag="landing-${lp}"`))
-    assert.equal(r.headers.get('x-lc-page'), 'landing')
-    assert.equal(r.headers.get('vary'), 'Cookie')
-    seen.add(lp)
+test('one landing page: no variant cookie, old A/B links still show it, none when LANDING is off', async () => {
+  for (const p of ['/', '/?lp=a', '/?lp=b']) {
+    const r = await get(on, p, { Cookie: 'lc_lp=b' })
+    assert.match(r.body.toString(), /<title>LANDING<\/title>/, p)
+    assert.equal(r.headers.get('set-cookie'), null, p)
   }
-  assert.equal(seen.size, 2, 'both variants are served')
-  for (const v of ['a', 'b']) {
-    for (let i = 0; i < 5; i++) assert.ok((await get(ab, '/', { Cookie: `lc_lp=${v}` })).body.toString().includes(`data-tag="landing-${v}"`))
-  }
-  assert.ok((await get(ab, '/?lp=b', { Cookie: 'lc_lp=a' })).body.toString().includes('LANDING-B'), '?lp= wins over the cookie')
-  const app = await get(ab, '/', { Cookie: 'lc_session=abc; lc_lp=b' })
-  assert.match(app.body.toString(), /APP/)
-  assert.equal(app.headers.get('set-cookie'), null)
-})
-
-test('LANDING_AB off: everyone gets A without a cookie; ?lp=b previews B; no landing pages when LANDING is off', async () => {
-  for (let i = 0; i < 5; i++) {
-    const r = await get(on, '/', { Cookie: 'lc_lp=b' })
-    assert.match(r.body.toString(), /<title>LANDING<\/title>/)
-    assert.equal(r.headers.get('set-cookie'), null)
-  }
-  const preview = await get(on, '/?lp=b')
-  assert.match(preview.body.toString(), /LANDING-B/)
-  assert.match(preview.headers.get('set-cookie'), /^lc_lp=b;/)
-  assert.match((await get(on, '/?lp=zzz')).body.toString(), /<title>LANDING<\/title>/)
+  assert.equal((await get(off, '/landing.html')).status, 404)
   assert.equal((await get(off, '/landing-b.html')).status, 404)
   assert.match((await get(off, '/?lp=b')).body.toString(), /APP/)
 })
@@ -221,11 +194,11 @@ test('GITHUB_REPO: the landing page shows the star count, fetched by the server;
   try {
     const base = await start({ LANDING: 'on', GITHUB_REPO: 'me/repo', GITHUB_API: `http://127.0.0.1:${gh.address().port}` })
     let body = ''
-    for (let i = 0; i < 50 && !body.includes('1.2k'); i++) { body = (await get(base, '/?lp=b')).body.toString(); await new Promise((r) => setTimeout(r, 20)) }
+    for (let i = 0; i < 50 && !body.includes('1.2k'); i++) { body = (await get(base, '/')).body.toString(); await new Promise((r) => setTimeout(r, 20)) }
     assert.ok(body.includes('<b class="stars">1.2k</b>'), body)
     assert.equal(calls, 1, 'fetched once, not per visitor')
   } finally { gh.close() }
-  assert.ok((await get(on, '/?lp=b')).body.toString().includes('<b class="stars"></b>'), 'no repo: an empty count')
+  assert.ok((await get(on, '/')).body.toString().includes('<b class="stars"></b>'), 'no repo: an empty count')
 })
 
 test('/api/health tells the app about analytics only when it is configured', async () => {
@@ -244,7 +217,7 @@ test('/docs/guide and /docs/self-hosting: served on every server, listed in the 
       assert.equal(r.headers.get('x-frame-options'), 'DENY')
     }
   }
-  assert.equal((await get(on, '/docs/nope')).status, 200, 'unknown paths still fall back to the app')
+  assert.equal((await get(on, '/docs/nope')).status, 404, 'unknown paths show the app but answer 404 (no soft 404)')
   assert.match((await get(on, '/docs/nope')).body.toString(), /APP/)
   assert.equal((await get(on, '/app')).headers.get('x-lc-page'), null, 'the app shell stays cacheable')
   const map = (await get(on, '/sitemap.xml')).body.toString()
@@ -288,6 +261,9 @@ test('edition landing paths: /minimalist is its page for visitors; signed-in peo
   assert.equal(selfHosted.status, 302)
   assert.equal(selfHosted.headers.get('location'), '/app?edition=minimalist')
   assert.equal((await get(off, '/landing-minimalist.html')).status, 404)
+  const byName = await fetch(on + '/landing-minimalist.html', noFollow)
+  assert.equal(byName.status, 301, 'the edition page by file name: moved to its own address')
+  assert.equal(byName.headers.get('location'), '/minimalist')
   assert.match((await get(on, '/sitemap.xml')).body.toString(), /<loc>https:\/\/lc.test\/minimalist<\/loc>/)
 })
 
@@ -307,7 +283,11 @@ test('comparison pages: served and listed in the sitemap on the public site only
     assert.equal(r.headers.get('x-lc-page'), 'page')
     assert.match((await get(off, p)).body.toString(), /APP/, 'LANDING off: the app, not a marketing page')
   }
-  assert.match((await get(on, '/vs/zoom')).body.toString(), /APP/, 'unknown pages fall back to the app')
+  const unknown = await get(on, '/vs/zoom')
+  assert.match(unknown.body.toString(), /APP/, 'unknown pages fall back to the app')
+  assert.equal(unknown.status, 404, 'but answer 404, not a soft 404')
+  assert.equal((await get(on, '/app')).status, 200)
+  assert.equal((await get(off, '/vs/zoom')).status, 200, 'a private server: the app, as before')
   const map = (await get(on, '/sitemap.xml')).body.toString()
   assert.ok(map.includes('<url><loc>https://lc.test/vs/sunsama</loc><lastmod>2026-11-17</lastmod>'))
   assert.ok(map.includes('<loc>https://lc.test/alternatives</loc>'))
@@ -330,6 +310,10 @@ test('scripts/compare-pages.mjs: front matter is checked, pages link to each oth
   assert.ok(html.includes('href="/app?from=compare" data-umami-event="open-app" data-umami-event-place="/vs/sunsama"'))
   assert.ok(html.includes('<a href="/alternatives/sunsama">Card /alternatives/sunsama</a>'))
   assert.ok(html.includes('"@type":"SoftwareApplication"'))
+  const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/.exec(html)[1])['@graph']
+  assert.equal(ld[0]['@id'], 'https://life-console.dev/#app', 'the same app entity as the landing page')
+  assert.equal(ld[1].dateModified, '2026-11-18')
+  assert.deepEqual(ld[1].breadcrumb.itemListElement.map((c) => c.name), ['Life Console', 'Comparisons', 'T <&>'])
   const hub = renderHub([a, b])
   assert.ok(hub.includes('href="/vs/sunsama"') && hub.includes('href="/alternatives/sunsama"'))
   assert.throws(() => parsePage(src('/sunsama')), /path must/)
@@ -342,4 +326,25 @@ test('scripts/compare-pages.mjs: front matter is checked, pages link to each oth
   assert.ok(!renderHub([a, b]).includes('/templates/'))
   assert.throws(() => parsePage('---\npath: /vs/x\n---\n'), /needs "title"/)
   assert.throws(() => parsePage('# no front matter'), /no front matter/)
+})
+
+test('LANDING=on: duplicate URLs 301 to the canonical one (http://, landing files by name, .html of plain URLs)', async () => {
+  // http.request, not fetch: fetch won't send a custom Host header
+  const moved = (base, p, headers = {}) => new Promise((resolve, reject) => {
+    http.get(base + p, { headers }, (r) => { r.resume(); resolve([r.statusCode, r.headers.location ?? null]) }).on('error', reject)
+  })
+  assert.deepEqual(await moved(on, '/landing.html'), [301, '/'])
+  assert.deepEqual(await moved(on, '/landing-b.html?lp=b'), [301, '/?lp=b'])
+  assert.deepEqual(await moved(on, '/privacy.html'), [301, '/privacy'])
+  assert.deepEqual(await moved(on, '/docs/guide.html'), [301, '/docs/guide'])
+  // a trailing slash on a page's address
+  assert.deepEqual(await moved(on, '/vs/sunsama/?x=1'), [301, '/vs/sunsama?x=1'])
+  assert.deepEqual(await moved(on, '/privacy/'), [301, '/privacy'])
+  assert.deepEqual(await moved(on, '/minimalist/'), [301, '/minimalist'])
+  // Cloudflare's CF-Visitor says the visitor came over plain http: send them to the https site
+  assert.deepEqual(await moved(on, '/docs/guide?x=1', { Host: 'lc.test', 'CF-Visitor': '{"scheme":"http"}' }), [301, 'https://lc.test/docs/guide?x=1'])
+  assert.deepEqual(await moved(on, '/', { Host: 'lc.test', 'CF-Visitor': '{"scheme":"https"}' }), [200, null])
+  assert.deepEqual(await moved(on, '/', { 'CF-Visitor': '{"scheme":"http"}' }), [200, null]) // another host (e.g. a private address): no redirect
+  // a private server keeps serving its files as before
+  assert.match((await get(off, '/docs/guide.html')).body.toString(), /GUIDE/)
 })

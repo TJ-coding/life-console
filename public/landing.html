@@ -256,6 +256,55 @@ h1 { font: 700 clamp(34px, 5.4vw, 60px)/1.06 var(--sans); letter-spacing: -.03em
 .caret { display: inline-block; width: .07em; height: .86em; margin-left: .06em; vertical-align: -.06em; background: var(--accent); animation: blink 1.05s steps(1) infinite; }
 .rotator.typing .caret { animation: none; }
 @keyframes blink { 50% { opacity: 0; } }
+/* hero: headline and method on the left, two big buttons filling the right */
+.hero-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: 48px; align-items: center; }
+.hero-top .method { margin-bottom: 0; }
+.ctas.hero-ctas { flex-direction: column; align-items: stretch; gap: 14px; }
+.hero-ctas .btn.big { justify-content: center; text-align: center; padding: 26px 24px; font-size: 24px; border-radius: 6px; }
+.hero-ctas .star { margin: 4px 0 0; text-align: center; }
+@media (max-width: 900px) {
+  .hero-top { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .ctas.hero-ctas { flex-direction: row; flex-wrap: wrap; }
+  .hero-ctas .btn.big { flex: 1 1 auto; padding: 16px 20px; font-size: 18px; }
+}
+/* shiny call-to-action: glows, grows and catches the light more the closer the pointer gets (--p: 0 far … 1 on it);
+   a sheen sweeps across it every few seconds, so it also shines on touch screens */
+.shine { position: relative; overflow: hidden; isolation: isolate; --p: 0; --mx: 50%; --my: 50%;
+  transform: scale(calc(1 + var(--p) * .045));
+  box-shadow: 0 0 calc(8px + var(--p) * 48px) calc(var(--p) * 8px) rgba(63, 182, 139, calc(.25 + var(--p) * .45)), inset 0 1px 0 rgba(255, 255, 255, .35);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0) 55%);
+  transition: transform .15s ease-out, box-shadow .15s ease-out; }
+.btn.primary.shine:hover { filter: brightness(1.06); }
+.shine::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(circle at var(--mx) var(--my), rgba(255, 255, 255, calc(var(--p) * .6)), transparent 55%); }
+.shine::after { content: ''; position: absolute; top: -50%; bottom: -50%; left: 0; width: 45%; z-index: -1; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, calc(.35 + var(--p) * .4)), transparent);
+  transform: translateX(-160%) skewX(-18deg); animation: sheen calc(4s - var(--p) * 2.4s) ease-in-out infinite; }
+@keyframes sheen { 0%, 55% { transform: translateX(-160%) skewX(-18deg); } 100% { transform: translateX(330%) skewX(-18deg); } }
+@media (prefers-reduced-motion: reduce) { .shine { transform: none; } .shine::after { animation: none; display: none; } }
+
+/* the method under the headline: 1 Strategise → 2 Distribute → 3 Execute */
+.method-note { font: 500 13px/1.4 var(--mono); color: var(--muted); margin: 0 0 10px; }
+.method { list-style: none; counter-reset: step; display: flex; flex-wrap: wrap; gap: 8px 0; margin: 0 0 30px; padding: 0; }
+.method li { counter-increment: step; display: flex; align-items: center; font: 600 clamp(18px, 2.2vw, 22px)/1.2 var(--sans); }
+/* each step is a button that plays what it means in the hero */
+.method button { display: inline-flex; align-items: center; margin: -5px -8px; padding: 5px 14px 5px 5px; font: inherit; color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 999px; cursor: pointer; transition: background .15s, border-color .15s; }
+.method button::before { content: counter(step); display: inline-grid; place-items: center; width: 1.6em; height: 1.6em; margin-right: 10px; border: 1px solid var(--accent); border-radius: 50%; color: var(--accent); font: 500 .7em/1 var(--mono); transition: background .15s, color .15s; }
+.method button::after { content: '▶'; margin-left: 9px; font-size: .5em; color: var(--accent); opacity: .7; }
+.method button:hover { background: var(--surface); border-color: var(--border); }
+.method button:hover::after { opacity: 1; }
+.method button[aria-pressed="true"] { background: var(--surface); border-color: var(--accent); }
+.method button[aria-pressed="true"]::before { background: var(--accent); color: #0e1116; }
+.method button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* the clip for the chosen step takes the hero video's place */
+.demo { margin: 56px 0 0; }
+.demo[hidden], .demo [hidden] { display: none; }
+.demo figcaption { font-size: 15px; }
+.demo figcaption b { color: var(--accent); }
+.hero.demoing .hero-phone, .hero.demoing .hero-desk { display: none; }
+@media (max-width: 640px) { .demo { margin-top: 36px; } }
+.method li:not(:last-child)::after { content: '→'; margin: 0 16px; color: var(--muted); font-weight: 400; }
+@media (max-width: 520px) { .method { flex-direction: column; gap: 10px; } .method li:not(:last-child)::after { content: none; } }
 .hero .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 46ch; margin: 0 0 28px; }
 /* closing call to action: the logo on the left faces right, toward the line and the Try it now button.
    Its background is transparent, so it sits on any dark section; the light theme puts it on a dark rounded tile */
@@ -275,7 +324,6 @@ h1 { font: 700 clamp(34px, 5.4vw, 60px)/1.06 var(--sans); letter-spacing: -.03em
 .ctas .star:hover { color: var(--text); text-decoration: underline; }
 .hero figure { margin: 56px 0 0; }
 .cta-note { font-size: 14px; color: var(--muted); margin: 12px 0 0; }
-.cta-note a { color: inherit; }
 /* phones see the phone app in the hero (the keyboard tour is unreadable at that size); wider screens see the tour */
 .hero-phone > video { aspect-ratio: 390 / 640; object-position: top; border-radius: 18px; }
 @media (max-width: 640px) {
@@ -368,6 +416,27 @@ tbody th { font-weight: 500; color: var(--muted); width: 22%; }
   tbody td[data-h]:not([data-h=""])::before { content: attr(data-h) ": "; font: 13px var(--mono); color: var(--muted); }
 }
 
+/* self-host shell: the three commands, coloured like a terminal, with a copy button */
+.shell { margin-top: 28px; max-width: 860px; border: 1px solid #2a323d; border-radius: 10px; overflow: hidden; background: linear-gradient(180deg, #0b0f14, #06080b); box-shadow: 0 0 0 1px rgba(63, 182, 139, .06), 0 24px 60px -30px rgba(63, 182, 139, .35); }
+.shell-bar { display: flex; align-items: center; justify-content: flex-end; padding: 8px 10px 8px 18px; border-bottom: 1px solid #1c232c; font: 500 12px/1 var(--mono); color: #6e7781; }
+.shell-copy { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; font: 500 13px/1 var(--mono); color: #c9d1d9; background: #161b22; border: 1px solid #2a323d; border-radius: 6px; cursor: pointer; transition: border-color .15s, color .15s; }
+.shell-copy:hover { border-color: #3fb68b; color: #fff; }
+.shell-copy .ic { width: 12px; height: 14px; border: 1.5px solid currentColor; border-radius: 2px; box-shadow: 3px -3px 0 -1.5px #161b22, 3px -3px 0 0 currentColor; margin: 3px 3px 0 0; }
+.shell-copy.done { border-color: #3fb68b; color: #3fb68b; }
+.shell-copy.done .ic { width: 10px; height: 6px; border: 0; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; border-radius: 0; box-shadow: none; transform: rotate(-45deg); margin: 0 3px 4px 1px; }
+.shell pre { margin: 0; padding: 22px 24px 24px; overflow-x: auto; font: 16px/1.9 var(--mono); color: #e6edf3; }
+.shell .p { color: #3fb68b; user-select: none; } .shell .k { color: #79c0ff; } .shell .u { color: #a5d6ff; } .shell .o { color: #8b96a3; } .shell .f { color: #e3b341; }
+.shell .cur { display: inline-block; width: .6em; height: 1.1em; vertical-align: -.2em; background: #3fb68b; animation: blink 1.05s steps(1) infinite; }
+@media (max-width: 520px) { .shell pre { font-size: 13px; padding: 16px; } }
+/* centred: heading, terminal, then one big button */
+#self-host .wrap { text-align: center; }
+#self-host h2 { margin-left: auto; margin-right: auto; }
+.shell { margin-left: auto; margin-right: auto; text-align: left; }
+.or-try { margin-top: 36px; }
+.or-try .btn.big { padding: 22px 44px; font-size: 22px; border-radius: 6px; }
+@media (max-width: 520px) { .or-try .btn.big { display: block; padding: 18px 20px; font-size: 19px; } }
+@media (prefers-reduced-motion: reduce) { .shell .cur { animation: none; } }
+
 /* keyboard */
 .keys { columns: 2; column-gap: 48px; margin: 40px 0 0; }
 .keys div { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border); break-inside: avoid; color: var(--muted); }
@@ -430,15 +499,28 @@ footer a { color: var(--muted); }
 <main id="main">
   <div class="hero">
     <div class="wrap">
-      <p class="kicker">Military-grade planning for your own goals</p>
-      <h1><span class="rotator" data-lines="Take back control of your life.|Bring system to your life.|Strategise, then execute.|Turn big goals into today's tasks.|Plan the week in three moves.|See every deadline coming.">Know what to do right now.</span></h1>
-      <p class="lede">Life Console turns your goals into a week plan, and your week plan into the next thing to do.<span class="desk"> Keyboard-first and free; use it here or run it on your own server.</span><span class="mob"> Free, works offline, and installs on your phone.</span></p>
-      <div class="ctas">
-        <a class="btn primary big" href="/app" data-umami-event="open-app" data-umami-event-place="hero">Try it now</a>
+      <div class="hero-top">
+      <div>
+      <p class="kicker">Open source · <a href="https://github.com/TJ-coding/life-console/blob/main/LICENSE" rel="noopener">AGPL-3.0</a> · self-hostable</p>
+      <h1><span class="rotator" data-lines="Take back control of your life.|Strategise, then execute.|Turn big goals into today's tasks.|Plan the week in three moves.|See every deadline coming.">Know what to do right now.</span></h1>
+      <p class="method-note">Bring military-grade planning to your life:</p>
+      <ol class="method">
+        <li><button type="button" data-step="strategise" aria-controls="demo" aria-pressed="false" data-umami-event="method-step" data-umami-event-step="strategise">Strategise</button></li>
+        <li><button type="button" data-step="distribute" aria-controls="demo" aria-pressed="false" data-umami-event="method-step" data-umami-event-step="distribute">Distribute</button></li>
+        <li><button type="button" data-step="execute" aria-controls="demo" aria-pressed="false" data-umami-event="method-step" data-umami-event-step="execute">Execute</button></li>
+      </ol>
+      </div>
+      <div class="ctas hero-ctas">
+        <a class="btn primary big shine" href="/app" data-umami-event="open-app" data-umami-event-place="hero">Try it now</a>
         <a class="btn big" href="#self-host" data-umami-event="self-host" data-umami-event-place="hero">Self-host it</a>
         <a class="star" href="https://github.com/TJ-coding/life-console" rel="noopener" data-umami-event="github" data-umami-event-place="hero">★ Star on GitHub</a>
       </div>
-      <p class="cta-note">Free and open source (<a href="https://github.com/TJ-coding/life-console/blob/main/LICENSE" rel="noopener">AGPL-3.0</a>), self-hostable, no ads. Sign in with Google; there's no password to make up.</p>
+      </div>
+      <figure id="demo" class="demo" hidden aria-live="polite">
+        <video muted loop playsinline preload="none" width="1440" height="900"></video>
+        <img alt="" width="1440" height="900" decoding="async" hidden />
+        <figcaption></figcaption>
+      </figure>
       <figure class="hero-phone">
         <video class="auto" muted loop playsinline preload="metadata" poster="/media/mobile-poster.webp" width="780" height="1688" aria-label="Life Console on a phone: Today, Deadlines and Focus mode">
           <source src="/media/mobile.mp4" type="video/mp4" />
@@ -525,41 +607,14 @@ footer a { color: var(--muted); }
     <div class="wrap">
       <p class="label">Open source</p>
       <h2>Your planner, on your server.</h2>
-      <p class="intro">Life Console is free software under the <a href="https://github.com/TJ-coding/life-console/blob/main/LICENSE" rel="noopener">GNU AGPL-3.0</a>. life-console.dev runs the same code you can read on GitHub. If you'd rather keep your plans on your own machine, three commands start it.</p>
-      <div class="split" style="margin-top:36px">
-        <div>
-          <p>It needs Docker with the compose plugin. Open <code>http://localhost:8080</code> and create an account; the first one becomes the admin. To install it on phones and get notifications, put it behind HTTPS (Caddy, Traefik, nginx or a Cloudflare Tunnel) and set <code>APP_URL</code>.</p>
-          <p><a href="/docs/self-hosting" rel="noopener">Read the self-hosting guide →</a></p>
-        </div>
-        <pre class="term" aria-label="Self-hosting commands"><span class="p">$ </span>git clone https://github.com/TJ-coding/life-console.git
-<span class="p">$ </span>cd life-console &amp;&amp; cp .env.example .env
-<span class="p">$ </span>docker compose up -d
-<span class="c"># PostgreSQL + app + backups on :8080</span></pre>
+      <div class="shell">
+        <div class="shell-bar"><button type="button" class="shell-copy" data-umami-event="self-host-copy" data-umami-event-place="self-host"><span class="ic" aria-hidden="true"></span><span class="t">Copy</span></button></div>
+        <pre aria-label="Self-hosting commands"><code><span class="p">$</span> <span class="k">git</span> clone <span class="u">https://github.com/TJ-coding/life-console.git</span>
+<span class="p">$</span> <span class="k">cd</span> life-console <span class="o">&amp;&amp;</span> <span class="k">cp</span> .env.example .env
+<span class="p">$</span> <span class="k">docker</span> compose up <span class="f">-d</span>
+<span class="p">$</span> <span class="cur" aria-hidden="true"></span></code></pre>
       </div>
-
-      <dl class="spec">
-        <dt>Runs as</dt><dd>Three containers from one <code>docker-compose.yml</code>: PostgreSQL 17, the app (Node 22) and a backup job. About 300 MB of RAM.</dd>
-        <dt>Backups</dt><dd>A database dump every 24 hours, kept for 14 days by default, plus a dump before every schema migration. Per-account snapshots let you roll a planner back.</dd>
-        <dt>Updates</dt><dd>Prebuilt images on GitHub Container Registry. Follow <code>latest</code>, or pin a build with <code>LC_VERSION</code> and roll back by changing it.</dd>
-        <dt>Accounts</dt><dd>Email and password, Google sign-in, or both. Close sign-ups with <code>SIGNUPS=closed</code> and add people from the admin CLI.</dd>
-        <dt>Notifications</dt><dd>Web Push from your own server. The keys are generated on first start, so no third-party account is needed.</dd>
-        <dt>Privacy</dt><dd>No analytics. A self-hosted server tells search engines to stay out.</dd>
-      </dl>
-
-      <h3 style="margin-top:56px">Hosted or self-hosted</h3>
-      <div class="scroll">
-        <table>
-          <thead><tr><th></th><th>life-console.dev</th><th>Your own server</th></tr></thead>
-          <tbody>
-            <tr><th>Cost</th><td data-h="life-console.dev">Free</td><td data-h="Your own server">Free (your hardware)</td></tr>
-            <tr><th>Sign-in</th><td data-h="life-console.dev">Google only, no passwords stored</td><td data-h="Your own server">Email and password, Google, or both</td></tr>
-            <tr><th>Your data</th><td data-h="life-console.dev">On our server, never sold or analysed</td><td data-h="Your own server">On yours</td></tr>
-            <tr><th>Backups</th><td data-h="life-console.dev">Daily, kept 14 days</td><td data-h="Your own server">Daily by default, you set retention</td></tr>
-            <tr><th>Updates</th><td data-h="life-console.dev">Automatic</td><td data-h="Your own server">When you pull a new image</td></tr>
-            <tr><th>Moving</th><td colspan="2" data-h="">Export your planner as JSON and import it on the other side, any time.</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <div class="or-try"><a class="btn primary big shine" href="/app" data-umami-event="open-app" data-umami-event-place="self-host">Take it out for a spin</a></div>
     </div>
   </section>
 
@@ -824,6 +879,73 @@ footer a { color: var(--muted); }
     btns.forEach((x) => x.setAttribute('aria-pressed', String(x === b)))
     document.querySelectorAll('#shots img').forEach((img) => { img.src = `/media/${img.dataset[b.dataset.set] || img.dataset.dark}.webp` })
   }))
+
+  // the three steps: each plays a clip of what it means in place of the hero video; pressing it again goes back
+  const DEMOS = {
+    strategise: { video: '/media/goalflow.mp4', poster: '/media/goalflow-poster.webp', ratio: '1600 / 706', text: '<b>Strategise:</b> vision → goals → milestones. Click a goal to see what it needs.' },
+    distribute: { video: '/media/autobox.mp4', poster: '/media/autobox-poster.webp', text: '<b>Distribute:</b> give tasks a day, then Auto time-box fits them into the free gaps.' },
+    execute: { img: '/media/today.webp', srcset: '/media/today.webp 1440w, /media/today@2x.webp 2880w', text: '<b>Execute:</b> the block you should be in now, counting down, and the task to work on.' },
+  }
+  const hero = document.querySelector('.hero'), demo = document.getElementById('demo')
+  const dVideo = demo.querySelector('video'), dImg = demo.querySelector('img'), dCap = demo.querySelector('figcaption')
+  const stepBtns = document.querySelectorAll('.method button')
+  stepBtns.forEach((btn) => btn.addEventListener('click', () => {
+    const on = btn.getAttribute('aria-pressed') !== 'true'
+    stepBtns.forEach((b) => b.setAttribute('aria-pressed', String(on && b === btn)))
+    hero.classList.toggle('demoing', on)
+    demo.hidden = !on
+    hero.querySelectorAll('.hero-phone video, .hero-desk video').forEach((v) => v.pause())
+    if (!on) { dVideo.pause(); return }
+    const d = DEMOS[btn.dataset.step]
+    dCap.innerHTML = d.text
+    if (d.video) {
+      dImg.hidden = true; dVideo.hidden = false
+      dVideo.style.aspectRatio = d.ratio || ''
+      dVideo.poster = d.poster
+      dVideo.src = d.video
+      dVideo.setAttribute('aria-label', btn.textContent)
+      if (reduce) dVideo.controls = true; else dVideo.play().catch(() => {})
+    } else {
+      dVideo.pause(); dVideo.removeAttribute('src'); dVideo.load(); dVideo.hidden = true
+      dImg.hidden = false; dImg.srcset = d.srcset; dImg.src = d.img; dImg.alt = dCap.textContent
+    }
+    const r = demo.getBoundingClientRect()
+    if (r.top > innerHeight - 120) demo.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' })
+  }))
+
+  // shiny buttons: closeness of the mouse (0 at 420px away … 1 on the button) and where on it the pointer is
+  const shiny = [...document.querySelectorAll('.shine')]
+  if (shiny.length && matchMedia('(hover: hover)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    let px = -1e4, py = -1e4, queued = false
+    const paint = () => {
+      queued = false
+      for (const b of shiny) {
+        const r = b.getBoundingClientRect()
+        const dx = Math.max(r.left - px, 0, px - r.right), dy = Math.max(r.top - py, 0, py - r.bottom)
+        const p = Math.max(0, 1 - Math.hypot(dx, dy) / 420)
+        b.style.setProperty('--p', (p * p).toFixed(3)) // eases in: subtle far away, strong up close
+        b.style.setProperty('--mx', `${((px - r.left) / r.width) * 100}%`)
+        b.style.setProperty('--my', `${((py - r.top) / r.height) * 100}%`)
+      }
+    }
+    const queue = () => { if (!queued) { queued = true; requestAnimationFrame(paint) } }
+    addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') { px = e.clientX; py = e.clientY; queue() } }, { passive: true })
+    addEventListener('scroll', queue, { passive: true })
+    document.addEventListener('pointerleave', () => { px = py = -1e4; queue() })
+  }
+
+  // self-host commands: copy all three lines
+  const copyBtn = document.querySelector('.shell-copy')
+  if (copyBtn) copyBtn.addEventListener('click', async () => {
+    const cmds = 'git clone https://github.com/TJ-coding/life-console.git\ncd life-console && cp .env.example .env\ndocker compose up -d\n'
+    const t = copyBtn.querySelector('.t')
+    // the Clipboard API, or the older copy command where it's refused (no focus, older browsers)
+    const legacy = () => { const ta = Object.assign(document.createElement('textarea'), { value: cmds }); ta.style.cssText = 'position:fixed;opacity:0'; document.body.append(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok }
+    let ok = false
+    try { await navigator.clipboard.writeText(cmds); ok = true } catch { ok = legacy() }
+    if (ok) { t.textContent = 'Copied'; copyBtn.classList.add('done') } else t.textContent = 'Select to copy'
+    setTimeout(() => { t.textContent = 'Copy'; copyBtn.classList.remove('done') }, 2000)
+  })
 
   // full-size view
   const lb = document.getElementById('lb'), lbImg = lb.querySelector('img'), lbCap = lb.querySelector('p')

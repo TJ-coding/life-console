@@ -26,7 +26,7 @@ const MIME = {
 }
 const LEGAL = new Set(['/privacy', '/terms'])
 const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
-const DOCS_DATE = '2026-11-10' // sitemap <lastmod> for the docs pages: bump when they change
+const DOCS_DATE = '2026-11-23' // sitemap <lastmod> for the docs pages: bump when they change
 const LANDING_DATE = '2026-11-23' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
@@ -361,9 +361,10 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const LANDING_HEADERS = cfg.analyticsDashboard
     ? { ...NO_XFO, 'Content-Security-Policy': `frame-ancestors 'self' ${cfg.analyticsDashboard}` }
     : SECURITY_HEADERS
-  // data-tag names the landing-page variant, so Umami can split every statistic by it (filter: Tag)
-  const analyticsTag = (variant) => cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
-    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}" data-tag="landing-${variant}"></script>` +
+  // data-tag="landing" sets the landing page apart in Umami (filter: Tag); the A/B test used landing-a / landing-b
+  // (an edition's page: landing-<edition>)
+  const analyticsTag = (edition) => cfg.landing && cfg.analyticsScript && cfg.analyticsSiteId
+    ? `<script defer src="${attr(cfg.analyticsScript)}" data-website-id="${attr(cfg.analyticsSiteId)}" data-tag="landing${edition ? `-${edition}` : ''}"></script>` +
       // heatmap (click positions, scroll depth) and, if switched on in Umami's settings for the website, session replays of this page
       (cfg.analyticsRecorder ? `\n<script defer src="${attr(cfg.analyticsRecorder)}" data-website-id="${attr(cfg.analyticsSiteId)}"></script>` : '')
     : ''
@@ -409,20 +410,10 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
 `
   }
 
-  // landing-page A/B test: which page a visitor sees, kept in a cookie the app also reads (sign-in funnel per variant)
-  const LP_COOKIE = 'lc_lp'
-  const LANDING_FILES = { a: '/landing.html', b: '/landing-b.html' }
+  // the landing page; /landing-b.html is the A/B test's B page (now landing.html), kept only to redirect old links
   // editions' landing pages as paths on the main domain (/minimalist → landing-minimalist.html)
   const EDITION_FILES = Object.fromEntries(Object.values(EDITION_LANDINGS).map((id) => [`/landing-${id}.html`, id]))
-  const LANDING_PAGES = new Set([...Object.values(LANDING_FILES), ...Object.keys(EDITION_FILES)])
-  /** ?lp=a|b forces a variant (previews, links in posts); otherwise the remembered one; otherwise a coin flip. */
-  function landingVariant(cookies, query) {
-    const forced = query.get('lp')
-    if (LANDING_FILES[forced]) return forced
-    if (!cfg.landingAb) return 'a'
-    if (LANDING_FILES[cookies[LP_COOKIE]]) return cookies[LP_COOKIE]
-    return Math.random() < 0.5 ? 'a' : 'b'
-  }
+  const LANDING_PAGES = new Set(['/landing.html', '/landing-b.html', ...Object.keys(EDITION_FILES)])
 
   // GitHub star count for the landing pages' Star button: fetched by the server at most hourly, never per visitor
   const stars = { n: null, at: 0 }
@@ -438,26 +429,38 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
   refreshStars()
   const starText = () => stars.n == null ? '' : stars.n >= 1000 ? `${(stars.n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(stars.n)
 
+  /** 301 to the one URL search engines should index (Search Console: "Alternative page with proper canonical tag"). */
+  const moved = (res, location) => { res.writeHead(301, { Location: location, 'Cache-Control': 'public, max-age=86400', ...SECURITY_HEADERS }); res.end() }
+  /** Cloudflare tells us the visitor's scheme in CF-Visitor (X-Forwarded-Proto is rewritten by Traefik behind the tunnel). */
+  const plainHttp = (req) => /"scheme"\s*:\s*"http"/.test(String(req.headers['cf-visitor'] || ''))
+
+  /** A page with its own address on the public site (what the sitemap lists, plus legal pages). */
+  const isPage = (p) => LEGAL.has(p) || DOCS.has(p) || COMPARE.has(p) || !!EDITION_LANDINGS[p]
+
   function serveStatic(req, res, pathname, query = new URLSearchParams()) {
     let rel
     try { rel = decodeURIComponent(pathname) } catch { return send(res, 400, 'bad path') }
+    if (cfg.landing) {
+      // duplicates of indexed pages: http://, the landing files by name, the .html of the plain URLs
+      const search = query.size ? `?${query}` : ''
+      if (plainHttp(req) && site.startsWith('https://') && req.headers.host === appHost) return moved(res, site + pathname + search)
+      if (EDITION_FILES[rel]) return moved(res, `/${EDITION_FILES[rel]}${search}`)
+      if (LANDING_PAGES.has(rel)) return moved(res, `/${search}`)
+      // a trailing slash on a page's URL (/vs/sunsama/): the slash-less address is the canonical one
+      if (rel.length > 1 && rel.endsWith('/') && isPage(rel.slice(0, -1))) return moved(res, rel.slice(0, -1) + search)
+      if (rel.endsWith('.html') && (LEGAL.has(rel.slice(0, -5)) || DOCS.has(rel.slice(0, -5)))) return moved(res, rel.slice(0, -5) + search)
+    }
     if (rel === '/robots.txt') return send(res, 200, robots(), { 'Cache-Control': 'public, max-age=3600' })
     if (rel === '/sitemap.xml' || rel === '/llms.txt') {
       if (!cfg.landing) return send(res, 404, 'not found')
       if (rel === '/sitemap.xml') return send(res, 200, sitemap(), { 'Content-Type': MIME['.xml'], 'Cache-Control': 'public, max-age=3600' })
     }
-    let vary = false
+    let vary = false, notFound = false
     const extra = {}
     if (rel === '/' && cfg.landing) {
       // the landing page for visitors without a session (and crawlers); signed-in people get the app as before
       vary = true
-      const cookies = parseCookies(req.headers.cookie)
-      if (cookies[COOKIE]) rel = '/index.html'
-      else {
-        const variant = landingVariant(cookies, query)
-        rel = LANDING_FILES[variant]
-        if (cfg.landingAb || query.get('lp')) extra['Set-Cookie'] = `${LP_COOKIE}=${variant}; Path=/; Max-Age=${90 * 86400}; SameSite=Lax${secureFor(req) ? '; Secure' : ''}`
-      }
+      rel = parseCookies(req.headers.cookie)[COOKIE] ? '/index.html' : '/landing.html'
     } else if (EDITION_LANDINGS[rel]) {
       // an edition's page: visitors read about it; people already signed in, and servers without landing pages
       // (self-hosted), go straight into the app in that edition
@@ -470,7 +473,12 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
       rel = `/landing-${id}.html`
     } else if (LANDING_PAGES.has(rel) && !cfg.landing) return send(res, 404, 'not found')
     else if (LEGAL.has(rel) || DOCS.has(rel) || (cfg.landing && COMPARE.has(rel))) rel += '.html' // /privacy, /terms, /docs/…: plain URLs for people, search engines and Google's consent screen
-    else if (rel === '/' || !path.extname(rel)) rel = '/index.html' // SPA fallback (routes use #, but be safe); /app always opens the app
+    else if (rel === '/' || !path.extname(rel)) {
+      // SPA fallback (routes use #, but be safe); /app always opens the app. On the public site any other
+      // unknown path still shows the app but answers 404, so search engines don't report a soft 404.
+      if (cfg.landing && rel !== '/' && rel !== '/app' && rel !== '/index.html') notFound = true
+      rel = '/index.html'
+    }
     const file = path.normalize(path.join(dist, rel))
     if (!file.startsWith(dist)) return send(res, 403, 'forbidden')
     const landingPage = LANDING_PAGES.has(rel)
@@ -479,7 +487,7 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
       refreshStars()
       return fs.readFile(file, 'utf8', (err, html) => {
         if (err) return send(res, 404, 'not found')
-        const tag = analyticsTag(EDITION_FILES[rel] ?? (rel === LANDING_FILES.b ? 'b' : 'a')) // data-tag landing-a|b|<edition>
+        const tag = analyticsTag(EDITION_FILES[rel]) // data-tag landing | landing-<edition>
         let body = html.replaceAll('<!--stars-->', starText())
         if (tag) body = body.replace('</head>', `${tag}\n</head>`)
         res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'Content-Length': Buffer.byteLength(body), Vary: 'Cookie', 'X-LC-Page': 'landing', ...LANDING_HEADERS, ...extra })
@@ -506,8 +514,8 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
       else if (rel.endsWith('.html') && rel !== '/index.html') headers['X-LC-Page'] = 'page' // /privacy, /terms, /docs/…: not the app shell either
       // byte ranges: Safari won't play a <video> without them
       const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '')
-      let start = 0, end = st.size - 1, status = 200
-      if (m && (m[1] || m[2])) {
+      let start = 0, end = st.size - 1, status = notFound ? 404 : 200
+      if (m && (m[1] || m[2]) && !notFound) {
         if (m[1]) { start = Number(m[1]); if (m[2]) end = Math.min(Number(m[2]), end) } else start = Math.max(0, st.size - Number(m[2]))
         if (start > end || start >= st.size) {
           res.writeHead(416, { 'Content-Range': `bytes */${st.size}`, ...SECURITY_HEADERS }); return res.end()
