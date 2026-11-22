@@ -16,6 +16,7 @@ import Prio from '../components/Prio.vue'
 import TimeBound from '../components/TimeBound.vue'
 import GoalFlow from '../components/GoalFlow.vue'
 import CascadeMap from '../components/CascadeMap.vue'
+import TaskNode from '../components/TaskNode.vue'
 import { boundIssues, countdown, urgency, effDue, minsTo } from '../glance'
 
 const route = useRoute()
@@ -301,8 +302,8 @@ const print = () => window.print()
 const pref = (k, d) => { try { return localStorage.getItem('life-console/strategy-' + k) ?? d } catch { return d } }
 const keep = (k, v) => { try { localStorage.setItem('life-console/strategy-' + k, v) } catch { /* ignore */ } }
 const showTable = ref(pref('table', '0') === '1')
-const tableMode = ref(['split', 'cascade', 'text'].includes(pref('table-mode', '')) ? pref('table-mode', '') : 'cascade')
-const mapDir = ref(pref('map-dir', 'side') === 'down' ? 'down' : 'side')
+const tableMode = ref(['split', 'cascade', 'text'].includes(pref('table-mode', '')) ? pref('table-mode', '') : 'split')
+const mapDir = ref(pref('map-dir', 'down') === 'side' ? 'side' : 'down')
 const showMore = ref(pref('more', '0') === '1')
 watch(showTable, (v) => keep('table', v ? '1' : '0'))
 watch(tableMode, (v) => keep('table-mode', v))
@@ -346,15 +347,15 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
 
     <div class="sp-top" :class="{ 'with-table': showTable }">
       <!-- cascading goal diagram: the pyramid -->
-      <section class="tree panel map-panel">
+      <section v-if="!showTable" class="tree panel map-panel">
         <div class="panel-h">
           <span class="icon sm ok">account_tree</span><h2>Cascading goal diagram</h2>
           <span class="spacer"></span>
-          <div v-if="!showTable" class="seg" role="group" aria-label="Diagram direction">
-            <button class="btn sm" :class="{ on: mapDir === 'side' }" :aria-pressed="mapDir === 'side'" title="Vision on the left, widening to the right" @click="mapDir = 'side'"><span class="icon sm">east</span>Sideways</button>
+          <div class="seg" role="group" aria-label="Diagram direction">
             <button class="btn sm" :class="{ on: mapDir === 'down' }" :aria-pressed="mapDir === 'down'" title="Vision at the top, widening downwards" @click="mapDir = 'down'"><span class="icon sm">south</span>Top-down</button>
+            <button class="btn sm" :class="{ on: mapDir === 'side' }" :aria-pressed="mapDir === 'side'" title="Vision on the left, widening to the right" @click="mapDir = 'side'"><span class="icon sm">east</span>Sideways</button>
           </div>
-          <button v-if="!showTable" class="btn sm" :class="{ on: showTasks }" title="Show the tasks linked to each goal" @click="showTasks = !showTasks"><span class="icon sm">checklist</span>Tasks</button>
+          <button class="btn sm" :class="{ on: showTasks }" title="Show the tasks linked to each goal" @click="showTasks = !showTasks"><span class="icon sm">checklist</span>Tasks</button>
           <button class="btn sm" @click="addPsg">+ PSG</button>
           <button class="btn sm" :class="{ on: showTable }" :aria-pressed="showTable" title="Show the goals table beside the diagram" @click="showTable = !showTable"><span class="icon sm">table_rows</span>Table</button>
         </div>
@@ -363,9 +364,76 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
           <span class="muted ellipsis">{{ focusSummary }}</span><span class="spacer"></span>
           <button class="btn sm icon-only" title="Clear the selection (Esc)" @click="selected = null"><span class="icon sm">close</span></button>
         </div>
-        <CascadeMap :plan="plan" :selected="selected" :tasks="tasksOf" :dir="mapDir" :compact="showTable" :show-tasks="showTasks"
+        <CascadeMap :plan="plan" :selected="selected" :tasks="tasksOf" :dir="mapDir" :show-tasks="showTasks"
           @select="selectInFlow" @pick="pickGoal" @open="showInTable" @add-sig="addSig" @add-task="todoFor" />
       </section>
+        <!-- table open: the original cascading tree beside the table -->
+        <section v-else class="tree panel orig-tree">
+          <div class="panel-h">
+            <span class="icon sm ok">account_tree</span><h2>Cascading goal diagram</h2>
+            <span class="spacer"></span>
+            <button class="btn sm" :class="{ on: showTasks }" title="Show the tasks linked to each goal" @click="showTasks = !showTasks"><span class="icon sm">checklist</span>Tasks</button>
+            <button class="btn sm" @click="addPsg">+ PSG</button>
+            <button class="btn sm icon-only on" :aria-pressed="true" title="Close the table and show the diagram" aria-label="Close the table" @click="showTable = false"><span class="icon sm">table_rows</span></button>
+          </div>
+          <div v-if="focus" class="fx-bar small">
+            <span class="icon sm info">filter_center_focus</span><b class="mono info fx-id">{{ focus.sel }}</b>
+            <span class="muted ellipsis">{{ focusSummary }}</span><span class="spacer"></span>
+            <button class="btn sm icon-only" title="Show everything again (Esc)" @click="selected = null"><span class="icon sm">close</span></button>
+          </div>
+          <div class="canvas">
+            <div class="node vision">
+              <div class="row tiny upper"><span class="chip goal">Vision</span><span class="spacer"></span><span class="muted mono">{{ plan.planNo }}</span></div>
+              <input v-model="plan.vision" class="input ghost vis-in" />
+              <div class="row small mono"><span class="muted">AGGREGATE</span><span class="spacer"></span><span :class="pctClass(overall)">{{ overall }}%</span></div>
+              <div class="bar"><i :style="{ width: overall + '%' }"></i></div>
+            </div>
+            <div class="trunk"></div>
+            <div v-for="p in psgs" :key="p.no" class="branch">
+              <div class="node psg" :class="[fx('goals', p.no), { sel: selected === p.no }]" @click="select(p.no)">
+                <div class="row"><Prio :p="p.priority" /><span class="mono ok">{{ p.no }}</span><span class="spacer"></span><span class="mono small" :class="pctClass(psgPct(p.no))">{{ psgPct(p.no) }}%</span></div>
+                <input v-model="p.name" class="input ghost nm-in" placeholder="PSG name" title="Edit PSG name" @click.stop />
+                <div class="bar" :class="psgPct(p.no) < 40 ? 'warn' : ''"><i :style="{ width: psgPct(p.no) + '%' }"></i></div>
+              </div>
+              <div v-if="dlOf(p.no).length" class="gdl psg-dl">
+                <button v-for="d in dlOf(p.no)" :key="d.id" class="gdl-row" :class="fx('deadlines', d.id)" :title="`${d.title} · due ${d.due.replace('T', ' ')} — click to edit`" @click.stop="ui.deadlineId = d.id">
+                  <span class="icon sm" :class="urgency(effDue(d))">alarm</span><span class="mono gdl-cd" :class="urgency(effDue(d))">{{ dlLeft(d) }}</span><span class="ellipsis">{{ d.title }}</span>
+                </button>
+              </div>
+              <div v-if="showTasks && (tasksOf(p.no).open.length || tasksOf(p.no).done)" class="tasks psg-tasks">
+                <TaskNode v-for="t in tasksOf(p.no).open" :key="t.id" :todo="t" :focus="focus?.todos" />
+                <div v-if="tasksOf(p.no).done" class="tiny muted mono task-done">✓ {{ tasksOf(p.no).done }} done</div>
+              </div>
+              <div class="kids">
+                <template v-for="s in sigsOf(p.no)" :key="s.no">
+                <div class="node sig" :class="[s.status, fx('goals', s.no), { sel: selected === s.no }]" @click="select(s.no)">
+                  <div class="grow">
+                    <div class="row sig-nm"><span class="mono small" :class="s.status === 'done' ? 'ok' : 'info'">{{ s.no }}</span><input v-model="s.name" class="input ghost sig-in" placeholder="SIG name" title="Edit SIG name" @click.stop /></div>
+                    <div class="small muted ellipsis">{{ s.criteria || '—' }}</div>
+                    <div v-if="(s.deps ?? []).length" class="tiny muted mono ellipsis" title="Depends on">⛓ {{ (s.deps ?? []).join(', ') }}</div>
+                  </div>
+                  <span class="status" :class="s.status">{{ s.pct }}% {{ s.status === 'done' ? '✓' : s.status === 'doing' ? '!' : '◯' }}</span>
+                </div>
+                <div v-if="dlOf(s.no).length" class="gdl">
+                  <button v-for="d in dlOf(s.no)" :key="d.id" class="gdl-row" :class="fx('deadlines', d.id)" :title="`${d.title} · due ${d.due.replace('T', ' ')} — click to edit`" @click.stop="ui.deadlineId = d.id">
+                    <span class="icon sm" :class="urgency(effDue(d))">alarm</span><span class="mono gdl-cd" :class="urgency(effDue(d))">{{ dlLeft(d) }}</span><span class="ellipsis">{{ d.title }}</span>
+                  </button>
+                </div>
+                <div v-if="showTasks" class="tasks">
+                  <TaskNode v-for="t in tasksOf(s.no).open" :key="t.id" :todo="t" :focus="focus?.todos" />
+                  <div class="row task-foot">
+                    <span v-if="tasksOf(s.no).done" class="tiny muted mono">✓ {{ tasksOf(s.no).done }} done</span>
+                    <span v-else-if="!tasksOf(s.no).open.length && s.status !== 'done'" class="tiny muted">No tasks yet</span>
+                    <span class="spacer"></span>
+                    <button v-if="s.status !== 'done'" class="add-task" :title="`Create a todo for ${s.no}`" @click.stop="todoFor(s)">+ task</button>
+                  </div>
+                </div>
+                </template>
+                <button class="btn sm add-sig" @click="addSig(p.no)">+ SIG</button>
+              </div>
+            </div>
+          </div>
+        </section>
 
       <!-- goals table: three layouts -->
       <section v-if="showTable" class="panel table-panel">
@@ -689,10 +757,53 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 .lt-row { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .lt-row:hover { background: var(--surface-2); }
 .lt-row.done span.grow { text-decoration: line-through; color: var(--muted); }
-/* map on top (full width); with the table open it shrinks to the left and the table takes the rest */
-.sp-top { display: flex; gap: 12px; padding: 12px; align-items: stretch; }
-.map-panel { flex: 1 1 100%; min-width: 0; transition: flex-basis 0.3s ease; }
-.with-table .map-panel { flex: 0 0 clamp(440px, 40%, 680px); }
+/* table open: the original tree (its own look, as before the pyramid) */
+.orig-tree { position: sticky; top: 12px; max-height: calc(100vh - 140px); }
+.canvas {
+  overflow: auto; padding: 16px;
+  background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 16px 16px;
+}
+.node { background: var(--surface); border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+.node:hover { border-color: var(--muted); }
+.node.sel { border-color: var(--info); box-shadow: 0 0 0 2px var(--info); background: color-mix(in srgb, var(--info) 14%, var(--surface)); }
+.vision { border-color: var(--accent); cursor: default; }
+.vis-in { font-weight: 600; font-size: 14px; height: 28px; }
+.trunk { width: 1px; height: 18px; background: var(--border); margin-left: 20px; }
+.branch { position: relative; margin-left: 20px; padding-left: 16px; border-left: 1px solid var(--border); padding-bottom: 14px; }
+.branch::before { content: ''; position: absolute; left: 0; top: 18px; width: 16px; border-top: 1px solid var(--border); }
+.nm-in { height: 24px; font-size: 13px; font-weight: 600; padding: 0 2px; }
+.sig-nm { gap: 6px; align-items: baseline; }
+.sig-in { height: 20px; font-size: 11px; flex: 1; min-width: 60px; padding: 0 2px; }
+.kids { margin: 6px 0 0 14px; padding-left: 12px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+/* tasks linked to a goal, hanging under its node */
+.tasks { margin: -3px 0 2px 10px; padding-left: 8px; border-left: 2px solid var(--surface-2); display: flex; flex-direction: column; }
+.psg-tasks { margin: 4px 0 0 24px; }
+.task { display: flex; align-items: center; gap: 6px; min-height: 24px; font-size: 12.5px; cursor: pointer; border-radius: 2px; padding: 0 4px; }
+.task:hover { background: var(--surface-2); }
+.task input { margin: 0; }
+.task-foot { gap: 6px; min-height: 20px; padding: 0 4px; }
+.task-done { padding: 2px 4px; }
+.add-task { border: 0; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; padding: 0 2px; }
+.add-task:hover { color: var(--accent); }
+/* deadlines hanging under a goal node */
+.gdl { margin: -3px 0 2px 10px; padding-left: 8px; border-left: 2px solid var(--surface-2); display: flex; flex-direction: column; }
+.psg-dl { margin: 4px 0 0 24px; }
+.gdl-row { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 4px; border: 0; border-radius: 2px; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; min-width: 0; }
+.gdl-row:hover { background: var(--surface-2); }
+.gdl-row .icon { font-size: 14px; }
+.gdl-cd { flex: none; min-width: 52px; font-size: 11.5px; }
+.node.fx-rel { border-color: color-mix(in srgb, var(--info) 60%, var(--border)); }
+.gdl-row.fx-rel, .lt-row.fx-rel { background: color-mix(in srgb, var(--info) 8%, transparent); }
+.sig { flex-direction: row; align-items: center; gap: 8px; }
+.sig.doing { border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
+.sig.done { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.add-sig { align-self: flex-start; }
+.node.fx-rel { border-color: color-mix(in srgb, var(--info) 60%, var(--border)); }
+.gdl-row.fx-rel { background: color-mix(in srgb, var(--info) 8%, transparent); }
+/* pyramid on top at full width; with the table open, the original tree on the left and the table beside it */
+.sp-top { display: flex; gap: 12px; padding: 12px; align-items: flex-start; }
+.map-panel { flex: 1 1 100%; min-width: 0; }
+.orig-tree { flex: 0 0 340px; align-self: flex-start; }
 .table-panel { flex: 1 1 0; min-width: 0; }
 .seg { display: inline-flex; gap: 2px; }
 .split { display: flex; flex-direction: column; }
@@ -720,6 +831,7 @@ tfoot .td-add { padding: 0; border-bottom: 0; }
 .flow-panel { margin: 0 12px 12px; }
 .more-bar { display: flex; justify-content: flex-end; padding: 0 12px 12px; }
 .more { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 0 12px 12px; align-items: start; }
-@media (max-width: 1000px) { .sp-top { flex-direction: column; align-items: stretch; } .with-table .map-panel { flex-basis: auto; } .more { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1200px) { .sp-top { flex-direction: column; align-items: stretch; } .orig-tree { position: static; max-height: none; flex-basis: auto; } }
+@media (max-width: 1000px) { .more { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .more { grid-template-columns: 1fr; } .flow-hint { display: none; } }
 </style>
