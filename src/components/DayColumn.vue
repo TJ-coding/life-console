@@ -20,7 +20,7 @@ const router = useRouter()
 // ISS-38: a day in Plan week opens it in the Command Center with the backlog beside it, to plan that day
 const openDay = () => { ui.dayPlanning = true; router.push(props.date === todayISO() ? '/?plan=1' : `/day/${props.date}?plan=1`) }
 // balance: ② Assign day only — { avg, counts (days the average covers), rows, moves } from the planner
-const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object, dlRows: { type: Number, default: 0 }, goalRow: { type: Boolean, default: false } })
+const props = defineProps({ date: String, filter: String, mode: { type: String, default: 'both' }, balance: Object, dlRows: { type: Number, default: 0 }, bandTop: { type: Number, default: null } })
 /* ② Assign day: the space under the day does that day's job — on an over-full day, what to move out
    (the planner's rebalance moves); on a day with room, the backlog tasks the planner gives it */
 const free = computed(() => capH() - hours.value)
@@ -32,6 +32,7 @@ function moveTo(s) {
 }
 const delta = computed(() => (props.balance?.counts.includes(props.date) ? hours.value - props.balance.avg : null))
 // height of a deadline banner with n rows (22px rows, 2px gaps, 3px padding top and bottom): see .dlband/.dlb
+// (the goal-date banner under it uses the same rows; WeeklyPlanner passes the week's tallest pair as bandTop)
 const bandPx = (n) => (n ? n * 22 + (n - 1) * 2 + 6 : 0)
 const isToday = computed(() => props.date === todayISO())
 const past = computed(() => diffDays(props.date, todayISO()) > 0)
@@ -43,7 +44,6 @@ const deadlines = computed(() => state.deadlines.filter((d) => d.due.slice(0, 10
 /* goal dates on this day (PSG/SIG time bounds): a quiet mark in the date row, never a banner like a deadline */
 const goalsHere = computed(() => goalDates(state).filter((g) => g.date === props.date))
 const openGoal = (g) => router.push(`/strategy/${g.planId}?goal=${encodeURIComponent(g.no)}`)
-const goalsTitle = computed(() => goalsHere.value.map((g) => `Goal date: ${g.no} ${g.title} · ${g.pct}%`).join('\n') + '\nClick to open the goal')
 const matches = (links) => !props.filter || links.includes(props.filter)
 const dimBlock = (b) => props.filter && b.link !== props.filter && !(b.todoId && matches(state.todos.find((t) => t.id === b.todoId)?.links ?? []))
 const dimTodo = (t) => !matches(t.links)
@@ -72,7 +72,7 @@ function auto() {
 </script>
 
 <template>
-  <div class="day panel" :class="{ today: isToday, past, hasdl: deadlines.length }" :data-date="date" :style="{ marginTop: bandPx(dlRows) - bandPx(deadlines.length) + 'px' }">
+  <div class="day panel" :class="{ today: isToday, past, hasdl: deadlines.length }" :data-date="date" :style="{ marginTop: (bandTop ?? bandPx(dlRows)) - bandPx(deadlines.length) - bandPx(goalsHere.length) + 'px' }">
     <!-- ISS-41: a day with a deadline wears a solid banner above its date (red once overdue), so the
          week's deadline days stand out at a glance. Columns with fewer banner rows than the busiest
          day start lower (margin above the column, not space inside it), so the dates stay level -->
@@ -80,6 +80,13 @@ function auto() {
       <div v-for="d in deadlines" :key="d.id" class="dlb" :class="{ done: d.done, over: isOverdue(d) }" :title="`Deadline: ${d.title}${d.vital ? ' · ' + d.vital : ''} — click to edit`" @click="ui.deadlineId = d.id">
         <span class="icon">flag</span><span class="ellipsis grow">{{ d.title }}</span><span class="mono tm">{{ d.due.slice(11) }}</span>
         <input v-model="d.done" type="checkbox" title="Done" @click.stop />
+      </div>
+    </div>
+    <!-- goal dates (PSG/SIG time bounds): the same banner shape, in a soft tint, so they read like deadlines
+         without competing with them -->
+    <div v-if="goalsHere.length" class="gband">
+      <div v-for="g in goalsHere" :key="g.key" class="gb" :title="`Goal date: ${g.no} ${g.title} · ${g.pct}% · click to open the goal`" @click="openGoal(g)">
+        <span class="icon">flag</span><span class="ellipsis grow">{{ g.title }}</span><span class="mono tm">{{ g.pct }}%</span>
       </div>
     </div>
     <header class="dh" role="link" tabindex="0" :title="`Plan ${wd(date)} ${fmtSlash(date)}: open it with the backlog beside it`" @click="openDay" @keydown.enter="openDay">
@@ -91,11 +98,6 @@ function auto() {
         <span v-if="isToday" class="mono tiny ok">● NOW</span>
         <button class="btn sm icon-only addbtn" :class="{ active: adding }" :title="`Add a deadline on ${wd(date)}`" @click.stop="adding = !adding" @keydown.enter.stop><span class="icon sm">flag</span></button>
         <span class="icon sm open">open_in_new</span>
-      </div>
-      <div v-if="goalRow || goalsHere.length" class="grow-row">
-        <button v-if="goalsHere.length" type="button" class="gmk" :title="goalsTitle" @click.stop="openGoal(goalsHere[0])" @keydown.enter.stop>
-          <span class="icon">flag</span><span class="ellipsis">{{ goalsHere[0].title }}</span><span v-if="goalsHere.length > 1" class="mono">+{{ goalsHere.length - 1 }}</span>
-        </button>
       </div>
       <div class="row">
         <span v-if="hours > capH()" class="icon sm danger" title="Over capacity">warning</span>
@@ -214,8 +216,9 @@ function auto() {
 .notes { width: 100%; font-size: 11px; line-height: 15px; }
 .stamps-sec { display: flex; justify-content: center; border-bottom: 0; padding: 8px; }
 /* goal date: a quiet mark beside the date (deadlines get the banner above) */
-.grow-row { display: flex; height: 16px; min-width: 0; }
-.gmk { display: inline-flex; align-items: center; gap: 2px; min-width: 0; max-width: 100%; border: 0; background: transparent; padding: 0 2px; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
-.gmk .icon { font-size: 12px; color: var(--info); flex: none; }
-.gmk:hover { color: var(--text); }
+.gband { display: flex; flex-direction: column; gap: 2px; padding: 3px; box-sizing: border-box; background: color-mix(in srgb, var(--info) 16%, var(--surface)); box-shadow: inset 3px 0 0 var(--info); }
+.gb { display: flex; align-items: center; gap: 4px; height: 22px; padding: 0 4px; border-radius: 2px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text); }
+.gb:hover { background: color-mix(in srgb, var(--info) 18%, transparent); }
+.gb .icon { font-size: 15px; color: var(--info); }
+.gb .tm { font-size: 11px; color: var(--muted); }
 </style>
