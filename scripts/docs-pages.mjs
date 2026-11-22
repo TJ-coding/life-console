@@ -18,7 +18,7 @@ export const DOC_PAGES = {
   },
   guide: {
     src: 'docs/GUIDE.md',
-    title: 'Life Console user guide: time-blocking, deadlines, goals and keyboard shortcuts',
+    title: 'Life Console user guide: time-blocking, goals and shortcuts',
     description: 'Every Life Console screen and feature: the Command Center, planning the week, quick-add syntax, deadline countdowns, strategic goals, pomodoro planning, shortcuts and notifications.',
   },
 }
@@ -36,6 +36,18 @@ function rewriteHref(href) {
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const slugify = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
+/** The doc as a web page about the app (the landing page's #app entity), with a breadcrumb trail. */
+const docLd = (slug, page) => JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'WebPage', '@id': `${SITE}/docs/${slug}`, url: `${SITE}/docs/${slug}`, name: page.title, description: page.description,
+  inLanguage: 'en', isPartOf: { '@id': `${SITE}/#website` }, about: { '@id': `${SITE}/#app` },
+  breadcrumb: {
+    '@type': 'BreadcrumbList',
+    itemListElement: [['Life Console', '/'], [slug === 'guide' ? 'User guide' : 'Self-hosting', `/docs/${slug}`]]
+      .map(([name, p], i) => ({ '@type': 'ListItem', position: i + 1, name, item: `${SITE}${p}` })),
+  },
+}).replace(/</g, '\\u003c')
 
 export function renderDoc(slug, md) {
   const page = DOC_PAGES[slug]
@@ -65,6 +77,7 @@ export function renderDoc(slug, md) {
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <link rel="stylesheet" href="/legal.css" />
+<script type="application/ld+json">${docLd(slug, page)}</script>
 </head>
 <body>
 <main class="doc">

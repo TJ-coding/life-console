@@ -26,7 +26,7 @@ const MIME = {
 }
 const LEGAL = new Set(['/privacy', '/terms'])
 const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
-const DOCS_DATE = '2026-11-10' // sitemap <lastmod> for the docs pages: bump when they change
+const DOCS_DATE = '2026-11-23' // sitemap <lastmod> for the docs pages: bump when they change
 const LANDING_DATE = '2026-11-23' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
@@ -434,6 +434,9 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
   /** Cloudflare tells us the visitor's scheme in CF-Visitor (X-Forwarded-Proto is rewritten by Traefik behind the tunnel). */
   const plainHttp = (req) => /"scheme"\s*:\s*"http"/.test(String(req.headers['cf-visitor'] || ''))
 
+  /** A page with its own address on the public site (what the sitemap lists, plus legal pages). */
+  const isPage = (p) => LEGAL.has(p) || DOCS.has(p) || COMPARE.has(p) || !!EDITION_LANDINGS[p]
+
   function serveStatic(req, res, pathname, query = new URLSearchParams()) {
     let rel
     try { rel = decodeURIComponent(pathname) } catch { return send(res, 400, 'bad path') }
@@ -441,7 +444,10 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
       // duplicates of indexed pages: http://, the landing files by name, the .html of the plain URLs
       const search = query.size ? `?${query}` : ''
       if (plainHttp(req) && site.startsWith('https://') && req.headers.host === appHost) return moved(res, site + pathname + search)
+      if (EDITION_FILES[rel]) return moved(res, `/${EDITION_FILES[rel]}${search}`)
       if (LANDING_PAGES.has(rel)) return moved(res, `/${search}`)
+      // a trailing slash on a page's URL (/vs/sunsama/): the slash-less address is the canonical one
+      if (rel.length > 1 && rel.endsWith('/') && isPage(rel.slice(0, -1))) return moved(res, rel.slice(0, -1) + search)
       if (rel.endsWith('.html') && (LEGAL.has(rel.slice(0, -5)) || DOCS.has(rel.slice(0, -5)))) return moved(res, rel.slice(0, -5) + search)
     }
     if (rel === '/robots.txt') return send(res, 200, robots(), { 'Cache-Control': 'public, max-age=3600' })
@@ -449,7 +455,7 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
       if (!cfg.landing) return send(res, 404, 'not found')
       if (rel === '/sitemap.xml') return send(res, 200, sitemap(), { 'Content-Type': MIME['.xml'], 'Cache-Control': 'public, max-age=3600' })
     }
-    let vary = false
+    let vary = false, notFound = false
     const extra = {}
     if (rel === '/' && cfg.landing) {
       // the landing page for visitors without a session (and crawlers); signed-in people get the app as before
@@ -467,7 +473,12 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
       rel = `/landing-${id}.html`
     } else if (LANDING_PAGES.has(rel) && !cfg.landing) return send(res, 404, 'not found')
     else if (LEGAL.has(rel) || DOCS.has(rel) || (cfg.landing && COMPARE.has(rel))) rel += '.html' // /privacy, /terms, /docs/…: plain URLs for people, search engines and Google's consent screen
-    else if (rel === '/' || !path.extname(rel)) rel = '/index.html' // SPA fallback (routes use #, but be safe); /app always opens the app
+    else if (rel === '/' || !path.extname(rel)) {
+      // SPA fallback (routes use #, but be safe); /app always opens the app. On the public site any other
+      // unknown path still shows the app but answers 404, so search engines don't report a soft 404.
+      if (cfg.landing && rel !== '/' && rel !== '/app' && rel !== '/index.html') notFound = true
+      rel = '/index.html'
+    }
     const file = path.normalize(path.join(dist, rel))
     if (!file.startsWith(dist)) return send(res, 403, 'forbidden')
     const landingPage = LANDING_PAGES.has(rel)
@@ -503,8 +514,8 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
       else if (rel.endsWith('.html') && rel !== '/index.html') headers['X-LC-Page'] = 'page' // /privacy, /terms, /docs/…: not the app shell either
       // byte ranges: Safari won't play a <video> without them
       const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '')
-      let start = 0, end = st.size - 1, status = 200
-      if (m && (m[1] || m[2])) {
+      let start = 0, end = st.size - 1, status = notFound ? 404 : 200
+      if (m && (m[1] || m[2]) && !notFound) {
         if (m[1]) { start = Number(m[1]); if (m[2]) end = Math.min(Number(m[2]), end) } else start = Math.max(0, st.size - Number(m[2]))
         if (start > end || start >= st.size) {
           res.writeHead(416, { 'Content-Range': `bytes */${st.size}`, ...SECURITY_HEADERS }); return res.end()

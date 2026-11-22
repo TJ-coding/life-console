@@ -217,7 +217,7 @@ test('/docs/guide and /docs/self-hosting: served on every server, listed in the 
       assert.equal(r.headers.get('x-frame-options'), 'DENY')
     }
   }
-  assert.equal((await get(on, '/docs/nope')).status, 200, 'unknown paths still fall back to the app')
+  assert.equal((await get(on, '/docs/nope')).status, 404, 'unknown paths show the app but answer 404 (no soft 404)')
   assert.match((await get(on, '/docs/nope')).body.toString(), /APP/)
   assert.equal((await get(on, '/app')).headers.get('x-lc-page'), null, 'the app shell stays cacheable')
   const map = (await get(on, '/sitemap.xml')).body.toString()
@@ -261,6 +261,9 @@ test('edition landing paths: /minimalist is its page for visitors; signed-in peo
   assert.equal(selfHosted.status, 302)
   assert.equal(selfHosted.headers.get('location'), '/app?edition=minimalist')
   assert.equal((await get(off, '/landing-minimalist.html')).status, 404)
+  const byName = await fetch(on + '/landing-minimalist.html', noFollow)
+  assert.equal(byName.status, 301, 'the edition page by file name: moved to its own address')
+  assert.equal(byName.headers.get('location'), '/minimalist')
   assert.match((await get(on, '/sitemap.xml')).body.toString(), /<loc>https:\/\/lc.test\/minimalist<\/loc>/)
 })
 
@@ -280,7 +283,11 @@ test('comparison pages: served and listed in the sitemap on the public site only
     assert.equal(r.headers.get('x-lc-page'), 'page')
     assert.match((await get(off, p)).body.toString(), /APP/, 'LANDING off: the app, not a marketing page')
   }
-  assert.match((await get(on, '/vs/zoom')).body.toString(), /APP/, 'unknown pages fall back to the app')
+  const unknown = await get(on, '/vs/zoom')
+  assert.match(unknown.body.toString(), /APP/, 'unknown pages fall back to the app')
+  assert.equal(unknown.status, 404, 'but answer 404, not a soft 404')
+  assert.equal((await get(on, '/app')).status, 200)
+  assert.equal((await get(off, '/vs/zoom')).status, 200, 'a private server: the app, as before')
   const map = (await get(on, '/sitemap.xml')).body.toString()
   assert.ok(map.includes('<url><loc>https://lc.test/vs/sunsama</loc><lastmod>2026-11-17</lastmod>'))
   assert.ok(map.includes('<loc>https://lc.test/alternatives</loc>'))
@@ -303,6 +310,10 @@ test('scripts/compare-pages.mjs: front matter is checked, pages link to each oth
   assert.ok(html.includes('href="/app?from=compare" data-umami-event="open-app" data-umami-event-place="/vs/sunsama"'))
   assert.ok(html.includes('<a href="/alternatives/sunsama">Card /alternatives/sunsama</a>'))
   assert.ok(html.includes('"@type":"SoftwareApplication"'))
+  const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/.exec(html)[1])['@graph']
+  assert.equal(ld[0]['@id'], 'https://life-console.dev/#app', 'the same app entity as the landing page')
+  assert.equal(ld[1].dateModified, '2026-11-18')
+  assert.deepEqual(ld[1].breadcrumb.itemListElement.map((c) => c.name), ['Life Console', 'Comparisons', 'T <&>'])
   const hub = renderHub([a, b])
   assert.ok(hub.includes('href="/vs/sunsama"') && hub.includes('href="/alternatives/sunsama"'))
   assert.throws(() => parsePage(src('/sunsama')), /path must/)
@@ -326,6 +337,10 @@ test('LANDING=on: duplicate URLs 301 to the canonical one (http://, landing file
   assert.deepEqual(await moved(on, '/landing-b.html?lp=b'), [301, '/?lp=b'])
   assert.deepEqual(await moved(on, '/privacy.html'), [301, '/privacy'])
   assert.deepEqual(await moved(on, '/docs/guide.html'), [301, '/docs/guide'])
+  // a trailing slash on a page's address
+  assert.deepEqual(await moved(on, '/vs/sunsama/?x=1'), [301, '/vs/sunsama?x=1'])
+  assert.deepEqual(await moved(on, '/privacy/'), [301, '/privacy'])
+  assert.deepEqual(await moved(on, '/minimalist/'), [301, '/minimalist'])
   // Cloudflare's CF-Visitor says the visitor came over plain http: send them to the https site
   assert.deepEqual(await moved(on, '/docs/guide?x=1', { Host: 'lc.test', 'CF-Visitor': '{"scheme":"http"}' }), [301, 'https://lc.test/docs/guide?x=1'])
   assert.deepEqual(await moved(on, '/', { Host: 'lc.test', 'CF-Visitor': '{"scheme":"https"}' }), [200, null])

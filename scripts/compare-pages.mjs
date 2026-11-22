@@ -42,13 +42,33 @@ export function parsePage(src, name = 'page') {
   return { ...meta, body: m[2] }
 }
 
-// the app as structured data, so search engines and AI answers can read price, licence and platforms
-const appLd = JSON.stringify({
-  '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'Life Console', url: SITE,
-  applicationCategory: 'ProductivityApplication', operatingSystem: 'Web, Android, iOS, macOS, Windows, Linux (installable web app); self-hosted with Docker',
+// the app as structured data, so search engines and AI answers can read price, licence and platforms. The same
+// entity as the landing page's (#app, same fields), so every page describes one app rather than a new one each.
+const APP = {
+  '@type': 'SoftwareApplication', '@id': `${SITE}/#app`, name: 'Life Console', url: `${SITE}/`,
+  applicationCategory: 'ProductivityApplication', operatingSystem: 'Web, Android, iOS, Windows, macOS, Linux',
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }, license: 'https://www.gnu.org/licenses/agpl-3.0.html',
   isAccessibleForFree: true, codeRepository: REPO,
-})
+}
+/** This page (with its last update and breadcrumb trail) and the app it is about. */
+function pageLd({ title, description, canonical, updated }) {
+  const crumbs = [['Life Console', '/'], ...(canonical === '/alternatives' || isTemplate(canonical) ? [] : [['Comparisons', '/alternatives']]), [title, canonical]]
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      APP,
+      {
+        '@type': 'WebPage', '@id': `${SITE}${canonical}`, url: `${SITE}${canonical}`, name: title, description,
+        inLanguage: 'en', isPartOf: { '@id': `${SITE}/#website` }, about: { '@id': `${SITE}/#app` },
+        ...(updated ? { dateModified: updated } : {}),
+        breadcrumb: {
+          '@type': 'BreadcrumbList',
+          itemListElement: crumbs.map(([name, p], i) => ({ '@type': 'ListItem', position: i + 1, name, item: `${SITE}${p}` })),
+        },
+      },
+    ],
+  }).replace(/</g, '\\u003c')
+}
 
 const cta = (place) => `<aside class="closer"><div class="box"><div><p class="line">Try Life Console free</p><p class="sub">No account needed to try it. <a href="/docs/self-hosting">Or run it on your own server.</a></p></div><a class="btn primary big" href="/app?from=compare" data-umami-event="open-app" data-umami-event-place="${esc(place)}">Try it now</a></div></aside>`
 
@@ -71,7 +91,7 @@ const footer = `<footer>
   </div>
 </footer>`
 
-function shell({ title, description, canonical, body, place }) {
+function shell({ title, description, canonical, body, place, updated }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -91,7 +111,7 @@ function shell({ title, description, canonical, body, place }) {
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <link rel="preload" as="font" type="font/woff2" href="/media/fonts/inter-latin.woff2" crossorigin />
 <link rel="stylesheet" href="/compare.css" />
-<script type="application/ld+json">${appLd}</script>
+<script type="application/ld+json">${pageLd({ title, description, canonical, updated })}</script>
 </head>
 <body>
 ${header(place)}
@@ -145,11 +165,12 @@ export function renderPage(page, others = []) {
     ? `<h2 id="more-comparisons">More comparisons</h2>\n${cards(others)}`
     : ''
   const body = pickCards(labelCells(marked.parse(page.body, { renderer, gfm: true }))) + more
-  return shell({ title: page.title, description: page.description, canonical: page.path, body, place: page.path })
+  return shell({ title: page.title, description: page.description, canonical: page.path, body, place: page.path, updated: page.updated })
 }
 
 /** The /alternatives hub: every page, grouped into head-to-heads and roundups. */
 export function renderHub(pages) {
+  const updated = pages.map((p) => p.updated).sort().at(-1)
   const list = (kind) => { const l = pages.filter((p) => p.path.startsWith(`/${kind}/`)); return l.length ? cards(l) : '' }
   const vs = list('vs'), alt = list('alternatives')
   const body = `<h1>Life Console compared with other planners</h1>
@@ -161,7 +182,7 @@ ${vs ? `<h2 id="head-to-head">Head to head</h2>\n${vs}` : ''}
   return shell({
     title: 'Life Console alternatives: open-source planner comparisons',
     description: 'How Life Console, the free and open-source time-blocking planner, compares with Sunsama, Todoist, Notion and other planners: price, self-hosting, features and where each is better.',
-    canonical: '/alternatives', body, place: '/alternatives',
+    canonical: '/alternatives', body, place: '/alternatives', updated,
   })
 }
 
