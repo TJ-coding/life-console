@@ -468,7 +468,7 @@ dialog p { color: #c9d1d9; font: 13px/1.5 var(--mono); text-align: center; margi
 
 /* faq */
 .next-lead { color: var(--muted); max-width: 62ch; margin: 0 0 28px; }
-.next-links { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.next-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .next-links a { display: block; color: var(--text); padding: 16px 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); text-decoration: none; transition: border-color .15s; }
 .next-links a:hover { border-color: var(--accent); }
 .next-links b { display: block; font-weight: 600; margin-bottom: 4px; }
@@ -791,6 +791,7 @@ footer a { color: var(--muted); }
       <h2>A planner you can make your own.</h2>
       <p class="next-lead">Life Console is opening up: plugins that can do anything with your consent and one shared language so they add up, your data in a Solid pod you can move, and sharing between servers over ActivityPub. It isn't built yet, and the plans are public.</p>
       <nav class="next-links" aria-label="Where Life Console is going">
+        <a href="/goals" data-umami-event="platform" data-umami-event-place="goals"><b>Goals</b><span>What we're building towards</span></a>
         <a href="/manifesto" data-umami-event="platform" data-umami-event-place="manifesto"><b>Manifesto</b><span>What we believe</span></a>
         <a href="/roadmap" data-umami-event="platform" data-umami-event-place="roadmap"><b>Roadmap</b><span>Live, next and later</span></a>
         <a href="/whitepaper" data-umami-event="platform" data-umami-event-place="whitepaper"><b>White paper</b><span>Plugins, Solid pods and ActivityPub</span></a>

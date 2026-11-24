@@ -27,7 +27,7 @@ const MIME = {
 const LEGAL = new Set(['/privacy', '/terms'])
 const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
 /** Pages built by scripts/compare-pages.mjs (its PATH_RE): comparisons, templates and the platform pages. */
-const PAGE_PATH = /^\/(?:(?:vs|alternatives|templates|blog|plugins)\/[a-z0-9-]+|manifesto|roadmap|whitepaper|plugins)$/
+const PAGE_PATH = /^\/(?:(?:vs|alternatives|templates|blog|plugins)\/[a-z0-9-]+|goals|manifesto|roadmap|whitepaper|plugins)$/
 const DOCS_DATE = '2026-11-23' // sitemap <lastmod> for the docs pages: bump when they change
 const LANDING_DATE = '2026-11-24' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
@@ -500,7 +500,7 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
         res.end(req.method === 'HEAD' ? undefined : body)
       })
     }
-    const pageTag = DOCS.has(rel.slice(0, -5)) ? 'docs' : COMPARE.has(rel.slice(0, -5)) ? (/^\/(manifesto|roadmap|whitepaper|blog|plugins)(\/|$)/.test(rel) ? 'platform' : 'compare') : null
+    const pageTag = DOCS.has(rel.slice(0, -5)) ? 'docs' : COMPARE.has(rel.slice(0, -5)) ? (/^\/(goals|manifesto|roadmap|whitepaper|blog|plugins)(\/|$)/.test(rel) ? 'platform' : 'compare') : null
     if (pageTag && docsTag()) {
       return fs.readFile(file, 'utf8', (err, html) => {
         if (err) return send(res, 404, 'not found')

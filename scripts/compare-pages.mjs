@@ -24,9 +24,9 @@ import { marked } from 'marked'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SITE = 'https://life-console.dev'
 const REPO = 'https://github.com/TJ-coding/life-console'
-export const PATH_RE = /^\/(?:(?:vs|alternatives|templates|blog|plugins)\/[a-z0-9-]+|manifesto|roadmap|whitepaper|plugins)$/
+export const PATH_RE = /^\/(?:(?:vs|alternatives|templates|blog|plugins)\/[a-z0-9-]+|goals|manifesto|roadmap|whitepaper|plugins)$/
 /** The platform pages: where Life Console is going (manifesto, roadmap, white paper, blog, plugin docs). */
-export const isPlatform = (p) => /^\/(manifesto|roadmap|whitepaper|blog|plugins)(\/|$)/.test(p)
+export const isPlatform = (p) => /^\/(goals|manifesto|roadmap|whitepaper|blog|plugins)(\/|$)/.test(p)
 /** A platform page's section, if it sits under one: /blog/… → Blog, /plugins/… → Plugins. */
 const SECTIONS = { '/blog': 'Blog', '/plugins': 'Plugins' }
 const sectionOf = (p) => Object.keys(SECTIONS).find((s) => p.startsWith(`${s}/`))

@@ -5,6 +5,7 @@
 ## 1. Sources of truth, in order
 
 1. **The public pages** (`platform/*.md`, served at life-console.dev): *what* we're building and *why*. They are the plan.
+   - [`platform/goals.md`](../platform/goals.md) (`/goals`): **the goals, one page**, each with "done when" and a status. Start here; update a goal's status when it changes.
    - [`platform/whitepaper.md`](../platform/whitepaper.md) (`/whitepaper`): the design. Part 1 plugins, part 2 Solid and ActivityPub.
    - [`platform/roadmap.md`](../platform/roadmap.md) (`/roadmap`): the order of work.
    - [`platform/plugins-sdk.md`](../platform/plugins-sdk.md) (`/plugins/sdk`): manifest fields, extension points, `lc.data`, events, reminders, connections, versioning.
