@@ -9,6 +9,8 @@ draft: true
 ---
 # Roadmap
 
+> **Development update (2026-11-24):** a first version of everything under Now, Next and Later is built on a development branch and tested end to end. It isn't released yet; the [goals](/goals) page tracks each one.
+
 Life Console is a free, open-source planner today. Over the next stages it becomes a planner **you can extend**: a small core, plugins that can do anything with your consent, and a shared language so they work together. Why: the [manifesto](/manifesto). How: the [white paper](/whitepaper).
 
 ## Live today

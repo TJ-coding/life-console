@@ -40,15 +40,31 @@ Each phase ships on its own and needs the owner's go-ahead. Order agreed: phases
 
 | # | Phase | Done when | Status |
 |---|---|---|---|
-| 0 | Plugins on paper: Habits, the research hub, a Strava integration written against the SDK and vocabulary | Every gap below has an answer | Draft written (outside the repo) |
-| 1 | One SDK: grow `defineModule` into the plugin API (slots, fields, events, settings, view types, `replaces`); Core modules move onto it; clashes stop throwing; merged taxonomy loads | Every screen, the sidebar, shortcuts and the theme are plugins; screenshot + keyboard baseline unchanged | Not started |
-| 2 | Trusted page + confirmation tokens + safe mode; token creation, email/password, export, delete behind it | No script in the app page can do those actions | Not started |
-| 3 | The data door: `lc.data.*` over core records (through store helpers) and plugin types (`entities`, `relations` tables, server record API); schema checks, events, activity trail, grouped undo | Plugins store and compose data through one interface | Not started |
-| 4 | Registry + Public plugins: publishing, hashed versions, cards, checks and hints; loader, consent screens, pinned updates, Settings → Plugins | Anyone can publish; installing takes one informed yes | Not started |
-| 5 | Write-only vault + connections | Integrations without exposing keys | Not started |
-| 6 | Workshop + AI authoring (demo data on a separate origin) | Describe-to-plugin without touching the real planner | Not started |
-| 7 | Registry social layer: public plugin pages, downloads, reports | The growth loop | Not started |
-| later | Plugin compute; Secure tier; Solid storage; ActivityPub sharing; move anywhere | | |
+| 0 | Plugins on paper: Habits, the research hub, a Strava integration written against the SDK and vocabulary | Every gap below has an answer | Done: platform/plugins-*.md, vocabulary v1 in src/sdk/vocabulary.js |
+| 1 | One SDK: grow `defineModule` into the plugin API (slots, fields, events, settings, view types, `replaces`); Core modules move onto it; clashes stop throwing; merged taxonomy loads | Every screen, the sidebar, shortcuts and the theme are plugins; screenshot + keyboard baseline unchanged | Built (first version) |
+| 2 | Trusted page + confirmation tokens + safe mode; token creation, email/password, export, delete behind it | No script in the app page can do those actions | Built (first version) |
+| 3 | The data door: `lc.data.*` over core records (through store helpers) and plugin types (`entities`, `relations` tables, server record API); schema checks, events, activity trail, grouped undo | Plugins store and compose data through one interface | Built (first version) |
+| 4 | Registry + Public plugins: publishing, hashed versions, cards, checks and hints; loader, consent screens, pinned updates, Settings → Plugins | Anyone can publish; installing takes one informed yes | Built (first version) |
+| 5 | Write-only vault + connections | Integrations without exposing keys | Built (first version) |
+| 6 | Workshop + AI authoring (demo data on a separate origin) | Describe-to-plugin without touching the real planner | Built (first version) |
+| 7 | Registry social layer: public plugin pages, downloads, reports | The growth loop | Partly: downloads, reports, pulling and the Works-with-everything mark are built; public plugin pages on life-console.dev are not |
+| 8 | Solid storage, ActivityPub sharing, move anywhere (whitepaper part 2) | Two servers share, edit, revoke and move | Built (first version) |
+| later | Plugin compute (GitHub Actions-style); Secure tier; in-app AI drafting; Core screens on `lc.data`; Solid-OIDC sign-in to pods; one registry shared by every server | | |
+
+## 3b. Where the code is (first version, branch feature/plugins-manifesto)
+
+| Part | Files | Tests |
+|---|---|---|
+| Vocabulary, data door | `src/sdk/vocabulary.js`, `src/sdk/data.js` | `test/platform.test.mjs` |
+| Registry (registry.js), runtime, slots, safe mode | `src/sdk/registry.js`, `src/sdk/index.js`, `src/sdk/lc.js`, `src/sdk/loader.js`, `src/sdk/manifest.js`, `src/sdk/mount.js`, `src/components/PluginSlot.vue`, `PluginPart.vue`, `src/views/PluginPage.vue` | `test/registry.test.mjs` |
+| Reminders as data | `server/schedule.mjs` (`remindsOn`, `state.reminders`) | `test/platform.test.mjs` |
+| Plugin registry (server) | `server/registry.mjs` | `test/plugins.test.mjs` |
+| Trusted page, consent | `server/consent.mjs` (`/trust`, `/trust/oauth`) | `test/plugins.test.mjs`, `test/opendata.test.mjs` |
+| Vault, connections, OAuth | `server/vault.mjs`, `server/oauth.mjs` | `test/plugins.test.mjs` |
+| Plugins screen, workshop, sharing screen | `src/views/PluginsHub.vue`, `Workshop.vue` (+ `preview.html`, `src/preview/main.js`), `Sharing.vue`, `modules/plugins/` | Chrome end to end (manual script) |
+| Solid pod | `server/pod.mjs` (`/pods/<handle>/`) | `test/opendata.test.mjs` |
+| ActivityPub | `server/federation.mjs` (`/.well-known/webfinger`, `/u/<handle>`, inbox, records) | `test/opendata.test.mjs` (two servers) |
+| Database | migrations `0004_plugin_platform`, `0005_open_data` (additive) | |
 
 ## 4. Gaps to close (from writing plugins on paper)
 

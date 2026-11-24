@@ -28,8 +28,8 @@ test('the real module list builds and keeps today’s sidebar, tab bar, chords a
   ])
   assert.deepEqual(reg.tabs.map((t) => [t.tab, t.to]), [['Today', '/'], ['Plan', '/week'], ['Todos', '/todos'], ['Deadlines', '/deadlines'], ['Settings', '/settings']])
   assert.deepEqual(reg.chords, { s: '/strategy', i: '/todos', t: '/', w: '/week', c: '/', l: '/week?mode=days', d: '/deadlines', b: '/issues' })
-  assert.deepEqual(reg.routes.map((r) => r.path).sort(), [...FROZEN_PATHS, '/m/plugins', '/m/plugins/workshop'].sort(), 'every existing route is still there, plus the plugin platform\'s own screens')
-  assert.deepEqual(reg.commands.map((c) => c.label), ['Briefing (morning review)', 'Debrief (evening review)', 'Plugins', 'Plugin workshop'])
+  assert.deepEqual(reg.routes.map((r) => r.path).sort(), [...FROZEN_PATHS, '/m/plugins', '/m/plugins/workshop', '/m/plugins/sharing'].sort(), 'every existing route is still there, plus the plugin platform\'s own screens')
+  assert.deepEqual(reg.commands.map((c) => c.label), ['Briefing (morning review)', 'Debrief (evening review)', 'Plugins', 'Plugin workshop', 'Sharing and your data'])
   assert.deepEqual(reg.byId.study.planned.length, 4)
 })
 

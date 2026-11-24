@@ -7,9 +7,11 @@ export default defineModule({
   routes: [
     { path: '/m/plugins', name: 'plugins', component: () => import('../../src/views/PluginsHub.vue'), meta: { title: 'Plugins', screen: 'S-96' } },
     { path: '/m/plugins/workshop', name: 'workshop', component: () => import('../../src/views/Workshop.vue'), meta: { title: 'Workshop', screen: 'S-97' } },
+    { path: '/m/plugins/sharing', name: 'sharing', component: () => import('../../src/views/Sharing.vue'), meta: { title: 'Sharing', screen: 'S-98' } },
   ],
   commands: [
     { label: 'Plugins', icon: 'extension', run: ({ router }) => router.push('/m/plugins') },
     { label: 'Plugin workshop', icon: 'construction', run: ({ router }) => router.push('/m/plugins/workshop') },
+    { label: 'Sharing and your data', icon: 'share', run: ({ router }) => router.push('/m/plugins/sharing') },
   ],
 })

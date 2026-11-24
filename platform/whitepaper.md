@@ -4,7 +4,7 @@ title: Life Console plugin platform: white paper (draft)
 description: The design of Life Console's plugin platform and open data: a tiny kernel, plugins with consent, one data door, a registry, a shared vocabulary, Solid pods and ActivityPub sharing.
 card: The white paper: plugins, Solid pods and ActivityPub
 updated: 2026-11-24
-status: Draft for discussion, version 0.1. Describes a design, not shipped software.
+status: Draft for discussion, version 0.1. A first version of this design is built on a development branch and tested; it isn't released yet.
 draft: true
 ---
 # The Life Console plugin platform

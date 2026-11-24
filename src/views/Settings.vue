@@ -175,7 +175,7 @@ function toggleBoDay(b, i) {
       <div class="panel-h"><span class="icon sm">extension</span><h2>Plugins</h2><span class="spacer"></span><span class="tiny muted">extend the console</span></div>
       <div class="panel-b col">
         <p class="small muted">Add screens, records and integrations made by others or by you. Installing and saving keys happen on the trusted page.</p>
-        <div class="row"><router-link class="btn" to="/m/plugins"><span class="icon sm">extension</span>Plugins</router-link><router-link class="btn" to="/m/plugins/workshop"><span class="icon sm">construction</span>Workshop</router-link></div>
+        <div class="row"><router-link class="btn" to="/m/plugins"><span class="icon sm">extension</span>Plugins</router-link><router-link class="btn" to="/m/plugins/workshop"><span class="icon sm">construction</span>Workshop</router-link><router-link class="btn" to="/m/plugins/sharing"><span class="icon sm">share</span>Sharing and your data</router-link></div>
         <PluginSlot name="settings.section" />
       </div>
     </section>
