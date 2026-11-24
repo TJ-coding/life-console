@@ -222,14 +222,14 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
         if (!user.publicPlugins) await db.update(users).set({ publicPlugins: true, updatedAt: new Date() }).where(eq(users.id, uid))
         const r = await registry.install(uid, a.pkg, a.hash)
         log(`[consent] ${uid.slice(0, 8)} installed ${a.pkg}@${r.version}`)
-        return { msg: `Installed ${a.pkg} ${r.version}` }
+        return { msg: `Installed ${a.pkg} ${r.version}`, added: a.pkg }
       }
       case 'remove':
         await registry.uninstall(uid, a.pkg)
         return { msg: `Removed ${a.pkg}.`, forget: form.get('forget') === '1' ? a.pkg : null }
       case 'toggle':
         await registry.setEnabled(uid, a.pkg, a.on)
-        return { msg: `${a.pkg} is ${a.on ? 'on' : 'off'}.` }
+        return { msg: `${a.pkg} is ${a.on ? 'on' : 'off'}.`, added: a.on ? a.pkg : null }
       case 'token': {
         const token = await auth.replaceApiToken(uid, a.name)
         log(`[consent] api token "${a.name}" for ${uid.slice(0, 8)}`)
@@ -324,7 +324,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       const r = await run(who, row.action, form, req)
       if (r.redirect) return { status: 303, html: '', headers: { Location: r.redirect } }
       const extra = r.token ? `<label>Token</label><input type="text" readonly value="${esc(r.token)}"><div class="row"><a class="btn" href="lifeconsole-now://connect?server=${encodeURIComponent(`${req.headers['x-forwarded-proto'] ?? 'http'}://${req.headers.host}`)}&token=${encodeURIComponent(r.token)}">Open in the Mac app</a></div>` : ''
-      if (!r.token && !r.deleted) return { status: 303, html: '', headers: { Location: withQuery(backTo, { notice: r.msg, forget: r.forget }) } }
+      if (!r.token && !r.deleted) return { status: 303, html: '', headers: { Location: withQuery(backTo, { notice: r.msg, forget: r.forget, added: r.added }) } }
       const next = r.deleted ? '/' : backTo
       const headers = r.deleted ? { 'Set-Cookie': auth.clearCookie(secureFor(req)) } : {}
       return { ...page('Done', `<h1>Done</h1><p>${esc(r.msg)}</p>${extra}<div class="row"><a class="btn" href="${esc(next)}">Back to Life Console</a></div>`), headers }

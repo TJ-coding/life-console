@@ -1,8 +1,10 @@
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
 import { registry, attachRouter } from './sdk'
-import { loadPlugins } from './sdk/loader.js'
+import { loadPlugins, plugins } from './sdk/loader.js'
+import { whereShown } from './sdk/whereShown.js'
+import { nsOfPkg } from './sdk/manifest.js'
 import { setLcRouter } from './sdk/lc.js'
 import { applyTheme, toast } from './store'
 import { startSync, resumeSync } from './sync'
@@ -24,10 +26,26 @@ router.afterEach((to) => trackRoute(to))
 // back from the trusted page: show what happened, then tidy the address
 router.afterEach((to) => {
   if (typeof to.query.notice !== 'string') return
-  toast(to.query.notice)
-  const { notice, ...query } = to.query
+  const { notice, added, ...query } = to.query
+  if (typeof added !== 'string') { toast(notice); router.replace({ path: to.path, query }); return }
+  // a plugin was just installed or switched on: take you to where it shows up and point at it
   router.replace({ path: to.path, query })
+  showAdded(added, notice)
 })
+function showAdded(pkg, notice) {
+  const go = () => {
+    const places = whereShown(pkg)
+    const title = registry.byId[nsOfPkg(pkg)]?.title ?? pkg
+    if (!places.length) { toast(plugins.failed[pkg] ? `${title} didn't load: ${plugins.failed[pkg]}` : notice); return }
+    const first = places.find((p) => p.path)
+    toast(`${title} is on: find it on ${places.map((p) => p.label).join(', ')}`)
+    if (first && router.currentRoute.value.path !== first.path) router.push(first.path)
+    plugins.highlight = pkg
+    setTimeout(() => { if (plugins.highlight === pkg) plugins.highlight = null }, 5000)
+  }
+  if (plugins.status === 'ready' || plugins.status === 'none' || plugins.status === 'safe') go()
+  else { const stop = watch(() => plugins.status, (s) => { if (s !== 'loading' && s !== 'idle') { stop(); go() } }) }
+}
 attachRouter(router)
 setLcRouter(router)
 

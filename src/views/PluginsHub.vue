@@ -10,6 +10,7 @@ import { registry } from '../sdk'
 import { auth } from '../auth'
 import { toast } from '../store'
 import PluginPart from '../components/PluginPart.vue'
+import { whereShown } from '../sdk/whereShown.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -67,6 +68,10 @@ const mine = (p) => auth.user?.handle && p.name.startsWith(`${auth.user.handle}/
               <span v-if="p.pulled" class="small danger"> · removed from the registry ({{ p.pulledReason || 'reported as harmful' }}), so it's off</span>
               <span v-else-if="plugins.failed[p.pkg]" class="small danger"> · didn't load: {{ plugins.failed[p.pkg] }}</span>
               <span v-else-if="!p.enabled" class="small muted"> · switched off</span>
+              <div v-if="p.enabled && !p.pulled && whereShown(p.pkg).length" class="small muted">Shows on:
+                <template v-for="(w, i) in whereShown(p.pkg)" :key="w.label">{{ i ? ', ' : ' ' }}<router-link v-if="w.path" :to="w.path">{{ w.label }}</router-link><span v-else>{{ w.label }}</span></template>
+              </div>
+              <div v-else-if="p.enabled && !p.pulled && plugins.status === 'ready' && !plugins.failed[p.pkg]" class="small muted">Loaded, but it doesn't add anything to a screen.</div>
             </div>
             <a v-if="p.update" class="btn primary" :href="trustUrl('install', { pkg: p.pkg, hash: p.update.hash })">Update</a>
             <a class="btn" :href="trustUrl('toggle', { pkg: p.pkg, on: p.enabled ? '0' : '1' })">{{ p.enabled ? 'Switch off' : 'Switch on' }}</a>

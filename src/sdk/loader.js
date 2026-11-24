@@ -8,7 +8,7 @@ import { toModule, vocabOf, sdkOk } from './manifest.js'
 import PluginPage from '../views/PluginPage.vue'
 
 const LOADING = 'life-console/plugins-loading'
-export const plugins = reactive({ status: 'idle', safe: false, crashed: false, installed: [], failed: {}, conflicts: [] })
+export const plugins = reactive({ status: 'idle', safe: false, crashed: false, installed: [], failed: {}, conflicts: [], highlight: null })
 
 function wantsSafe() {
   try {
