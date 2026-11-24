@@ -2,7 +2,7 @@
 // S-97 Workshop (goal 7): editing mode, a separate place. Describe the plugin, copy the prompt to your own AI (no
 // planner data in it), paste the file back, try it on demo data in a sandboxed preview, publish it (private by
 // default) and install it through the trusted page. Drafts never run in the console itself.
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { api, trustUrl } from '../sdk/client.js'
 import { workshopPrompt, STARTER } from '../sdk/prompt.js'
 import { auth } from '../auth'
@@ -22,6 +22,31 @@ const height = ref(320)
 const published = ref(null)
 const busy = ref(false)
 const persist = () => { try { localStorage.setItem(DRAFT, JSON.stringify({ describe: describe.value, code: code.value, slug: slug.value, version: version.value })) } catch { /* storage off */ } }
+
+// a plugin's own terms start with its name (water.Glass for a plugin called water): when the name changes, rename
+// them too, and when they don't match, say so and offer both fixes
+const ns = (s) => String(s).toLowerCase().replace(/[^a-z0-9-]/g, '-')
+const termPrefix = (s) => new RegExp(`(['"\`])${s.replace(/[-]/g, '\\-')}\\.(?=[A-Za-z])`, 'g')
+function renameTerms(from, to) {
+  if (!from || !to || from === to) return false
+  const next = code.value.replace(termPrefix(from), `$1${to}.`)
+  if (next === code.value) return false
+  code.value = next
+  return true
+}
+watch(slug, (now, before) => {
+  if (renameTerms(ns(before), ns(now))) { toast(`Renamed ${ns(before)}.* to ${ns(now)}.* to match the plugin's name`); run() }
+})
+/** Terms named after something other than the plugin, from the preview's problems: { from, to } or null. */
+const mismatch = computed(() => {
+  for (const p of result.value?.problems ?? []) {
+    const m = /"([a-z0-9-]+)\.[^"]+" must start with "([a-z0-9-]+)\."/.exec(p)
+    if (m) return { from: m[1], to: m[2] }
+  }
+  return null
+})
+function fixByRenaming() { if (renameTerms(mismatch.value.from, mismatch.value.to)) run() }
+function fixByName() { const f = mismatch.value.from; slug.value = f }
 
 const name = computed(() => `${auth.user?.handle ?? 'you'}/${slug.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`)
 function run() {
@@ -97,7 +122,11 @@ async function publish() {
         <div class="panel-b col">
           <iframe ref="frame" class="preview" sandbox="allow-scripts" src="/preview.html" title="Plugin preview" :style="{ height: height + 'px' }"></iframe>
           <ul v-if="result?.errors?.length" class="small bad"><li v-for="e in result.errors" :key="e">{{ e }}</li></ul>
-          <ul v-if="result?.problems?.length" class="small warn"><li v-for="p in result.problems" :key="p">{{ p }}</li></ul>
+          <div v-if="mismatch" class="fix small">
+            <span>Your plugin is called <b class="mono">{{ mismatch.to }}</b>, but its types are named <b class="mono">{{ mismatch.from }}.…</b> A plugin's own names start with its name.</span>
+            <div class="row wrap"><button class="btn primary" @click="fixByRenaming">Rename them to {{ mismatch.to }}.…</button><button class="btn" @click="fixByName">Call the plugin {{ mismatch.from }}</button></div>
+          </div>
+          <ul v-else-if="result?.problems?.length" class="small warn"><li v-for="p in result.problems" :key="p">{{ p }}</li></ul>
           <div v-if="result?.manifest" class="small muted">
             <b>{{ result.manifest.title }}</b> · {{ result.manifest.pages }} page(s) · slots: {{ result.manifest.slots.join(', ') || 'none' }} · types: {{ result.manifest.types.join(', ') || 'none' }}
             · talks to: {{ result.manifest.says.internet.join(', ') || 'no sites' }}<span v-if="result.manifest.replaces.length"> · replaces {{ result.manifest.replaces.join(', ') }}</span>
@@ -136,4 +165,5 @@ textarea, input, select { width: 100%; background: var(--surface-2); color: var(
 .preview { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
 .chip.ok { color: var(--accent); } .chip.bad, .bad { color: var(--danger); } .warn { color: var(--warn); }
 ul { margin: 0; padding-left: 18px; }
+.fix { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--warn); border-radius: 8px; }
 </style>

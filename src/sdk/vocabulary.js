@@ -106,7 +106,7 @@ export function buildTaxonomy(plugins = [], own = {}) {
   const ownsIt = (p, name, what) => {
     if (!NAME.test(name)) { problems.push(`${p.id}: ${what} "${name}" must be a dotted name like ${p.ns}.Thing`); return false }
     const pre = prefixOf(name)
-    if (pre !== p.ns) { problems.push(`${p.id}: ${what} "${name}" is outside its namespace "${p.ns}"`); return false }
+    if (pre !== p.ns) { problems.push(`${p.id}: ${what} "${name}" must start with "${p.ns}." (the plugin's name): call it ${p.ns}.${name.split('.').slice(1).join('.')}, or name the plugin ${pre}`); return false }
     return true
   }
   for (const p of plugins) {
