@@ -277,6 +277,12 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     if (regOne && req.method === 'GET') { const p = await registry.one(user, regOne); return p ? send(res, 200, p) : send(res, 404, { error: 'no such plugin' }) }
     // the owner edits the listing (title, description, icon, who can see it); anyone who can see it likes it
     if (regOne && req.method === 'PATCH') return send(res, 200, await registry.details(user, regOne, await body(req)))
+    // forks and suggestions (pull requests): anyone who forked an extension suggests a version; its author reviews it
+    const regSuggest = url.pathname.match(/^\/api\/registry\/plugins\/([a-z0-9-]+\/[a-z0-9-]+)\/suggest$/)?.[1]
+    if (regSuggest && req.method === 'POST') return send(res, 201, await registry.propose(user, regSuggest, await body(req)))
+    if (req.method === 'GET' && url.pathname === '/api/registry/suggestions') return send(res, 200, await registry.proposals(user))
+    const regDecline = url.pathname.match(/^\/api\/registry\/suggestions\/(\d+)\/decline$/)?.[1]
+    if (regDecline && req.method === 'POST') return send(res, 200, await registry.decline(user, regDecline))
 
     switch (route) {
       /* ── the plugin platform (docs/PLATFORM.md) ── */

@@ -12,6 +12,7 @@ import { auth } from '../auth'
 import { toast } from '../store'
 import PluginPart from '../components/PluginPart.vue'
 import { whereShown } from '../sdk/whereShown.js'
+import ExtPreview from '../components/ExtPreview.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +23,8 @@ const conns = ref({ on: false, connections: [], providers: [] })
 const newConn = ref({ name: '', site: '' })
 const err = ref('')
 const open = ref({}) // pkg → its settings are shown
+const sugg = ref({ incoming: [], sent: [] }) // suggestions (pull requests) to your extensions, and the ones you sent
+const previewing = ref(null) // the listing being previewed
 
 async function refresh() {
   err.value = ''
@@ -29,6 +32,7 @@ async function refresh() {
     status.value = await api('GET', '/api/plugins/installed')
     found.value = (await api('GET', `/api/registry/plugins?q=${encodeURIComponent(q.value)}`)).plugins
     conns.value = await api('GET', '/api/connections')
+    sugg.value = await api('GET', '/api/registry/suggestions')
   } catch (e) { err.value = e.status === 401 ? 'Sign in to use extensions.' : e.message }
 }
 let qTimer
@@ -44,7 +48,7 @@ const installed = computed(() => status.value?.plugins ?? [])
 const isInstalled = (name) => installed.value.some((p) => p.pkg === name)
 const toFind = computed(() => found.value.filter((p) => !isInstalled(p.name)))
 const settingsOf = (pkg) => registry.settings.find((s) => registry.byId[s.module]?.pkg === pkg)
-const mine = (p) => auth.user?.handle && p.name.startsWith(`${auth.user.handle}/`)
+const mine = (p) => p.mine ?? (!!auth.user?.handle && p.name.startsWith(`${auth.user.handle}/`)) // the server says
 
 /** One status line per extension, with colour only when something needs you. */
 function stateOf(p) {
@@ -77,6 +81,10 @@ async function setListed(p, on) {
   } catch (e) { toast(e.message) }
 }
 const listing = (p) => p.visibility === 'public' ? 'in the registry' : p.visibility === 'unlisted' ? 'out of the registry (still works for people who have it)' : 'only you'
+const incomingFor = (key) => sugg.value.incoming.filter((x) => x.packageName === key)
+const sentFrom = (key) => sugg.value.sent.find((x) => x.fromPackage === key)
+async function declineSuggestion(x) { try { await api('POST', `/api/registry/suggestions/${x.id}/decline`, {}); toast(`Declined ${x.by}'s suggestion`); refresh() } catch (e) { toast(e.message) } }
+const forkLink = (key) => ({ path: '/m/extensions/workshop', query: { fork: key } })
 function addKey() { if (canConnect.value) location.href = trustUrl('vault-save', { name: newConn.value.name.trim().toLowerCase(), site: newConn.value.site.trim().toLowerCase() }) }
 </script>
 
@@ -95,18 +103,26 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
         <span v-if="installed.length" class="mono small muted">{{ installed.length }}</span>
         <span v-if="attention" class="mono small danger">· {{ attention }} need{{ attention === 1 ? 's' : '' }} attention</span>
         <span v-if="updates" class="mono small warn">· {{ updates }} update{{ updates === 1 ? '' : 's' }}</span>
+        <span v-if="sugg.incoming.length" class="mono small info">· {{ sugg.incoming.length }} suggestion{{ sugg.incoming.length === 1 ? '' : 's' }}</span>
       </div>
       <div class="panel-b flush">
         <p v-if="status && !installed.length" class="empty muted">None yet.</p>
         <div v-for="p in installed" :key="p.pkg" class="ext" :class="{ off: !p.enabled }">
           <span class="icon ext-icon" aria-hidden="true">{{ p.icon }}</span>
           <div class="grow">
-            <div class="ext-name"><b>{{ p.title }}</b> <span class="mono tiny muted">{{ p.version }}</span><span v-if="p.mine" class="tiny upper muted"> · yours, {{ listing(p) }}</span></div>
+            <div class="ext-name"><b>{{ p.title }}</b> <span class="mono tiny muted">{{ p.version }}</span><span v-if="p.mine" class="tiny upper muted"> · yours, {{ listing(p) }}</span><span v-if="p.forkedFrom" class="tiny muted"> · fork of {{ p.forkedFrom }}</span><span v-if="sentFrom(p.pkg)" class="tiny muted"> · suggested to its author: {{ sentFrom(p.pkg).status }}</span><span v-if="incomingFor(p.pkg).length" class="tiny info"> · {{ incomingFor(p.pkg).length }} suggestion{{ incomingFor(p.pkg).length === 1 ? '' : 's' }}</span></div>
             <p v-if="p.description" class="small muted desc">{{ p.description }}</p>
             <p v-if="stateOf(p)" class="small" :class="stateOf(p).tone">{{ stateOf(p).text }}</p>
             <div v-else-if="whereShown(p.pkg).length" class="shows row wrap"><span class="tiny upper muted">Shows on</span><router-link v-for="w in whereShown(p.pkg)" :key="w.label" class="btn sm" :to="w.path">{{ w.label }}<span class="icon sm" aria-hidden="true">arrow_outward</span></router-link></div>
             <p v-else-if="plugins.status === 'ready'" class="small muted">Runs in the background</p>
-            <div v-if="editing?.key === p.pkg" class="ext-settings"><form class="details" @submit.prevent="saveDetails">
+            <div v-if="editing?.key === p.pkg" class="ext-settings"><div v-if="incomingFor(editing.key).length" class="sugg">
+              <div class="tiny upper muted">Suggestions</div>
+              <div v-for="x in incomingFor(editing.key)" :key="x.id" class="row wrap small">
+                <span class="grow"><b class="mono">{{ x.by }}</b> <span class="muted mono">{{ x.fromPackage }} {{ x.version }}</span><span v-if="x.message">: {{ x.message }}</span></span>
+                <router-link class="btn sm" :to="{ path: '/m/extensions/workshop', query: { edit: editing.key, suggestion: x.id } }">Review</router-link>
+                <button class="btn sm" type="button" @click="declineSuggestion(x)">Decline</button>
+              </div>
+            </div><form class="details" @submit.prevent="saveDetails">
               <label class="small muted" :for="`t-${editing.key}`">Name</label><input :id="`t-${editing.key}`" v-model="editing.title" maxlength="80" />
               <label class="small muted" :for="`d-${editing.key}`">Description</label><textarea :id="`d-${editing.key}`" v-model="editing.description" rows="2" maxlength="400"></textarea>
               <label class="small muted" :for="`i-${editing.key}`">Icon</label><span class="row"><span class="icon" aria-hidden="true">{{ editing.icon || 'extension' }}</span><input :id="`i-${editing.key}`" v-model="editing.icon" class="mono" placeholder="water_drop" /><a class="small" href="https://fonts.google.com/icons" target="_blank" rel="noopener">Find icons</a></span>
@@ -125,6 +141,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
             <a v-if="p.update && !p.pulled" class="btn primary" :href="trustUrl('install', { pkg: p.pkg, hash: p.update.hash })" :title="p.update.changelog || ''">Update to {{ p.update.version }}</a>
             <button v-if="settingsOf(p.pkg)" class="btn" :class="{ active: open[p.pkg] }" :aria-expanded="!!open[p.pkg]" @click="open[p.pkg] = !open[p.pkg]"><span class="icon sm" aria-hidden="true">tune</span>Settings</button>
             <button v-if="p.mine && !p.upstream" class="btn" :class="{ active: editing?.key === p.pkg }" :aria-expanded="editing?.key === p.pkg" @click="openDetails(p)"><span class="icon sm" aria-hidden="true">edit_note</span>Details</button>
+            <router-link v-if="!p.mine && !p.upstream" class="btn" :to="forkLink(p.pkg)" title="Copy it under your name to change it"><span class="icon sm" aria-hidden="true">fork_right</span>Fork</router-link>
             <a v-if="!p.pulled" class="btn" :href="trustUrl('toggle', { pkg: p.pkg, on: p.enabled ? '0' : '1' })">{{ p.enabled ? 'Switch off' : 'Switch on' }}</a>
             <a class="btn danger-ghost icon-only" :href="trustUrl('remove', { pkg: p.pkg })" :aria-label="`Remove ${p.title}`" title="Remove"><span class="icon sm" aria-hidden="true">delete</span></a>
           </div>
@@ -146,10 +163,21 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
         <div v-for="p in toFind" :key="p.name" class="ext">
           <span class="icon ext-icon" aria-hidden="true">{{ p.icon }}</span>
           <div class="grow">
-            <div class="ext-name"><b>{{ p.title }}</b> <span class="tiny muted">by {{ mine(p) ? `you, ${listing(p)}` : p.name.split('/')[0] }}</span><span v-if="p.worksWithEverything" class="tiny upper ok" title="Uses only the SDK and the data route, so it works with other extensions"> · works with everything</span></div>
+            <div class="ext-name"><b>{{ p.title }}</b> <span class="tiny muted">by {{ mine(p) ? `you, ${listing(p)}` : p.name.split('/')[0] }}</span><span v-if="p.forkedFrom" class="tiny muted"> · fork of {{ p.forkedFrom }}</span><span v-if="mine(p) && incomingFor(p.name).length" class="tiny info"> · {{ incomingFor(p.name).length }} suggestion{{ incomingFor(p.name).length === 1 ? '' : 's' }}</span><span v-if="p.worksWithEverything" class="tiny upper ok" title="Uses only the SDK and the data route, so it works with other extensions"> · works with everything</span></div>
             <p class="small muted desc">{{ p.description }}</p>
             <p v-if="p.latest?.checks?.warnings?.length" class="small warn">Check first: {{ p.latest.checks.warnings.map((w) => w.msg).join('; ') }}</p>
-            <div v-if="editing?.key === p.name" class="ext-settings"><form class="details" @submit.prevent="saveDetails">
+            <div v-if="previewing === p.name" class="ext-settings">
+              <ExtPreview :hash="p.latest.hash" :name="p.name" />
+              <div v-if="!mine(p) && !p.source" class="row wrap fork-row"><span class="spacer"></span><router-link class="btn" :to="forkLink(p.name)" title="Copy it under your name to change it"><span class="icon sm" aria-hidden="true">fork_right</span>Fork</router-link></div>
+            </div>
+            <div v-if="editing?.key === p.name" class="ext-settings"><div v-if="incomingFor(editing.key).length" class="sugg">
+              <div class="tiny upper muted">Suggestions</div>
+              <div v-for="x in incomingFor(editing.key)" :key="x.id" class="row wrap small">
+                <span class="grow"><b class="mono">{{ x.by }}</b> <span class="muted mono">{{ x.fromPackage }} {{ x.version }}</span><span v-if="x.message">: {{ x.message }}</span></span>
+                <router-link class="btn sm" :to="{ path: '/m/extensions/workshop', query: { edit: editing.key, suggestion: x.id } }">Review</router-link>
+                <button class="btn sm" type="button" @click="declineSuggestion(x)">Decline</button>
+              </div>
+            </div><form class="details" @submit.prevent="saveDetails">
               <label class="small muted" :for="`t-${editing.key}`">Name</label><input :id="`t-${editing.key}`" v-model="editing.title" maxlength="80" />
               <label class="small muted" :for="`d-${editing.key}`">Description</label><textarea :id="`d-${editing.key}`" v-model="editing.description" rows="2" maxlength="400"></textarea>
               <label class="small muted" :for="`i-${editing.key}`">Icon</label><span class="row"><span class="icon" aria-hidden="true">{{ editing.icon || 'extension' }}</span><input :id="`i-${editing.key}`" v-model="editing.icon" class="mono" placeholder="water_drop" /><a class="small" href="https://fonts.google.com/icons" target="_blank" rel="noopener">Find icons</a></span>
@@ -163,6 +191,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
             <button v-if="!mine(p) && !p.source" class="btn sm" :class="{ active: p.liked }" :aria-pressed="!!p.liked" :aria-label="p.liked ? 'Unlike' : 'Like'" @click="toggleLike(p)"><span class="icon sm" aria-hidden="true">favorite</span>{{ p.likes ?? 0 }}</button>
             <span v-else class="stats mono small muted"><span class="icon sm" aria-hidden="true">favorite</span>{{ p.likes ?? 0 }}</span>
             <button v-if="mine(p) && !p.source" class="btn" :class="{ active: editing?.key === p.name }" :aria-expanded="editing?.key === p.name" @click="openDetails(p)"><span class="icon sm" aria-hidden="true">edit_note</span>Details</button>
+            <button v-if="!p.source" class="btn" :class="{ active: previewing === p.name }" :aria-expanded="previewing === p.name" @click="previewing = previewing === p.name ? null : p.name"><span class="icon sm" aria-hidden="true">visibility</span>Preview</button>
             <a class="btn" :href="trustUrl('install', { pkg: p.name, hash: p.latest.hash })" :aria-label="`Install ${p.title}`">Install</a>
           </div>
         </div>
@@ -210,6 +239,9 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
 .ext-actions { gap: 6px; flex: none; }
 .ext-settings { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
 .ext-new { display: flex; justify-content: center; padding: 10px 12px; border-top: 1px solid var(--border); }
+.sugg { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.fork-row { margin-top: 6px; }
+.info { color: var(--info); }
 .stats { display: inline-flex; align-items: center; gap: 3px; }
 .details { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; max-width: 640px; }
 .details textarea { resize: vertical; }

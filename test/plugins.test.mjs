@@ -228,6 +228,35 @@ test('registry: likes, installs counted once, and the owner edits the listing or
   assert.equal((await alice('PATCH', '/api/registry/plugins/alice/streaks', { visibility: 'public' })).body.visibility, 'public', 'and back (Undo)')
 })
 
+test('forks and suggestions: only the author changes an extension; others fork it and suggest versions', async () => {
+  const orig = await alice('POST', '/api/registry/publish', { name: 'alice/timer', code: CODE.replace('Habits', 'Timer'), visibility: 'public', manifest: { title: 'Timer' } })
+  assert.equal((await bob('POST', '/api/registry/publish', { name: 'alice/timer', code: 'export default { sdk: 1 }' })).status, 403, "nobody publishes over someone else's extension")
+  assert.equal((await bob('PATCH', '/api/registry/plugins/alice/timer', { title: 'x' })).status, 404, "nor edits its listing")
+  // bob forks it (privately) and suggests his version back
+  const fork = await bob('POST', '/api/registry/publish', { name: 'timer', code: CODE.replace('Habits', 'Timer with sounds'), forkOf: 'alice/timer' })
+  assert.equal(fork.body.name, 'bob/timer')
+  assert.equal((await bob('GET', '/api/registry/plugins/bob/timer')).body.forkedFrom, 'alice/timer')
+  assert.equal((await bob('POST', '/api/registry/plugins/alice/timer/suggest', { hash: orig.body.hash })).status, 400, 'only a version of your fork')
+  const sug = await bob('POST', '/api/registry/plugins/alice/timer/suggest', { hash: fork.body.hash, message: 'Adds sounds' })
+  assert.equal(sug.status, 201)
+  assert.equal((await bob('POST', '/api/registry/plugins/alice/timer/suggest', { hash: fork.body.hash })).body.already, true, 'once per version')
+  // alice sees it, can read the private fork's code to review it, and accepts it by publishing it as her next version
+  const inbox = (await alice('GET', '/api/registry/suggestions')).body.incoming
+  assert.equal(inbox.length, 1); assert.equal(inbox[0].by, 'bob'); assert.equal(inbox[0].message, 'Adds sounds'); assert.equal(inbox[0].fromPackage, 'bob/timer')
+  assert.match((await alice('GET', `/api/registry/code/${fork.body.hash}.js`)).text, /Timer with sounds/)
+  assert.equal((await admin('GET', `/api/registry/code/${fork.body.hash}.js`)).status, 404, 'nobody else can read the private fork')
+  const next = await alice('POST', '/api/registry/publish', { name: 'timer', code: CODE.replace('Habits', 'Timer with sounds'), proposal: inbox[0].id })
+  assert.equal(next.body.name, 'alice/timer'); assert.equal(next.body.version, '0.1.1')
+  assert.equal((await alice('GET', '/api/registry/suggestions')).body.incoming.length, 0)
+  assert.equal((await bob('GET', '/api/registry/suggestions')).body.sent[0].status, 'accepted')
+  // declining
+  const fork2 = await bob('POST', '/api/registry/publish', { name: 'timer', code: CODE.replace('Habits', 'Timer v3') })
+  const s2 = await bob('POST', '/api/registry/plugins/alice/timer/suggest', { hash: fork2.body.hash })
+  assert.equal((await bob('POST', `/api/registry/suggestions/${s2.body.id}/decline`, {})).status, 404, 'only the author declines')
+  assert.equal((await alice('POST', `/api/registry/suggestions/${s2.body.id}/decline`, {})).status, 200)
+  assert.equal((await bob('GET', '/api/registry/suggestions')).body.sent[0].status, 'declined')
+})
+
 test('consent: once Public plugins are on, token, password and delete need the trusted page', async () => {
   const t = await bob('POST', '/api/auth/tokens', { name: 'Mac app' })
   assert.equal(t.status, 403)

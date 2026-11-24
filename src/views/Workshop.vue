@@ -24,7 +24,9 @@ const published = ref(null)
 const busy = ref(false)
 const route = useRoute()
 const SLOT_NAMES = { 'today.card': 'Today', 'week.strip': 'Plan week', 'strategy.plan': 'Strategic plans', 'todo.panel': 'Todo details', 'settings.section': 'Settings' }
-const persist = () => { try { localStorage.setItem(DRAFT, JSON.stringify({ describe: describe.value, code: code.value, slug: slug.value, version: version.value })) } catch { /* storage off */ } }
+const forkOf = ref(saved?.forkOf ?? null) // the extension this draft is a fork of (only its author changes the original)
+const suggestion = ref(null) // reviewing a suggestion to your extension: { id, by, message, fromPackage, version, base }
+const persist = () => { try { localStorage.setItem(DRAFT, JSON.stringify({ describe: describe.value, code: code.value, slug: slug.value, version: version.value, forkOf: forkOf.value })) } catch { /* storage off */ } }
 
 // a plugin's own terms start with its name (water.Glass for a plugin called water): when the name changes, rename
 // them too, and when they don't match, say so and offer both fixes
@@ -67,22 +69,37 @@ function onMessage(e) {
 }
 onMounted(async () => {
   window.addEventListener('message', onMessage)
-  // Extensions → Edit: open one of your own installed extensions here
-  const pkg = route.query.edit
-  if (typeof pkg !== 'string' || !pkg) return
+  // ?edit=<yours> opens your extension (?suggestion=<id> to review a suggestion to it); anything else is forked
+  const q = route.query
+  const pkg = typeof q.edit === 'string' ? q.edit : typeof q.fork === 'string' ? q.fork : ''
+  if (!pkg) return
   try {
+    const codeOf = async (hash) => { const r = await fetch(`/api/registry/code/${hash}.js`, { credentials: 'same-origin' }); if (!r.ok) throw new Error(`couldn't load it (${r.status})`); return r.text() }
     // installed, or only published (then its newest version)
     let it = (await api('GET', '/api/plugins/installed')).plugins.find((p) => p.pkg === pkg)
-    if (!it) { const r = await api('GET', `/api/registry/plugins/${pkg}`); if (!r.latest) return; it = { pkg, title: r.title, description: r.description, version: r.latest.version, hash: r.latest.hash } }
-    const r = await fetch(`/api/registry/code/${it.hash}.js`, { credentials: 'same-origin' })
-    if (!r.ok) throw new Error(`couldn't load it (${r.status})`)
+    if (!it) { const r = await api('GET', `/api/registry/plugins/${pkg}`); if (!r.latest) return; it = { pkg, title: r.title, description: r.description, version: r.latest.version, hash: r.latest.hash, forkedFrom: r.forkedFrom } }
+    let text = await codeOf(it.hash)
+    const own = it.mine ?? (await api('GET', `/api/registry/plugins/${pkg}`)).mine
+    suggestion.value = null
+    if (own) {
+      editing.value = it
+      forkOf.value = it.forkedFrom ?? null
+      if (q.suggestion) {
+        const x = (await api('GET', '/api/registry/suggestions')).incoming.find((y) => String(y.id) === String(q.suggestion))
+        if (x) { suggestion.value = { ...x, base: text }; text = await codeOf(x.fromHash) }
+      }
+      toast(suggestion.value ? `Reviewing ${suggestion.value.by}'s suggestion` : `Editing ${it.title}`)
+    } else {
+      editing.value = null
+      forkOf.value = pkg
+      toast(`Forked ${it.title}: this copy is yours to change`)
+    }
     slugQuiet = true
     slug.value = pkg.split('/')[1]
-    code.value = await r.text()
+    code.value = text
     describe.value = it.description || describe.value
-    editing.value = it
+    persist()
     run()
-    toast(`Editing ${it.title}`)
   } catch (e) { toast(e.message) }
 })
 const editing = ref(null)
@@ -122,17 +139,49 @@ const steps = computed(() => [
 async function useIt() {
   busy.value = true
   try {
-    const r = await api('POST', '/api/registry/publish', { name: slug.value, code: code.value, visibility: 'private', manifest: manifestOf() })
+    const r = await api('POST', '/api/registry/publish', { name: slug.value, code: code.value, visibility: 'private', manifest: manifestOf(), forkOf: forkOf.value, proposal: suggestion.value?.id })
     if (r.name && auth.user && !auth.user.handle) auth.user.handle = r.name.split('/')[0]
     persist()
     location.href = trustUrl('install', { pkg: r.name, hash: r.hash }, '/app#/')
   } catch (e) { toast(e.message); busy.value = false }
 }
+/** A fork: send this version to the original's author as a suggestion (it's saved under your name first). */
+const suggestMsg = ref('')
+const sent = ref(null)
+async function suggestIt() {
+  busy.value = true
+  try {
+    const r = await api('POST', '/api/registry/publish', { name: slug.value, code: code.value, visibility: 'private', manifest: manifestOf(), forkOf: forkOf.value })
+    const x = await api('POST', `/api/registry/plugins/${forkOf.value}/suggest`, { hash: r.hash, message: suggestMsg.value })
+    sent.value = { to: forkOf.value, version: r.version }
+    toast(x.already ? 'Already suggested' : `Suggested to ${forkOf.value.split('/')[0]}`)
+  } catch (e) { toast(e.message) }
+  busy.value = false
+}
+// reviewing a suggestion: what changed, line by line (a plain LCS diff; extension files are small)
+const changes = computed(() => {
+  if (!suggestion.value) return []
+  const a = suggestion.value.base.split('\n'), b = code.value.split('\n')
+  if (a.length * b.length > 4e6) return [{ t: '~', s: 'Too long to compare here' }]
+  const L = Array.from({ length: a.length + 1 }, () => new Uint16Array(b.length + 1))
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1])
+  const out = []
+  let i = 0, j = 0
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) { out.push({ t: ' ', s: a[i], n: j + 1 }); i++; j++ }
+    else if (i < a.length && (j >= b.length || L[i + 1][j] >= L[i][j + 1])) { out.push({ t: '-', s: a[i] }); i++ }
+    else { out.push({ t: '+', s: b[j], n: j + 1 }); j++ }
+  }
+  // only the changed lines and two lines around them
+  const keep = new Set()
+  out.forEach((l, k) => { if (l.t !== ' ') for (let d = -2; d <= 2; d++) keep.add(k + d) })
+  return out.filter((_, k) => keep.has(k))
+})
 /** Share it with everyone: the same, public, with a note for people who update. */
 async function shareIt() {
   busy.value = true
   try {
-    const r = await api('POST', '/api/registry/publish', { name: slug.value, code: code.value, visibility: 'public', changelog: changelog.value, manifest: manifestOf() })
+    const r = await api('POST', '/api/registry/publish', { name: slug.value, code: code.value, visibility: 'public', changelog: changelog.value, manifest: manifestOf(), forkOf: forkOf.value })
     published.value = r
     toast(r.reused ? `${r.name} ${r.version} is already published` : `Published ${r.name} ${r.version} for everyone`)
   } catch (e) { toast(e.message) }
@@ -154,7 +203,7 @@ async function shareIt() {
         <section class="panel">
           <div class="panel-h"><span class="mono muted">1</span><h2>Describe it</h2></div>
           <div class="panel-b col">
-            <label class="small name">Name <input v-model="slug" class="mono" @change="persist" /></label>
+            <label class="small name">Name <input v-model="slug" class="mono" @change="persist" /><span v-if="forkOf" class="tiny muted"> fork of {{ forkOf }}</span></label>
             <label class="small col">What should it do?
               <textarea v-model="describe" rows="4" placeholder="e.g. Track my reading: books with a status, a Today card with what I'm reading, and a reminder at 21:00" @change="persist"></textarea>
             </label>
@@ -168,6 +217,10 @@ async function shareIt() {
         <section class="panel">
           <div class="panel-h"><span class="mono muted">2</span><h2>Paste the file it gives you</h2><span class="spacer"></span><button class="btn" @click="pasteClipboard"><span class="icon sm" aria-hidden="true">content_paste</span>Paste</button></div>
           <div class="panel-b col">
+            <div v-if="suggestion" class="review">
+              <div class="small"><b class="mono">{{ suggestion.by }}</b> suggests <span class="mono muted">{{ suggestion.fromPackage }} {{ suggestion.version }}</span><span v-if="suggestion.message">: {{ suggestion.message }}</span></div>
+              <pre class="diff mono" aria-label="Changes from your version"><span v-for="(l, k) in changes" :key="k" :class="l.t === '+' ? 'add' : l.t === '-' ? 'del' : ''">{{ l.t }} {{ l.s }}</span><span v-if="!changes.length" class="muted">No changes from your version</span></pre>
+            </div>
             <div v-if="mismatch" class="fix small" role="alert">
               <span><span class="icon sm" aria-hidden="true">build</span>Your extension is called <b class="mono">{{ mismatch.to }}</b>, but its types are named <b class="mono">{{ mismatch.from }}.…</b> They need to match.</span>
               <div class="row wrap"><button class="btn primary" @click="fixByRenaming">Rename them to {{ mismatch.to }}.…</button><button class="btn" @click="fixByName">Call the extension {{ mismatch.from }}</button></div>
@@ -197,8 +250,16 @@ async function shareIt() {
         <section class="panel">
           <div class="panel-h"><span class="mono muted">4</span><h2>Use it</h2></div>
           <div class="panel-b col">
-            <button class="btn primary big" :disabled="busy || !result?.ok" @click="useIt"><span class="icon sm" aria-hidden="true">check_circle</span>{{ editing ? 'Save and update mine' : 'Use it' }}</button>
-            <details class="small">
+            <button class="btn primary big" :disabled="busy || !result?.ok" @click="useIt"><span class="icon sm" aria-hidden="true">check_circle</span>{{ suggestion ? 'Accept and update mine' : editing ? 'Save and update mine' : 'Use it' }}</button>
+            <details v-if="forkOf && !suggestion" class="small">
+              <summary class="muted">Suggest it to {{ forkOf.split('/')[0] }}</summary>
+              <div class="col share">
+                <input v-model="suggestMsg" placeholder="What does it change?" aria-label="What does it change?" />
+                <div class="row wrap"><button class="btn" :disabled="busy || !result?.ok" @click="suggestIt"><span class="icon sm" aria-hidden="true">call_merge</span>Send suggestion</button></div>
+                <p v-if="sent" class="muted">Sent {{ sent.version }} to {{ sent.to }}.</p>
+              </div>
+            </details>
+            <details v-if="!suggestion" class="small">
               <summary class="muted">Share it with everyone</summary>
               <div class="col share">
                 <input v-model="changelog" placeholder="What's new (people see this when they update)" aria-label="What's new" />
@@ -239,5 +300,10 @@ ul { margin: 0; padding-left: 18px; }
 .facts dt { color: var(--muted); } .facts dd { margin: 0; }
 label.col { gap: 4px; }
 @media (max-width: 640px) { .hide-phone { display: none; } }
+.review { display: flex; flex-direction: column; gap: 6px; }
+.diff { margin: 0; max-height: 260px; overflow: auto; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); font-size: 11px; line-height: 1.5; white-space: pre; }
+.diff span { display: block; min-height: 1.5em; }
+.diff .add { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); display: block; }
+.diff .del { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); display: block; }
 .fix { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--warn); border-radius: 4px; }
 </style>

@@ -164,6 +164,7 @@ export const pluginPackages = pgTable('plugin_packages', {
   icon: text('icon').notNull().default('extension'),
   downloads: integer('downloads').notNull().default(0),
   upstream: text('upstream'), // a copy of a plugin from another server's registry (REGISTRY_UPSTREAM): never published to here
+  forkedFrom: text('forked_from'), // the extension this one was forked from (its author gets suggestions from here)
   createdAt: created(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 }, (t) => [index('plugin_packages_owner_idx').on(t.ownerId)])
@@ -206,6 +207,18 @@ export const pluginLikes = pgTable('plugin_likes', {
   packageName: text('package_name').notNull().references(() => pluginPackages.name, { onDelete: 'cascade' }),
   createdAt: created(),
 }, (t) => [primaryKey({ columns: [t.userId, t.packageName] }), index('plugin_likes_pkg_idx').on(t.packageName)])
+
+/** Suggestions (pull requests): someone proposes a version of their fork as the next version of the original. */
+export const pluginProposals = pgTable('plugin_proposals', {
+  id: serial('id').primaryKey(),
+  packageName: text('package_name').notNull().references(() => pluginPackages.name, { onDelete: 'cascade' }), // the original
+  fromHash: text('from_hash').notNull(), // a version of the proposer's fork
+  authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }), // who proposes it
+  message: text('message').notNull().default(''),
+  status: text('status').notNull().default('open'), // open | accepted | declined
+  createdAt: created(),
+  decidedAt: ts('decided_at'),
+}, (t) => [index('plugin_proposals_pkg_idx').on(t.packageName)])
 
 /** The write-only vault (goal 8): keys saved once on the trusted page, used by the server, never shown again. */
 export const vaultSecrets = pgTable('vault_secrets', {

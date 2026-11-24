@@ -7,7 +7,7 @@
 // the upload; the checks compare what the code does with what it says.
 import crypto from 'node:crypto'
 import { and, eq, desc, inArray, or, sql } from 'drizzle-orm'
-import { pluginPackages, pluginVersions, pluginInstalls, pluginReports, pluginLikes, users } from './db/schema.js'
+import { pluginPackages, pluginVersions, pluginInstalls, pluginReports, pluginLikes, pluginProposals, users } from './db/schema.js'
 import { httpError } from './auth.mjs'
 
 export const MAX_CODE = 512 * 1024
@@ -118,7 +118,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     // no version given ("Use it" in the workshop): the same code reuses its version, new code gets the next one
     if (!b.version) {
       const [same] = await db.select().from(pluginVersions).where(and(eq(pluginVersions.packageName, name), eq(pluginVersions.hash, versionHash(name, code))))
-      if (same) return { name, version: same.version, hash: same.hash, visibility: (await pkgOf(name))?.visibility ?? 'private', checks: same.checks, reused: true }
+      if (same) { await accepted(user, name, b.proposal); return { name, version: same.version, hash: same.hash, visibility: (await pkgOf(name))?.visibility ?? 'private', checks: same.checks, reused: true } }
       const vs = await db.select({ v: pluginVersions.version }).from(pluginVersions).where(eq(pluginVersions.packageName, name))
       const top = vs.map((x) => x.v.split('-')[0].split('.').map(Number)).sort((a, c) => c[0] - a[0] || c[1] - a[1] || c[2] - a[2])[0]
       b = { ...b, version: top ? `${top[0]}.${top[1]}.${top[2] + 1}` : '0.1.0' }
@@ -141,16 +141,66 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     const visibility = b.visibility === 'public' ? 'public' : existing?.visibility ?? 'private'
     if (existing?.upstream) throw httpError(403, `${name} comes from ${existing.upstream}: publish it there`)
     if (existing && existing.ownerId !== user.id) throw httpError(403, 'That extension belongs to someone else')
+    // a fork remembers where it came from (only something you could see, and not your own)
+    const from = !existing && b.forkOf ? await pkgOf(String(b.forkOf)) : null
+    const forkedFrom = from && canSee(from, user) && from.ownerId !== user.id ? from.name : null
     const [dupe] = await db.select({ hash: pluginVersions.hash }).from(pluginVersions).where(and(eq(pluginVersions.packageName, name), eq(pluginVersions.version, b.version)))
     if (dupe) throw httpError(409, `Version ${b.version} is already published: versions are fixed, publish a new one`)
     await db.transaction(async (tx) => {
       // a new version never hides a shared extension, and never overwrites the listing details its owner edited
       if (existing) await tx.update(pluginPackages).set({ visibility, updatedAt: new Date() }).where(eq(pluginPackages.name, name))
-      else await tx.insert(pluginPackages).values({ name, ownerId: user.id, visibility, title: manifest.title, description: manifest.description, icon: manifest.icon })
+      else await tx.insert(pluginPackages).values({ name, ownerId: user.id, visibility, title: manifest.title, description: manifest.description, icon: manifest.icon, forkedFrom })
       await tx.insert(pluginVersions).values({ hash, packageName: name, version: b.version, code, manifest, checks, changelog: clip(b.changelog, 4000) }).onConflictDoNothing()
     })
     log(`[registry] ${user.handle} published ${name}@${b.version} (${visibility}) ${hash.slice(0, 12)}`)
+    await accepted(user, name, b.proposal)
     return { name, version: b.version, hash, visibility, checks }
+  }
+  /** The author published a suggestion they reviewed in the workshop: it's accepted. */
+  async function accepted(user, name, id) {
+    if (!id) return
+    await db.update(pluginProposals).set({ status: 'accepted', decidedAt: new Date() })
+      .where(and(eq(pluginProposals.id, Number(id)), eq(pluginProposals.packageName, name), eq(pluginProposals.status, 'open')))
+  }
+
+  /* ── forks and suggestions: only an extension's author changes it; anyone else forks it and suggests ── */
+  /** Suggest a version of your fork as the next version of the extension you forked. */
+  async function propose(user, target, b) {
+    const to = await pkgOf(String(target ?? ''))
+    if (!canSee(to, user) || to.upstream) throw httpError(404, 'no such extension')
+    if (to.ownerId === user.id) throw httpError(400, "It's yours: change it in the workshop")
+    const [v] = await db.select({ hash: pluginVersions.hash, packageName: pluginVersions.packageName }).from(pluginVersions).where(eq(pluginVersions.hash, String(b.hash ?? '')))
+    const fork = v && (await pkgOf(v.packageName))
+    if (!fork || fork.ownerId !== user.id || fork.forkedFrom !== to.name) throw httpError(400, `Publish your fork of ${to.name} first, then suggest it`)
+    const [open] = await db.select({ id: pluginProposals.id }).from(pluginProposals).where(and(eq(pluginProposals.packageName, to.name), eq(pluginProposals.fromHash, v.hash), eq(pluginProposals.status, 'open')))
+    if (open) return { id: open.id, already: true }
+    const [row] = await db.insert(pluginProposals).values({ packageName: to.name, fromHash: v.hash, authorId: user.id, message: clip(b.message, 2000).trim() }).returning()
+    log(`[registry] ${user.handle} suggested ${fork.name} → ${to.name}`)
+    return { id: row.id }
+  }
+  /** Suggestions to your extensions (open ones) and the ones you sent (with what happened to them). */
+  async function proposals(user) {
+    const cols = { id: pluginProposals.id, packageName: pluginProposals.packageName, fromHash: pluginProposals.fromHash, message: pluginProposals.message, status: pluginProposals.status, createdAt: pluginProposals.createdAt, by: users.handle, fromPackage: pluginVersions.packageName, version: pluginVersions.version }
+    const base = () => db.select(cols).from(pluginProposals).leftJoin(users, eq(users.id, pluginProposals.authorId)).leftJoin(pluginVersions, eq(pluginVersions.hash, pluginProposals.fromHash))
+    const mine = (await db.select({ name: pluginPackages.name }).from(pluginPackages).where(eq(pluginPackages.ownerId, user.id))).map((r) => r.name)
+    const incoming = mine.length ? await base().where(and(inArray(pluginProposals.packageName, mine), eq(pluginProposals.status, 'open'))).orderBy(desc(pluginProposals.createdAt)) : []
+    const sent = await base().where(eq(pluginProposals.authorId, user.id)).orderBy(desc(pluginProposals.createdAt)).limit(50)
+    return { incoming, sent }
+  }
+  /** A private fork's version that was suggested to this person's extension: they may read it to review it. */
+  async function suggestedTo(user, hash) {
+    if (!user) return false
+    const [r] = await db.select({ id: pluginProposals.id }).from(pluginProposals).innerJoin(pluginPackages, eq(pluginPackages.name, pluginProposals.packageName))
+      .where(and(eq(pluginProposals.fromHash, hash), eq(pluginPackages.ownerId, user.id)))
+    return !!r
+  }
+  /** The author declines a suggestion (accepting happens by publishing it). */
+  async function decline(user, id) {
+    const [p] = await db.select().from(pluginProposals).where(eq(pluginProposals.id, Number(id)))
+    const to = p && (await pkgOf(p.packageName))
+    if (!to || to.ownerId !== user.id) throw httpError(404, 'no such suggestion')
+    await db.update(pluginProposals).set({ status: 'declined', decidedAt: new Date() }).where(eq(pluginProposals.id, p.id))
+    return { ok: true }
   }
 
   async function latestVersions(names) {
@@ -161,7 +211,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     for (const r of rows) if (!out[r.packageName]) out[r.packageName] = r
     return out
   }
-  const card = (p, v, reports = 0, likes = {}) => ({ name: p.name, title: p.title, description: p.description, icon: p.icon, visibility: p.visibility, downloads: p.downloads, reports,
+  const card = (p, v, reports = 0, likes = {}, user = null) => ({ name: p.name, mine: !!user && p.ownerId === user.id, title: p.title, description: p.description, icon: p.icon, visibility: p.visibility, downloads: p.downloads, reports, forkedFrom: p.forkedFrom ?? null,
     likes: likes.n?.[p.name] ?? 0, liked: !!likes.mine?.has(p.name),
     latest: v ? { version: v.version, hash: v.hash, sdk: v.manifest.sdk, says: v.manifest.says, checks: { warnings: v.checks.warnings, passed: v.checks.passed }, changelog: v.changelog, publishedAt: v.createdAt } : null,
     worksWithEverything: !!v && !v.checks.warnings.some((w) => ['data-door', 'internal-api'].includes(w.id)) })
@@ -175,7 +225,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     const latest = await latestVersions(pkgs.map((p) => p.name))
     const counts = await reportCounts(pkgs.map((p) => p.name))
     const lk = await likesFor(pkgs.map((p) => p.name), user)
-    const local = pkgs.filter((p) => latest[p.name] && !p.upstream).map((p) => card(p, latest[p.name], counts[p.name] ?? 0, lk))
+    const local = pkgs.filter((p) => latest[p.name] && !p.upstream).map((p) => card(p, latest[p.name], counts[p.name] ?? 0, lk, user))
     if (!user || !upstream) return local
     // public plugins from the upstream registry, after this server's own (installing copies the exact version here)
     const up = await upJson(`/api/registry/public?q=${encodeURIComponent(q)}`)
@@ -238,7 +288,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     const versions = await db.select({ hash: pluginVersions.hash, version: pluginVersions.version, manifest: pluginVersions.manifest, checks: pluginVersions.checks, changelog: pluginVersions.changelog, pulled: pluginVersions.pulled, pulledReason: pluginVersions.pulledReason, createdAt: pluginVersions.createdAt })
       .from(pluginVersions).where(eq(pluginVersions.packageName, name)).orderBy(desc(pluginVersions.createdAt))
     const latest = versions.find((v) => !v.pulled) ?? null
-    return { ...card(p, latest, (await reportCounts([name]))[name] ?? 0, await likesFor([name], user)), versions }
+    return { ...card(p, latest, (await reportCounts([name]))[name] ?? 0, await likesFor([name], user), user), versions }
   }
 
   /** A version, if this person may see it: public and not pulled, or their own. */
@@ -250,7 +300,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
       return u && !u.pulled ? { ...u, hash, code: null, pkg: { name: u.packageName, visibility: 'public', upstream } } : null
     }
     const p = await pkgOf(v.packageName)
-    if (!canSee(p, user)) return null
+    if (!canSee(p, user) && !(await suggestedTo(user, v.hash))) return null
     if (v.pulled && p.ownerId !== user?.id) return null
     return { ...v, pkg: p }
   }
@@ -319,12 +369,12 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
       return {
         pkg: r.packageName, hash: r.hash, version: v?.version ?? '?', title: pkgBy[r.packageName]?.title ?? r.packageName, icon: pkgBy[r.packageName]?.icon ?? 'extension',
         description: pkgBy[r.packageName]?.description ?? '', mine: pkgBy[r.packageName]?.ownerId === uid, visibility: pkgBy[r.packageName]?.visibility ?? 'private',
-        downloads: pkgBy[r.packageName]?.downloads ?? 0, likes: lk.n[r.packageName] ?? 0, liked: lk.mine.has(r.packageName), upstream: !!pkgBy[r.packageName]?.upstream,
+        downloads: pkgBy[r.packageName]?.downloads ?? 0, likes: lk.n[r.packageName] ?? 0, liked: lk.mine.has(r.packageName), upstream: !!pkgBy[r.packageName]?.upstream, forkedFrom: pkgBy[r.packageName]?.forkedFrom ?? null,
         enabled: r.enabled && !!v && !v.pulled, pulled: !!v?.pulled, pulledReason: v?.pulledReason ?? '', says: v?.manifest?.says ?? {},
         update: l && l.hash !== r.hash ? { version: l.version, hash: l.hash, changelog: l.changelog } : null,
       }
     })
   }
 
-  return { setHandle, publish, list, one, version, publicVersion, report, like, details, pull, install, uninstall, setEnabled, disableAll, installed }
+  return { setHandle, publish, list, one, version, publicVersion, report, like, details, propose, proposals, decline, pull, install, uninstall, setEnabled, disableAll, installed }
 }

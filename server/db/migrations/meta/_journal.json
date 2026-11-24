@@ -57,6 +57,13 @@
       "when": 1795526649756,
       "tag": "0007_plugin_likes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795526998045,
+      "tag": "0008_plugin_forks",
+      "breakpoints": true
     }
   ]
 }
