@@ -74,11 +74,9 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
         <span v-if="installed.length" class="mono small muted">{{ installed.length }}</span>
         <span v-if="attention" class="mono small danger">· {{ attention }} need{{ attention === 1 ? 's' : '' }} attention</span>
         <span v-if="updates" class="mono small warn">· {{ updates }} update{{ updates === 1 ? '' : 's' }}</span>
-        <span class="spacer"></span>
-        <router-link class="btn primary" to="/m/extensions/workshop"><span class="icon sm" aria-hidden="true">construction</span>Make your own</router-link>
       </div>
       <div class="panel-b flush">
-        <p v-if="status && !installed.length" class="empty muted">None yet. Extensions add things to Life Console: a card on Today, a new page, a link to another app. Add one below, or make your own: describe it, let your AI write it, try it on demo data.</p>
+        <p v-if="status && !installed.length" class="empty muted">None yet.</p>
         <div v-for="p in installed" :key="p.pkg" class="ext" :class="{ off: !p.enabled }">
           <span class="icon ext-icon" aria-hidden="true">{{ p.icon }}</span>
           <div class="grow">
@@ -99,6 +97,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
             <a class="btn danger-ghost icon-only" :href="trustUrl('remove', { pkg: p.pkg })" :aria-label="`Remove ${p.title}`" title="Remove"><span class="icon sm" aria-hidden="true">delete</span></a>
           </div>
         </div>
+        <div class="ext-new"><router-link class="btn" to="/m/extensions/workshop"><span class="icon sm" aria-hidden="true">add</span>New extension</router-link></div>
       </div>
     </section>
 
@@ -110,7 +109,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
       <div class="panel-b flush">
         <p v-if="!toFind.length" class="empty muted">
           <template v-if="q">Nothing matches "{{ q }}".</template>
-          <template v-else>Nothing new to add on this server yet. <router-link to="/m/extensions/workshop">Make the first one</router-link>, and share it if others could use it.</template>
+          <template v-else>Nothing to add yet.</template>
         </p>
         <div v-for="p in toFind" :key="p.name" class="ext">
           <span class="icon ext-icon" aria-hidden="true">{{ p.icon }}</span>
@@ -164,6 +163,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
 .shows { gap: 6px; margin-top: 6px; }
 .ext-actions { gap: 6px; flex: none; }
 .ext-settings { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
+.ext-new { padding: 10px 12px; border-top: 1px solid var(--border); }
 .empty { margin: 0; padding: 12px; font-size: 13px; }
 .search { width: 220px; height: 28px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 2px; padding: 0 8px; font: inherit; }
 input { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 2px; padding: 6px 8px; font: inherit; }

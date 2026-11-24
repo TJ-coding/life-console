@@ -81,7 +81,7 @@ onMounted(async () => {
     describe.value = it.description || describe.value
     editing.value = it
     run()
-    toast(`Editing ${it.title} ${it.version}: Use it saves the next version`)
+    toast(`Editing ${it.title}`)
   } catch (e) { toast(e.message) }
 })
 const editing = ref(null)
@@ -146,10 +146,8 @@ async function shareIt() {
         <li v-for="st in steps" :key="st.n" :class="{ done: st.done }"><span aria-hidden="true">{{ st.done ? '✓' : st.n }}</span> {{ st.label }}<span v-if="st.done" class="sr"> (done)</span></li>
       </ol>
       <span class="spacer"></span>
-      <span class="tiny muted hide-phone">Drafts run on demo data, never on your planner. Your draft is kept on this device.</span>
       <router-link to="/m/extensions" class="btn"><span class="icon sm" aria-hidden="true">arrow_back</span>Back to Extensions</router-link>
     </div>
-    <p v-if="editing" class="small editing"><span class="icon sm" aria-hidden="true">edit</span>Editing <b>{{ editing.title }}</b> {{ editing.version }}. Saving makes its next version and updates yours.</p>
     <div class="ws-grid">
       <div class="col stack">
         <section class="panel">
@@ -163,7 +161,6 @@ async function shareIt() {
               <button class="btn primary" @click="copyPrompt"><span class="icon sm" aria-hidden="true">content_copy</span>Copy prompt for your AI</button>
               <button class="btn" :aria-expanded="showPrompt" @click="showPrompt = !showPrompt">{{ showPrompt ? 'Hide' : 'Show' }} prompt</button>
             </div>
-            <p class="small muted">Paste it into ChatGPT, Claude or any AI. It has everything the AI needs and none of your data.</p>
             <textarea v-if="showPrompt" class="mono small" rows="10" readonly :value="promptText" aria-label="Prompt for your AI"></textarea>
           </div>
         </section>
@@ -175,13 +172,13 @@ async function shareIt() {
               <div class="row wrap"><button class="btn primary" @click="fixByRenaming">Rename them to {{ mismatch.to }}.…</button><button class="btn" @click="fixByName">Call the extension {{ mismatch.from }}</button></div>
             </div>
             <textarea v-model="code" class="mono code" rows="20" spellcheck="false" aria-label="Extension file" @keydown.meta.enter="run" @keydown.ctrl.enter="run"></textarea>
-            <div class="row wrap"><button class="btn primary" @click="run"><span class="icon sm" aria-hidden="true">play_arrow</span>Preview it</button><span class="small muted">or ⌘/Ctrl + Enter</span></div>
+            <div class="row wrap"><button class="btn primary" title="⌘/Ctrl + Enter" @click="run"><span class="icon sm" aria-hidden="true">play_arrow</span>Preview it</button></div>
           </div>
         </section>
       </div>
       <div class="col stack">
         <section class="panel">
-          <div class="panel-h"><span class="mono muted">3</span><h2>Preview</h2><span class="tiny muted">on demo data</span><span class="spacer"></span>
+          <div class="panel-h"><span class="mono muted">3</span><h2>Preview</h2><span class="spacer"></span>
             <span v-if="result" class="mono small" :class="result.ok ? 'ok' : 'bad'" role="status">{{ result.ok ? 'Works' : 'Has problems' }}</span>
           </div>
           <div class="panel-b col">
@@ -200,7 +197,6 @@ async function shareIt() {
           <div class="panel-h"><span class="mono muted">4</span><h2>Use it</h2></div>
           <div class="panel-b col">
             <button class="btn primary big" :disabled="busy || !result?.ok" @click="useIt"><span class="icon sm" aria-hidden="true">check_circle</span>{{ editing ? 'Save and update mine' : 'Use it' }}</button>
-            <p class="small muted">{{ result?.ok ? 'Installs it for you (only you can see it). One confirmation, then you\'re taken to where it shows up.' : 'Preview it first: it needs to work on demo data.' }}</p>
             <details class="small">
               <summary class="muted">Share it with everyone</summary>
               <div class="col share">
@@ -238,7 +234,6 @@ ul { margin: 0; padding-left: 18px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .stack { gap: 12px; }
 .panel-h .mono { margin-right: 2px; }
-.editing { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
 .facts dt { color: var(--muted); } .facts dd { margin: 0; }
 label.col { gap: 4px; }
