@@ -53,11 +53,49 @@ export function fromPod(resources) {
   return state
 }
 
-/** A Solid (LDP) client for any pod: base ends with '/', token = a bearer token (or none on a private network). */
-export function podClient(base, { token = '', fetchImpl = fetch } = {}) {
+/* ── Solid-OIDC (client credentials + DPoP), the way Solid servers such as the Community Solid Server authorise apps ── */
+const b64u = (b) => Buffer.from(b).toString('base64url')
+/** A DPoP proof (RFC 9449): a JWT signed with this client's key, bound to one method and URL (and the token, if any). */
+export function dpopProof(key, method, url, accessToken) {
+  const jwk = key.publicKey.export({ format: 'jwk' })
+  const header = { typ: 'dpop+jwt', alg: 'ES256', jwk: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y } }
+  const u = new URL(url)
+  const payload = { htm: method, htu: `${u.origin}${u.pathname}`, iat: Math.floor(Date.now() / 1000), jti: crypto.randomUUID(), ...(accessToken ? { ath: b64u(crypto.createHash('sha256').update(accessToken).digest()) } : {}) }
+  const input = `${b64u(JSON.stringify(header))}.${b64u(JSON.stringify(payload))}`
+  const sig = crypto.sign('sha256', Buffer.from(input), { key: key.privateKey, dsaEncoding: 'ieee-p1363' })
+  return `${input}.${b64u(sig)}`
+}
+/** Get a DPoP-bound access token with client credentials (the id and secret a Solid server's account page gives you). */
+export async function solidToken({ issuer, clientId, clientSecret }, key, fetchImpl = fetch) {
+  const conf = await (await fetchImpl(new URL('/.well-known/openid-configuration', issuer).toString())).json().catch(() => ({}))
+  const tokenUrl = conf.token_endpoint ?? new URL('/.oidc/token', issuer).toString()
+  const r = await fetchImpl(tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: `Basic ${Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`).toString('base64')}`, DPoP: dpopProof(key, 'POST', tokenUrl) },
+    body: new URLSearchParams({ grant_type: 'client_credentials', scope: 'webid' }),
+  })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok || !j.access_token) throw httpError(502, `the Solid server refused the app credentials${j.error ? `: ${j.error}` : ''}`)
+  return { token: j.access_token, expiresAt: Date.now() + (j.expires_in ?? 600) * 1000 }
+}
+
+/**
+ * A Solid (LDP) client for any pod: base ends with '/'. Auth, one of:
+ *   token: a bearer token (another Life Console's built-in pod, or none on a private network)
+ *   oidc: { issuer?, clientId, clientSecret }: Solid-OIDC client credentials with DPoP (Community Solid Server and others)
+ */
+export function podClient(base, { token = '', oidc = null, fetchImpl: rawFetch = fetch } = {}) {
   if (!/^https?:\/\/.+\/$/.test(base)) throw httpError(400, 'A pod address looks like https://pod.example/alice/ (ending in /)')
-  const headers = (extra = {}) => ({ ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra })
+  const headers = (extra = {}) => ({ ...(token && !oidc ? { Authorization: `Bearer ${token}` } : {}), ...extra })
   const url = (p) => new URL(p, base).toString()
+  // with Solid-OIDC every request carries a fresh DPoP proof for its method and URL, and the token is renewed when old
+  let key = null, cur = null
+  const fetchImpl = !oidc ? rawFetch : async (u, opts = {}) => {
+    key ??= crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' })
+    if (!cur || cur.expiresAt < Date.now() + 30000) cur = await solidToken({ issuer: oidc.issuer || new URL(base).origin, clientId: oidc.clientId, clientSecret: oidc.clientSecret }, key, rawFetch)
+    const method = (opts.method ?? 'GET').toUpperCase()
+    return rawFetch(u, { ...opts, headers: { ...(opts.headers ?? {}), Authorization: `DPoP ${cur.token}`, DPoP: dpopProof(key, method, u, cur.token) } })
+  }
   return {
     base,
     async get(path) {

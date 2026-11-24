@@ -97,7 +97,11 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   /** The account's pod as a Solid client: its own Solid server (token from the vault), or null for the built-in one. */
   async function podFor(user) {
     if (!user.podUrl) return null
-    return podClient(user.podUrl, { token: (await vault.secretFor(user.id, 'pod')) ?? '' })
+    const secret = (await vault.secretFor(user.id, 'pod')) ?? ''
+    // Solid-OIDC app credentials are saved as JSON; anything else is a bearer token
+    let oidc = null
+    try { const j = JSON.parse(secret); if (j?.clientId) oidc = j } catch { /* a plain token */ }
+    return podClient(user.podUrl, oidc ? { oidc } : { token: secret })
   }
   // write the planner to the pod after each save, at most every few seconds per account (goal 9)
   const mirrorTimers = new Map()

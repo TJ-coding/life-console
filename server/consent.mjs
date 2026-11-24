@@ -136,6 +136,8 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       if (kind === 'pod-import') warning = 'This replaces your planner on this server.'
       fields = `<label for="u">Pod address</label><input id="u" type="text" name="pod" placeholder="https://pod.example/alice/ (or https://other-life-console/pods/alice/)" required>
 <label for="t">Access token (if the pod needs one)</label><input id="t" type="password" name="token" autocomplete="off">
+<p class="muted" style="font-size:13px">A Solid server such as the Community Solid Server gives apps an <b>id and secret</b> instead (its account page → credential tokens):</p>
+<label for="ci">App id</label><input id="ci" type="text" name="clientId" autocomplete="off"><label for="cs">App secret</label><input id="cs" type="password" name="clientSecret" autocomplete="off">
 <p class="muted" style="font-size:13px">${kind === 'pod-use' ? 'The token is kept in the vault, encrypted, and only sent to that pod.' : 'For another Life Console server: its Settings → Mac menu-bar app creates an access token. The token is used once and not kept.'}</p>`
     } else if (kind === 'share') {
       if (!user.handle) return { noHandle: true }
@@ -233,10 +235,11 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       case 'pod-use': {
         const podUrl = String(form.get('pod') ?? '').trim()
         const token = String(form.get('token') ?? '')
-        const client = podClient(podUrl, { token })
-        if (token) {
-          if (!vault.on) throw httpError(503, 'Saving a pod token needs the vault (the admin sets VAULT_KEY)')
-          await vault.save(uid, { name: 'pod', site: new URL(podUrl).hostname, scheme: 'bearer', secret: token })
+        const oidc = form.get('clientId') ? { clientId: String(form.get('clientId')), clientSecret: String(form.get('clientSecret') ?? '') } : null
+        const client = podClient(podUrl, oidc ? { oidc } : { token })
+        if (token || oidc) {
+          if (!vault.on) throw httpError(503, 'Saving pod credentials needs the vault (the admin sets VAULT_KEY)')
+          await vault.save(uid, { name: 'pod', site: new URL(podUrl).hostname, scheme: 'bearer', secret: oidc ? JSON.stringify(oidc) : token })
         }
         const doc = await planner.get(uid)
         const n = doc.state ? await pods.mirror(user, doc.state, { base: client.base, remote: client }) : 0
@@ -259,7 +262,8 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
         if (vault.on) await vault.remove(uid, 'pod')
         return { msg: 'Your planner is written to this server\'s pod again.' }
       case 'pod-import': {
-        const client = podClient(String(form.get('pod') ?? '').trim(), { token: String(form.get('token') ?? '') })
+        const oidcIn = form.get('clientId') ? { clientId: String(form.get('clientId')), clientSecret: String(form.get('clientSecret') ?? '') } : null
+        const client = podClient(String(form.get('pod') ?? '').trim(), oidcIn ? { oidc: oidcIn } : { token: String(form.get('token') ?? '') })
         const state = await pods.readPlanner(client)
         const r = await planner.save(uid, { state, force: true, device: 'pod-import', reason: 'pod-import' })
         if (!r.ok) throw httpError(409, 'The planner could not be replaced (it is newer than this server understands)')

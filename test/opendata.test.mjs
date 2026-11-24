@@ -203,3 +203,33 @@ test('goal 9: keep the planner in your own Solid server: saves are written there
   assert.equal(JSON.parse(there.text)['@graph'][0].title, 'Finish the PhD (from B)', 'written to the other Solid server')
   assert.ok(!(await alice2('GET', '/api/connections')).text.includes(aliceToken), 'the pod token stays in the vault')
 })
+
+test('goal 9: Solid-OIDC: app credentials get a DPoP-bound token, and every request carries a proof for its method and URL', async () => {
+  const { podClient } = await import('../server/pod.mjs')
+  const seenReq = []
+  let issued = 0
+  const fakeFetch = async (u, opts = {}) => {
+    const url = String(u)
+    seenReq.push({ url, method: opts.method ?? 'GET', auth: opts.headers?.Authorization, dpop: opts.headers?.DPoP })
+    if (url.endsWith('/.well-known/openid-configuration')) return new Response(JSON.stringify({ token_endpoint: 'https://pod.test/.oidc/token' }))
+    if (url === 'https://pod.test/.oidc/token') { issued++; return new Response(JSON.stringify({ access_token: `tok-${issued}`, token_type: 'DPoP', expires_in: 600 })) }
+    if (opts.method === 'PUT') return new Response('', { status: 201, headers: { ETag: '"e1"' } })
+    return new Response(JSON.stringify({ '@graph': [] }), { headers: { 'Content-Type': 'application/ld+json' } })
+  }
+  const c = podClient('https://pod.test/alice/', { oidc: { clientId: 'app-id', clientSecret: 'app-secret' }, fetchImpl: fakeFetch })
+  await c.put('planner/todos.jsonld', { '@graph': [] })
+  await c.get('planner/todos.jsonld')
+  const tokenReq = seenReq.find((r) => r.url.endsWith('/.oidc/token'))
+  assert.equal(tokenReq.auth, `Basic ${Buffer.from('app-id:app-secret').toString('base64')}`)
+  const proofOf = (jwt) => JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString())
+  assert.equal(proofOf(tokenReq.dpop).htm, 'POST')
+  const put = seenReq.find((r) => r.method === 'PUT')
+  assert.equal(put.auth, 'DPoP tok-1')
+  const p = proofOf(put.dpop)
+  assert.equal(p.htm, 'PUT')
+  assert.equal(p.htu, 'https://pod.test/alice/planner/todos.jsonld')
+  assert.ok(p.ath, 'bound to the access token')
+  const hdr = JSON.parse(Buffer.from(put.dpop.split('.')[0], 'base64url').toString())
+  assert.equal(hdr.typ, 'dpop+jwt'); assert.equal(hdr.alg, 'ES256'); assert.equal(hdr.jwk.crv, 'P-256')
+  assert.equal(issued, 1, 'the token is reused while it is fresh')
+})
