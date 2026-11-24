@@ -169,7 +169,7 @@ label.field > span { font: 600 10px/12px 'JetBrains Mono', monospace; letter-spa
 /* ── chips / badges ── */
 .chip {
   display: inline-flex; align-items: center; height: 20px; padding: 0 8px;
-  border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 2px; background: var(--surface-2);
   font: 600 10px/1 'JetBrains Mono', monospace; white-space: nowrap;
 }
 .chip.goal { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
@@ -187,7 +187,7 @@ label.field > span { font: 600 10px/12px 'JetBrains Mono', monospace; letter-spa
 .prio.p2 { color: var(--warn); border-color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
 .status {
   display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px;
-  border: 1px solid var(--border); border-radius: 999px; cursor: pointer; background: transparent;
+  border: 1px solid var(--border); border-radius: 2px; cursor: pointer; background: transparent;
   font: 600 10px/1 'JetBrains Mono', monospace; color: var(--muted); white-space: nowrap;
 }
 .status.doing { color: var(--info); border-color: var(--info); background: color-mix(in srgb, var(--info) 12%, transparent); }

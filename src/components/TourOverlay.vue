@@ -470,7 +470,7 @@ const blockers = computed(() => {
 }
 .tour-moves { display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
 .tour-card.centred .tour-moves { justify-content: center; }
-.tour-moves span { padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); transition: all 0.3s; }
+.tour-moves span { padding: 3px 8px; border-radius: 2px; border: 1px solid var(--border); color: var(--muted); transition: all 0.3s; }
 .tour-moves span.past { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .tour-moves span.on {
   color: var(--on-accent); border-color: transparent;

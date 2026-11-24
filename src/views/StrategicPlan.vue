@@ -746,7 +746,7 @@ h1 { margin: 0; font-size: 18px; font-weight: 600; }
 /* ── table polish: quiet until you reach for it ── */
 .deps { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px 0; }
 .dep-add {
-  appearance: none; -webkit-appearance: none; height: 20px; padding: 0 6px; border: 1px solid transparent; border-radius: 999px;
+  appearance: none; -webkit-appearance: none; height: 20px; padding: 0 6px; border: 1px solid transparent; border-radius: 2px;
   background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; outline: none;
 }
 .dep-add:hover, .dep-add:focus { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }

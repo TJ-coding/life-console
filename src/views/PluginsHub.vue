@@ -85,7 +85,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
             <div class="ext-name"><b>{{ p.title }}</b> <span class="mono tiny muted">{{ p.version }}</span><span v-if="p.mine" class="tiny upper muted"> · yours{{ p.visibility === 'public' ? ', shared' : '' }}</span></div>
             <p v-if="p.description" class="small muted desc">{{ p.description }}</p>
             <p v-if="stateOf(p)" class="small" :class="stateOf(p).tone">{{ stateOf(p).text }}</p>
-            <p v-else-if="whereShown(p.pkg).length" class="small shows"><span class="muted">Shows on </span><template v-for="(w, i) in whereShown(p.pkg)" :key="w.label"><span v-if="i" class="muted"> · </span><router-link :to="w.path">{{ w.label }}</router-link></template></p>
+            <div v-else-if="whereShown(p.pkg).length" class="shows row wrap"><span class="tiny upper muted">Shows on</span><router-link v-for="w in whereShown(p.pkg)" :key="w.label" class="btn sm" :to="w.path">{{ w.label }}<span class="icon sm" aria-hidden="true">arrow_outward</span></router-link></div>
             <p v-else-if="plugins.status === 'ready'" class="small muted">Runs in the background</p>
             <div v-if="open[p.pkg] && settingsOf(p.pkg)" class="ext-settings">
               <PluginPart :part="settingsOf(p.pkg).part" :module="settingsOf(p.pkg).module" />
@@ -161,8 +161,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
 .ext-name { font-size: 15px; }
 .ext p { margin: 3px 0 0; }
 .desc { max-width: 80ch; }
-.shows a { color: var(--text); }
-.shows a:hover, .shows a:focus-visible { color: var(--accent); }
+.shows { gap: 6px; margin-top: 6px; }
 .ext-actions { gap: 6px; flex: none; }
 .ext-settings { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
 .empty { margin: 0; padding: 12px; font-size: 13px; }
