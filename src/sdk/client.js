@@ -5,9 +5,10 @@ export async function api(method, path, body) {
   if (!r.ok) throw Object.assign(new Error(j.error || `request failed (${r.status})`), { status: r.status, trust: j.trust })
   return j
 }
-/** The trusted page for an action, opened in a tab of its own (the console can't reach it). */
-export function trustUrl(kind, params = {}) {
-  const q = new URLSearchParams({ do: kind, ...params })
+/** The trusted page for an action. It opens in this tab and comes back to where you are, with a short notice. */
+export function trustUrl(kind, params = {}, backTo = null) {
+  const here = backTo ?? `/app${(typeof location !== 'undefined' ? location.hash : '#/m/plugins').split('?')[0]}`
+  const q = new URLSearchParams({ do: kind, ...params, back: here })
   return `/trust?${q}`
 }
-export const openTrust = (kind, params) => window.open(trustUrl(kind, params), '_blank', 'noopener')
+export const openTrust = (kind, params) => { location.href = trustUrl(kind, params) }

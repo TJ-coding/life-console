@@ -69,7 +69,11 @@ async function confirm(c, query, fields = {}) {
   const page = await c('GET', `/trust?${query}`, undefined, NAV)
   const nonce = /name="nonce" value="([^"]+)"/.exec(page.text)?.[1]
   assert.ok(nonce, `no nonce for ${query}: ${page.text.replace(/<style>[\s\S]*<\/style>/, '').slice(0, 300)}`)
-  return c('POST', '/trust', new URLSearchParams({ nonce, do: new URLSearchParams(query).get('do'), decision: 'yes', ...fields }).toString(), NAV)
+  const r = await c('POST', '/trust', new URLSearchParams({ nonce, do: new URLSearchParams(query).get('do'), decision: 'yes', ...fields }).toString(), NAV)
+  // most confirmations go straight back to the console with a notice: show it as the text
+  const loc = typeof r.headers.get === 'function' ? r.headers.get('location') : r.headers.location
+  if (r.status === 303 && loc) r.text = `${loc} ${decodeURIComponent(loc.replace(/\+/g, ' '))}`
+  return r
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 const PLAN = { id: 'SP-01', title: 'Finish the PhD', status: 'active', health: 'On-track', vision: 'Defend by June', psgs: [{ no: 'PSG-1', title: 'Paper 2' }], sigs: [{ no: 'SIG-1.1', psg: 'PSG-1', pct: 20, status: 'active', title: 'Run experiments' }] }

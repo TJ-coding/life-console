@@ -4,7 +4,7 @@ import App from './App.vue'
 import { registry, attachRouter } from './sdk'
 import { loadPlugins } from './sdk/loader.js'
 import { setLcRouter } from './sdk/lc.js'
-import { applyTheme } from './store'
+import { applyTheme, toast } from './store'
 import { startSync, resumeSync } from './sync'
 import { auth, setSignedInHandler } from './auth'
 import { refreshPush } from './push'
@@ -21,6 +21,13 @@ const router = createRouter({
 router.beforeEach((to) => (to.name === 'day' && !/^\d{4}-\d{2}-\d{2}$/.test(to.params.date) ? '/' : true))
 
 router.afterEach((to) => trackRoute(to))
+// back from the trusted page: show what happened, then tidy the address
+router.afterEach((to) => {
+  if (typeof to.query.notice !== 'string') return
+  toast(to.query.notice)
+  const { notice, ...query } = to.query
+  router.replace({ path: to.path, query })
+})
 attachRouter(router)
 setLcRouter(router)
 

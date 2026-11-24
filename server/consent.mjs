@@ -67,6 +67,16 @@ button.yes{background:var(--accent);border-color:var(--accent);color:var(--bg)}b
 <footer>This page never runs plugins or scripts. Life Console only asks for consent, keys and passwords here. <a href="${appPath}?safe=1" style="color:inherit">Open the console without Public plugins</a></footer></main></body></html>`
     return { status, html }
   }
+  /** Where to go back to in the console: only a path in this app (never another site). */
+  const safeBack = (v) => (typeof v === 'string' && /^\/app(#\/[\w\-/.?=&%]*)?$/.test(v) ? v : `${appPath}#/m/plugins`)
+  /** Add a notice (and other query values) to a console address, for the console to show when you're back. */
+  const withQuery = (back, params) => {
+    const [path, hash = '/'] = back.split('#')
+    const [route, q = ''] = hash.split('?')
+    const qs = new URLSearchParams(q)
+    for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v)
+    return `${path}#${route}?${qs}`
+  }
   const back = (label = 'Back to Life Console') => `<div class="row"><a class="btn" href="${appPath}">${esc(label)}</a></div>`
 
   async function newNonce(uid, action) {
@@ -89,7 +99,6 @@ button.yes{background:var(--accent);border-color:var(--accent);color:var(--bg)}b
     } else if (kind === 'disable-plugins') {
       details = '<p>Every Public plugin is switched off. Your planner and the plugins\' data stay; you can switch them on again one by one.</p>'
     } else if (kind === 'install') {
-      if (!user.publicPlugins) return { needEnable: true }
       const v = await registry.version(user, q.get('hash'))
       if (!v || v.packageName !== q.get('pkg') || v.pulled) return { missing: true }
       action.pkg = v.packageName; action.hash = v.hash
@@ -103,7 +112,11 @@ ${says.replaces?.length ? `<dt>Replaces</dt><dd class="warn">${esc(says.replaces
 <p class="muted">What it says it does is the author's statement, not a guarantee.</p>
 ${warnings.length ? `<p><b>Automated checks found:</b></p><ul>${warnings.map((w) => `<li>${esc(w.msg)}</li>`).join('')}</ul>` : '<p class="muted">Automated checks found nothing to flag.</p>'}
 ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : ''}`
-      warning = 'It will be able to see and change everything in your planner and send it to the sites it talks to (listed below).'
+      const own = user.handle && v.packageName.startsWith(`${user.handle}/`)
+      warning = own
+        ? 'This is your own plugin. Like any plugin, it can see and change everything in your planner.'
+        : 'It will be able to see and change everything in your planner and send it to the sites it talks to (listed below). Only install plugins from people you trust.'
+      if (!user.publicPlugins) details += '<p class="muted">This is your first plugin: installing it also turns on plugins for your account. From then on, creating access tokens, changing your password and deleting your account are confirmed on this page too.</p>'
     } else if (kind === 'remove' || kind === 'toggle') {
       action.pkg = String(q.get('pkg') ?? '')
       if (kind === 'toggle') action.on = q.get('on') === '1'
@@ -179,15 +192,16 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     const user = who.user
     const d = await describe(user, url.searchParams)
     if (!d) return page('Trusted page', `<h1>Trusted page</h1><p>Nothing to confirm.</p><p class="muted">Life Console asks for consent, keys and passwords only on this page.</p>${back()}`)
-    if (d.needEnable) return page('Turn on Public plugins first', `<h1>Turn on Public plugins first</h1><p>Public plugins are off for your account.</p><div class="row"><a class="btn" href="/trust?do=enable-plugins">Turn them on…</a><a class="btn" href="${appPath}">Cancel</a></div>`)
     if (d.missing) return page('Not found', `<h1>That plugin version isn't available</h1><p>It may have been pulled from the registry.</p>${back()}`)
     if (d.vaultOff) return page('Vault off', `<h1>Connections are off on this server</h1><p>The server's admin hasn't set a vault key (VAULT_KEY).</p>${back()}`)
     if (d.noHandle) return page('Choose a handle', `<h1>Choose a handle first</h1><p>Your handle is your address for sharing (Plugins → Publishing).</p>${back()}`)
     if (d.noPassword) return page('No password', `<h1>This account signs in with Google</h1><p>It has no password to change.</p>${back()}`)
+    const backTo = safeBack(url.searchParams.get('back'))
+    d.action.back = backTo
     const nonce = await newNonce(user.id, d.action)
     const html = page(d.k.title, `<h1>${esc(d.k.title)}</h1>${d.warning ? `<p class="warn">${esc(d.warning)}</p>` : ''}${d.details}
 <form method="post" action="/trust"><input type="hidden" name="nonce" value="${nonce}"><input type="hidden" name="do" value="${esc(d.kind)}">${d.fields}
-<div class="row"><button class="yes${d.k.danger ? ' danger' : ''}" type="submit" name="decision" value="yes">${d.kind === 'install' ? 'Install' : d.kind === 'connect' ? 'Continue' : 'Confirm'}</button><a class="btn" href="${appPath}">Cancel</a></div></form>
+<div class="row"><button class="yes${d.k.danger ? ' danger' : ''}" type="submit" name="decision" value="yes">${d.kind === 'install' ? 'Install' : d.kind === 'connect' ? 'Continue' : 'Confirm'}</button><a class="btn" href="${esc(backTo)}">Cancel</a></div></form>
 <p class="muted" style="margin-top:14px;font-size:13px">Signed in as ${esc(user.email)}</p>`)
     if (d.formAction) html.headers = { 'Content-Security-Policy': TRUST_HEADERS['Content-Security-Policy'].replace("form-action 'self'", `form-action 'self' ${d.formAction}`) }
     return html
@@ -205,9 +219,10 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
         await registry.disableAll(uid)
         return { msg: 'Every Public plugin is switched off.' }
       case 'install': {
+        if (!user.publicPlugins) await db.update(users).set({ publicPlugins: true, updatedAt: new Date() }).where(eq(users.id, uid))
         const r = await registry.install(uid, a.pkg, a.hash)
         log(`[consent] ${uid.slice(0, 8)} installed ${a.pkg}@${r.version}`)
-        return { msg: `Installed ${a.pkg} ${r.version}. It loads the next time the console opens.` }
+        return { msg: `Installed ${a.pkg} ${r.version}` }
       }
       case 'remove':
         await registry.uninstall(uid, a.pkg)
@@ -303,17 +318,19 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       return { status: 400, html: page('Expired', `<h1>This confirmation expired</h1><p>Start again from the console.</p>${back()}`).html }
     }
     await db.update(consentNonces).set({ usedAt: new Date() }).where(eq(consentNonces.nonceHash, row.nonceHash))
-    if (form.get('decision') !== 'yes') return page('Cancelled', `<h1>Cancelled</h1>${back()}`)
+    const backTo = safeBack(row.action.back)
+    if (form.get('decision') !== 'yes') return { status: 303, html: '', headers: { Location: backTo } }
     try {
       const r = await run(who, row.action, form, req)
       if (r.redirect) return { status: 303, html: '', headers: { Location: r.redirect } }
       const extra = r.token ? `<label>Token</label><input type="text" readonly value="${esc(r.token)}"><div class="row"><a class="btn" href="lifeconsole-now://connect?server=${encodeURIComponent(`${req.headers['x-forwarded-proto'] ?? 'http'}://${req.headers.host}`)}&token=${encodeURIComponent(r.token)}">Open in the Mac app</a></div>` : ''
-      const next = r.deleted ? '/' : r.forget ? `${appPath}#/m/plugins?forget=${encodeURIComponent(r.forget)}` : appPath
+      if (!r.token && !r.deleted) return { status: 303, html: '', headers: { Location: withQuery(backTo, { notice: r.msg, forget: r.forget }) } }
+      const next = r.deleted ? '/' : backTo
       const headers = r.deleted ? { 'Set-Cookie': auth.clearCookie(secureFor(req)) } : {}
-      return { ...page('Done', `<h1>Done</h1><p>${esc(r.msg)}</p>${extra}<div class="row"><a class="btn" href="${next}">Back to Life Console</a></div>`), headers }
+      return { ...page('Done', `<h1>Done</h1><p>${esc(r.msg)}</p>${extra}<div class="row"><a class="btn" href="${esc(next)}">Back to Life Console</a></div>`), headers }
     } catch (e) {
       if (!e.status || e.status >= 500) throw e
-      return { status: e.status, html: page('Not done', `<h1>Not done</h1><p>${esc(e.message)}</p><div class="row"><a class="btn" href="${appPath}">Back to Life Console</a></div>`).html }
+      return { status: e.status, html: page('Not done', `<h1>Not done</h1><p>${esc(e.message)}</p><div class="row"><a class="btn" href="${esc(backTo)}">Back to Life Console</a></div>`).html }
     }
   }
 

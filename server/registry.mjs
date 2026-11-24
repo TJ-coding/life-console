@@ -16,6 +16,8 @@ const VERSION = /^\d{1,4}\.\d{1,4}\.\d{1,4}(-[a-z0-9.]{1,20})?$/
 export const HANDLE = /^[a-z0-9][a-z0-9-]{1,29}$/
 const RESERVED_HANDLES = new Set(['life-console', 'lifeconsole', 'core', 'common', 'admin', 'official', 'support', 'me', 'x', 'schema'])
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex')
+/** A version's id: the SHA-256 of its plugin's name and its code, so the same code under two names is two versions. */
+export const versionHash = (name, code) => sha256(`${name}\n${code}`)
 const clip = (v, n) => String(v ?? '').slice(0, n)
 
 /**
@@ -70,7 +72,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     if (!v || v.packageName !== name || v.pulled) throw httpError(404, 'no such version')
     const r = await fetchImpl(`${upstream}/api/registry/code/${hash}.js`)
     const code = r.ok ? await r.text() : ''
-    if (sha256(code) !== hash) throw httpError(502, "the upstream registry's code doesn't match its hash")
+    if (versionHash(name, code) !== hash) throw httpError(502, "the upstream registry's code doesn't match its hash")
     const checks = checkCode(code, v.manifest?.says ?? {}) // checked again here: never trust another server's results
     if (checks.blocked.length) throw httpError(422, `Not installed: ${checks.blocked.map((c) => c.msg).join('; ')}`)
     await db.insert(pluginPackages).values({ name, ownerId: uid, visibility: 'public', title: clip(v.manifest?.title, 80), description: clip(v.manifest?.description, 400), icon: clip(v.manifest?.icon || 'extension', 40), upstream }).onConflictDoNothing()
@@ -92,13 +94,35 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
   }
 
   /** Publish a version. b: { name, version, code, manifest: { title, description, icon, sdk, says, replaces }, visibility, changelog } */
+  /** A publisher name for someone who hasn't chosen one: from their email, made unique. They can't change it later. */
+  async function autoHandle(user) {
+    let base = String(user.email ?? 'me').split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').slice(0, 24)
+    if (base.length < 2 || RESERVED_HANDLES.has(base)) base = `user-${base}`.slice(0, 24)
+    for (let i = 0; i < 50; i++) {
+      const h = i ? `${base}-${i + 1}` : base
+      const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.handle, h))
+      if (!taken) { await db.update(users).set({ handle: h, updatedAt: new Date() }).where(eq(users.id, user.id)); user.handle = h; return h }
+    }
+    throw httpError(409, 'Choose a publisher name in Plugins first')
+  }
+
   async function publish(user, b) {
-    if (!user.handle) throw httpError(400, 'Choose a handle first (Settings → Plugins)')
-    const name = String(b.name ?? '').toLowerCase()
+    if (!user.handle) await autoHandle(user)
+    // a bare name ("water") is published under your publisher name
+    let name = String(b.name ?? '').toLowerCase()
+    if (!name.includes('/')) name = `${user.handle}/${name}`
     if (!NAME.test(name)) throw httpError(400, 'A plugin name looks like your-handle/plugin-name')
     if (name.split('/')[0] !== user.handle) throw httpError(403, `You can only publish under ${user.handle}/`)
-    if (!VERSION.test(String(b.version ?? ''))) throw httpError(400, 'version must look like 1.0.0')
     const code = String(b.code ?? '')
+    // no version given ("Use it" in the workshop): the same code reuses its version, new code gets the next one
+    if (!b.version) {
+      const [same] = await db.select().from(pluginVersions).where(and(eq(pluginVersions.packageName, name), eq(pluginVersions.hash, versionHash(name, code))))
+      if (same) return { name, version: same.version, hash: same.hash, visibility: (await pkgOf(name))?.visibility ?? 'private', checks: same.checks, reused: true }
+      const vs = await db.select({ v: pluginVersions.version }).from(pluginVersions).where(eq(pluginVersions.packageName, name))
+      const top = vs.map((x) => x.v.split('-')[0].split('.').map(Number)).sort((a, c) => c[0] - a[0] || c[1] - a[1] || c[2] - a[2])[0]
+      b = { ...b, version: top ? `${top[0]}.${top[1]}.${top[2] + 1}` : '0.1.0' }
+    }
+    if (!VERSION.test(String(b.version ?? ''))) throw httpError(400, 'version must look like 1.0.0')
     if (!code.trim()) throw httpError(400, 'code is empty')
     if (Buffer.byteLength(code) > MAX_CODE) throw httpError(413, `A plugin is at most ${MAX_CODE / 1024} KB`)
     if (!/export\s+default\b/.test(code)) throw httpError(400, 'The plugin file needs `export default { … }` (its manifest)')
@@ -109,7 +133,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     }
     const checks = checkCode(code, manifest.says)
     if (checks.blocked.length) throw httpError(422, `Not published: ${checks.blocked.map((c) => c.msg).join('; ')}`)
-    const hash = sha256(code)
+    const hash = versionHash(name, code)
     const visibility = b.visibility === 'public' ? 'public' : 'private'
     const existing = await pkgOf(name)
     if (existing?.upstream) throw httpError(403, `${name} comes from ${existing.upstream}: publish it there`)

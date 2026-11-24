@@ -86,12 +86,11 @@ It protects **integrity**, not secrecy: a plugin you've installed could still re
 
 ## 6. Consent
 
-A Public plugin can do a lot, so you say yes at four moments, and nowhere else:
+A Public plugin can do a lot, so you say yes at three moments, and nowhere else. Each opens the trusted page in place and brings you straight back:
 
-1. **Turning on Public plugins** for your account, once, with a plain warning: a plugin you install can see and change everything in your planner and send it anywhere.
-2. **Installing a plugin:** who made it, what it says it does (sites it talks to, screens it replaces), its automated check results and reports.
-3. **Updating a plugin:** never silent; you see what changed.
-4. **Account actions** a plugin could abuse: creating access tokens, changing your email or password, exporting or deleting your account, saving a connection.
+1. **Installing a plugin:** who made it, what it says it does (sites it talks to, screens it replaces), its automated check results and reports, and a plain warning: a plugin can see and change everything in your planner. The first install also turns plugins on for your account, on the same page: one confirmation, not two.
+2. **Updating a plugin:** never silent; you see what changed.
+3. **Account actions** a plugin could abuse: creating access tokens, changing your email or password, exporting or deleting your account, saving a connection.
 
 **Consent can't be faked.** Plugins run in the app's page, so they could click "Allow" themselves. These confirmations therefore happen on a separate **trusted page** on its own address, which never loads plugins; the browser keeps app code out of it. The server only accepts those actions with a one-time confirmation from that page.
 

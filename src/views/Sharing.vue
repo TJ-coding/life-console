@@ -55,11 +55,11 @@ const writeNow = async () => { await api('POST', '/api/pod/mirror'); toast('Writ
             <select v-model="sharePlan" aria-label="Plan"><option value="" disabled>Plan to share</option><option v-for="p in plans" :key="p.id" :value="p.id">{{ p.title || p.id }}</option></select>
             <input v-model="shareTo" placeholder="@someone@their-server" aria-label="Their address" />
             <label class="small"><input v-model="shareEdit" type="checkbox" /> can edit</label>
-            <a class="btn" :class="{ disabled: !sharePlan || !shareTo }" :href="trustUrl('share', { plan: sharePlan, to: shareTo, access: shareEdit ? 'edit' : 'view' })" target="_blank" rel="noopener">Share…</a>
+            <a class="btn" :class="{ disabled: !sharePlan || !shareTo }" :href="trustUrl('share', { plan: sharePlan, to: shareTo, access: shareEdit ? 'edit' : 'view' })">Share…</a>
           </div>
           <div v-for="s in me.shares" :key="s.id" class="row">
             <span class="grow"><b>{{ planTitle(s.recordId) }}</b> <span class="muted small">with</span> <span class="mono small">{{ s.actor }}</span> <span class="chip">{{ s.access }}</span></span>
-            <a class="btn" :href="trustUrl('unshare', { id: s.id })" target="_blank" rel="noopener">Stop sharing</a>
+            <a class="btn" :href="trustUrl('unshare', { id: s.id })">Stop sharing</a>
           </div>
         </template>
       </div>
@@ -98,9 +98,9 @@ const writeNow = async () => { await api('POST', '/api/pod/mirror'); toast('Writ
         <p v-else-if="pod" class="small">Your planner is written to <span class="mono">{{ pod.base }}</span>{{ pod.own ? ' (your own Solid server)' : ' (the pod built into this server)' }} after every save, as JSON-LD any Solid app can read.</p>
         <div class="row wrap">
           <button v-if="pod && !pod.needsHandle" class="btn" @click="writeNow">Write it now</button>
-          <a class="btn" :href="trustUrl(pod?.own ? 'pod-builtin' : 'pod-use')" target="_blank" rel="noopener">{{ pod?.own ? 'Use this server\'s pod' : 'Use my own Solid pod…' }}</a>
-          <a class="btn" :href="trustUrl('pod-import')" target="_blank" rel="noopener">Copy my planner from a pod…</a>
-          <a v-if="me?.address && !me.movedTo" class="btn" :href="trustUrl('move')" target="_blank" rel="noopener">Move my account…</a>
+          <a class="btn" :href="trustUrl(pod?.own ? 'pod-builtin' : 'pod-use')">{{ pod?.own ? 'Use this server\'s pod' : 'Use my own Solid pod…' }}</a>
+          <a class="btn" :href="trustUrl('pod-import')">Copy my planner from a pod…</a>
+          <a v-if="me?.address && !me.movedTo" class="btn" :href="trustUrl('move')">Move my account…</a>
         </div>
         <p class="small muted">Moving: copy your planner into the new server first (there: Copy my planner from a pod), then Move my account here. Your address and the people you share with come along.</p>
       </div>

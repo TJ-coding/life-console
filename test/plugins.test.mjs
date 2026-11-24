@@ -76,7 +76,11 @@ async function confirm(c, query, fields = {}) {
   const nonce = nonceOf(page.text)
   assert.ok(nonce, `no nonce on ${query}: ${page.text.slice(0, 400)}`)
   const kind = new URLSearchParams(query).get('do')
-  return c('POST', '/trust', new URLSearchParams({ nonce, do: kind, decision: 'yes', ...fields }).toString(), NAV)
+  const r = await c('POST', '/trust', new URLSearchParams({ nonce, do: kind, decision: 'yes', ...fields }).toString(), NAV)
+  // most confirmations go straight back to the console with a notice: show it as the text
+  const loc = typeof r.headers.get === 'function' ? r.headers.get('location') : r.headers.location
+  if (r.status === 303 && loc) r.text = `${loc} ${decodeURIComponent(loc.replace(/\+/g, ' '))}`
+  return r
 }
 
 const CODE = `export default {
@@ -102,16 +106,25 @@ test('automated checks: remote code is blocked; obfuscation, data-door bypass an
 })
 
 test('registry: a handle, then publish under it; versions are fixed; others see only public plugins', async () => {
-  assert.equal((await alice('POST', '/api/registry/publish', { name: 'alice/habits', version: '1.0.0', code: CODE })).status, 400, 'needs a handle first')
   assert.equal((await alice('POST', '/api/registry/handle', { handle: 'life-console' })).status, 400, 'reserved')
   assert.equal((await alice('POST', '/api/registry/handle', { handle: 'alice' })).body.handle, 'alice')
+  // someone who never chose a publisher name gets one from their email when they first publish
+  const eve = client()
+  await eve('POST', '/api/auth/signup', { email: 'Eve.Smith@x.test', password: 'pw-eve-12345' })
+  const ep = await eve('POST', '/api/registry/publish', { name: 'notes', code: CODE.replace("title: 'Habits'", "title: 'Notes'") })
+  assert.equal(ep.status, 201)
+  assert.equal(ep.body.name, 'eve-smith/notes')
+  assert.equal(ep.body.version, '0.1.0', 'no version given: the first one')
+  assert.equal((await eve('POST', '/api/registry/publish', { name: 'notes', code: CODE.replace("title: 'Habits'", "title: 'Notes'") })).body.reused, true, 'the same code again: the same version')
+  assert.equal((await eve('POST', '/api/registry/publish', { name: 'notes', code: CODE.replace("title: 'Habits'", "title: 'Notes 2'") })).body.version, '0.1.1', 'new code: the next version')
+  assert.equal((await eve('POST', '/api/registry/publish', { name: 'copy', code: CODE.replace("title: 'Habits'", "title: 'Notes'") })).status, 201, 'the same code under another name is its own plugin')
   assert.equal((await bob('POST', '/api/registry/handle', { handle: 'alice' })).status, 409, 'taken')
   await bob('POST', '/api/registry/handle', { handle: 'bob' })
   assert.equal((await alice('POST', '/api/registry/publish', { name: 'bob/habits', version: '1.0.0', code: CODE })).status, 403, 'only under your own handle')
   assert.equal((await alice('POST', '/api/registry/publish', { name: 'alice/evil', version: '1.0.0', code: "export default {}; import('https://x.test/a.js')" })).status, 422)
   const r = await alice('POST', '/api/registry/publish', { name: 'alice/habits', version: '1.0.0', code: CODE, manifest: { title: 'Habits', says: { internet: [] } }, visibility: 'private' })
   assert.equal(r.status, 201)
-  assert.equal(r.body.hash, crypto.createHash('sha256').update(CODE).digest('hex'))
+  assert.equal(r.body.hash, crypto.createHash('sha256').update(`alice/habits\n${CODE}`).digest('hex'), 'named by its plugin and its code')
   published = r.body
   assert.equal((await alice('POST', '/api/registry/publish', { name: 'alice/habits', version: '1.0.0', code: CODE + '//x' })).status, 409, 'a version is fixed')
   assert.equal((await bob('GET', '/api/registry/plugins')).body.plugins.length, 0, 'private: bob does not see it')
@@ -149,12 +162,15 @@ test('consent: the trusted page refuses fetch(), frames and posts without its no
 
 test('consent: enable Public plugins, install from the registry, load, update, toggle, remove', async () => {
   assert.equal((await bob('GET', '/api/plugins/installed')).body.publicPlugins, false)
-  const early = await bob('GET', `/trust?do=install&pkg=alice/habits&hash=${published.hash}`, undefined, NAV)
-  assert.match(early.text, /Turn on Public plugins first/)
-  assert.equal((await confirm(bob, 'do=enable-plugins')).status, 200)
-  const me = (await bob('GET', '/api/auth/me')).body.user
-  assert.equal(me.publicPlugins, true)
+  // the first install says it also turns plugins on: one confirmation, not two
+  const early = await bob('GET', `/trust?do=install&pkg=alice/habits&hash=${published.hash}&back=/app%23/m/plugins`, undefined, NAV)
+  assert.match(early.text, /This is your first plugin/)
+  assert.match(early.text, /href="\/app#\/m\/plugins">Cancel/, 'Cancel goes back where you came from')
+  assert.equal((await bob('GET', `/trust?do=install&pkg=alice/habits&hash=${published.hash}&back=https://evil.test/`, undefined, NAV)).text.includes('evil.test'), false, 'never back to another site')
   const done = await confirm(bob, `do=install&pkg=alice/habits&hash=${published.hash}`)
+  assert.equal(done.status, 303, 'straight back to the console')
+  assert.match(done.headers.get('location'), /^\/app#\/m\/plugins\?notice=Installed/, 'back where it started, with a notice')
+  assert.equal((await bob('GET', '/api/auth/me')).body.user.publicPlugins, true, 'the first install turned plugins on')
   assert.match(done.text, /Installed alice\/habits 1\.1\.0/)
   const inst = (await bob('GET', '/api/plugins/installed')).body.plugins
   assert.equal(inst.length, 1)
