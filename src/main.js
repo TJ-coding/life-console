@@ -1,7 +1,9 @@
 import { createApp } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
-import { registry } from './sdk'
+import { registry, attachRouter } from './sdk'
+import { loadPlugins } from './sdk/loader.js'
+import { setLcRouter } from './sdk/lc.js'
 import { applyTheme } from './store'
 import { startSync, resumeSync } from './sync'
 import { auth, setSignedInHandler } from './auth'
@@ -19,6 +21,8 @@ const router = createRouter({
 router.beforeEach((to) => (to.name === 'day' && !/^\d{4}-\d{2}-\d{2}$/.test(to.params.date) ? '/' : true))
 
 router.afterEach((to) => trackRoute(to))
+attachRouter(router)
+setLcRouter(router)
 
 applyTheme()
 createApp(App).use(router).mount('#app')
@@ -27,6 +31,7 @@ createApp(App).use(router).mount('#app')
 const swReady = 'serviceWorker' in navigator && window.isSecureContext && import.meta.env.PROD
 setSignedInHandler(async () => {
   await resumeSync()
+  loadPlugins()
   analyticsReady(router.currentRoute.value)
   loadIssues()
   if (swReady) refreshPush().catch(() => {})
@@ -34,6 +39,7 @@ setSignedInHandler(async () => {
 // sync with the server (no-op without one), then the service worker for offline + push
 if (swReady) navigator.serviceWorker.register('/sw.js').catch((e) => console.warn('service worker', e))
 startSync().then(() => {
+  if (auth.status === 'signed-in') loadPlugins() // Public plugins installed for this account (src/sdk/loader.js)
   if (auth.status === 'signed-in' || auth.status === 'none') loadIssues() // issue counts; also sends reports queued offline
   if (auth.status === 'signed-in') analyticsReady(router.currentRoute.value)
   if (auth.status === 'signed-in' && swReady) navigator.serviceWorker.ready.then(() => refreshPush()).catch(() => {})

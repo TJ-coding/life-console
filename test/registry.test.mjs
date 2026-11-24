@@ -119,3 +119,23 @@ test('sleep, caffeine and routines are plugins: listed, no sidebar entry, off un
     assert.ok(!enabledModules(e.id, { addOns: { [e.id]: { caffeine: false } } }).has('caffeine'))
   }
 })
+
+test('Public plugins never crash the registry: clashes are lost and reported; declared replacements take over (goal 2)', () => {
+  const thief = defineModule({ id: 'thief', chords: [{ key: 'd', to: '/m/thief' }], routes: [{ path: '/week' }, { path: '/m/thief', name: 'thief' }] })
+  const dupe = defineModule({ id: 'deadlines' })
+  const today2 = defineModule({ id: 'today2', replaces: ['today'], routes: [{ path: '/', name: 'today', component: {} }], nav: [{ key: 'today', label: 'My Today', to: '/', hint: 'T', tab: 'Today' }], chords: [{ key: 't', to: '/' }] })
+  const side = defineModule({ id: 'side', replaces: ['core/sidebar', 'core/theme'], slots: { 'shell.sidebar': {}, 'today.card': {} }, styles: ':root{--accent:red}' })
+  const r = buildRegistry([...MODULES, core], { plugins: [thief, dupe, today2, side] })
+  assert.equal(r.chords.d, '/deadlines', 'a Core chord stays')
+  assert.ok(r.routes.some((x) => x.path === '/m/thief'), "the plugin keeps what didn't clash")
+  assert.ok(!r.routes.some((x) => x.path === '/week' && x.meta.module === 'thief'))
+  assert.ok(r.conflicts.some((c) => c.startsWith('thief:')) && r.conflicts.some((c) => c.startsWith('deadlines:')))
+  assert.equal(r.routes.find((x) => x.path === '/').meta.module, 'today2', 'a declared replacement takes the route')
+  assert.equal(r.nav.find((n) => n.key === 'today').label, 'My Today')
+  assert.equal(r.replaced.today, 'today2')
+  assert.equal(r.shell.sidebar.module, 'side')
+  assert.ok(r.styles.find((x) => x.module === 'side').global, 'a theme plugin styles the whole app')
+  assert.deepEqual(r.slots['today.card'].map((x) => x.module), ['side'])
+  // without the plugins (safe mode) everything is ours again
+  assert.equal(buildRegistry([...MODULES, core]).routes.find((x) => x.path === '/').meta.module, 'today')
+})

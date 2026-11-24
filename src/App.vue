@@ -23,6 +23,8 @@ import { auth } from './auth'
 import { serverUpdate, showBanner as showUpdate, dismissBanner as dismissUpdate } from './updates'
 import AuthScreen from './components/AuthScreen.vue'
 import TourOverlay from './components/TourOverlay.vue'
+import PluginPart from './components/PluginPart.vue'
+import { makeLc } from './sdk/lc.js'
 
 const SYNC_TEXT = { outdated: 'RELOAD', choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', guest: 'GUEST', error: 'ERROR' }
 const SYNC_ICON = { outdated: 'system_update', choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', guest: 'person_off', error: 'error' }
@@ -85,6 +87,11 @@ let gPending = false
 let gTimer
 function onKey(e) {
   if (showAuth.value) return // the sign-in screen is up: no app shortcuts
+  // a plugin that replaces the shortcuts (replaces: ['core/shortcuts']) sees keys first; returning true consumes one
+  const sk = registry.shell?.shortcuts
+  if (sk?.part?.keydown) {
+    try { if (sk.part.keydown(e, makeLc(registry.byId[sk.module]?.pkg ?? sk.module)) === true) return } catch (err) { console.warn('[plugin] shortcuts', err) }
+  }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
     ui.palette ? (ui.palette = false) : openPalette('cmd')
@@ -233,7 +240,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <button class="exec" @click="openPalette('cmd')">
         <span class="icon sm">terminal</span><span class="mono">EXECUTE</span><span class="spacer"></span><span class="kbd">⌘K</span>
       </button>
-      <nav>
+      <!-- a plugin that replaces the sidebar (replaces: ['core/sidebar']) draws it; safe mode brings ours back -->
+      <PluginPart v-if="registry.shell?.sidebar" class="plugin-sidebar" :part="registry.shell.sidebar.part" :module="registry.shell.sidebar.module" :data="{ nav: NAV }" />
+      <nav v-else>
         <router-link v-for="n in NAV" :key="n.key" :to="n.to" class="nav" :class="{ on: activeKey === n.key }">
           <span class="icon">{{ n.icon }}</span>
           <span class="grow">{{ n.label }}</span>

@@ -7,6 +7,7 @@ import DateInput from './DateInput.vue'
 import { computed, ref } from 'vue'
 import { ui, state, findTodo, deleteTodoUndo, unscheduleTodo, todayISO, tickTodo, updateTodo, linkType, linkLabel, splitSiblings, partLabel, mergePartsUndo, wd, fmtSlash, toast, childrenOf, isContainer, sendToNextDay, budgetLeft, subCount, addSubtask, parseQuick, pomo } from '../store'
 import Chip from './Chip.vue'
+import PluginSlot from './PluginSlot.vue'
 
 const t = computed(() => (ui.drawerId ? findTodo(ui.drawerId) : null))
 const touch = () => { if (t.value) t.value.updatedAt = new Date().toISOString() }
@@ -205,6 +206,7 @@ const dayName = computed(() => {
         <button class="btn primary grow" @click="tickTodo(t.id)"><span class="icon sm">done_all</span>{{ t.done ? 'Reopen' : 'Mark completed' }} <span class="kbd">X</span></button>
         <button class="btn danger-ghost" title="Delete this task (undo in the toast)" @click="remove"><span class="icon sm">delete</span>Delete</button>
       </footer>
+      <PluginSlot name="todo.panel" :data="{ todo: t.id }" />
     </aside>
   </transition>
 </template>

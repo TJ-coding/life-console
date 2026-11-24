@@ -15,6 +15,7 @@ import WeekBar from '../components/WeekBar.vue'
 import DayColumn from '../components/DayColumn.vue'
 import BacklogPanel from '../components/BacklogPanel.vue'
 import BalancePanel from '../components/BalancePanel.vue'
+import PluginSlot from '../components/PluginSlot.vue'
 
 const route = useRoute()
 const T = computed(() => todayISO())
@@ -136,6 +137,7 @@ const print = () => window.print()
 <template>
   <div class="wp">
     <WeekBar />
+    <PluginSlot name="week.strip" />
 
     <div class="guide">
       <span class="next row" :class="next.cls"><span class="icon sm">{{ next.icon }}</span>{{ next.text }}</span>

@@ -36,7 +36,7 @@ export function checkPassword(pw) {
   return ''
 }
 
-export const publicUser = (u) => u && { id: u.id, email: u.email, name: u.name, role: u.role, createdAt: u.createdAt, hasPassword: !!u.passwordHash, google: !!u.googleSub }
+export const publicUser = (u) => u && { id: u.id, email: u.email, name: u.name, role: u.role, createdAt: u.createdAt, hasPassword: !!u.passwordHash, google: !!u.googleSub, handle: u.handle ?? null, publicPlugins: !!u.publicPlugins }
 
 /** `signups` (server/signups.mjs) decides who may create an account; without it (the CLI), SIGNUPS alone does. */
 export function createAuth(db, cfg, signups = null) {

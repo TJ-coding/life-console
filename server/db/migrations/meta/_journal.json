@@ -29,6 +29,13 @@
       "when": 1795250128636,
       "tag": "0003_issue_replies",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795506076056,
+      "tag": "0004_plugin_platform",
+      "breakpoints": true
     }
   ]
 }

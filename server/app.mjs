@@ -14,6 +14,9 @@ import { createMacApp } from './macapp.mjs'
 import { createMailer } from './mail.mjs'
 import { createGoogle } from './google.mjs'
 import { createSignups } from './signups.mjs'
+import { createRegistry } from './registry.mjs'
+import { createVault } from './vault.mjs'
+import { createConsent, TRUST_HEADERS } from './consent.mjs'
 import { settingsOf } from './schedule.mjs'
 import { EDITION_LANDINGS } from '../editions/index.js'
 
@@ -36,6 +39,16 @@ function send(res, status, body, headers = {}) {
   const isJson = typeof body !== 'string' && !Buffer.isBuffer(body)
   res.writeHead(status, { 'Content-Type': isJson ? 'application/json' : 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS, ...headers })
   res.end(isJson ? JSON.stringify(body) : body)
+}
+/** A raw (form) body as text, up to `limit` bytes. */
+function readRaw(req, limit) {
+  return new Promise((resolve, reject) => {
+    let size = 0
+    const chunks = []
+    req.on('data', (c) => { size += c.length; if (size > limit) { reject(httpError(413, 'payload too large')); req.destroy() } else chunks.push(c) })
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    req.on('error', reject)
+  })
 }
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
@@ -74,6 +87,8 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const planner = createPlanner(db, cfg)
   const push = await createPush(db, cfg, log)
   const issues = createIssues(db)
+  const registry = createRegistry(db, { log })
+  const vault = createVault(db, cfg)
   const mailer = cfg.passwordAuth ? createMailer(cfg, log) : null
   const google = cfg.google ? createGoogle(cfg) : null
   const limit = createLimiter()
@@ -85,6 +100,10 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const appHost = cfg.appUrl ? new URL(cfg.appUrl).host : null
   /** Secure cookies on the public https address; plain ones on other hosts (e.g. a private-network http URL). */
   const secureFor = (req) => cfg.cookieSecure && (!appHost || req.headers.host === appHost)
+
+  const consent = createConsent({ db, auth, registry, vault, log, secureFor: (req) => secureFor(req) })
+  /** Account actions a plugin could abuse need the trusted page once Public plugins are on (goal 3). */
+  const viaTrust = (user, action) => { if (user.publicPlugins) throw Object.assign(httpError(403, 'Confirm this on the trusted page'), { trust: `/trust?do=${action}` }) }
 
   const ip = (req) => (cfg.trustProxy && (req.headers['cf-connecting-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim())) || req.socket.remoteAddress || '?'
   const body = (req, max = 64 * 1024) => readBody(req, max)
@@ -215,7 +234,36 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     const revRestore = url.pathname.match(/^\/api\/state\/revisions\/(\d+)\/restore$/)?.[1]
     if (revRestore && req.method === 'POST') return send(res, 200, await planner.restore(uid, Number(revRestore)))
 
+    const regOne = url.pathname.match(/^\/api\/registry\/plugins\/([a-z0-9-]+\/[a-z0-9-]+)$/)?.[1]
+    if (regOne && req.method === 'GET') { const p = await registry.one(user, regOne); return p ? send(res, 200, p) : send(res, 404, { error: 'no such plugin' }) }
+
     switch (route) {
+      /* ── the plugin platform (docs/PLATFORM.md) ── */
+      case 'GET /api/plugins/installed':
+        return send(res, 200, { publicPlugins: !!user.publicPlugins, plugins: user.publicPlugins ? await registry.installed(uid) : [] })
+      case 'GET /api/registry/plugins':
+        return send(res, 200, { plugins: await registry.list(user, url.searchParams.get('q') ?? '') })
+      case 'POST /api/registry/handle':
+        return send(res, 200, { handle: await registry.setHandle(user, (await body(req)).handle) })
+      case 'POST /api/registry/publish': {
+        limit(`publish:${uid}`, 30, 3600000)
+        return send(res, 201, await registry.publish(user, await body(req, 700 * 1024)))
+      }
+      case 'POST /api/registry/report': {
+        limit(`report:${uid}`, 20, 3600000)
+        return send(res, 200, await registry.report(user, await body(req)))
+      }
+      case 'POST /api/admin/registry/pull': {
+        adminOnly(user)
+        const b = await body(req)
+        return send(res, 200, await registry.pull(b.hash, b.reason ?? ''))
+      }
+      case 'GET /api/connections':
+        return send(res, 200, { on: vault.on, connections: await vault.list(uid) })
+      case 'POST /api/connections/request': {
+        limit(`conn:${uid}`, 120, 60000)
+        return send(res, 200, await vault.request(uid, await body(req, 128 * 1024)))
+      }
       case 'GET /api/auth/me':
         return send(res, 200, { user: publicUser(user) })
       case 'PATCH /api/auth/me': {
@@ -225,6 +273,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         return send(res, 200, { user: publicUser(u) })
       }
       case 'DELETE /api/auth/me': { // delete the account and everything in it
+        viaTrust(user, 'delete-account')
         const b = await body(req)
         limit(`delete:${uid}`, 5, 3600000)
         // accounts with a password confirm with it; Google-only accounts type their email instead
@@ -237,6 +286,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       }
       case 'POST /api/auth/tokens': { // "Connect Mac app" in Settings: an API token for one named device
         if (who.via !== 'session') throw httpError(403, 'Create tokens from a signed-in browser')
+        viaTrust(user, 'token')
         const b = await body(req)
         const name = String(b.name || '').trim().slice(0, 60)
         if (!/^[\w .()-]{1,60}$/.test(name)) throw httpError(400, 'name (letters, digits, spaces) required')
@@ -247,6 +297,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       }
       case 'POST /api/auth/password': {
         noPasswords()
+        viaTrust(user, 'password')
         const b = await body(req)
         limit(`password:${uid}`, 10, 3600000)
         if (!(await verifyPassword(String(b.current || ''), user.passwordHash))) throw httpError(401, 'Current password is wrong')
@@ -353,6 +404,14 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
 
   async function api(req, res, url) {
     const route = `${req.method} ${url.pathname}`
+    // a plugin version's code, for the console to import: public versions for anyone, private ones for their owner
+    const codeHash = req.method === 'GET' && url.pathname.match(/^\/api\/registry\/code\/([0-9a-f]{64})\.js$/)?.[1]
+    if (codeHash) {
+      const who = await auth.identify(req)
+      const v = await registry.version(who?.user ?? null, codeHash)
+      if (!v) return send(res, 404, 'not found')
+      return send(res, 200, v.code, { 'Content-Type': MIME['.js'], 'Cache-Control': v.pkg.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, max-age=31536000, immutable' })
+    }
     checkCsrf(req)
     if ((await publicRoute(req, res, route)) !== undefined || res.writableEnded) return
     const who = await auth.identify(req)
@@ -539,6 +598,15 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
     const url = new URL(req.url, 'http://localhost')
     try {
       if (url.pathname.startsWith('/api/')) return await api(req, res, url)
+      // the trusted page (server/consent.mjs): consent, keys and passwords, never inside the console
+      if (url.pathname === '/trust') {
+        let out
+        if (req.method === 'POST') out = await consent.post(req, res, await readRaw(req, 32 * 1024))
+        else if (req.method === 'GET' || req.method === 'HEAD') out = await consent.get(req, res, url)
+        else return send(res, 405, 'method not allowed')
+        res.writeHead(out.status ?? 200, { ...TRUST_HEADERS, ...(out.headers ?? {}) })
+        return res.end(req.method === 'HEAD' ? undefined : out.html)
+      }
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed')
       // the Mac menu-bar app's latest release (landing page buttons, the Terminal install line)
       if (url.pathname === '/download/mac' || url.pathname === '/download/mac.zip') {
@@ -548,7 +616,7 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
     } catch (err) {
       const status = err.status || 500
       if (status >= 500) log('[http]', req.method, url.pathname, err.stack || err.message)
-      if (!res.headersSent) send(res, status, { error: status >= 500 ? 'server error' : err.message }, err.retryAfter ? { 'Retry-After': String(err.retryAfter) } : {})
+      if (!res.headersSent) send(res, status, { error: status >= 500 ? 'server error' : err.message, ...(err.trust ? { trust: err.trust } : {}) }, err.retryAfter ? { 'Retry-After': String(err.retryAfter) } : {})
     }
   }
 
@@ -558,5 +626,5 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
 
   metrics.start()
   updates.start()
-  return { handler, scheduler, auth, planner, push, issues, metrics, updates, build: BUILD, close: () => { clearInterval(sweep); scheduler.stop(); metrics.stop(); updates.stop() } }
+  return { handler, scheduler, auth, planner, push, issues, registry, vault, metrics, updates, build: BUILD, close: () => { clearInterval(sweep); scheduler.stop(); metrics.stop(); updates.stop() } }
 }

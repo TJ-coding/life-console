@@ -19,6 +19,7 @@ import Timeline24 from '../components/Timeline24.vue'
 import TodoRow from '../components/TodoRow.vue'
 import Stamps from '../components/Stamps.vue'
 import NowCard from '../components/NowCard.vue'
+import PluginSlot from '../components/PluginSlot.vue'
 import DeadlineHero from '../components/DeadlineHero.vue'
 import { openDeadlines, minsTo, countdown, urgency, effDue } from '../glance'
 import DayTimeline from '../components/DayTimeline.vue'
@@ -277,6 +278,7 @@ function quickAdd() {
         </template>
       </section>
 
+      <PluginSlot name="today.card" :data="{ date: T }" />
       <section class="panel todo-panel">
         <div class="panel-h">
           <span class="icon sm ok">checklist</span>

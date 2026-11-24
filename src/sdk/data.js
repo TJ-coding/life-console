@@ -46,7 +46,9 @@ function nextId(arr, store) {
  *   taxonomy: from vocabulary.js buildTaxonomy()
  *   now(): ISO time; emit(event, payload): event sink; nsOf(pluginId): the plugin's vocabulary namespace
  */
-export function createDataDoor({ getState, taxonomy, now = () => new Date().toISOString(), emit = () => {}, nsOf = (id) => String(id).split('/').pop() }) {
+export function createDataDoor({ getState, taxonomy: taxonomyIn, now = () => new Date().toISOString(), emit = () => {}, nsOf = (id) => String(id).split('/').pop() }) {
+  // the taxonomy, or a function returning the current one (it changes as plugins are installed)
+  const tax = () => (typeof taxonomyIn === 'function' ? taxonomyIn() : taxonomyIn)
   const activity = []
   const log = (by, op, ref) => { activity.push({ at: now(), by, op, ref }); if (activity.length > LIMITS.activity) activity.shift() }
   const doc = () => {
@@ -65,17 +67,17 @@ export function createDataDoor({ getState, taxonomy, now = () => new Date().toIS
   function locate(ref) {
     const { type, id } = parseRef(ref)
     const s = doc()
-    const store = taxonomy.storeOf(type)
+    const store = tax().storeOf(type)
     const arr = s[store]
     if (!Array.isArray(arr)) return null
     const byUid = id.startsWith('~') ? id.slice(1) : null
     const i = arr.findIndex((r) => (byUid ? r.uid === byUid : String(r.id) === id))
     if (i < 0) return null
     const rec = arr[i]
-    if (store === 'entities' && !taxonomy.isKindOf(rec.type, type)) return null
+    if (store === 'entities' && !tax().isKindOf(rec.type, type)) return null
     return { store, arr, i, rec, type: store === 'entities' ? rec.type : type }
   }
-  const typeOfIn = (store, rec) => (store === 'entities' ? rec.type : Object.keys(taxonomy.types).find((t) => taxonomy.types[t].store === store))
+  const typeOfIn = (store, rec) => (store === 'entities' ? rec.type : Object.keys(tax().types).find((t) => tax().types[t].store === store))
   const out = (store, rec) => ({ ...clone(rec), type: typeOfIn(store, rec), ref: `${typeOfIn(store, rec)}/${rec.id}` })
 
   /** A stable reference for links: core records get a uid on first use (G10). */
@@ -92,7 +94,7 @@ export function createDataDoor({ getState, taxonomy, now = () => new Date().toIS
     if (x !== undefined && JSON.stringify(x).length > LIMITS.xBytes) throw new DataError(`fields under x.${ns} are larger than ${LIMITS.xBytes} bytes: store bigger data as your own records`, 'too-big')
   }
   function validateOrThrow(type, rec) {
-    const errs = taxonomy.validate(type, rec)
+    const errs = tax().validate(type, rec)
     if (errs.length) throw new DataError(`${type}: ${errs.join('; ')}`)
   }
   function matches(rec, where = {}) {
@@ -110,10 +112,10 @@ export function createDataDoor({ getState, taxonomy, now = () => new Date().toIS
 
     function list(type, { where, linkedTo, from, to, limit = LIMITS.listMax } = {}) {
       const s = doc()
-      const t = taxonomy.canonical(type)
-      if (!taxonomy.types[t]) throw new DataError(`unknown type ${type}`)
-      const store = taxonomy.storeOf(t)
-      let rows = (s[store] ?? []).filter((r) => (store === 'entities' ? taxonomy.isKindOf(r.type, t) : true))
+      const t = tax().canonical(type)
+      if (!tax().types[t]) throw new DataError(`unknown type ${type}`)
+      const store = tax().storeOf(t)
+      let rows = (s[store] ?? []).filter((r) => (store === 'entities' ? tax().isKindOf(r.type, t) : true))
       if (where) rows = rows.filter((r) => matches(r, where))
       if (from || to) {
         const dateOf = (r) => String(r.due ?? r.at ?? r.date ?? r.scheduled?.date ?? '').slice(0, 10)
@@ -132,12 +134,12 @@ export function createDataDoor({ getState, taxonomy, now = () => new Date().toIS
     function get(ref) { const h = locate(ref); return h ? out(h.store, h.rec) : null }
 
     function create(type, fields = {}) {
-      const t = taxonomy.canonical(type)
-      const def = taxonomy.types[t]
+      const t = tax().canonical(type)
+      const def = tax().types[t]
       if (!def) throw new DataError(`unknown type ${type}`)
       if (!core && def.owner !== 'core' && def.owner !== 'common' && def.owner !== ns) throw new DataError(`${by} can't create ${t}: it belongs to ${def.owner}`, 'forbidden')
       const s = doc()
-      const store = taxonomy.storeOf(t)
+      const store = tax().storeOf(t)
       const at = now()
       let rec
       if (store === 'entities') {
@@ -146,7 +148,7 @@ export function createDataDoor({ getState, taxonomy, now = () => new Date().toIS
         if (store === 'reminders' && !core && s.reminders.filter((r) => r.by === by).length >= LIMITS.reminders) throw new DataError(`${by} already has ${LIMITS.reminders} reminders`, 'limit')
         const base = (CORE_DEFAULTS[store] ?? ((st, f) => ({ ...f })))(s, clone(fields), at)
         rec = { ...base, id: nextId(s[store], store), uid: randomId(12), ...(core ? {} : { by }) }
-        if (store !== 'entities' && t !== Object.keys(taxonomy.types).find((k) => taxonomy.types[k].store === store)) rec.kind = t // a subtype stored as a core record (G4)
+        if (store !== 'entities' && t !== Object.keys(tax().types).find((k) => tax().types[k].store === store)) rec.kind = t // a subtype stored as a core record (G4)
       }
       checkXSize(rec, ns)
       validateOrThrow(t, rec)
@@ -166,7 +168,7 @@ export function createDataDoor({ getState, taxonomy, now = () => new Date().toIS
         if (keys.some((k) => k !== 'x') || Object.keys(patch.x ?? {}).some((k) => k !== ns)) throw new DataError(`${by} may only change x.${ns} on ${type} records`, 'forbidden')
         next = { ...clone(rec), x: { ...(rec.x ?? {}), [ns]: clone(patch.x[ns]) } }
       } else {
-        if (store === 'entities' && !core && rec.by !== by && taxonomy.types[rec.type]?.owner !== ns) throw new DataError(`${by} can't change a ${rec.type} it didn't create`, 'forbidden')
+        if (store === 'entities' && !core && rec.by !== by && tax().types[rec.type]?.owner !== ns) throw new DataError(`${by} can't change a ${rec.type} it didn't create`, 'forbidden')
         const { id, type: _t, by: _b, createdAt, uid, ...rest } = patch
         next = { ...clone(rec), ...clone(rest) }
       }
@@ -185,7 +187,7 @@ export function createDataDoor({ getState, taxonomy, now = () => new Date().toIS
     function upsert(type, { source, externalId }, fields = {}) {
       if (!source || !externalId) throw new DataError('upsert needs source and externalId')
       const hit = list(type, { where: { source, externalId: String(externalId) } })[0]
-      return hit ? update(hit.ref, core || taxonomy.storeOf(type) === 'entities' ? fields : { x: { [ns]: fields } }) : create(type, { ...fields, source, externalId: String(externalId) })
+      return hit ? update(hit.ref, core || tax().storeOf(type) === 'entities' ? fields : { x: { [ns]: fields } }) : create(type, { ...fields, source, externalId: String(externalId) })
     }
 
     function remove(ref) {
@@ -203,10 +205,10 @@ export function createDataDoor({ getState, taxonomy, now = () => new Date().toIS
     }
 
     function relate(from, link, to) {
-      if (!taxonomy.linkBase(link)) throw new DataError(`unknown link ${link}: use one of the standard links or a kind of one`)
+      if (!tax().linkBase(link)) throw new DataError(`unknown link ${link}: use one of the standard links or a kind of one`)
       const s = doc()
       const sRef = stableRef(from)
-      const oRef = /^me\.|^core\.|^common\./.test(to) && taxonomy.tags[to] ? to : stableRef(to)
+      const oRef = /^me\.|^core\.|^common\./.test(to) && tax().tags[to] ? to : stableRef(to)
       if (s.relations.some((l) => l.s === sRef && l.p === link && l.o === oRef)) return true
       s.relations.push({ id: randomId(12), s: sRef, p: link, o: oRef, by, at: now() })
       log(by, 'relate', `${sRef} ${link} ${oRef}`)
@@ -217,7 +219,7 @@ export function createDataDoor({ getState, taxonomy, now = () => new Date().toIS
       const s = doc()
       const sRef = stableRef(from)
       let oRef = to
-      try { oRef = taxonomy.tags[to] ? to : stableRef(to) } catch { /* a deleted target */ }
+      try { oRef = tax().tags[to] ? to : stableRef(to) } catch { /* a deleted target */ }
       const before = s.relations.length
       s.relations = s.relations.filter((l) => !(l.s === sRef && l.p === link && l.o === oRef && (core || l.by === by)))
       return s.relations.length < before

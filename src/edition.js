@@ -5,6 +5,7 @@ import { reactive, computed } from 'vue'
 import { state } from './store'
 import { EDITIONS, EDITION_LIST, DEFAULT_EDITION, enabledModules } from '../editions/index.js'
 import { devicePref, saveDevicePref } from './editionPref.js'
+import { publicIds } from './sdk/publicIds.js'
 
 const pref = reactive({ id: devicePref.value })
 export const editions = EDITION_LIST
@@ -12,7 +13,7 @@ export const editions = EDITION_LIST
 export const edition = computed(() => EDITIONS[pref.id] ?? EDITIONS[state.settings?.edition] ?? EDITIONS[DEFAULT_EDITION])
 const enabled = computed(() => enabledModules(edition.value.id, state.settings))
 /** Is a module shown in this edition? The shell's own entries ('core') always are. */
-export const isEnabled = (moduleId) => !moduleId || moduleId === 'core' || enabled.value.has(moduleId)
+export const isEnabled = (moduleId) => !moduleId || moduleId === 'core' || enabled.value.has(moduleId) || publicIds.has(moduleId)
 /** A view switch (edition.features): on unless the edition turns it off. */
 export const feature = (name) => edition.value.features?.[name] !== false
 /** Is a module one of the edition's own (vs an add-on)? */

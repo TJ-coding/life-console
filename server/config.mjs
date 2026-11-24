@@ -53,6 +53,11 @@ export function loadConfig(over = {}) {
     // public landing page at / for visitors who aren't signed in, plus a search-engine-friendly robots.txt/sitemap.
     // Off (the default) keeps a self-hosted server private: / is the app and robots.txt asks crawlers to stay out.
     landing: bool(e.LANDING),
+    // the plugin platform (docs/PLATFORM.md). VAULT_KEY: 32 random bytes, base64 (openssl rand -base64 32); without it the
+    // vault (saved connections) is off. Keep a copy: losing it loses every saved key. CONNECTIONS_ALLOW_PRIVATE=1 lets
+    // the broker reach private addresses (tests and private-network self-hosting only).
+    vaultKey: e.VAULT_KEY || '',
+    connectionsAllowPrivate: bool(e.CONNECTIONS_ALLOW_PRIVATE),
     // the GitHub repository whose star count the landing pages show (fetched hourly by the server, so visitors'
     // browsers never contact GitHub). Empty = no count
     githubRepo: 'GITHUB_REPO' in e ? e.GITHUB_REPO : 'TJ-coding/life-console',

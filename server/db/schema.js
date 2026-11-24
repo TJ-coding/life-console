@@ -22,7 +22,11 @@ export const users = pgTable('users', {
   createdAt: created(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
   lastLoginAt: ts('last_login_at'),
-}, (t) => [uniqueIndex('users_email_key').on(t.email), uniqueIndex('users_google_sub_key').on(t.googleSub)])
+  // the plugin platform (docs/PLATFORM.md): a public name for publishing plugins and sharing (alice), and whether
+  // this account turned on Public plugins (from then on, account actions need the trusted page)
+  handle: text('handle'),
+  publicPlugins: boolean('public_plugins').notNull().default(false),
+}, (t) => [uniqueIndex('users_email_key').on(t.email), uniqueIndex('users_google_sub_key').on(t.googleSub), uniqueIndex('users_handle_key').on(t.handle)])
 
 /** Browser sessions: the cookie holds a random token, the table holds only its SHA-256. */
 export const sessions = pgTable('sessions', {
@@ -134,3 +138,70 @@ export const appKv = pgTable('app_kv', {
   value: jsonb('value').notNull(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 })
+
+/* ── the plugin platform (platform/whitepaper.md, docs/PLATFORM.md) ── */
+
+/** Consent (goal 3): one-time nonces the trusted page (/trust) embeds; an action runs only with one. Hash only. */
+export const consentNonces = pgTable('consent_nonces', {
+  nonceHash: text('nonce_hash').primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  action: jsonb('action').notNull(), // { kind, … } what the page showed, so the POST can't be swapped for another action
+  createdAt: created(),
+  usedAt: ts('used_at'),
+}, (t) => [index('consent_nonces_user_idx').on(t.userId)])
+
+/** The registry (goal 6): packages named author/name, public or private. */
+export const pluginPackages = pgTable('plugin_packages', {
+  name: text('name').primaryKey(), // alice/habits
+  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  visibility: text('visibility').notNull().default('private'), // public | private
+  title: text('title').notNull().default(''),
+  description: text('description').notNull().default(''),
+  icon: text('icon').notNull().default('extension'),
+  downloads: integer('downloads').notNull().default(0),
+  createdAt: created(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [index('plugin_packages_owner_idx').on(t.ownerId)])
+
+/** Every published version, fixed: identified by the SHA-256 of its code. */
+export const pluginVersions = pgTable('plugin_versions', {
+  hash: text('hash').primaryKey(),
+  packageName: text('package_name').notNull().references(() => pluginPackages.name, { onDelete: 'cascade' }),
+  version: text('version').notNull(),
+  code: text('code').notNull(),
+  manifest: jsonb('manifest').notNull(), // what the registry read from the code: title, says, replaces, sdk…
+  checks: jsonb('checks').notNull(), // automated check results
+  changelog: text('changelog').notNull().default(''),
+  pulled: boolean('pulled').notNull().default(false),
+  pulledReason: text('pulled_reason').notNull().default(''),
+  createdAt: created(),
+}, (t) => [uniqueIndex('plugin_versions_pkg_version_key').on(t.packageName, t.version)])
+
+/** What each account installed (only through the trusted page). */
+export const pluginInstalls = pgTable('plugin_installs', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  packageName: text('package_name').notNull(),
+  hash: text('hash').notNull(),
+  enabled: boolean('enabled').notNull().default(true),
+  installedAt: created(),
+}, (t) => [primaryKey({ columns: [t.userId, t.packageName] })])
+
+export const pluginReports = pgTable('plugin_reports', {
+  id: serial('id').primaryKey(),
+  packageName: text('package_name').notNull(),
+  hash: text('hash').notNull().default(''),
+  reporterId: uuid('reporter_id').references(() => users.id, { onDelete: 'set null' }),
+  reason: text('reason').notNull(),
+  createdAt: created(),
+}, (t) => [index('plugin_reports_pkg_idx').on(t.packageName)])
+
+/** The write-only vault (goal 8): keys saved once on the trusted page, used by the server, never shown again. */
+export const vaultSecrets = pgTable('vault_secrets', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(), // strava
+  site: text('site').notNull(), // www.strava.com: the only host the key is ever sent to
+  scheme: text('scheme').notNull().default('bearer'), // bearer | header:<Name> | query:<param>
+  ciphertext: text('ciphertext').notNull(), // AES-256-GCM, base64 (iv.tag.data)
+  createdAt: created(),
+  lastUsedAt: ts('last_used_at'),
+}, (t) => [primaryKey({ columns: [t.userId, t.name] })])

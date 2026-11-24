@@ -17,6 +17,7 @@ import TimeBound from '../components/TimeBound.vue'
 import GoalFlow from '../components/GoalFlow.vue'
 import CascadeMap from '../components/CascadeMap.vue'
 import TaskNode from '../components/TaskNode.vue'
+import PluginSlot from '../components/PluginSlot.vue'
 import { boundIssues, countdown, urgency, effDue, minsTo } from '../glance'
 
 const route = useRoute()
@@ -377,6 +378,7 @@ const byText = (tb) => (isDay(tb) ? new Date(tb + 'T00:00').toLocaleDateString('
       </div>
       <div class="row intent"><b class="mono">INTENT:</b><input v-model="plan.intent" class="input ghost grow" /></div>
     </header>
+    <PluginSlot name="strategy.plan" :data="{ plan: plan.id }" />
 
     <div class="sp-top" :class="{ 'with-table': showTable }">
       <!-- cascading goal diagram: the pyramid -->
