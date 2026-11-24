@@ -360,12 +360,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <SelectionBar />
     <ContextMenu />
     <TourOverlay v-if="ui.tourOpen" />
+    <div class="toast-live" aria-live="polite" aria-atomic="true">
     <transition name="fade">
-      <div v-if="ui.toast" class="toast mono" role="status">
+      <div v-if="ui.toast" class="toast mono">
         <span class="toast-msg">{{ ui.toast }}</span>
         <button v-if="ui.toastAction" class="btn sm toast-act" @click="ui.toastAction.run(); ui.toast = ''; ui.toastAction = null"><span v-if="ui.toastAction.label === 'Undo'" class="icon sm">undo</span>{{ ui.toastAction.label }}</button>
       </div>
     </transition>
+    </div>
   </div>
 </template>
 

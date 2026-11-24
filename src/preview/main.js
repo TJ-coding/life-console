@@ -56,9 +56,10 @@ async function run({ code, name }) {
     ui: { toast: (m) => post({ type: 'toast', text: String(m).slice(0, 200) }), navigate: () => {}, theme: () => document.documentElement.dataset.theme || 'dark' },
     connections: { request: async () => { throw new Error('Connections are off in the preview (no network): it uses demo data') } },
   })
+  const SLOT_NAMES = { 'today.card': 'Today', 'week.strip': 'Plan week', 'strategy.plan': 'a strategic plan', 'todo.panel': 'a todo', 'settings.section': 'Settings' }
   const parts = [
     ...(manifest.pages ?? []).map((p, i) => [`Page ${i + 1}: ${p.title ?? manifest.title ?? ''}`, p, { params: {}, query: {} }]),
-    ...Object.entries(manifest.slots ?? {}).map(([slot, p]) => [`Slot ${slot}`, p, { date: day(0), todo: 'T-101', plan: 'SP-01' }]),
+    ...Object.entries(manifest.slots ?? {}).map(([slot, p]) => [`On ${SLOT_NAMES[slot] ?? slot}`, p, { date: day(0), todo: 'T-101', plan: 'SP-01' }]),
     ...(manifest.settings ? [['Settings', manifest.settings, {}]] : []),
   ]
   if (typeof manifest.start === 'function') try { manifest.start(lc) } catch (e) { errors.push(`start: ${e.message}`) }

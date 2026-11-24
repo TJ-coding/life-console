@@ -53,20 +53,23 @@ export function createConsent({ db, auth, registry, vault, log = () => {}, appPa
   function page(title, body, { status = 200 } = {}) {
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · Life Console trusted page</title>
 <style>
-:root{--bg:#0e1116;--surface:#161b22;--border:#2a323d;--text:#e6edf3;--muted:#8b96a3;--accent:#3fb68b;--danger:#e5534b;color-scheme:dark}
-@media (prefers-color-scheme:light){:root{--bg:#f7f7f5;--surface:#fff;--border:#d9dde2;--text:#1a1f24;--muted:#5f6b77;--accent:#187a56;--danger:#c4332b;color-scheme:light}}
+:root{--bg:#0e1116;--surface:#161b22;--border:#2a323d;--text:#e6edf3;--muted:#8b96a3;--accent:#2bd4e6;--danger:#e5534b;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#f7f7f5;--surface:#fff;--border:#d9dde2;--text:#1a1f24;--muted:#5f6b77;--accent:#0a7d8c;--danger:#c4332b;color-scheme:light}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,'Segoe UI',sans-serif}
 main{max-width:560px;margin:40px auto;padding:0 16px}.badge{display:inline-flex;gap:8px;align-items:center;font:600 12px/1 ui-monospace,Menlo,monospace;letter-spacing:.06em;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:6px 10px;margin-bottom:18px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:22px}h1{font-size:22px;margin:0 0 10px}p{margin:0 0 12px}.muted{color:var(--muted)}.warn{color:var(--danger);font-weight:600}
-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:14px 0}dt{color:var(--muted)}dd{margin:0;word-break:break-word}ul{padding-left:20px;margin:6px 0 12px}
+dl{display:grid;grid-template-columns:auto 1fr;gap:1px;margin:16px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--border)}dt,dd{margin:0;padding:9px 12px;background:var(--bg)}dt{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.04em}dd{word-break:break-word}ul{padding-left:20px;margin:6px 0 12px}
 label{display:block;margin:12px 0 4px;font-weight:600}input[type=text],input[type=password]{width:100%;padding:9px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:inherit}
-.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}button,.btn{font:600 15px/1 inherit;padding:11px 16px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}button,.btn{font-family:inherit;font-weight:600;font-size:15px;line-height:1;padding:11px 16px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none}
 button.yes{background:var(--accent);border-color:var(--accent);color:var(--bg)}button.yes.danger{background:var(--danger);border-color:var(--danger);color:#fff}code{font:13px ui-monospace,Menlo,monospace}
+.ok{color:var(--accent)}.note{border-left:3px solid var(--accent);padding-left:10px}ul.flags{margin:0;padding-left:0;list-style:none;color:var(--danger)}
 .check{display:flex;gap:8px;align-items:flex-start;font-weight:400}footer{margin-top:18px;font-size:13px;color:var(--muted)}
 </style></head><body><main><div class="badge">🔒 LIFE CONSOLE · TRUSTED PAGE</div><div class="card">${body}</div>
 <footer>This page never runs extensions or scripts. Life Console only asks for consent, keys and passwords here. <a href="${appPath}?safe=1" style="color:inherit">Open the console without Public extensions</a></footer></main></body></html>`
     return { status, html }
   }
+  /** Plain names for the places an extension can appear (src/sdk/whereShown.js). */
+  const SLOT_NAMES = { 'today.card': 'Today', 'week.strip': 'Plan week', 'strategy.plan': 'Strategic plans', 'todo.panel': 'Todo details', 'settings.section': 'Settings' }
   /** Where to go back to in the console: only a path in this app (never another site). */
   const safeBack = (v) => (typeof v === 'string' && /^\/app(#\/[\w\-/.?=&%]*)?$/.test(v) ? v : `${appPath}#/m/extensions`)
   /** Add a notice (and other query values) to a console address, for the console to show when you're back. */
@@ -92,7 +95,7 @@ button.yes{background:var(--accent);border-color:var(--accent);color:var(--bg)}b
     const k = KINDS[kind]
     if (!k) return null
     const action = { kind }
-    let details = '', fields = '', warning = '', formAction = ''
+    let details = '', fields = '', warning = '', gentle = false, formAction = ''
     if (kind === 'enable-plugins') {
       warning = 'Public extensions are made by other people. An extension you install can see and change everything in your planner and send it anywhere. Only install extensions from people you trust.'
       details = '<p class="muted">From now on, creating access tokens, changing your password and deleting your account also need this page.</p>'
@@ -104,15 +107,20 @@ button.yes{background:var(--accent);border-color:var(--accent);color:var(--bg)}b
       action.pkg = v.packageName; action.hash = v.hash
       const says = v.manifest.says ?? {}
       const warnings = v.checks.warnings ?? []
+      const shows = v.manifest.shows ?? {}
+      const where = [...(shows.pages ? [`its own page${shows.pages > 1 ? 's' : ''}`] : []), ...(shows.slots ?? []).map((x) => SLOT_NAMES[x] ?? x)]
+      const passed = v.checks.passed ?? []
       details = `<dl><dt>Extension</dt><dd><b>${esc(v.manifest.title)}</b> <code>${esc(v.packageName)}</code></dd><dt>Version</dt><dd>${esc(v.version)}</dd>
-<dt>Made by</dt><dd>${esc(v.packageName.split('/')[0])}</dd><dt>Visibility</dt><dd>${esc(v.pkg.visibility)}</dd>
-<dt>Talks to</dt><dd>${says.internet?.length ? esc(says.internet.join(', ')) : 'no sites (it says)'}</dd>
-${says.connections?.length ? `<dt>Uses connections</dt><dd>${esc(says.connections.join(', '))}</dd>` : ''}
-${says.replaces?.length ? `<dt>Replaces</dt><dd class="warn">${esc(says.replaces.join(', '))}</dd>` : ''}</dl>
-<p class="muted">What it says it does is the author's statement, not a guarantee.</p>
-${warnings.length ? `<p><b>Automated checks found:</b></p><ul>${warnings.map((w) => `<li>${esc(w.msg)}</li>`).join('')}</ul>` : '<p class="muted">Automated checks found nothing to flag.</p>'}
+<dt>Made by</dt><dd>${esc(v.packageName.split('/')[0])}</dd><dt>Who can see it</dt><dd>${v.pkg.visibility === 'public' ? 'Everyone' : 'Only you'}</dd>
+${where.length ? `<dt>Where it appears</dt><dd>${esc(where.join(', '))}</dd>` : ''}
+<dt>Internet</dt><dd>${says.internet?.length ? `Talks to ${esc(says.internet.join(', '))}` : '<span class="ok">None: it talks to no outside sites</span>'}</dd>
+${says.connections?.length ? `<dt>Uses your accounts</dt><dd>${esc(says.connections.join(', '))}</dd>` : ''}
+${says.replaces?.length ? `<dt>Replaces</dt><dd class="warn">${esc(says.replaces.join(', '))}</dd>` : ''}
+<dt>Automated checks</dt><dd>${warnings.length ? `<ul class="flags">${warnings.map((w) => `<li>⚠ ${esc(w.msg)}</li>`).join('')}</ul>` : `<span class="ok">${passed.length ? `All ${passed.length} passed` : 'Nothing to flag'}</span>`}</dd></dl>
+<p class="muted">What it says it does is the author's statement, not a guarantee. You can switch it off or remove it any time in Extensions.</p>
 ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : ''}`
       const own = user.handle && v.packageName.startsWith(`${user.handle}/`)
+      gentle = !!own
       warning = own
         ? 'This is your own extension. Like any extension, it can see and change everything in your planner.'
         : 'It will be able to see and change everything in your planner and send it to the sites it talks to (listed below). Only install extensions from people you trust.'
@@ -182,7 +190,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       warning = 'This deletes your account and your whole planner on this server. It can\'t be undone.'
       fields = user.passwordHash ? '<label for="c">Your password</label><input id="c" type="password" name="password" required>' : `<label for="c">Type your email (${esc(user.email)})</label><input id="c" type="text" name="confirm" required>`
     }
-    return { kind, k, action, details, fields, warning, formAction }
+    return { kind, k, action, details, fields, warning, gentle, formAction }
   }
 
   async function get(req, res, url) {
@@ -199,7 +207,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     const backTo = safeBack(url.searchParams.get('back'))
     d.action.back = backTo
     const nonce = await newNonce(user.id, d.action)
-    const html = page(d.k.title, `<h1>${esc(d.k.title)}</h1>${d.warning ? `<p class="warn">${esc(d.warning)}</p>` : ''}${d.details}
+    const html = page(d.k.title, `<h1>${esc(d.k.title)}</h1>${d.warning ? `<p class="${d.gentle ? 'note' : 'warn'}">${esc(d.warning)}</p>` : ''}${d.details}
 <form method="post" action="/trust"><input type="hidden" name="nonce" value="${nonce}"><input type="hidden" name="do" value="${esc(d.kind)}">${d.fields}
 <div class="row"><button class="yes${d.k.danger ? ' danger' : ''}" type="submit" name="decision" value="yes">${d.kind === 'install' ? 'Install' : d.kind === 'connect' ? 'Continue' : 'Confirm'}</button><a class="btn" href="${esc(backTo)}">Cancel</a></div></form>
 <p class="muted" style="margin-top:14px;font-size:13px">Signed in as ${esc(user.email)}</p>`)

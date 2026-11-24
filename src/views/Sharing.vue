@@ -38,6 +38,7 @@ async function savePct(sig, pct) {
     view(open.value.item)
   } catch (e) { toast(e.message) }
 }
+function share() { location.href = trustUrl('share', { plan: sharePlan.value, to: shareTo.value.trim(), access: shareEdit.value ? 'edit' : 'view' }) }
 const writeNow = async () => { await api('POST', '/api/pod/mirror'); toast('Writing your planner to the pod') }
 </script>
 
@@ -48,14 +49,14 @@ const writeNow = async () => { await api('POST', '/api/pod/mirror'); toast('Writ
     <section class="panel">
       <div class="panel-h"><span class="icon sm">share</span><h2>Sharing</h2><span class="spacer"></span><span v-if="me?.address" class="mono small">{{ me.address }}</span></div>
       <div class="panel-b col">
-        <p v-if="me && !me.address" class="small muted">Choose a handle in <router-link to="/m/extensions">Extensions → Publishing</router-link>: it becomes your address for sharing.</p>
+        <p v-if="me && !me.address" class="small muted">Choose a handle in <router-link to="/m/extensions">Extensions</router-link> (or publish an extension once): it becomes your address for sharing.</p>
         <p v-if="me?.movedTo" class="small warn">This account moved to {{ me.movedTo }}: this server forwards to it.</p>
         <template v-if="me?.address && !me.movedTo">
           <div class="row wrap">
             <select v-model="sharePlan" aria-label="Plan"><option value="" disabled>Plan to share</option><option v-for="p in plans" :key="p.id" :value="p.id">{{ p.title || p.id }}</option></select>
             <input v-model="shareTo" placeholder="@someone@their-server" aria-label="Their address" />
             <label class="small"><input v-model="shareEdit" type="checkbox" /> can edit</label>
-            <a class="btn" :class="{ disabled: !sharePlan || !shareTo }" :href="trustUrl('share', { plan: sharePlan, to: shareTo, access: shareEdit ? 'edit' : 'view' })">Share…</a>
+            <button class="btn" :disabled="!sharePlan || !shareTo.trim()" @click="share">Share…</button>
           </div>
           <div v-for="s in me.shares" :key="s.id" class="row">
             <span class="grow"><b>{{ planTitle(s.recordId) }}</b> <span class="muted small">with</span> <span class="mono small">{{ s.actor }}</span> <span class="chip">{{ s.access }}</span></span>
@@ -113,6 +114,6 @@ const writeNow = async () => { await api('POST', '/api/pod/mirror'); toast('Writ
 .shared { border: 1px solid var(--border); border-radius: 8px; padding: 10px; gap: 6px; margin-top: 6px; }
 .pct { width: 64px; }
 input, select { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font: inherit; }
-.btn.disabled { pointer-events: none; opacity: .5; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
 .warn { color: var(--warn); } .danger { color: var(--danger); }
 </style>

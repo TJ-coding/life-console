@@ -130,6 +130,8 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     const manifest = {
       title: clip(m.title || name.split('/')[1], 80), description: clip(m.description, 400), icon: clip(m.icon || 'extension', 40), sdk: m.sdk ?? 1,
       says: { internet: (m.says?.internet ?? []).slice(0, 20).map((h) => clip(h, 100).toLowerCase()), connections: (m.says?.connections ?? []).slice(0, 10).map((c) => clip(c, 40)), replaces: (m.replaces ?? m.says?.replaces ?? []).slice(0, 10).map((r) => clip(r, 40)) },
+      // where it shows up (from the workshop's preview; shown at install, so people know where to look)
+      shows: { slots: (Array.isArray(m.shows?.slots) ? m.shows.slots : []).filter((x) => /^[a-z]+\.[a-z]+$/.test(x)).slice(0, 10), pages: Math.max(0, Math.min(10, Number(m.shows?.pages) || 0)) },
     }
     const checks = checkCode(code, manifest.says)
     if (checks.blocked.length) throw httpError(422, `Not published: ${checks.blocked.map((c) => c.msg).join('; ')}`)
@@ -273,6 +275,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
       const l = latest[r.packageName]
       return {
         pkg: r.packageName, hash: r.hash, version: v?.version ?? '?', title: pkgBy[r.packageName]?.title ?? r.packageName, icon: pkgBy[r.packageName]?.icon ?? 'extension',
+        description: pkgBy[r.packageName]?.description ?? '', mine: pkgBy[r.packageName]?.ownerId === uid, visibility: pkgBy[r.packageName]?.visibility ?? 'private',
         enabled: r.enabled && !!v && !v.pulled, pulled: !!v?.pulled, pulledReason: v?.pulledReason ?? '', says: v?.manifest?.says ?? {},
         update: l && l.hash !== r.hash ? { version: l.version, hash: l.hash, changelog: l.changelog } : null,
       }
