@@ -26,6 +26,10 @@ export const users = pgTable('users', {
   // this account turned on Public plugins (from then on, account actions need the trusted page)
   handle: text('handle'),
   publicPlugins: boolean('public_plugins').notNull().default(false),
+  // open data (goals 9-11): where this account's Solid pod is (null = the pod built into this server), and, after a
+  // move, the address that now serves the account (this server keeps forwarding to it)
+  podUrl: text('pod_url'),
+  movedTo: text('moved_to'),
 }, (t) => [uniqueIndex('users_email_key').on(t.email), uniqueIndex('users_google_sub_key').on(t.googleSub), uniqueIndex('users_handle_key').on(t.handle)])
 
 /** Browser sessions: the cookie holds a random token, the table holds only its SHA-256. */
@@ -205,3 +209,57 @@ export const vaultSecrets = pgTable('vault_secrets', {
   createdAt: created(),
   lastUsedAt: ts('last_used_at'),
 }, (t) => [primaryKey({ columns: [t.userId, t.name] })])
+
+/* ── open data: Solid pods and ActivityPub (goals 9-11, platform/whitepaper.md part 2) ── */
+
+/** The pod built into this server: Solid resources (LDP) per account, served at /pods/<handle>/… */
+export const podResources = pgTable('pod_resources', {
+  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  path: text('path').notNull(), // planner/todos.jsonld (no leading slash)
+  contentType: text('content_type').notNull().default('application/ld+json'),
+  body: text('body').notNull(),
+  etag: text('etag').notNull(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.ownerId, t.path] })])
+
+/** Each account's ActivityPub key pair (HTTP Signatures). */
+export const actorKeys = pgTable('actor_keys', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  publicPem: text('public_pem').notNull(),
+  privatePem: text('private_pem').notNull(),
+  createdAt: created(),
+})
+
+/** What this account shared with whom (the share list lives with the owner; revoking stops answering). */
+export const shares = pgTable('shares', {
+  id: text('id').primaryKey(),
+  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  recordType: text('record_type').notNull(), // core.Plan
+  recordId: text('record_id').notNull(), // SP-01
+  actor: text('actor').notNull(), // https://other.example/u/bob
+  access: text('access').notNull().default('view'), // view | edit
+  revokedAt: ts('revoked_at'),
+  createdAt: created(),
+}, (t) => [index('shares_owner_idx').on(t.ownerId), index('shares_actor_idx').on(t.actor)])
+
+/** Activities that arrived for an account: shares offered to it, updates, moves. */
+export const federationInbox = pgTable('federation_inbox', {
+  id: serial('id').primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  actor: text('actor').notNull(),
+  type: text('type').notNull(), // Offer | Update | Undo | Move
+  objectId: text('object_id').notNull().default(''),
+  activity: jsonb('activity').notNull(),
+  status: text('status').notNull().default('new'), // new | accepted | declined | done
+  receivedAt: ts('received_at').notNull().defaultNow(),
+}, (t) => [index('federation_inbox_user_idx').on(t.userId)])
+
+/** Remote actors this server has fetched (public keys, inboxes), refreshed when a signature fails. */
+export const remoteActors = pgTable('remote_actors', {
+  id: text('id').primaryKey(), // the actor URL
+  inbox: text('inbox').notNull(),
+  publicPem: text('public_pem').notNull(),
+  handle: text('handle').notNull().default(''),
+  movedTo: text('moved_to'),
+  fetchedAt: ts('fetched_at').notNull().defaultNow(),
+})

@@ -17,6 +17,8 @@ import { createSignups } from './signups.mjs'
 import { createRegistry } from './registry.mjs'
 import { createVault } from './vault.mjs'
 import { createConsent, TRUST_HEADERS } from './consent.mjs'
+import { createPods, podClient } from './pod.mjs'
+import { createFederation } from './federation.mjs'
 import { settingsOf } from './schedule.mjs'
 import { EDITION_LANDINGS } from '../editions/index.js'
 
@@ -89,6 +91,32 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const issues = createIssues(db)
   const registry = createRegistry(db, { log })
   const vault = createVault(db, cfg)
+  const siteOf = (req) => cfg.appUrl || `http://${req?.headers?.host ?? 'localhost'}`
+  const pods = createPods(db, { log, siteFor: siteOf })
+  const fed = createFederation(db, { planner, cfg, log, siteOf, onSharesChanged: (user, req) => mirrorSoon(user, req) })
+  /** The account's pod as a Solid client: its own Solid server (token from the vault), or null for the built-in one. */
+  async function podFor(user) {
+    if (!user.podUrl) return null
+    return podClient(user.podUrl, { token: (await vault.secretFor(user.id, 'pod')) ?? '' })
+  }
+  // write the planner to the pod after each save, at most every few seconds per account (goal 9)
+  const mirrorTimers = new Map()
+  function mirrorSoon(user, req) {
+    clearTimeout(mirrorTimers.get(user.id))
+    mirrorTimers.set(user.id, setTimeout(async () => {
+      mirrorTimers.delete(user.id)
+      try {
+        if (!user.handle && !user.podUrl) return // the built-in pod lives at /pods/<handle>/: no handle, nowhere to put it
+        const doc = await planner.get(user.id)
+        if (!doc.state) return
+        const remote = await podFor(user)
+        // who this account shares with moves with it too (whitepaper §13): sharing/shares.json
+        const mine = await fed.myShares(user)
+        const extra = { 'sharing/shares.json': { shares: mine.map((s) => ({ recordType: s.recordType, recordId: s.recordId, actor: s.actor, access: s.access })) } }
+        await pods.mirror(user, doc.state, { base: remote ? remote.base : `${siteOf(req)}/pods/${user.handle}/`, remote, extra })
+      } catch (e) { log(`[pod] mirror for ${user.id.slice(0, 8)} failed: ${e.message}`) }
+    }, cfg.podMirrorMs ?? 3000))
+  }
   const mailer = cfg.passwordAuth ? createMailer(cfg, log) : null
   const google = cfg.google ? createGoogle(cfg) : null
   const limit = createLimiter()
@@ -101,7 +129,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   /** Secure cookies on the public https address; plain ones on other hosts (e.g. a private-network http URL). */
   const secureFor = (req) => cfg.cookieSecure && (!appHost || req.headers.host === appHost)
 
-  const consent = createConsent({ db, auth, registry, vault, log, secureFor: (req) => secureFor(req), providers: cfg.oauthProviders ?? {}, appUrl: cfg.appUrl })
+  const consent = createConsent({ db, auth, registry, vault, log, secureFor: (req) => secureFor(req), providers: cfg.oauthProviders ?? {}, appUrl: cfg.appUrl, planner, pods, podClient, siteOf, fed })
   /** Account actions a plugin could abuse need the trusted page once Public plugins are on (goal 3). */
   const viaTrust = (user, action) => { if (user.publicPlugins) throw Object.assign(httpError(403, 'Confirm this on the trusted page'), { trust: `/trust?do=${action}` }) }
 
@@ -234,6 +262,11 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     const revRestore = url.pathname.match(/^\/api\/state\/revisions\/(\d+)\/restore$/)?.[1]
     if (revRestore && req.method === 'POST') return send(res, 200, await planner.restore(uid, Number(revRestore)))
 
+    const inboxId = url.pathname.match(/^\/api\/federation\/inbox\/(\d+)$/)?.[1]
+    if (inboxId && req.method === 'POST') return send(res, 200, await fed.setInbox(user, inboxId, (await body(req)).status))
+    const sharedId = url.pathname.match(/^\/api\/federation\/shared\/(\d+)(\/update)?$/)
+    if (sharedId && req.method === 'GET' && !sharedId[2]) return send(res, 200, await fed.readShared(user, req, sharedId[1]))
+    if (sharedId && req.method === 'POST' && sharedId[2]) return send(res, 200, await fed.editShared(user, req, sharedId[1], (await body(req)).patch ?? {}))
     const regOne = url.pathname.match(/^\/api\/registry\/plugins\/([a-z0-9-]+\/[a-z0-9-]+)$/)?.[1]
     if (regOne && req.method === 'GET') { const p = await registry.one(user, regOne); return p ? send(res, 200, p) : send(res, 404, { error: 'no such plugin' }) }
 
@@ -257,6 +290,20 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         adminOnly(user)
         const b = await body(req)
         return send(res, 200, await registry.pull(b.hash, b.reason ?? ''))
+      }
+      case 'GET /api/federation/shares':
+        return send(res, 200, { address: user.handle ? `@${user.handle}@${new URL(siteOf(req)).host}` : null, movedTo: user.movedTo ?? null, shares: await fed.myShares(user) })
+      case 'GET /api/federation/inbox':
+        return send(res, 200, { items: await fed.inboxFor(user) })
+      case 'GET /api/federation/mailbox':
+        return send(res, 200, { messages: await fed.mailbox(user, { since: url.searchParams.get('since') ?? 0 }) })
+      case 'POST /api/federation/mailbox/pull':
+        return send(res, 200, await fed.pullMailbox(user, await body(req)))
+      case 'GET /api/pod':
+        return send(res, 200, { own: !!user.podUrl, base: user.podUrl ?? (user.handle ? `${siteOf(req)}/pods/${user.handle}/` : null), needsHandle: !user.podUrl && !user.handle })
+      case 'POST /api/pod/mirror': { // write it now (Settings → Your data)
+        mirrorSoon(user, req)
+        return send(res, 202, { ok: true })
       }
       case 'GET /api/connections':
         return send(res, 200, { on: vault.on, connections: await vault.list(uid), providers: Object.values(cfg.oauthProviders ?? {}).map((p) => ({ name: p.name, title: p.title, site: p.site })) })
@@ -316,6 +363,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         if (!b.state || typeof b.state !== 'object') return send(res, 400, { error: 'state required' })
         const r = await planner.save(uid, { state: b.state, baseVersion: b.baseVersion, force: !!b.force, device: b.device })
         if (!r.ok) return send(res, 409, { error: r.outdated ? 'outdated' : 'conflict', ...r.conflict })
+        mirrorSoon(user, req)
         return send(res, 200, { version: r.version, updatedAt: r.updatedAt })
       }
       case 'GET /api/state/revisions':
@@ -609,6 +657,30 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
     try {
       if (url.pathname.startsWith('/api/')) return await api(req, res, url)
       // the trusted page (server/consent.mjs): consent, keys and passwords, never inside the console
+      // ActivityPub (server/federation.mjs): WebFinger, actors, inboxes and shared records
+      if (url.pathname === '/.well-known/webfinger') {
+        const j = await fed.webfinger(req, url)
+        return j ? send(res, 200, j, { 'Content-Type': 'application/jrd+json', 'Access-Control-Allow-Origin': '*' }) : send(res, 404, { error: 'not found' })
+      }
+      const apm = url.pathname.match(/^\/u\/([a-z0-9][a-z0-9-]{1,29})(\/inbox|\/outbox|\/r\/([a-z]+)\/([^/]+))?$/)
+      if (apm) {
+        const AP = { 'Content-Type': 'application/activity+json' }
+        if (!apm[2] && req.method === 'GET') { const a = await fed.actor(req, apm[1]); return a ? send(res, 200, a, AP) : send(res, 404, { error: 'not found' }) }
+        if (apm[2] === '/outbox' && req.method === 'GET') return send(res, 200, { '@context': 'https://www.w3.org/ns/activitystreams', type: 'OrderedCollection', totalItems: 0, orderedItems: [] }, AP)
+        if (apm[2] === '/inbox' && req.method === 'POST') { const out = await fed.inbox(req, apm[1], await readRaw(req, 256 * 1024)); return send(res, out.status, '') }
+        if (apm[3] && req.method === 'GET') {
+          const signer = await fed.verify(req, undefined)
+          const out = await fed.record(req, apm[1], apm[3], decodeURIComponent(apm[4]), signer)
+          if (out.status === 301) return send(res, 301, '', { Location: out.location })
+          return out.status === 200 ? send(res, 200, out.body, AP) : send(res, out.status, { error: out.status === 403 ? 'not shared with you' : 'not found' })
+        }
+        return send(res, 405, 'method not allowed')
+      }
+      // the pod built into this server (server/pod.mjs): a small Solid server, for its owner only
+      if (url.pathname.startsWith('/pods/')) {
+        if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !req.headers.authorization && req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin') return send(res, 403, { error: 'cross-site writes refused' })
+        return await pods.serve(req, res, url, await auth.identify(req), send)
+      }
       if (url.pathname === '/trust/oauth' && req.method === 'GET') {
         const out = await consent.oauthCallback(req, url)
         res.writeHead(out.status ?? 200, { ...TRUST_HEADERS, ...(out.headers ?? {}) })
@@ -641,5 +713,5 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
 
   metrics.start()
   updates.start()
-  return { handler, scheduler, auth, planner, push, issues, registry, vault, metrics, updates, build: BUILD, close: () => { clearInterval(sweep); scheduler.stop(); metrics.stop(); updates.stop() } }
+  return { handler, scheduler, auth, planner, push, issues, registry, vault, pods, metrics, updates, build: BUILD, close: () => { clearInterval(sweep); for (const t of mirrorTimers.values()) clearTimeout(t); scheduler.stop(); metrics.stop(); updates.stop() } }
 }

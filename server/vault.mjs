@@ -122,5 +122,11 @@ export function createVault(db, cfg, { fetchImpl = fetch, lookup = (h) => dns.lo
       throw httpError(502, e.name === 'AbortError' ? 'the other site took too long' : 'could not reach the other site')
     } finally { clearTimeout(timer) }
   }
-  return { on, save, saveOAuth, list, remove, request }
+  /** For the server's own use only (the pod connection): never exposed through the API. */
+  async function secretFor(uid, name) {
+    if (!on) return null
+    const [row] = await db.select().from(vaultSecrets).where(and(eq(vaultSecrets.userId, uid), eq(vaultSecrets.name, name)))
+    return row ? open(row.ciphertext) : null
+  }
+  return { on, save, saveOAuth, list, remove, request, secretFor }
 }

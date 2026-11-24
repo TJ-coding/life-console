@@ -37,12 +37,18 @@ const KINDS = {
   token: { title: 'Create an access token', danger: true },
   'vault-save': { title: 'Save a connection key', danger: true },
   connect: { title: 'Connect an account', danger: true },
+  'pod-use': { title: 'Keep your planner in your own Solid pod', danger: true },
+  'pod-builtin': { title: 'Keep your planner in this server\'s pod' },
+  'pod-import': { title: 'Copy your planner from a pod', danger: true },
+  share: { title: 'Share a plan with someone on another server', danger: true },
+  unshare: { title: 'Stop sharing a plan' },
+  move: { title: 'Move your account to another server', danger: true },
   'vault-remove': { title: 'Remove a connection key' },
   password: { title: 'Change your password', danger: true },
   'delete-account': { title: 'Delete your account', danger: true },
 }
 
-export function createConsent({ db, auth, registry, vault, log = () => {}, appPath = '/app', secureFor = () => false, providers = {}, appUrl = '' }) {
+export function createConsent({ db, auth, registry, vault, log = () => {}, appPath = '/app', secureFor = () => false, providers = {}, appUrl = '', planner = null, pods = null, podClient = null, siteOf = () => '', fed = null }) {
   const origin = (req) => appUrl || `${secureFor(req) ? 'https' : 'http'}://${req.headers.host}`
   function page(title, body, { status = 200 } = {}) {
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · Life Console trusted page</title>
@@ -123,6 +129,34 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       details = `<p>Connect your <b>${esc(p.title)}</b> account. You'll sign in on ${esc(p.title)}'s own site and come back here.</p>
 <dl><dt>Access asked for</dt><dd><code>${esc(p.scope || 'basic')}</code></dd><dt>Sent only to</dt><dd>${esc(p.site)}</dd></dl>
 <p class="muted">The tokens are stored encrypted and never shown, to plugins or to you. Plugins that say they use the ${esc(p.name)} connection can ask Life Console to make requests with it.</p>`
+    } else if (kind === 'pod-use' || kind === 'pod-import') {
+      details = kind === 'pod-use'
+        ? '<p>From now on, every time your planner is saved it is also written to this Solid pod, as JSON-LD any Solid app can read. Life Console keeps its working copy here too.</p>'
+        : '<p>Read a Life Console planner from a Solid pod (another server\'s built-in pod, or your own Solid server) and <b>replace the planner on this server with it</b>. The current one is kept as a snapshot you can restore.</p>'
+      if (kind === 'pod-import') warning = 'This replaces your planner on this server.'
+      fields = `<label for="u">Pod address</label><input id="u" type="text" name="pod" placeholder="https://pod.example/alice/ (or https://other-life-console/pods/alice/)" required>
+<label for="t">Access token (if the pod needs one)</label><input id="t" type="password" name="token" autocomplete="off">
+<p class="muted" style="font-size:13px">${kind === 'pod-use' ? 'The token is kept in the vault, encrypted, and only sent to that pod.' : 'For another Life Console server: its Settings → Mac menu-bar app creates an access token. The token is used once and not kept.'}</p>`
+    } else if (kind === 'share') {
+      if (!user.handle) return { noHandle: true }
+      const doc = await planner.get(user.id)
+      const plan = (doc.state?.plans ?? []).find((p) => p.id === q.get('plan'))
+      if (!plan) return { missing: true }
+      action.planId = plan.id
+      details = `<p>Share <b>${esc(plan.title ?? plan.id)}</b> with someone on another Life Console server (or another ActivityPub server).</p>
+<p class="muted">Life Console servers read it live from here, so stopping sharing works for them. Other fediverse servers (Mastodon…) get a copy they keep.</p>`
+      fields = `<label for="to">Their address</label><input id="to" type="text" name="to" placeholder="@supervisor@lc.example-uni.ac.uk" value="${esc(q.get('to') ?? '')}" required>
+<label class="check"><input type="checkbox" name="edit" value="1"${q.get('access') === 'edit' ? ' checked' : ''}> They can edit milestones and health</label>`
+    } else if (kind === 'unshare') {
+      action.id = String(q.get('id') ?? '')
+      details = '<p>Stop sharing this plan. Their server can\'t read it any more; a copy a plain fediverse server already got stays there.</p>'
+    } else if (kind === 'move') {
+      if (!user.handle) return { noHandle: true }
+      warning = 'After moving, this server forwards your address and messages to the new place.'
+      details = '<p>First copy your planner to the new server (there: Settings → Your data → Copy my planner from a pod) and choose a handle there. Then give its address here. Everyone you share with is told where you are now.</p>'
+      fields = '<label for="to">Your new address</label><input id="to" type="text" name="to" placeholder="@alice@my-own-server.example" required>'
+    } else if (kind === 'pod-builtin') {
+      details = '<p>Your planner goes back to being written to the pod built into this server. Your own pod keeps what it already has.</p>'
     } else if (kind === 'vault-remove') {
       action.name = String(q.get('name') ?? '').slice(0, 30)
       details = `<p>Remove the saved key <b>${esc(action.name)}</b>. Plugins that use it stop working until you add it again.</p>`
@@ -146,6 +180,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     if (d.needEnable) return page('Turn on Public plugins first', `<h1>Turn on Public plugins first</h1><p>Public plugins are off for your account.</p><div class="row"><a class="btn" href="/trust?do=enable-plugins">Turn them on…</a><a class="btn" href="${appPath}">Cancel</a></div>`)
     if (d.missing) return page('Not found', `<h1>That plugin version isn't available</h1><p>It may have been pulled from the registry.</p>${back()}`)
     if (d.vaultOff) return page('Vault off', `<h1>Connections are off on this server</h1><p>The server's admin hasn't set a vault key (VAULT_KEY).</p>${back()}`)
+    if (d.noHandle) return page('Choose a handle', `<h1>Choose a handle first</h1><p>Your handle is your address for sharing (Plugins → Publishing).</p>${back()}`)
     if (d.noPassword) return page('No password', `<h1>This account signs in with Google</h1><p>It has no password to change.</p>${back()}`)
     const nonce = await newNonce(user.id, d.action)
     const html = page(d.k.title, `<h1>${esc(d.k.title)}</h1>${d.warning ? `<p class="warn">${esc(d.warning)}</p>` : ''}${d.details}
@@ -194,6 +229,45 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
         const u = new URL(p.authUrl)
         for (const [k, v] of Object.entries({ client_id: p.clientId, redirect_uri: `${origin(req)}/trust/oauth`, response_type: 'code', scope: p.scope, state, ...p.extra })) if (v) u.searchParams.set(k, v)
         return { redirect: u.toString() }
+      }
+      case 'pod-use': {
+        const podUrl = String(form.get('pod') ?? '').trim()
+        const token = String(form.get('token') ?? '')
+        const client = podClient(podUrl, { token })
+        if (token) {
+          if (!vault.on) throw httpError(503, 'Saving a pod token needs the vault (the admin sets VAULT_KEY)')
+          await vault.save(uid, { name: 'pod', site: new URL(podUrl).hostname, scheme: 'bearer', secret: token })
+        }
+        const doc = await planner.get(uid)
+        const n = doc.state ? await pods.mirror(user, doc.state, { base: client.base, remote: client }) : 0
+        await db.update(users).set({ podUrl: client.base, updatedAt: new Date() }).where(eq(users.id, uid))
+        return { msg: `Your planner now lives in ${client.base} too (${n} resources written).` }
+      }
+      case 'share': {
+        const s = await fed.share(user, req, { planId: a.planId, to: form.get('to'), access: form.get('edit') === '1' ? 'edit' : 'view' })
+        return { msg: `Shared with ${s.actor} (${s.access === 'edit' ? 'can edit' : 'view only'}).` }
+      }
+      case 'unshare':
+        await fed.unshare(user, req, a.id)
+        return { msg: 'Stopped sharing.' }
+      case 'move': {
+        const m = await fed.move(user, req, form.get('to'))
+        return { msg: `Moved: your address now leads to ${m.movedTo}. ${m.told} partner server(s) were told.` }
+      }
+      case 'pod-builtin':
+        await db.update(users).set({ podUrl: null, updatedAt: new Date() }).where(eq(users.id, uid))
+        if (vault.on) await vault.remove(uid, 'pod')
+        return { msg: 'Your planner is written to this server\'s pod again.' }
+      case 'pod-import': {
+        const client = podClient(String(form.get('pod') ?? '').trim(), { token: String(form.get('token') ?? '') })
+        const state = await pods.readPlanner(client)
+        const r = await planner.save(uid, { state, force: true, device: 'pod-import', reason: 'pod-import' })
+        if (!r.ok) throw httpError(409, 'The planner could not be replaced (it is newer than this server understands)')
+        // the people this planner was shared with come along (records are read from this server from now on)
+        const sh = await pods.readOne(client, 'sharing/shares.json')
+        for (const s of (sh?.shares ?? []).slice(0, 500)) await fed.adoptShare(user, s)
+        log(`[consent] ${uid.slice(0, 8)} copied a planner from ${client.base}`)
+        return { msg: `Copied your planner from ${client.base}. Your devices pick it up at their next sync; the old one is a snapshot in Settings → Sync.` }
       }
       case 'vault-remove':
         await vault.remove(uid, a.name)

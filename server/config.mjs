@@ -58,6 +58,8 @@ export function loadConfig(over = {}) {
     // vault (saved connections) is off. Keep a copy: losing it loses every saved key. CONNECTIONS_ALLOW_PRIVATE=1 lets
     // the broker reach private addresses (tests and private-network self-hosting only).
     vaultKey: e.VAULT_KEY || '',
+    federationAllowPrivate: bool(e.FEDERATION_ALLOW_PRIVATE), // tests and private networks only: let ActivityPub reach private addresses over http
+    podMirrorMs: Number(e.POD_MIRROR_MS) || 3000, // how long after a save the planner is written to the pod (goal 9)
     oauthProviders: providersFrom(e), // OAuth connections (server/oauth.mjs): OAUTH_<NAME>_CLIENT_ID / _CLIENT_SECRET switch one on
     connectionsAllowPrivate: bool(e.CONNECTIONS_ALLOW_PRIVATE),
     // the GitHub repository whose star count the landing pages show (fetched hourly by the server, so visitors'
