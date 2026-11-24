@@ -158,7 +158,7 @@ export const consentNonces = pgTable('consent_nonces', {
 export const pluginPackages = pgTable('plugin_packages', {
   name: text('name').primaryKey(), // alice/habits
   ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  visibility: text('visibility').notNull().default('private'), // public | private
+  visibility: text('visibility').notNull().default('private'), // public | private | unlisted (off the listing, still works for people who installed it)
   title: text('title').notNull().default(''),
   description: text('description').notNull().default(''),
   icon: text('icon').notNull().default('extension'),
@@ -199,6 +199,13 @@ export const pluginReports = pgTable('plugin_reports', {
   reason: text('reason').notNull(),
   createdAt: created(),
 }, (t) => [index('plugin_reports_pkg_idx').on(t.packageName)])
+
+/** Likes: one per person per extension (shown as a count on listings). */
+export const pluginLikes = pgTable('plugin_likes', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  packageName: text('package_name').notNull().references(() => pluginPackages.name, { onDelete: 'cascade' }),
+  createdAt: created(),
+}, (t) => [primaryKey({ columns: [t.userId, t.packageName] }), index('plugin_likes_pkg_idx').on(t.packageName)])
 
 /** The write-only vault (goal 8): keys saved once on the trusted page, used by the server, never shown again. */
 export const vaultSecrets = pgTable('vault_secrets', {

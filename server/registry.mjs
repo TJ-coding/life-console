@@ -7,7 +7,7 @@
 // the upload; the checks compare what the code does with what it says.
 import crypto from 'node:crypto'
 import { and, eq, desc, inArray, or, sql } from 'drizzle-orm'
-import { pluginPackages, pluginVersions, pluginInstalls, pluginReports, users } from './db/schema.js'
+import { pluginPackages, pluginVersions, pluginInstalls, pluginReports, pluginLikes, users } from './db/schema.js'
 import { httpError } from './auth.mjs'
 
 export const MAX_CODE = 512 * 1024
@@ -80,7 +80,8 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
   }
 
   const pkgOf = (name) => db.select().from(pluginPackages).where(eq(pluginPackages.name, name)).then((r) => r[0] ?? null)
-  const canSee = (p, user) => p && (p.visibility === 'public' || (user && p.ownerId === user.id))
+  // unlisted: off the listing (its owner removed it from the registry) but still works for people who installed it
+  const canSee = (p, user) => p && (p.visibility === 'public' || p.visibility === 'unlisted' || (user && p.ownerId === user.id))
 
   /** Claim a handle (once): the author part of every package name. */
   async function setHandle(user, handle) {
@@ -136,14 +137,15 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     const checks = checkCode(code, manifest.says)
     if (checks.blocked.length) throw httpError(422, `Not published: ${checks.blocked.map((c) => c.msg).join('; ')}`)
     const hash = versionHash(name, code)
-    const visibility = b.visibility === 'public' ? 'public' : 'private'
     const existing = await pkgOf(name)
+    const visibility = b.visibility === 'public' ? 'public' : existing?.visibility ?? 'private'
     if (existing?.upstream) throw httpError(403, `${name} comes from ${existing.upstream}: publish it there`)
     if (existing && existing.ownerId !== user.id) throw httpError(403, 'That extension belongs to someone else')
     const [dupe] = await db.select({ hash: pluginVersions.hash }).from(pluginVersions).where(and(eq(pluginVersions.packageName, name), eq(pluginVersions.version, b.version)))
     if (dupe) throw httpError(409, `Version ${b.version} is already published: versions are fixed, publish a new one`)
     await db.transaction(async (tx) => {
-      if (existing) await tx.update(pluginPackages).set({ visibility, title: manifest.title, description: manifest.description, icon: manifest.icon, updatedAt: new Date() }).where(eq(pluginPackages.name, name))
+      // a new version never hides a shared extension, and never overwrites the listing details its owner edited
+      if (existing) await tx.update(pluginPackages).set({ visibility, updatedAt: new Date() }).where(eq(pluginPackages.name, name))
       else await tx.insert(pluginPackages).values({ name, ownerId: user.id, visibility, title: manifest.title, description: manifest.description, icon: manifest.icon })
       await tx.insert(pluginVersions).values({ hash, packageName: name, version: b.version, code, manifest, checks, changelog: clip(b.changelog, 4000) }).onConflictDoNothing()
     })
@@ -159,7 +161,8 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     for (const r of rows) if (!out[r.packageName]) out[r.packageName] = r
     return out
   }
-  const card = (p, v, reports = 0) => ({ name: p.name, title: p.title, description: p.description, icon: p.icon, visibility: p.visibility, downloads: p.downloads, reports,
+  const card = (p, v, reports = 0, likes = {}) => ({ name: p.name, title: p.title, description: p.description, icon: p.icon, visibility: p.visibility, downloads: p.downloads, reports,
+    likes: likes.n?.[p.name] ?? 0, liked: !!likes.mine?.has(p.name),
     latest: v ? { version: v.version, hash: v.hash, sdk: v.manifest.sdk, says: v.manifest.says, checks: { warnings: v.checks.warnings, passed: v.checks.passed }, changelog: v.changelog, publishedAt: v.createdAt } : null,
     worksWithEverything: !!v && !v.checks.warnings.some((w) => ['data-door', 'internal-api'].includes(w.id)) })
 
@@ -171,7 +174,8 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     if (needle) pkgs = pkgs.filter((p) => p.name.includes(needle) || p.title.toLowerCase().includes(needle) || p.description.toLowerCase().includes(needle))
     const latest = await latestVersions(pkgs.map((p) => p.name))
     const counts = await reportCounts(pkgs.map((p) => p.name))
-    const local = pkgs.filter((p) => latest[p.name] && !p.upstream).map((p) => card(p, latest[p.name], counts[p.name] ?? 0))
+    const lk = await likesFor(pkgs.map((p) => p.name), user)
+    const local = pkgs.filter((p) => latest[p.name] && !p.upstream).map((p) => card(p, latest[p.name], counts[p.name] ?? 0, lk))
     if (!user || !upstream) return local
     // public plugins from the upstream registry, after this server's own (installing copies the exact version here)
     const up = await upJson(`/api/registry/public?q=${encodeURIComponent(q)}`)
@@ -182,8 +186,44 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
   async function publicVersion(hash) {
     const [v] = await db.select().from(pluginVersions).where(eq(pluginVersions.hash, String(hash)))
     const p = v && (await pkgOf(v.packageName))
-    if (!v || p?.visibility !== 'public' || p.upstream) return null
+    if (!v || !['public', 'unlisted'].includes(p?.visibility) || p.upstream) return null
     return { packageName: v.packageName, version: v.version, manifest: v.manifest, checks: v.checks, changelog: v.changelog, pulled: v.pulled, pulledReason: v.pulledReason }
+  }
+  async function likesFor(names, user) {
+    if (!names.length) return { n: {}, mine: new Set() }
+    const rows = await db.select({ name: pluginLikes.packageName, n: sql`count(*)::int` }).from(pluginLikes).where(inArray(pluginLikes.packageName, names)).groupBy(pluginLikes.packageName)
+    const mine = user ? await db.select({ name: pluginLikes.packageName }).from(pluginLikes).where(and(eq(pluginLikes.userId, user.id), inArray(pluginLikes.packageName, names))) : []
+    return { n: Object.fromEntries(rows.map((r) => [r.name, r.n])), mine: new Set(mine.map((r) => r.name)) }
+  }
+  /** Like or unlike an extension you can see. Returns its new count. */
+  async function like(user, name, on) {
+    const p = await pkgOf(String(name ?? ''))
+    if (!canSee(p, user) || p.upstream) throw httpError(404, 'no such extension')
+    if (on) await db.insert(pluginLikes).values({ userId: user.id, packageName: p.name }).onConflictDoNothing()
+    else await db.delete(pluginLikes).where(and(eq(pluginLikes.userId, user.id), eq(pluginLikes.packageName, p.name)))
+    const [{ n }] = await db.select({ n: sql`count(*)::int` }).from(pluginLikes).where(eq(pluginLikes.packageName, p.name))
+    return { liked: !!on, likes: n }
+  }
+  /** The owner edits the listing: title, description, icon, and who can see it. "Only you" while other people have it
+   *  installed becomes unlisted: off the registry, still working for them. */
+  async function details(user, name, b) {
+    const p = await pkgOf(String(name ?? ''))
+    if (!p || p.ownerId !== user.id) throw httpError(404, 'no such extension of yours')
+    if (p.upstream) throw httpError(403, `${p.name} comes from ${p.upstream}: change it there`)
+    const set = { updatedAt: new Date() }
+    if (b.title !== undefined) { const t = clip(b.title, 80).trim(); if (!t) throw httpError(400, 'It needs a name'); set.title = t }
+    if (b.description !== undefined) set.description = clip(b.description, 400).trim()
+    if (b.icon !== undefined) set.icon = /^[a-z0-9_]{1,40}$/.test(b.icon) ? b.icon : 'extension'
+    if (b.visibility !== undefined) {
+      if (b.visibility === 'public') set.visibility = 'public'
+      else {
+        const [{ n }] = await db.select({ n: sql`count(*)::int` }).from(pluginInstalls).where(and(eq(pluginInstalls.packageName, p.name), sql`${pluginInstalls.userId} <> ${user.id}`))
+        set.visibility = n ? 'unlisted' : 'private'
+      }
+    }
+    const [row] = await db.update(pluginPackages).set(set).where(eq(pluginPackages.name, p.name)).returning()
+    if (set.visibility) log(`[registry] ${p.name} is now ${set.visibility}`)
+    return { name: row.name, title: row.title, description: row.description, icon: row.icon, visibility: row.visibility }
   }
   async function reportCounts(names) {
     if (!names.length) return {}
@@ -198,7 +238,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     const versions = await db.select({ hash: pluginVersions.hash, version: pluginVersions.version, manifest: pluginVersions.manifest, checks: pluginVersions.checks, changelog: pluginVersions.changelog, pulled: pluginVersions.pulled, pulledReason: pluginVersions.pulledReason, createdAt: pluginVersions.createdAt })
       .from(pluginVersions).where(eq(pluginVersions.packageName, name)).orderBy(desc(pluginVersions.createdAt))
     const latest = versions.find((v) => !v.pulled) ?? null
-    return { ...card(p, latest, (await reportCounts([name]))[name] ?? 0), versions }
+    return { ...card(p, latest, (await reportCounts([name]))[name] ?? 0, await likesFor([name], user)), versions }
   }
 
   /** A version, if this person may see it: public and not pulled, or their own. */
@@ -239,9 +279,11 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     if (!local && upstream) await mirrorUpstream(uid, name, hash)
     const v = await version({ id: uid }, hash)
     if (!v || v.packageName !== name || v.pulled) throw httpError(404, 'no such version')
+    const [had] = await db.select({ h: pluginInstalls.hash }).from(pluginInstalls).where(and(eq(pluginInstalls.userId, uid), eq(pluginInstalls.packageName, name)))
     await db.insert(pluginInstalls).values({ userId: uid, packageName: name, hash, enabled: true })
       .onConflictDoUpdate({ target: [pluginInstalls.userId, pluginInstalls.packageName], set: { hash, enabled: true } })
-    await db.update(pluginPackages).set({ downloads: sql`${pluginPackages.downloads} + 1` }).where(eq(pluginPackages.name, name))
+    // installs, not updates: an update or a reinstall doesn't count again
+    if (!had) await db.update(pluginPackages).set({ downloads: sql`${pluginPackages.downloads} + 1` }).where(eq(pluginPackages.name, name))
     return { name, hash, version: v.version }
   }
   async function uninstall(uid, name) { await db.delete(pluginInstalls).where(and(eq(pluginInstalls.userId, uid), eq(pluginInstalls.packageName, name))) }
@@ -270,17 +312,19 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     const latest = await latestVersions(rows.map((r) => r.packageName))
     const pkgs = await db.select().from(pluginPackages).where(inArray(pluginPackages.name, rows.map((r) => r.packageName)))
     const pkgBy = Object.fromEntries(pkgs.map((p) => [p.name, p]))
+    const lk = await likesFor(rows.map((r) => r.packageName), { id: uid })
     return rows.map((r) => {
       const v = byHash[r.hash]
       const l = latest[r.packageName]
       return {
         pkg: r.packageName, hash: r.hash, version: v?.version ?? '?', title: pkgBy[r.packageName]?.title ?? r.packageName, icon: pkgBy[r.packageName]?.icon ?? 'extension',
         description: pkgBy[r.packageName]?.description ?? '', mine: pkgBy[r.packageName]?.ownerId === uid, visibility: pkgBy[r.packageName]?.visibility ?? 'private',
+        downloads: pkgBy[r.packageName]?.downloads ?? 0, likes: lk.n[r.packageName] ?? 0, liked: lk.mine.has(r.packageName), upstream: !!pkgBy[r.packageName]?.upstream,
         enabled: r.enabled && !!v && !v.pulled, pulled: !!v?.pulled, pulledReason: v?.pulledReason ?? '', says: v?.manifest?.says ?? {},
         update: l && l.hash !== r.hash ? { version: l.version, hash: l.hash, changelog: l.changelog } : null,
       }
     })
   }
 
-  return { setHandle, publish, list, one, version, publicVersion, report, pull, install, uninstall, setEnabled, disableAll, installed }
+  return { setHandle, publish, list, one, version, publicVersion, report, like, details, pull, install, uninstall, setEnabled, disableAll, installed }
 }

@@ -50,6 +50,13 @@
       "when": 1795507485090,
       "tag": "0006_registry_upstream",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795526649756,
+      "tag": "0007_plugin_likes",
+      "breakpoints": true
     }
   ]
 }

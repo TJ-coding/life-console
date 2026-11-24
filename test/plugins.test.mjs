@@ -197,6 +197,37 @@ test('consent: enable Public plugins, install from the registry, load, update, t
   assert.equal((await bob('GET', '/api/plugins/installed')).body.plugins.length, 0)
 })
 
+test('registry: likes, installs counted once, and the owner edits the listing or takes it out', async () => {
+  const pub = await alice('POST', '/api/registry/publish', { name: 'alice/streaks', code: CODE.replace('Habits', 'Streaks'), visibility: 'public', manifest: { title: 'Streaks', description: 'first words' } })
+  assert.equal(pub.status, 201)
+  // likes: one per person, undone by DELETE
+  assert.equal((await bob('PUT', '/api/registry/plugins/alice/streaks/like', {})).body.likes, 1)
+  assert.equal((await bob('PUT', '/api/registry/plugins/alice/streaks/like', {})).body.likes, 1, 'liking twice counts once')
+  let card = (await bob('GET', '/api/registry/plugins?q=streaks')).body.plugins.find((p) => p.name === 'alice/streaks')
+  assert.equal(card.likes, 1); assert.equal(card.liked, true)
+  assert.equal((await bob('DELETE', '/api/registry/plugins/alice/streaks/like', {})).body.likes, 0)
+  // installs count people, not updates
+  await confirm(bob, `do=install&pkg=alice/streaks&hash=${pub.body.hash}`)
+  const v2 = await alice('POST', '/api/registry/publish', { name: 'alice/streaks', code: CODE.replace('Habits', 'Streaks 2'), visibility: 'public' })
+  await confirm(bob, `do=install&pkg=alice/streaks&hash=${v2.body.hash}`)
+  card = (await bob('GET', '/api/registry/plugins?q=streaks')).body.plugins.find((p) => p.name === 'alice/streaks')
+  assert.equal(card.downloads, 1, 'an update is not a second install')
+  // only the owner edits the listing; a new version keeps the edited details and stays shared
+  assert.equal((await bob('PATCH', '/api/registry/plugins/alice/streaks', { title: 'Mine now' })).status, 404)
+  assert.equal((await alice('PATCH', '/api/registry/plugins/alice/streaks', { title: 'Streak counter', description: 'Better words', icon: 'bolt' })).body.title, 'Streak counter')
+  await alice('POST', '/api/registry/publish', { name: 'alice/streaks', code: CODE.replace('Habits', 'Streaks 3'), visibility: 'private', manifest: { title: 'Streaks', description: 'first words' } })
+  card = (await bob('GET', '/api/registry/plugins?q=streak')).body.plugins.find((p) => p.name === 'alice/streaks')
+  assert.equal(card.title, 'Streak counter', 'publishing kept the edited listing')
+  assert.equal(card.visibility, 'public', '"Use it" on a shared extension does not hide it')
+  // out of the registry: bob has it, so it's unlisted (gone from the list, still loads for him)
+  assert.equal((await alice('PATCH', '/api/registry/plugins/alice/streaks', { visibility: 'private' })).body.visibility, 'unlisted')
+  assert.ok(!(await admin('GET', '/api/registry/plugins?q=streak')).body.plugins.some((p) => p.name === 'alice/streaks'), 'off the listing')
+  assert.equal((await bob('GET', `/api/registry/code/${v2.body.hash}.js`)).status, 200, 'still works for people who installed it')
+  await confirm(bob, 'do=remove&pkg=alice/streaks')
+  assert.equal((await alice('PATCH', '/api/registry/plugins/alice/streaks', { visibility: 'private' })).body.visibility, 'private', 'nobody else has it: private')
+  assert.equal((await alice('PATCH', '/api/registry/plugins/alice/streaks', { visibility: 'public' })).body.visibility, 'public', 'and back (Undo)')
+})
+
 test('consent: once Public plugins are on, token, password and delete need the trusted page', async () => {
   const t = await bob('POST', '/api/auth/tokens', { name: 'Mac app' })
   assert.equal(t.status, 403)

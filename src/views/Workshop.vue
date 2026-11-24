@@ -71,8 +71,9 @@ onMounted(async () => {
   const pkg = route.query.edit
   if (typeof pkg !== 'string' || !pkg) return
   try {
-    const it = (await api('GET', '/api/plugins/installed')).plugins.find((p) => p.pkg === pkg)
-    if (!it) return
+    // installed, or only published (then its newest version)
+    let it = (await api('GET', '/api/plugins/installed')).plugins.find((p) => p.pkg === pkg)
+    if (!it) { const r = await api('GET', `/api/registry/plugins/${pkg}`); if (!r.latest) return; it = { pkg, title: r.title, description: r.description, version: r.latest.version, hash: r.latest.hash } }
     const r = await fetch(`/api/registry/code/${it.hash}.js`, { credentials: 'same-origin' })
     if (!r.ok) throw new Error(`couldn't load it (${r.status})`)
     slugQuiet = true

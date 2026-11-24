@@ -272,7 +272,11 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     if (sharedId && req.method === 'GET' && !sharedId[2]) return send(res, 200, await fed.readShared(user, req, sharedId[1]))
     if (sharedId && req.method === 'POST' && sharedId[2]) return send(res, 200, await fed.editShared(user, req, sharedId[1], (await body(req)).patch ?? {}))
     const regOne = url.pathname.match(/^\/api\/registry\/plugins\/([a-z0-9-]+\/[a-z0-9-]+)$/)?.[1]
+    const regLike = url.pathname.match(/^\/api\/registry\/plugins\/([a-z0-9-]+\/[a-z0-9-]+)\/like$/)?.[1]
+    if (regLike && (req.method === 'PUT' || req.method === 'DELETE')) return send(res, 200, await registry.like(user, regLike, req.method === 'PUT'))
     if (regOne && req.method === 'GET') { const p = await registry.one(user, regOne); return p ? send(res, 200, p) : send(res, 404, { error: 'no such plugin' }) }
+    // the owner edits the listing (title, description, icon, who can see it); anyone who can see it likes it
+    if (regOne && req.method === 'PATCH') return send(res, 200, await registry.details(user, regOne, await body(req)))
 
     switch (route) {
       /* ── the plugin platform (docs/PLATFORM.md) ── */
