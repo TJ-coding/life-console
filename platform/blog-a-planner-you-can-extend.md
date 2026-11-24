@@ -30,6 +30,10 @@ We were inspired by tools that took this route and stayed loved: editors whose p
 
 **3. Plugins that add up.** The real risk of an open platform isn't one bad plugin. It's a thousand plugins that can't see each other: a habit tracker that doesn't know about your runs, a research tool whose deadlines never reach your week. So every plugin shares one small vocabulary: types, a few traits every view understands, a short list of ways records relate. A run logged by one plugin counts towards a habit in another, without either knowing the other exists.
 
+## And your data stays yours
+
+Opening up the app goes together with opening up the data. Later, your planner will live in a **Solid pod**, an open standard for personal data stores, which you can keep next to Life Console, on your own server or even on your own computer, and move whenever you like. And Life Console will talk to other servers over **ActivityPub**, the open protocol behind Mastodon, so you can share a plan with a supervisor or a co-founder on another Life Console server the way email works between providers.
+
 ## What happens next
 
 We're starting with foundations that help even without plugins: moving our own screens onto the same SDK anyone will use, putting important account actions behind a trusted page, and giving all data one door so it stays valid and can be undone. Then come the first plugins we ship ourselves, and the registry where anyone can publish.

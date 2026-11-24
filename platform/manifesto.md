@@ -1,10 +1,10 @@
 ---
 path: /manifesto
 title: The Life Console manifesto: a planner you can make your own
-description: Why Life Console is becoming an open, extensible planner: a small, excellent core, plugins that can do anything with your consent, and a shared language so they add up.
+description: Why Life Console is becoming an open, extensible planner: a small core, plugins with your consent, a shared language, your data in a Solid pod and sharing over ActivityPub.
 card: The manifesto: a small core, plugins that add up
 updated: 2026-11-24
-status: Draft. This is where Life Console is going. The plugin platform described here isn't built yet.
+status: Draft. This is where Life Console is going. The plugin platform, Solid pods and ActivityPub sharing described here aren't built yet.
 draft: true
 ---
 # A planner you can make your own
@@ -33,18 +33,22 @@ A thousand plugins that can't see each other's data would be a thousand small ap
 
 If a type already exists, use it. If it's nearly right, extend it. If two plugins mean the same thing, link them. This is culture, not a rule we enforce: our docs, our examples and the AI that helps you write plugins all follow it, so the harmonious way is the easy way.
 
-## 6. Your data is yours
+## 6. Your data is yours, and it can move
 
-Plugins read and write through one door, so your data stays valid, syncs across devices and can be undone. Life Console is open source under the AGPL. You can run it on your own server, export everything, and move between the hosted service and your own machine.
+Your planner will live in a **Solid pod**: a standard, open store of your data that you can keep next to Life Console, on your own server, or with any Solid provider, and move between them. Plugins read and write through one door, so your data stays valid, syncs across devices and can be undone. Life Console is open source under the AGPL, and you can run all of it yourself, even on your own computer.
 
-## 7. Everyone can extend it, including you with AI
+## 7. Open protocols, not walled gardens
+
+Life Console will talk to the world through open standards: **Solid** for where your data lives, **ActivityPub**, the protocol behind Mastodon, for talking to other servers. Share a plan with someone on another Life Console server, self-hosted or not, the way email works between providers. Nothing leaves your server unless you share it.
+
+## 8. Everyone can extend it, including you with AI
 
 You shouldn't need to be a developer to make Life Console fit your life. Describe what you need, and AI drafts a plugin you can try safely on sample data before it ever touches your planner. Keep it private, or share it with others.
 
-## 8. Calm by default
+## 9. Calm by default
 
 A console you look at all day must stay quiet. Plugins start small: no new buttons for their own sake, details on demand. Restraint is a feature.
 
-## 9. Built in the open
+## 10. Built in the open
 
 Plans, decisions and drafts are published as they happen: the [roadmap](/roadmap), the [white paper](/whitepaper) and the [plugin docs](/plugins). They'll change as we learn. Tell us where they're wrong on [GitHub](https://github.com/TJ-coding/life-console) or [Discord](https://discord.gg/bWZS5QvPYd).

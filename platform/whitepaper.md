@@ -1,15 +1,17 @@
 ---
 path: /whitepaper
 title: Life Console plugin platform: white paper (draft)
-description: The design of Life Console's plugin platform: a tiny kernel, Core and Public plugins, consent instead of permission mazes, one data door, a registry, and a shared vocabulary so plugins add up.
-card: The white paper: how the plugin platform works
+description: The design of Life Console's plugin platform and open data: a tiny kernel, plugins with consent, one data door, a registry, a shared vocabulary, Solid pods and ActivityPub sharing.
+card: The white paper: plugins, Solid pods and ActivityPub
 updated: 2026-11-24
 status: Draft for discussion, version 0.1. Describes a design, not shipped software.
 draft: true
 ---
 # The Life Console plugin platform
 
-**White paper, draft 0.1.** This paper describes how Life Console becomes extensible without becoming fragmented or unsafe. It's written for people who want to build plugins, people deciding whether to trust them, and anyone curious about the design. The short version is the [manifesto](/manifesto); the order of work is the [roadmap](/roadmap).
+**White paper, draft 0.1.** This paper describes how Life Console becomes extensible without becoming fragmented or unsafe (part 1), and how your data stays yours and reaches other servers through open standards, Solid and ActivityPub (part 2). It's written for people who want to build plugins, people deciding whether to trust them, and anyone curious about the design. The short version is the [manifesto](/manifesto); the order of work is the [roadmap](/roadmap).
+
+## Part 1: plugins
 
 ## 1. Goals
 
@@ -141,10 +143,73 @@ Public plugins don't run code on Life Console's servers. Reminders are **data**:
 
 Using Life Console and changing it are separate places. In the app, only installed, consented plugin versions run, and a failing plugin shows as unavailable without breaking the rest. In the **workshop**, drafts run against sample data on a separate address, with a live preview, until you publish them.
 
-## 12. Open questions
+## Part 2: your data, and other servers
+
+Part 1 is about extending Life Console. Part 2 is about where your data lives and how Life Console talks to the rest of the world. It comes later in the [roadmap](/roadmap), but it shapes decisions we make now, such as how records are named.
+
+## 12. Two open protocols, one on each side
+
+Life Console sits in the middle and speaks one open standard in each direction:
+
+```
+your pod  <-- Solid -->  Life Console  <-- ActivityPub -->  other servers
+```
+
+| Direction | Standard | Used for |
+|---|---|---|
+| Life Console ↔ your data | **[Solid](https://solidproject.org/)** | Storing and reading your planner, in a "pod" you own |
+| Life Console ↔ other services | **[ActivityPub](https://www.w3.org/TR/activitypub/)** (the W3C standard behind Mastodon and the fediverse) | Sharing, sending, receiving |
+
+Both are W3C work and both speak JSON-LD, the same format the [vocabulary](/plugins/vocabulary) exports to, so a record means the same thing in your pod, in Life Console and on another server.
+
+**Other servers never touch your pod.** Life Console is the only thing that reads and writes it, and it decides who may see a shared record. That keeps one outward-facing protocol to secure, and keeps the pod's location your private business.
+
+## 13. Your data in a pod (Solid)
+
+Everything that should move with you lives in your **Solid pod**: your planner (tasks, time blocks, deadlines, plans, settings), plugin records and links, the plugins you've installed, and who you've shared what with.
+
+What stays with the server you use, because it's about running the service or about security: your login, sessions and access tokens, which devices get notifications, and the vault of connection keys. A pod can be opened by any Solid app you approve, so secrets don't belong there.
+
+**Where the pod runs:**
+
+- **By default, next to Life Console:** a Solid server runs alongside it, on the hosted service and in the self-hosted setup. Nothing to set up.
+- **Your own Solid server, or a Solid provider:** point Life Console at it once.
+
+Because Life Console only talks to the pod through the Solid standard, **the storage is swappable**: moving is a copy of your pod, and Life Console keeps working. Your phone, the Mac app and offline use don't change; they still talk to Life Console, which talks to the pod.
+
+## 14. Sharing across servers (ActivityPub)
+
+Example: you use life-console.dev, your supervisor runs Life Console at their university, and you want them to see your research plan.
+
+1. You share the plan with `@supervisor@lc.example-uni.ac.uk`, view only or can edit.
+2. Life Console sends an ActivityPub message to their inbox with a link to the plan. It appears in their inbox, and in their console once they accept.
+3. Their server fetches the latest version through that link, with a signed request. Your Life Console checks the share, reads the plan from your pod and answers.
+4. If they can edit, their changes come back as messages; your Life Console checks their rights and writes the change to your pod.
+5. **Revoking works:** stop sharing, and your server stops answering.
+
+**Working on one project together:** the project lives in the pod of whoever created it. Each person's own tasks and time blocks for it stay in **their own** pod, linked to the project, so you see progress without seeing anyone's whole calendar. Two people editing the same thing are merged field by field, the way Life Console already merges two devices.
+
+**Other fediverse servers**, such as Mastodon, don't fetch live; they receive a copy, so for them, deleting is a request rather than a guarantee. The share screen says so.
+
+**Kept simple on purpose:** nothing leaves your server unless you share it with a named person; incoming shares wait in an inbox until you accept; access is view or edit; no public timeline or followers to begin with.
+
+## 15. Moving anywhere, even to your own computer
+
+You should be able to move your whole pod to your own machine and keep working as before, collaborators included:
+
+- **Your address doesn't change.** `@you@life-console.dev` keeps pointing to wherever you're now served from, and shared links keep working. With your own domain, you don't depend on us at all.
+- **A computer at home can still receive.** Your local Life Console keeps an outgoing connection to a small mailbox at life-console.dev, so no router setup is needed; messages wait there while your machine is off. Or use your own tunnel.
+- **Life Console runs next to the pod:** the self-hosted setup today, and perhaps a desktop build later.
+- **Moving is one action** in Settings: copy the pod, check it, switch over. Your login and notification devices are set up fresh on the new server, and connection keys re-entered.
+
+Not now: Bluesky's AT Protocol (its data is public by design, and a planner is private) and portable identifiers that survive any server disappearing. Both are worth revisiting later.
+
+## 16. Open questions
 
 - Should self-hosted servers be able to mirror the registry, for servers that can't reach it?
 - How many plugins must use a community type before it joins the common vocabulary?
 - Should "areas of life" (a PhD, a startup, health) become a first-class part of the vocabulary?
+- Should the first cross-server feature be sharing a plan with one person, or projects several people edit?
+- Should life-console.dev keep forwarding addresses for everyone who moves away, for as long as the service exists?
 
 Feedback welcome on [GitHub](https://github.com/TJ-coding/life-console) or [Discord](https://discord.gg/bWZS5QvPYd).
