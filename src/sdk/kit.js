@@ -15,7 +15,7 @@ button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padd
 button:hover { background: var(--surface-2); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-input, select, textarea { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font: inherit; }
+input, select, textarea { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 2px; padding: 6px 8px; font: inherit; }
 table { border-collapse: collapse; width: 100%; }
 th { text-align: left; font: 600 10px/1.4 'JetBrains Mono', monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 4px 8px; border-bottom: 1px solid var(--border); }
 td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
@@ -25,7 +25,7 @@ progress { accent-color: var(--accent); }
 
 /** lc-* classes: the console's building blocks. Safe to add to the page itself too (prefixed, so they collide with nothing). */
 export const KIT_CLASSES = `
-.lc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.lc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; }
 .lc-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; display: flex; flex-direction: column; }
 .lc-panel-h { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); min-height: 40px; font: 600 13px/18px 'JetBrains Mono', monospace; letter-spacing: .02em; text-transform: uppercase; }
 .lc-panel-b { padding: 12px; }
@@ -41,14 +41,14 @@ export const KIT_CLASSES = `
 .lc-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #0e1116); font-weight: 700; }
 .lc-btn.sm { height: 22px; padding: 0 6px; font-size: 11px; }
 .lc-btn.danger:hover { color: var(--danger); border-color: var(--danger); }
-.lc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; font: 500 11px/18px 'JetBrains Mono', monospace; color: var(--muted); }
+.lc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--border); border-radius: 2px; font: 500 11px/18px 'JetBrains Mono', monospace; color: var(--muted); }
 .lc-chip.ok { color: var(--accent); border-color: var(--accent); } .lc-chip.warn { color: var(--warn); border-color: var(--warn); } .lc-chip.danger { color: var(--danger); border-color: var(--danger); }
 .lc-list { list-style: none; margin: 0; padding: 0; }
 .lc-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
 .lc-item:last-child { border-bottom: 0; }
 .lc-bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .lc-bar > i { display: block; height: 100%; background: var(--accent); }
-.lc-empty { padding: 12px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); }
+.lc-empty { padding: 12px; border: 1px dashed var(--border); border-radius: 4px; color: var(--muted); }
 .lc-icon { font-family: 'Material Symbols Outlined'; font-weight: 400; font-style: normal; font-size: 18px; line-height: 1; display: inline-block; white-space: nowrap; font-feature-settings: 'liga'; user-select: none; }
 .lc-icon.sm { font-size: 15px; }
 `

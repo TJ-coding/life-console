@@ -36,6 +36,6 @@ onErrorCaptured((e) => { console.warn(`[plugin] ${props.module}`, e); failed.val
 </template>
 <style scoped>
 .plugin-off { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
-.plugin-part.fresh { border-radius: 8px; animation: plugin-fresh 1.2s ease-in-out 3; }
+.plugin-part.fresh { border-radius: 4px; animation: plugin-fresh 1.2s ease-in-out 3; }
 @keyframes plugin-fresh { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 3px var(--accent); } }
 </style>

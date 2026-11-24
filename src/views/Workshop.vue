@@ -141,15 +141,14 @@ async function shareIt() {
 
 <template>
   <div class="ws">
-    <div class="ws-bar">
-      <span class="icon sm" aria-hidden="true">construction</span><b>Workshop</b>
-      <span class="muted small hide-phone">editing mode: drafts run on demo data in a sandbox, never on your planner</span>
+    <div class="ws-top row wrap">
+      <ol class="steps mono" aria-label="Progress">
+        <li v-for="st in steps" :key="st.n" :class="{ done: st.done }"><span aria-hidden="true">{{ st.done ? '✓' : st.n }}</span> {{ st.label }}<span v-if="st.done" class="sr"> (done)</span></li>
+      </ol>
       <span class="spacer"></span>
+      <span class="tiny muted hide-phone">Drafts run on demo data, never on your planner</span>
       <router-link to="/m/extensions" class="btn">Done</router-link>
     </div>
-    <ol class="steps" aria-label="Progress">
-      <li v-for="st in steps" :key="st.n" :class="{ done: st.done }"><span class="n mono" aria-hidden="true">{{ st.done ? '✓' : st.n }}</span>{{ st.label }}<span v-if="st.done" class="sr">(done)</span></li>
-    </ol>
     <p v-if="editing" class="small editing"><span class="icon sm" aria-hidden="true">edit</span>Editing <b>{{ editing.title }}</b> {{ editing.version }}. Saving makes its next version and updates yours.</p>
     <div class="ws-grid">
       <div class="col stack">
@@ -183,7 +182,7 @@ async function shareIt() {
       <div class="col stack">
         <section class="panel">
           <div class="panel-h"><span class="mono muted">3</span><h2>Try it on demo data</h2><span class="spacer"></span>
-            <span v-if="result" class="chip" :class="result.ok ? 'ok' : 'bad'" role="status">{{ result.ok ? 'Works' : 'Has problems' }}</span>
+            <span v-if="result" class="mono small" :class="result.ok ? 'ok' : 'bad'" role="status">{{ result.ok ? 'Works' : 'Has problems' }}</span>
           </div>
           <div class="panel-b col">
             <iframe ref="frame" class="preview" sandbox="allow-scripts" src="/preview.html" title="Extension preview" :style="{ height: height + 'px' }"></iframe>
@@ -219,10 +218,8 @@ async function shareIt() {
 </template>
 
 <style scoped>
-.ws { padding: 0 16px 16px; }
-.ws-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin: 0 -16px 12px; background: var(--warn); color: #111; }
-.ws-bar .muted { color: #333; }
-.ws-bar .btn { color: #111; border-color: #111; background: transparent; }
+.ws { padding: 16px; }
+.ws-top { margin-bottom: 12px; gap: 12px; }
 .ws-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 @media (max-width: 900px) { .ws-grid { grid-template-columns: 1fr; } }
 textarea, input, select { width: 100%; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px; font: inherit; }
@@ -232,14 +229,12 @@ textarea, input, select { width: 100%; background: var(--surface-2); color: var(
 .share { gap: 8px; margin-top: 8px; }
 .big { padding: 10px 18px; font-size: 14px; }
 .code { font-size: 12px; line-height: 1.45; tab-size: 2; white-space: pre; }
-.preview { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.preview { width: 100%; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
 .chip.ok { color: var(--accent); } .chip.bad, .bad { color: var(--danger); } .warn { color: var(--warn); }
 ul { margin: 0; padding-left: 18px; }
-.steps { display: flex; gap: 6px; list-style: none; margin: 0 0 12px; padding: 0; flex-wrap: wrap; }
-.steps li { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--muted); }
-.steps li.done { color: var(--text); border-color: var(--accent); }
-.steps .n { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--surface-2); font-size: 11px; }
-.steps li.done .n { background: var(--accent); color: var(--on-accent, #000); }
+.steps { display: flex; gap: 0; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.steps li + li::before { content: '→'; margin: 0 10px; color: var(--border); }
+.steps li.done { color: var(--accent); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .stack { gap: 12px; }
 .panel-h .mono { margin-right: 2px; }
@@ -248,5 +243,5 @@ ul { margin: 0; padding-left: 18px; }
 .facts dt { color: var(--muted); } .facts dd { margin: 0; }
 label.col { gap: 4px; }
 @media (max-width: 640px) { .hide-phone { display: none; } }
-.fix { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--warn); border-radius: 8px; }
+.fix { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--warn); border-radius: 4px; }
 </style>

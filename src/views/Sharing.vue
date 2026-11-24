@@ -59,7 +59,7 @@ const writeNow = async () => { await api('POST', '/api/pod/mirror'); toast('Writ
             <button class="btn" :disabled="!sharePlan || !shareTo.trim()" @click="share">Share…</button>
           </div>
           <div v-for="s in me.shares" :key="s.id" class="row">
-            <span class="grow"><b>{{ planTitle(s.recordId) }}</b> <span class="muted small">with</span> <span class="mono small">{{ s.actor }}</span> <span class="chip">{{ s.access }}</span></span>
+            <span class="grow"><b>{{ planTitle(s.recordId) }}</b> <span class="muted small">with</span> <span class="mono small">{{ s.actor }}</span> <span class="tiny upper muted">· {{ s.access }}</span></span>
             <a class="btn" :href="trustUrl('unshare', { id: s.id })">Stop sharing</a>
           </div>
         </template>
@@ -71,13 +71,13 @@ const writeNow = async () => { await api('POST', '/api/pod/mirror'); toast('Writ
       <div class="panel-b col">
         <p v-if="!inbox.length" class="muted small">Nothing yet. People on any Life Console server can share plans with your address.</p>
         <div v-for="i in inbox" :key="i.id" class="row">
-          <span class="grow"><b>{{ i.name || 'A plan' }}</b> <span class="muted small">from</span> <span class="mono small">{{ i.actor }}</span> <span class="chip">{{ i.access }}</span></span>
+          <span class="grow"><b>{{ i.name || 'A plan' }}</b> <span class="muted small">from</span> <span class="mono small">{{ i.actor }}</span> <span class="tiny upper muted">· {{ i.access }}</span></span>
           <template v-if="i.status === 'new'"><button class="btn primary" @click="setStatus(i, 'accepted')">Accept</button><button class="btn" @click="setStatus(i, 'declined')">Decline</button></template>
           <button v-else-if="i.status === 'accepted'" class="btn" @click="view(i)">Open</button>
           <span v-else class="small muted">{{ i.status === 'revoked' ? 'no longer shared' : i.status }}</span>
         </div>
         <div v-if="open" class="shared col">
-          <div class="row"><b class="grow">{{ open.data.plan.title }}</b><span class="chip">{{ open.data.plan.health }}</span><button class="btn" @click="open = null">Close</button></div>
+          <div class="row"><b class="grow">{{ open.data.plan.title }}</b><span class="tiny upper muted">{{ open.data.plan.health }}</span><button class="btn" @click="open = null">Close</button></div>
           <p v-if="open.data.plan.vision" class="small">{{ open.data.plan.vision }}</p>
           <div v-for="g in open.data.plan.psgs" :key="g.no" class="col">
             <div class="mono small">{{ g.no }} {{ g.title }}</div>
@@ -111,9 +111,9 @@ const writeNow = async () => { await api('POST', '/api/pod/mirror'); toast('Writ
 
 <style scoped>
 .sh { gap: 12px; padding: 16px; max-width: 980px; }
-.shared { border: 1px solid var(--border); border-radius: 8px; padding: 10px; gap: 6px; margin-top: 6px; }
+.shared { border: 1px solid var(--border); border-radius: 4px; padding: 10px; gap: 6px; margin-top: 6px; }
 .pct { width: 64px; }
-input, select { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font: inherit; }
+input, select { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 2px; padding: 6px 8px; font: inherit; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .warn { color: var(--warn); } .danger { color: var(--danger); }
 </style>
