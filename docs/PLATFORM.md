@@ -49,7 +49,7 @@ Each phase ships on its own and needs the owner's go-ahead. Order agreed: phases
 | 6 | Workshop + AI authoring (demo data on a separate origin) | Describe-to-plugin without touching the real planner | Built (first version) |
 | 7 | Registry social layer: public plugin pages, downloads, reports | The growth loop | Partly: downloads, reports, pulling and the Works-with-everything mark are built; public plugin pages on life-console.dev are not |
 | 8 | Solid storage, ActivityPub sharing, move anywhere (whitepaper part 2) | Two servers share, edit, revoke and move | Built (first version) |
-| later | Plugin compute (GitHub Actions-style); Secure tier; in-app AI drafting; Core screens on `lc.data`; Solid-OIDC sign-in to pods; one registry shared by every server | | |
+| later | Plugin compute (GitHub Actions-style); Secure tier; in-app AI drafting; Core screens on `lc.data`; the pod as the source of truth (today Postgres keeps the working copy and the pod is written after it); a desktop build | | |
 
 ## 3b. Where the code is (first version, branch feature/plugins-manifesto)
 

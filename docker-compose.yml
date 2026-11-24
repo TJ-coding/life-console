@@ -60,6 +60,7 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
       # plugins (docs/PLATFORM.md): the vault key for saved connections, and OAuth apps for "Connect Strava" etc.
       VAULT_KEY: ${VAULT_KEY:-}
+      REGISTRY_UPSTREAM: ${REGISTRY_UPSTREAM:-}
       OAUTH_STRAVA_CLIENT_ID: ${OAUTH_STRAVA_CLIENT_ID:-}
       OAUTH_STRAVA_CLIENT_SECRET: ${OAUTH_STRAVA_CLIENT_SECRET:-}
       OAUTH_GITHUB_CLIENT_ID: ${OAUTH_GITHUB_CLIENT_ID:-}
