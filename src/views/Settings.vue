@@ -12,6 +12,7 @@ import { analyticsAvailable } from '../analytics'
 import { serverUpdate, loadUpdate, checkUpdate, applyUpdate, setAutoUpdate } from '../updates'
 import { signupsAdmin, loadSignups, setSignups } from '../signups'
 import { useRoute } from 'vue-router'
+import PluginSlot from '../components/PluginSlot.vue'
 
 /* ── account ── */
 const acctName = ref(auth.user?.name ?? '')
@@ -168,6 +169,14 @@ function toggleBoDay(b, i) {
             <span class="icon sm muted">{{ m.icon }}</span><span>{{ m.label }}</span><span v-if="m.soon" class="mono tiny muted">soon</span>
           </label>
         </template>
+      </div>
+    </section>
+    <section v-if="auth.user" id="plugins" class="panel">
+      <div class="panel-h"><span class="icon sm">extension</span><h2>Plugins</h2><span class="spacer"></span><span class="tiny muted">extend the console</span></div>
+      <div class="panel-b col">
+        <p class="small muted">Add screens, records and integrations made by others or by you. Installing and saving keys happen on the trusted page.</p>
+        <div class="row"><router-link class="btn" to="/m/plugins"><span class="icon sm">extension</span>Plugins</router-link><router-link class="btn" to="/m/plugins/workshop"><span class="icon sm">construction</span>Workshop</router-link></div>
+        <PluginSlot name="settings.section" />
       </div>
     </section>
     <section v-if="auth.user" class="panel">

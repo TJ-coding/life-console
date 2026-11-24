@@ -94,7 +94,7 @@ ${says.replaces?.length ? `<dt>Replaces</dt><dd class="warn">${esc(says.replaces
 <p class="muted">What it says it does is the author's statement, not a guarantee.</p>
 ${warnings.length ? `<p><b>Automated checks found:</b></p><ul>${warnings.map((w) => `<li>${esc(w.msg)}</li>`).join('')}</ul>` : '<p class="muted">Automated checks found nothing to flag.</p>'}
 ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : ''}`
-      warning = 'It will be able to see and change everything in your planner and send it to the sites above.'
+      warning = 'It will be able to see and change everything in your planner and send it to the sites it talks to (listed below).'
     } else if (kind === 'remove' || kind === 'toggle') {
       action.pkg = String(q.get('pkg') ?? '')
       if (kind === 'toggle') action.on = q.get('on') === '1'
@@ -208,7 +208,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     try {
       const r = await run(who, row.action, form, req)
       const extra = r.token ? `<label>Token</label><input type="text" readonly value="${esc(r.token)}"><div class="row"><a class="btn" href="lifeconsole-now://connect?server=${encodeURIComponent(`${req.headers['x-forwarded-proto'] ?? 'http'}://${req.headers.host}`)}&token=${encodeURIComponent(r.token)}">Open in the Mac app</a></div>` : ''
-      const next = r.deleted ? '/' : r.forget ? `${appPath}#/settings?forget=${encodeURIComponent(r.forget)}` : appPath
+      const next = r.deleted ? '/' : r.forget ? `${appPath}#/m/plugins?forget=${encodeURIComponent(r.forget)}` : appPath
       const headers = r.deleted ? { 'Set-Cookie': auth.clearCookie(secureFor(req)) } : {}
       return { ...page('Done', `<h1>Done</h1><p>${esc(r.msg)}</p>${extra}<div class="row"><a class="btn" href="${next}">Back to Life Console</a></div>`), headers }
     } catch (e) {

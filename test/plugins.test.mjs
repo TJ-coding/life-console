@@ -117,6 +117,7 @@ test('registry: a handle, then publish under it; versions are fixed; others see 
   assert.equal((await bob('GET', '/api/registry/plugins')).body.plugins.length, 0, 'private: bob does not see it')
   assert.equal((await bob('GET', `/api/registry/code/${published.hash}.js`)).status, 404)
   assert.match((await alice('GET', `/api/registry/code/${published.hash}.js`)).text, /export default/, 'the owner can load it')
+  assert.equal((await alice('GET', `/api/registry/code/${published.hash}.js`, undefined, { 'Service-Worker': 'script' })).status, 403, 'never registrable as a service worker')
   const pub = await alice('POST', '/api/registry/publish', { name: 'alice/habits', version: '1.1.0', code: CODE.replace('Habits', 'Habits 1.1'), manifest: { title: 'Habits' }, visibility: 'public', changelog: 'Streaks' })
   assert.equal(pub.status, 201)
   const list = (await bob('GET', '/api/registry/plugins')).body.plugins

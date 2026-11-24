@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plugin preview</title>
+<style>
+:root { --bg:#0e1116; --surface:#161b22; --surface-2:#1c232c; --border:#2a323d; --text:#e6edf3; --muted:#8b96a3; --accent:#3fb68b; --warn:#d29922; --danger:#e5534b; color-scheme: dark; }
+:root[data-theme="light"] { --bg:#f7f7f5; --surface:#fff; --surface-2:#f1f2f0; --border:#d9dde2; --text:#1a1f24; --muted:#5f6b77; --accent:#187a56; color-scheme: light; }
+body { margin: 0; padding: 12px; background: var(--bg); color: var(--text); font: 13px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+h3 { font: 600 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+.part { border: 1px dashed var(--border); border-radius: 8px; padding: 8px; }
+.err { color: var(--danger); white-space: pre-wrap; font: 12px ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+<div id="out"><p style="color:var(--muted)">Waiting for a draft…</p></div>
+<script type="module" src="/src/preview/main.js"></script>
+</body>
+</html>

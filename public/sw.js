@@ -19,6 +19,9 @@ self.addEventListener('fetch', (e) => {
   const req = e.request
   const url = new URL(req.url)
   if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return
+  // the trusted page and the workshop preview always come straight from the network: never through this worker
+  // (it would hide the browser's navigation signals the trusted page checks, and must never cache it as the app)
+  if (url.pathname === '/trust' || url.pathname === '/preview.html') return
   if (req.mode === 'navigate') {
     // network first so new deploys show up; fall back to the cached shell offline
     e.respondWith(fetch(req).then((res) => {

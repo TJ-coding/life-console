@@ -407,6 +407,8 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     // a plugin version's code, for the console to import: public versions for anyone, private ones for their owner
     const codeHash = req.method === 'GET' && url.pathname.match(/^\/api\/registry\/code\/([0-9a-f]{64})\.js$/)?.[1]
     if (codeHash) {
+      // never as a service worker: a plugin could otherwise keep running after it's removed
+      if (req.headers['service-worker'] === 'script' || req.headers['sec-fetch-dest'] === 'serviceworker') return send(res, 403, 'not a service worker')
       const who = await auth.identify(req)
       const v = await registry.version(who?.user ?? null, codeHash)
       if (!v) return send(res, 404, 'not found')
@@ -574,6 +576,14 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
         : rel.startsWith('/media/') ? 'public, max-age=86400' : 'no-cache'
       const headers = { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': cache, 'Accept-Ranges': 'bytes', ...(landingPage ? LANDING_HEADERS : SECURITY_HEADERS), ...extra }
       if (rel === '/sw.js') headers['Service-Worker-Allowed'] = '/'
+      // the workshop's plugin preview (src/preview/main.js): framed only by the console, in a sandbox with a nameless
+      // origin, so its module scripts are fetched with CORS (assets allow it) and it may not reach the network at all
+      if (rel === '/preview.html') {
+        const self = `${req.headers['x-forwarded-proto'] === 'https' || secureFor(req) ? 'https' : 'http'}://${req.headers.host}`
+        delete headers['X-Frame-Options']
+        headers['Content-Security-Policy'] = `default-src 'none'; script-src ${self} blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src ${self}; connect-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`
+      }
+      if (rel.startsWith('/assets/')) headers['Access-Control-Allow-Origin'] = '*'
       if (vary) headers.Vary = 'Cookie'
       if (landingPage) headers['X-LC-Page'] = 'landing' // the service worker never caches it as the app shell
       else if (rel.endsWith('.html') && rel !== '/index.html') headers['X-LC-Page'] = 'page' // /privacy, /terms, /docs/…: not the app shell either
