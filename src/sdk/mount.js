@@ -4,6 +4,7 @@
 // Errors stay inside the part's box: the console keeps working.
 import { h, render as vueRender } from 'vue'
 import { makeLc } from './lc.js'
+import { KIT, KIT_CLASSES } from './kit.js'
 
 const isVueComponent = (p) => p && typeof p === 'object' && !p.mount && (p.setup || p.render || p.template || p.__name || p.name || p.components)
 
@@ -19,8 +20,11 @@ export function mountPart(el, part, { pluginId, props = {}, publicPart = false, 
     let target = el
     if (publicPart && part.shadow !== false) {
       const root = el.shadowRoot ?? el.attachShadow({ mode: 'open' })
-      root.innerHTML = '<style>:host{display:block;color:var(--text);font:inherit}</style><div></div>'
+      // the look kit: plain HTML looks native and the lc-* classes work (src/sdk/kit.js)
+      root.innerHTML = `<style>${KIT}</style><div></div>`
       target = root.lastElementChild
+    } else if (publicPart && !document.getElementById('lc-kit')) {
+      const st = document.createElement('style'); st.id = 'lc-kit'; st.textContent = KIT_CLASSES; document.head.appendChild(st)
     }
     const cleanup = part.mount(target, makeLc(pluginId), props)
     return () => { try { if (typeof cleanup === 'function') cleanup() } catch { /* ignore */ } el.shadowRoot ? (el.shadowRoot.innerHTML = '') : (el.innerHTML = '') }

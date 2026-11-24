@@ -637,7 +637,7 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
       if (rel === '/preview.html') {
         const self = `${req.headers['x-forwarded-proto'] === 'https' || secureFor(req) ? 'https' : 'http'}://${req.headers.host}`
         delete headers['X-Frame-Options']
-        headers['Content-Security-Policy'] = `default-src 'none'; script-src ${self} blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src ${self}; connect-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`
+        headers['Content-Security-Policy'] = `default-src 'none'; script-src ${self} blob:; style-src 'unsafe-inline' https://fonts.googleapis.com; img-src data: blob:; font-src ${self} https://fonts.gstatic.com; connect-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`
       }
       if (rel.startsWith('/assets/')) headers['Access-Control-Allow-Origin'] = '*'
       if (vary) headers.Vary = 'Cookie'

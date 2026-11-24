@@ -2,6 +2,7 @@
 // works and harmonises, and nothing about the person's real data. Pure JS. Keep it in step with platform/plugins-sdk.md,
 // platform/plugins-vocabulary.md and platform/plugins-the-life-console-way.md.
 import { CORE_TYPES, COMMON_TYPES, TRAITS, LINKS, CORE_TAGS, CORE_EVENTS } from './vocabulary.js'
+import { KIT_GUIDE } from './kit.js'
 
 export const STARTER = `// A Life Console extension: one file, default export = its manifest.
 export default {
@@ -18,8 +19,11 @@ export default {
       mount(el, lc, { date }) {
         const draw = () => {
           const n = lc.data.list('water.Glass', { from: date, to: date }).length
-          el.innerHTML = \`<div style="display:flex;gap:8px;align-items:center;padding:8px 12px;border:1px solid var(--border);border-radius:8px">
-            <b>Water</b><span>\${n} / 8 glasses</span><button>+1</button></div>\`
+          el.innerHTML = \`<div class="lc-card lc-row">
+            <span class="lc-icon" aria-hidden="true">water_drop</span>
+            <div class="lc-grow"><div class="lc-label">Water</div><span class="lc-big">\${n}</span> <span class="lc-muted">/ 8 glasses</span></div>
+            <button class="lc-btn" aria-label="Add a glass of water">+1</button>
+          </div>\`
           el.querySelector('button').onclick = () => { lc.data.create('water.Glass', { title: 'Glass of water', at: new Date().toISOString() }); draw() }
         }
         draw()
@@ -45,7 +49,7 @@ ${description || '(describe it here)'}
   commands: [{ label, run(lc) }], chords: ['h'], settings: { mount(el, lc) }, styles: 'css', start(lc),
   says: { internet: ['host'], connections: ['name'] } (say every site you contact).
 - mount() draws into el with plain DOM (any framework you bundle is fine) and may return a cleanup function.
-  Parts render in a Shadow DOM: use the console's CSS variables (--text, --muted, --border, --surface, --accent).
+  Parts render in a Shadow DOM that already has the console's look kit (see "Look and feel").
 - Slots: today.card ({ date }), todo.panel ({ todo }), week.strip, strategy.plan ({ plan }), settings.section.
 
 ## lc (the only way to touch data)
@@ -68,8 +72,18 @@ Events: ${CORE_EVENTS.join(', ')}
 Your own terms live in your namespace (the extension's name), e.g. 'water.Glass'. Anything with a time belongs on the planner:
 create a core.Todo, core.TimeBlock, core.Deadline or core.Reminder ({ title, at: 'YYYY-MM-DDTHH:MM', repeat?: 'daily'|'weekdays'|'weekly:mon,thu'|'every:3', open: '/#/m/<name>' }).
 
-## Style
-Calm: small cards, no buttons for their own sake, details on demand. Work at phone width.
+## Look and feel (make it look like the rest of Life Console)
+Life Console is a calm, dark "operations console": each screen answers a few questions, the most important
+one largest and first. Follow the same rules:
+- One idea per card. The key number big (.lc-big), its label small (.lc-label), everything else muted.
+- Show exceptions, not status: colour only when something needs action (--warn amber, --danger red);
+  things that are fine stay muted. --accent is for the one main action or a "done/ok" state.
+- Numbers, times and IDs in monospace (.lc-num). Icons are Material Symbols names.
+- No buttons or labels for their own sake: one primary action at most, details on demand.
+- No empty space: a Today card is one compact row or block, never a tall empty box.
+- Works at phone width (390px) and in light and dark themes. Keyboard reachable; label icon-only buttons.
+The look kit (already loaded in every part; no setup):
+${KIT_GUIDE}
 
 ## Example
 ${STARTER}${currentCode ? `\n## The current version to change\n${currentCode}` : ''}`

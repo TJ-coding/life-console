@@ -42,6 +42,24 @@ draft: true
 
 UI can be written with the SDK's component kit (card, list, table, form, board, chart), which survives app updates, or with any framework mounted into an element.
 
+## Looking native
+
+Every part gets the console's **look kit** in its style scope, with no setup:
+
+- **Plain HTML looks native.** Headings, paragraphs, links, buttons, inputs, selects, tables and progress bars use the console's fonts, sizes and colours.
+- **`lc-*` classes cover the common pieces.** `lc-card`, `lc-panel` (with `lc-panel-h` and `lc-panel-b`), `lc-label`, `lc-big`, `lc-num`, `lc-row`, `lc-col`, `lc-btn` (`.primary`, `.sm`, `.danger`), `lc-chip`, `lc-list` with `lc-item`, `lc-bar`, `lc-empty`, `lc-icon` (Material Symbols by name), and the status colours `lc-ok`, `lc-warn`, `lc-danger`.
+- **Colours come only from the theme:** `var(--text)`, `var(--muted)`, `var(--accent)`, `var(--warn)`, `var(--danger)`, `var(--surface)`, `var(--border)` and so on. Light and dark themes then follow on their own. The workshop flags fixed colours such as `#fff`.
+
+The same rules as our own screens apply ([design guidelines](https://github.com/TJ-coding/life-console/blob/main/docs/DESIGN.md)):
+
+- **One idea per card.** The key number is large and its label small; everything else is muted.
+- **Show exceptions, not status.** Amber and red appear only when something needs action.
+- **At most one primary action per card.** Show details on demand.
+- **No tall empty boxes.**
+- **It must work at phone width** and from the keyboard.
+
+The kit's classes are a stable contract: they keep working when the console's own styles change. The workshop's AI prompt teaches all of this, so drafts start out looking native.
+
 ## The data door
 
 All data goes through `lc.data`, ours included.

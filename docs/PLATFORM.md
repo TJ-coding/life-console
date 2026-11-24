@@ -57,6 +57,7 @@ Each phase ships on its own and needs the owner's go-ahead. Order agreed: phases
 |---|---|---|
 | Vocabulary, data door | `src/sdk/vocabulary.js`, `src/sdk/data.js` | `test/platform.test.mjs` |
 | Registry (registry.js), runtime, slots, safe mode | `src/sdk/registry.js`, `src/sdk/index.js`, `src/sdk/lc.js`, `src/sdk/loader.js`, `src/sdk/manifest.js`, `src/sdk/mount.js`, `src/components/PluginSlot.vue`, `PluginPart.vue`, `src/views/PluginPage.vue` | `test/registry.test.mjs` |
+| Look kit (native look for every part; taught in the workshop prompt) | `src/sdk/kit.js` (used by `mount.js`, `src/preview/main.js`, `src/sdk/prompt.js`) | browser check |
 | Reminders as data | `server/schedule.mjs` (`remindsOn`, `state.reminders`) | `test/platform.test.mjs` |
 | Plugin registry (server) | `server/registry.mjs` | `test/plugins.test.mjs` |
 | Trusted page, consent | `server/consent.mjs` (`/trust`, `/trust/oauth`) | `test/plugins.test.mjs`, `test/opendata.test.mjs` |

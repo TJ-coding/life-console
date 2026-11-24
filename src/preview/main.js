@@ -4,6 +4,9 @@
 import { buildTaxonomy } from '../sdk/vocabulary.js'
 import { createDataDoor } from '../sdk/data.js'
 import { vocabOf, nsOfPkg, sdkOk } from '../sdk/manifest.js'
+import { KIT, KIT_CLASSES } from '../sdk/kit.js'
+
+{ const st = document.createElement('style'); st.textContent = KIT_CLASSES; document.head.appendChild(st) } // for shadow: false parts
 
 const out = document.getElementById('out')
 const post = (msg) => parent.postMessage({ source: 'lc-preview', ...msg }, '*')
@@ -70,6 +73,7 @@ async function run({ code, name }) {
     try {
       if (typeof part?.mount !== 'function') throw new Error('needs mount(el, lc)')
       const root = part.shadow === false ? box : box.attachShadow({ mode: 'open' })
+      if (root !== box) { const st = document.createElement('style'); st.textContent = KIT; root.appendChild(st) }
       const el = document.createElement('div')
       root.appendChild(el)
       const c = part.mount(el, lc, props)
@@ -82,7 +86,10 @@ async function run({ code, name }) {
     says: { internet: manifest.says?.internet ?? [], connections: manifest.says?.connections ?? [] }, replaces: manifest.replaces ?? [],
     types: (manifest.types ?? []).map((t) => t.type), pages: (manifest.pages ?? []).length, slots: Object.keys(manifest.slots ?? {}),
   }
-  setTimeout(() => post({ type: 'result', ok: !errors.length, errors, problems: taxonomy.problems, manifest: summary, activity: door.activity.slice(-20), height: document.body.scrollHeight }), 50)
+  // looks: fixed colours break the light or dark theme (a hint, not an error)
+  const fixed = [...new Set((code.match(/(?<![\w&])#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g) ?? []))].slice(0, 4)
+  const looks = fixed.length ? [`Looks: fixed colours (${fixed.join(', ')}) won't follow the light and dark themes. Use var(--accent), var(--text), var(--muted)… or the lc-* classes.`] : []
+  setTimeout(() => post({ type: 'result', ok: !errors.length, errors, problems: [...taxonomy.problems, ...looks], manifest: summary, activity: door.activity.slice(-20), height: document.body.scrollHeight }), 50)
 }
 
 window.addEventListener('message', (e) => {
