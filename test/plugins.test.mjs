@@ -237,6 +237,12 @@ test('forks and suggestions: only the author changes an extension; others fork i
   assert.equal(fork.body.name, 'bob/timer')
   assert.equal((await bob('GET', '/api/registry/plugins/bob/timer')).body.forkedFrom, 'alice/timer')
   assert.equal((await bob('POST', '/api/registry/plugins/alice/timer/suggest', { hash: orig.body.hash })).status, 400, 'only a version of your fork')
+  // using your copy: it takes the original's place in your console
+  await confirm(bob, `do=install&pkg=alice/timer&hash=${orig.body.hash}`)
+  const page = await bob('GET', `/trust?do=install&pkg=bob/timer&hash=${fork.body.hash}`, undefined, NAV)
+  assert.match(page.text, /Instead of.*alice\/timer/s)
+  await confirm(bob, `do=install&pkg=bob/timer&hash=${fork.body.hash}`)
+  assert.deepEqual((await bob('GET', '/api/plugins/installed')).body.plugins.map((p) => p.pkg).filter((n) => n.endsWith('/timer')), ['bob/timer'])
   const sug = await bob('POST', '/api/registry/plugins/alice/timer/suggest', { hash: fork.body.hash, message: 'Adds sounds' })
   assert.equal(sug.status, 201)
   assert.equal((await bob('POST', '/api/registry/plugins/alice/timer/suggest', { hash: fork.body.hash })).body.already, true, 'once per version')

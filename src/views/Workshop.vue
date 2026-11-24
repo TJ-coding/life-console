@@ -92,7 +92,7 @@ onMounted(async () => {
     } else {
       editing.value = null
       forkOf.value = pkg
-      toast(`Forked ${it.title}: this copy is yours to change`)
+      toast(`Your own copy of ${it.title}`)
     }
     slugQuiet = true
     slug.value = pkg.split('/')[1]
@@ -203,7 +203,7 @@ async function shareIt() {
         <section class="panel">
           <div class="panel-h"><span class="mono muted">1</span><h2>Describe it</h2></div>
           <div class="panel-b col">
-            <label class="small name">Name <input v-model="slug" class="mono" @change="persist" /><span v-if="forkOf" class="tiny muted"> fork of {{ forkOf }}</span></label>
+            <label class="small name">Name <input v-model="slug" class="mono" @change="persist" /><span v-if="forkOf" class="tiny muted"> your copy of {{ forkOf }}</span></label>
             <label class="small col">What should it do?
               <textarea v-model="describe" rows="4" placeholder="e.g. Track my reading: books with a status, a Today card with what I'm reading, and a reminder at 21:00" @change="persist"></textarea>
             </label>

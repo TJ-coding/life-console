@@ -116,6 +116,7 @@ ${where.length ? `<dt>Where it appears</dt><dd>${esc(where.join(', '))}</dd>` : 
 <dt>Internet</dt><dd>${says.internet?.length ? `Talks to ${esc(says.internet.join(', '))}` : '<span class="ok">None: it talks to no outside sites</span>'}</dd>
 ${says.connections?.length ? `<dt>Uses your accounts</dt><dd>${esc(says.connections.join(', '))}</dd>` : ''}
 ${says.replaces?.length ? `<dt>Replaces</dt><dd class="warn">${esc(says.replaces.join(', '))}</dd>` : ''}
+${v.pkg?.forkedFrom && (await registry.installed(user.id)).some((x) => x.pkg === v.pkg.forkedFrom) ? `<dt>Instead of</dt><dd>${esc(v.pkg.forkedFrom)} (your copy takes its place; its data stays)</dd>` : ''}
 <dt>Automated checks</dt><dd>${warnings.length ? `<ul class="flags">${warnings.map((w) => `<li>⚠ ${esc(w.msg)}</li>`).join('')}</ul>` : `<span class="ok">${passed.length ? `All ${passed.length} passed` : 'Nothing to flag'}</span>`}</dd></dl>
 <p class="muted">What it says it does is the author's statement, not a guarantee. You can switch it off or remove it any time in Extensions.</p>
 ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : ''}`

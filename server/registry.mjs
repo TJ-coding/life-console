@@ -334,6 +334,8 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
       .onConflictDoUpdate({ target: [pluginInstalls.userId, pluginInstalls.packageName], set: { hash, enabled: true } })
     // installs, not updates: an update or a reinstall doesn't count again
     if (!had) await db.update(pluginPackages).set({ downloads: sql`${pluginPackages.downloads} + 1` }).where(eq(pluginPackages.name, name))
+    // your own copy of someone's extension takes the original's place in your console (same name, same data)
+    if (v.pkg?.forkedFrom && v.pkg.ownerId === uid) await db.delete(pluginInstalls).where(and(eq(pluginInstalls.userId, uid), eq(pluginInstalls.packageName, v.pkg.forkedFrom)))
     return { name, hash, version: v.version }
   }
   async function uninstall(uid, name) { await db.delete(pluginInstalls).where(and(eq(pluginInstalls.userId, uid), eq(pluginInstalls.packageName, name))) }

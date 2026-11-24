@@ -110,7 +110,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
         <div v-for="p in installed" :key="p.pkg" class="ext" :class="{ off: !p.enabled }">
           <span class="icon ext-icon" aria-hidden="true">{{ p.icon }}</span>
           <div class="grow">
-            <div class="ext-name"><b>{{ p.title }}</b> <span class="mono tiny muted">{{ p.version }}</span><span v-if="p.mine" class="tiny upper muted"> · yours, {{ listing(p) }}</span><span v-if="p.forkedFrom" class="tiny muted"> · fork of {{ p.forkedFrom }}</span><span v-if="sentFrom(p.pkg)" class="tiny muted"> · suggested to its author: {{ sentFrom(p.pkg).status }}</span><span v-if="incomingFor(p.pkg).length" class="tiny info"> · {{ incomingFor(p.pkg).length }} suggestion{{ incomingFor(p.pkg).length === 1 ? '' : 's' }}</span></div>
+            <div class="ext-name"><b>{{ p.title }}</b> <span class="mono tiny muted">{{ p.version }}</span><span v-if="p.mine" class="tiny upper muted"> · yours, {{ listing(p) }}</span><span v-if="p.forkedFrom" class="tiny muted"> · your copy of {{ p.forkedFrom }}</span><span v-if="sentFrom(p.pkg)" class="tiny muted"> · suggested to its author: {{ sentFrom(p.pkg).status }}</span><span v-if="incomingFor(p.pkg).length" class="tiny info"> · {{ incomingFor(p.pkg).length }} suggestion{{ incomingFor(p.pkg).length === 1 ? '' : 's' }}</span></div>
             <p v-if="p.description" class="small muted desc">{{ p.description }}</p>
             <p v-if="stateOf(p)" class="small" :class="stateOf(p).tone">{{ stateOf(p).text }}</p>
             <div v-else-if="whereShown(p.pkg).length" class="shows row wrap"><span class="tiny upper muted">Shows on</span><router-link v-for="w in whereShown(p.pkg)" :key="w.label" class="btn sm" :to="w.path">{{ w.label }}<span class="icon sm" aria-hidden="true">arrow_outward</span></router-link></div>
@@ -141,7 +141,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
             <a v-if="p.update && !p.pulled" class="btn primary" :href="trustUrl('install', { pkg: p.pkg, hash: p.update.hash })" :title="p.update.changelog || ''">Update to {{ p.update.version }}</a>
             <button v-if="settingsOf(p.pkg)" class="btn" :class="{ active: open[p.pkg] }" :aria-expanded="!!open[p.pkg]" @click="open[p.pkg] = !open[p.pkg]"><span class="icon sm" aria-hidden="true">tune</span>Settings</button>
             <button v-if="p.mine && !p.upstream" class="btn" :class="{ active: editing?.key === p.pkg }" :aria-expanded="editing?.key === p.pkg" @click="openDetails(p)"><span class="icon sm" aria-hidden="true">edit_note</span>Details</button>
-            <router-link v-if="!p.mine && !p.upstream" class="btn" :to="forkLink(p.pkg)" title="Copy it under your name to change it"><span class="icon sm" aria-hidden="true">fork_right</span>Fork</router-link>
+            <router-link v-if="!p.mine && !p.upstream" class="btn" :to="forkLink(p.pkg)" title="Change it for yourself: you get your own copy"><span class="icon sm" aria-hidden="true">edit</span>Edit</router-link>
             <a v-if="!p.pulled" class="btn" :href="trustUrl('toggle', { pkg: p.pkg, on: p.enabled ? '0' : '1' })">{{ p.enabled ? 'Switch off' : 'Switch on' }}</a>
             <a class="btn danger-ghost icon-only" :href="trustUrl('remove', { pkg: p.pkg })" :aria-label="`Remove ${p.title}`" title="Remove"><span class="icon sm" aria-hidden="true">delete</span></a>
           </div>
@@ -163,12 +163,12 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
         <div v-for="p in toFind" :key="p.name" class="ext">
           <span class="icon ext-icon" aria-hidden="true">{{ p.icon }}</span>
           <div class="grow">
-            <div class="ext-name"><b>{{ p.title }}</b> <span class="tiny muted">by {{ mine(p) ? `you, ${listing(p)}` : p.name.split('/')[0] }}</span><span v-if="p.forkedFrom" class="tiny muted"> · fork of {{ p.forkedFrom }}</span><span v-if="mine(p) && incomingFor(p.name).length" class="tiny info"> · {{ incomingFor(p.name).length }} suggestion{{ incomingFor(p.name).length === 1 ? '' : 's' }}</span><span v-if="p.worksWithEverything" class="tiny upper ok" title="Uses only the SDK and the data route, so it works with other extensions"> · works with everything</span></div>
+            <div class="ext-name"><b>{{ p.title }}</b> <span class="tiny muted">by {{ mine(p) ? `you, ${listing(p)}` : p.name.split('/')[0] }}</span><span v-if="p.forkedFrom" class="tiny muted"> · based on {{ p.forkedFrom }}</span><span v-if="mine(p) && incomingFor(p.name).length" class="tiny info"> · {{ incomingFor(p.name).length }} suggestion{{ incomingFor(p.name).length === 1 ? '' : 's' }}</span><span v-if="p.worksWithEverything" class="tiny upper ok" title="Uses only the SDK and the data route, so it works with other extensions"> · works with everything</span></div>
             <p class="small muted desc">{{ p.description }}</p>
             <p v-if="p.latest?.checks?.warnings?.length" class="small warn">Check first: {{ p.latest.checks.warnings.map((w) => w.msg).join('; ') }}</p>
             <div v-if="previewing === p.name" class="ext-settings">
               <ExtPreview :hash="p.latest.hash" :name="p.name" />
-              <div v-if="!mine(p) && !p.source" class="row wrap fork-row"><span class="spacer"></span><router-link class="btn" :to="forkLink(p.name)" title="Copy it under your name to change it"><span class="icon sm" aria-hidden="true">fork_right</span>Fork</router-link></div>
+              <div v-if="!mine(p) && !p.source" class="row wrap fork-row"><span class="spacer"></span><router-link class="btn" :to="forkLink(p.name)" title="Change it for yourself: you get your own copy"><span class="icon sm" aria-hidden="true">edit</span>Edit before installing</router-link></div>
             </div>
             <div v-if="editing?.key === p.name" class="ext-settings"><div v-if="incomingFor(editing.key).length" class="sugg">
               <div class="tiny upper muted">Suggestions</div>
