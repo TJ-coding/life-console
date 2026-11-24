@@ -1,3 +1,4 @@
+import { providersFrom } from './oauth.mjs'
 // All server settings come from the environment (see .env.example for the documented list).
 const env = process.env
 const bool = (v, d = false) => (v === undefined || v === '' ? d : /^(1|true|yes|on)$/i.test(v))
@@ -57,6 +58,7 @@ export function loadConfig(over = {}) {
     // vault (saved connections) is off. Keep a copy: losing it loses every saved key. CONNECTIONS_ALLOW_PRIVATE=1 lets
     // the broker reach private addresses (tests and private-network self-hosting only).
     vaultKey: e.VAULT_KEY || '',
+    oauthProviders: providersFrom(e), // OAuth connections (server/oauth.mjs): OAUTH_<NAME>_CLIENT_ID / _CLIENT_SECRET switch one on
     connectionsAllowPrivate: bool(e.CONNECTIONS_ALLOW_PRIVATE),
     // the GitHub repository whose star count the landing pages show (fetched hourly by the server, so visitors'
     // browsers never contact GitHub). Empty = no count

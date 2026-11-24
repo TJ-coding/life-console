@@ -138,6 +138,10 @@ const conflictText = computed(() => plugins.conflicts.filter(Boolean))
             <span class="small muted">{{ c.lastUsedAt ? 'used ' + new Date(c.lastUsedAt).toLocaleDateString() : 'not used yet' }}</span>
             <a class="btn" :href="trustUrl('vault-remove', { name: c.name })" target="_blank" rel="noopener">Remove</a>
           </div>
+          <div v-if="conns.providers?.length" class="row wrap">
+            <span class="small muted">Connect an account:</span>
+            <a v-for="p in conns.providers" :key="p.name" class="btn" :href="trustUrl('connect', { provider: p.name })" target="_blank" rel="noopener"><span class="icon sm">link</span>{{ p.title }}</a>
+          </div>
           <div class="row wrap">
             <input v-model="newConn.name" placeholder="name (strava)" aria-label="Connection name" />
             <input v-model="newConn.site" placeholder="site (www.strava.com)" aria-label="Site" />

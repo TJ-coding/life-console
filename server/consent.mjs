@@ -16,6 +16,7 @@ import crypto from 'node:crypto'
 import { and, eq, isNull, lt } from 'drizzle-orm'
 import { consentNonces, users } from './db/schema.js'
 import { sha256, verifyPassword, normEmail, httpError } from './auth.mjs'
+import { tokenRequest } from './oauth.mjs'
 
 const NONCE_TTL = 15 * 60000
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -35,12 +36,14 @@ const KINDS = {
   toggle: { title: 'Switch a plugin on or off' },
   token: { title: 'Create an access token', danger: true },
   'vault-save': { title: 'Save a connection key', danger: true },
+  connect: { title: 'Connect an account', danger: true },
   'vault-remove': { title: 'Remove a connection key' },
   password: { title: 'Change your password', danger: true },
   'delete-account': { title: 'Delete your account', danger: true },
 }
 
-export function createConsent({ db, auth, registry, vault, log = () => {}, appPath = '/app', secureFor = () => false }) {
+export function createConsent({ db, auth, registry, vault, log = () => {}, appPath = '/app', secureFor = () => false, providers = {}, appUrl = '' }) {
+  const origin = (req) => appUrl || `${secureFor(req) ? 'https' : 'http'}://${req.headers.host}`
   function page(title, body, { status = 200 } = {}) {
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · Life Console trusted page</title>
 <style>
@@ -73,7 +76,7 @@ button.yes{background:var(--accent);border-color:var(--accent);color:var(--bg)}b
     const k = KINDS[kind]
     if (!k) return null
     const action = { kind }
-    let details = '', fields = '', warning = ''
+    let details = '', fields = '', warning = '', formAction = ''
     if (kind === 'enable-plugins') {
       warning = 'Public plugins are made by other people. A plugin you install can see and change everything in your planner and send it anywhere. Only install plugins from people you trust.'
       details = '<p class="muted">From now on, creating access tokens, changing your password and deleting your account also need this page.</p>'
@@ -111,6 +114,15 @@ ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : 
       fields = `${action.name ? '' : '<label for="n">Name</label><input id="n" type="text" name="name" placeholder="strava" required>'}
 ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name="site" placeholder="www.strava.com" required>'}
 <label for="k">Key</label><input id="k" type="password" name="secret" autocomplete="off" required>`
+    } else if (kind === 'connect') {
+      if (!vault.on) return { vaultOff: true }
+      const p = providers[String(q.get('provider') ?? '')]
+      if (!p) return { missing: true }
+      action.provider = p.name
+      formAction = new URL(p.authUrl).origin // the form's POST answers with a redirect there: CSP form-action must allow it
+      details = `<p>Connect your <b>${esc(p.title)}</b> account. You'll sign in on ${esc(p.title)}'s own site and come back here.</p>
+<dl><dt>Access asked for</dt><dd><code>${esc(p.scope || 'basic')}</code></dd><dt>Sent only to</dt><dd>${esc(p.site)}</dd></dl>
+<p class="muted">The tokens are stored encrypted and never shown, to plugins or to you. Plugins that say they use the ${esc(p.name)} connection can ask Life Console to make requests with it.</p>`
     } else if (kind === 'vault-remove') {
       action.name = String(q.get('name') ?? '').slice(0, 30)
       details = `<p>Remove the saved key <b>${esc(action.name)}</b>. Plugins that use it stop working until you add it again.</p>`
@@ -121,7 +133,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       warning = 'This deletes your account and your whole planner on this server. It can\'t be undone.'
       fields = user.passwordHash ? '<label for="c">Your password</label><input id="c" type="password" name="password" required>' : `<label for="c">Type your email (${esc(user.email)})</label><input id="c" type="text" name="confirm" required>`
     }
-    return { kind, k, action, details, fields, warning }
+    return { kind, k, action, details, fields, warning, formAction }
   }
 
   async function get(req, res, url) {
@@ -138,8 +150,9 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     const nonce = await newNonce(user.id, d.action)
     const html = page(d.k.title, `<h1>${esc(d.k.title)}</h1>${d.warning ? `<p class="warn">${esc(d.warning)}</p>` : ''}${d.details}
 <form method="post" action="/trust"><input type="hidden" name="nonce" value="${nonce}"><input type="hidden" name="do" value="${esc(d.kind)}">${d.fields}
-<div class="row"><button class="yes${d.k.danger ? ' danger' : ''}" type="submit" name="decision" value="yes">${d.kind === 'install' ? 'Install' : 'Confirm'}</button><a class="btn" href="${appPath}">Cancel</a></div></form>
+<div class="row"><button class="yes${d.k.danger ? ' danger' : ''}" type="submit" name="decision" value="yes">${d.kind === 'install' ? 'Install' : d.kind === 'connect' ? 'Continue' : 'Confirm'}</button><a class="btn" href="${appPath}">Cancel</a></div></form>
 <p class="muted" style="margin-top:14px;font-size:13px">Signed in as ${esc(user.email)}</p>`)
+    if (d.formAction) html.headers = { 'Content-Security-Policy': TRUST_HEADERS['Content-Security-Policy'].replace("form-action 'self'", `form-action 'self' ${d.formAction}`) }
     return html
   }
 
@@ -174,6 +187,14 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
         const saved = await vault.save(uid, { name: a.name || form.get('name'), site: a.site || form.get('site'), scheme: a.scheme || 'bearer', secret: form.get('secret') })
         return { msg: `Saved the ${saved.name} key for ${saved.site}. It won't be shown again.` }
       }
+      case 'connect': {
+        const p = providers[a.provider]
+        if (!p) throw httpError(404, 'That provider is not set up on this server')
+        const state = await newNonce(uid, { kind: 'connect-callback', provider: p.name })
+        const u = new URL(p.authUrl)
+        for (const [k, v] of Object.entries({ client_id: p.clientId, redirect_uri: `${origin(req)}/trust/oauth`, response_type: 'code', scope: p.scope, state, ...p.extra })) if (v) u.searchParams.set(k, v)
+        return { redirect: u.toString() }
+      }
       case 'vault-remove':
         await vault.remove(uid, a.name)
         return { msg: `Removed the ${a.name} key.` }
@@ -207,6 +228,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     if (form.get('decision') !== 'yes') return page('Cancelled', `<h1>Cancelled</h1>${back()}`)
     try {
       const r = await run(who, row.action, form, req)
+      if (r.redirect) return { status: 303, html: '', headers: { Location: r.redirect } }
       const extra = r.token ? `<label>Token</label><input type="text" readonly value="${esc(r.token)}"><div class="row"><a class="btn" href="lifeconsole-now://connect?server=${encodeURIComponent(`${req.headers['x-forwarded-proto'] ?? 'http'}://${req.headers.host}`)}&token=${encodeURIComponent(r.token)}">Open in the Mac app</a></div>` : ''
       const next = r.deleted ? '/' : r.forget ? `${appPath}#/m/plugins?forget=${encodeURIComponent(r.forget)}` : appPath
       const headers = r.deleted ? { 'Set-Cookie': auth.clearCookie(secureFor(req)) } : {}
@@ -217,5 +239,27 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     }
   }
 
-  return { get, post, KINDS }
+  /** The provider sends the person back here: check the state (a one-time nonce), exchange the code, save the tokens. */
+  async function oauthCallback(req, url) {
+    if (!isDocumentNavigation(req)) return { status: 403, html: page('Refused', '<h1>Refused</h1>').html }
+    const who = await auth.identify(req)
+    if (!who || who.via !== 'session') return page('Sign in first', `<h1>Sign in first</h1>${back('Go to Life Console')}`)
+    const state = String(url.searchParams.get('state') ?? '')
+    const [row] = state ? await db.select().from(consentNonces).where(and(eq(consentNonces.nonceHash, sha256(state)), eq(consentNonces.userId, who.user.id), isNull(consentNonces.usedAt))) : []
+    if (!row || row.action.kind !== 'connect-callback' || Date.now() - new Date(row.createdAt).getTime() > NONCE_TTL) return { status: 400, html: page('Expired', `<h1>This connection attempt expired</h1><p>Start again from Plugins → Connections.</p>${back()}`).html }
+    await db.update(consentNonces).set({ usedAt: new Date() }).where(eq(consentNonces.nonceHash, row.nonceHash))
+    const p = providers[row.action.provider]
+    if (!p) return { status: 404, html: page('Not set up', `<h1>That provider is not set up on this server</h1>${back()}`).html }
+    if (url.searchParams.get('error') || !url.searchParams.get('code')) return page('Not connected', `<h1>Not connected</h1><p>${esc(p.title)} said: ${esc(url.searchParams.get('error') ?? 'no code')}</p>${back()}`)
+    try {
+      const tokens = await tokenRequest(p, { grant_type: 'authorization_code', code: url.searchParams.get('code'), redirect_uri: `${origin(req)}/trust/oauth` })
+      await vault.saveOAuth(who.user.id, p, tokens)
+      log(`[consent] ${who.user.id.slice(0, 8)} connected ${p.name}`)
+      return page('Connected', `<h1>Connected</h1><p>Your ${esc(p.title)} account is connected. Plugins that use it can make requests to ${esc(p.site)}; you can remove it any time in Plugins → Connections.</p>${back()}`)
+    } catch (e) {
+      return { status: 502, html: page('Not connected', `<h1>Not connected</h1><p>${esc(e.message)}</p>${back()}`).html }
+    }
+  }
+
+  return { get, post, oauthCallback, KINDS }
 }

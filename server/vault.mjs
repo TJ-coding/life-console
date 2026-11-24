@@ -8,6 +8,7 @@ import net from 'node:net'
 import { and, eq } from 'drizzle-orm'
 import { vaultSecrets } from './db/schema.js'
 import { httpError } from './auth.mjs'
+import { tokenRequest } from './oauth.mjs'
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,29}$/
 const HOST = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/
@@ -56,6 +57,13 @@ export function createVault(db, cfg, { fetchImpl = fetch, lookup = (h) => dns.lo
       .onConflictDoUpdate({ target: [vaultSecrets.userId, vaultSecrets.name], set: { site, scheme, ciphertext: seal(secret), createdAt: new Date() } })
     return { name, site, scheme }
   }
+  /** Save the tokens of an OAuth connection (from the trusted page's callback). */
+  async function saveOAuth(uid, provider, tokens) {
+    need()
+    const value = { userId: uid, name: provider.name, site: provider.site, scheme: `oauth:${provider.name}`, ciphertext: seal(JSON.stringify(tokens)) }
+    await db.insert(vaultSecrets).values(value).onConflictDoUpdate({ target: [vaultSecrets.userId, vaultSecrets.name], set: { site: value.site, scheme: value.scheme, ciphertext: value.ciphertext, createdAt: new Date() } })
+    return { name: provider.name, site: provider.site }
+  }
   /** Names and sites only: values are never returned. */
   async function list(uid) {
     return db.select({ name: vaultSecrets.name, site: vaultSecrets.site, scheme: vaultSecrets.scheme, createdAt: vaultSecrets.createdAt, lastUsedAt: vaultSecrets.lastUsedAt }).from(vaultSecrets).where(eq(vaultSecrets.userId, uid))
@@ -78,9 +86,20 @@ export function createVault(db, cfg, { fetchImpl = fetch, lookup = (h) => dns.lo
     }
     const method = String(b.method ?? 'GET').toUpperCase()
     if (!METHODS.has(method)) throw httpError(400, 'method not allowed')
-    const secret = open(row.ciphertext)
+    let secret = open(row.ciphertext)
     const headers = { 'User-Agent': 'LifeConsole-Connections/1', Accept: 'application/json, text/plain;q=0.8' }
-    if (row.scheme === 'bearer') headers.Authorization = `Bearer ${secret}`
+    if (row.scheme.startsWith('oauth:')) {
+      // an OAuth connection: refresh the access token when it's about to expire, then send it as a bearer token
+      let t = JSON.parse(secret)
+      const provider = cfg.oauthProviders?.[row.scheme.slice(6)]
+      if (t.expiresAt && t.expiresAt < Date.now() + 60000) {
+        if (!provider || !t.refresh) throw httpError(401, `The ${row.name} connection expired: connect it again in Plugins → Connections`)
+        t = await tokenRequest(provider, { grant_type: 'refresh_token', refresh_token: t.refresh }, fetchImpl)
+        await db.update(vaultSecrets).set({ ciphertext: seal(JSON.stringify(t)) }).where(and(eq(vaultSecrets.userId, uid), eq(vaultSecrets.name, row.name)))
+      }
+      secret = t.access
+      headers.Authorization = `Bearer ${secret}`
+    } else if (row.scheme === 'bearer') headers.Authorization = `Bearer ${secret}`
     else if (row.scheme.startsWith('header:')) headers[row.scheme.slice(7)] = secret
     else url.searchParams.set(row.scheme.slice(6), secret)
     let body
@@ -103,5 +122,5 @@ export function createVault(db, cfg, { fetchImpl = fetch, lookup = (h) => dns.lo
       throw httpError(502, e.name === 'AbortError' ? 'the other site took too long' : 'could not reach the other site')
     } finally { clearTimeout(timer) }
   }
-  return { on, save, list, remove, request }
+  return { on, save, saveOAuth, list, remove, request }
 }

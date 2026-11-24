@@ -216,3 +216,54 @@ test('consent: delete account on the trusted page', async () => {
   assert.match(r.text, /Your account is deleted/)
   assert.equal((await bob('GET', '/api/auth/me')).status, 401)
 })
+
+test('OAuth connections: connect on the trusted page, tokens in the vault, refreshed by the broker (G7)', async () => {
+  // a fake provider: /authorize is never visited by the server; /token issues and refreshes tokens
+  let issued = 0
+  const prov = http.createServer((req, res) => {
+    let body = ''
+    req.on('data', (c) => { body += c })
+    req.on('end', () => {
+      const f = new URLSearchParams(body)
+      if (req.url === '/token') {
+        issued++
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        return res.end(JSON.stringify(f.get('grant_type') === 'refresh_token'
+          ? { access_token: `fresh-${issued}`, expires_in: 3600 }
+          : { access_token: 'old-token', refresh_token: 'r1', expires_in: 1 })) // expires at once: the broker must refresh
+      }
+      seen.push({ url: req.url, auth: req.headers.authorization })
+      res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true}')
+    })
+  })
+  await new Promise((r) => prov.listen(0, '127.0.0.1', r))
+  const pb = `http://127.0.0.1:${prov.address().port}`
+  const cfg = loadConfig({ DATABASE_URL: dbUrl, PUSH_DRY_RUN: '1', APP_URL: 'http://lc.test', ADMIN_EMAILS: '', DIST: '/nonexistent', VAULT_KEY: crypto.randomBytes(32).toString('base64'), CONNECTIONS_ALLOW_PRIVATE: '1',
+    OAUTH_FAKEFIT_CLIENT_ID: 'cid', OAUTH_FAKEFIT_CLIENT_SECRET: 'csecret', OAUTH_FAKEFIT_AUTH_URL: `${pb}/authorize`, OAUTH_FAKEFIT_TOKEN_URL: `${pb}/token`, OAUTH_FAKEFIT_SITE: '127.0.0.1', OAUTH_FAKEFIT_TITLE: 'FakeFit' })
+  assert.deepEqual(Object.keys(cfg.oauthProviders), ['fakefit'], 'only providers with a client id and secret are on')
+  const app2 = await createApp({ cfg, db: conn.db, pool: conn.pool, log: quiet })
+  const s2 = http.createServer(app2.handler)
+  await new Promise((r) => s2.listen(0, '127.0.0.1', r))
+  const saveBase = base
+  base = `http://127.0.0.1:${s2.address().port}`
+  try {
+    const carol = client()
+    await carol('POST', '/api/auth/signup', { email: 'carol@x.test', password: 'pw-carol-123' })
+    assert.deepEqual((await carol('GET', '/api/connections')).body.providers.map((p) => p.name), ['fakefit'])
+    const go = await confirm(carol, 'do=connect&provider=fakefit')
+    assert.equal(go.status, 303)
+    const to = new URL(go.headers.get('location'))
+    assert.equal(to.origin + to.pathname, `${pb}/authorize`)
+    assert.equal(to.searchParams.get('redirect_uri'), 'http://lc.test/trust/oauth')
+    const state = to.searchParams.get('state')
+    // the provider sends the person back (a cross-site top-level navigation)
+    const back = await carol('GET', `/trust/oauth?code=abc&state=${encodeURIComponent(state)}`, undefined, { ...NAV, 'Sec-Fetch-Site': 'cross-site' })
+    assert.match(back.text, /Connected/)
+    assert.equal((await carol('GET', `/trust/oauth?code=abc&state=${encodeURIComponent(state)}`, undefined, NAV)).status, 400, 'a state works once')
+    const conns = (await carol('GET', '/api/connections')).body.connections
+    assert.deepEqual(conns.map((c) => [c.name, c.site, c.scheme]), [['fakefit', '127.0.0.1', 'oauth:fakefit']])
+    const r = await carol('POST', '/api/connections/request', { name: 'fakefit', url: `${pb}/v1/athlete` })
+    assert.equal(r.status, 200)
+    assert.equal(seen.at(-1).auth, 'Bearer fresh-2', 'the expired token was refreshed first')
+  } finally { base = saveBase; app2.close(); s2.close(); prov.close() }
+})

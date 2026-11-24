@@ -58,6 +58,12 @@ services:
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-Life Console <no-reply@localhost>}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      # plugins (docs/PLATFORM.md): the vault key for saved connections, and OAuth apps for "Connect Strava" etc.
+      VAULT_KEY: ${VAULT_KEY:-}
+      OAUTH_STRAVA_CLIENT_ID: ${OAUTH_STRAVA_CLIENT_ID:-}
+      OAUTH_STRAVA_CLIENT_SECRET: ${OAUTH_STRAVA_CLIENT_SECRET:-}
+      OAUTH_GITHUB_CLIENT_ID: ${OAUTH_GITHUB_CLIENT_ID:-}
+      OAUTH_GITHUB_CLIENT_SECRET: ${OAUTH_GITHUB_CLIENT_SECRET:-}
       BACKUP_DIR: /backups
       # update notices for admins: compares this image's commit with GitHub (UPDATE_CHECK=off stops it)
       UPDATE_CHECK: ${UPDATE_CHECK:-on}

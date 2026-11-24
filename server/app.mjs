@@ -101,7 +101,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   /** Secure cookies on the public https address; plain ones on other hosts (e.g. a private-network http URL). */
   const secureFor = (req) => cfg.cookieSecure && (!appHost || req.headers.host === appHost)
 
-  const consent = createConsent({ db, auth, registry, vault, log, secureFor: (req) => secureFor(req) })
+  const consent = createConsent({ db, auth, registry, vault, log, secureFor: (req) => secureFor(req), providers: cfg.oauthProviders ?? {}, appUrl: cfg.appUrl })
   /** Account actions a plugin could abuse need the trusted page once Public plugins are on (goal 3). */
   const viaTrust = (user, action) => { if (user.publicPlugins) throw Object.assign(httpError(403, 'Confirm this on the trusted page'), { trust: `/trust?do=${action}` }) }
 
@@ -259,7 +259,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         return send(res, 200, await registry.pull(b.hash, b.reason ?? ''))
       }
       case 'GET /api/connections':
-        return send(res, 200, { on: vault.on, connections: await vault.list(uid) })
+        return send(res, 200, { on: vault.on, connections: await vault.list(uid), providers: Object.values(cfg.oauthProviders ?? {}).map((p) => ({ name: p.name, title: p.title, site: p.site })) })
       case 'POST /api/connections/request': {
         limit(`conn:${uid}`, 120, 60000)
         return send(res, 200, await vault.request(uid, await body(req, 128 * 1024)))
@@ -609,6 +609,11 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
     try {
       if (url.pathname.startsWith('/api/')) return await api(req, res, url)
       // the trusted page (server/consent.mjs): consent, keys and passwords, never inside the console
+      if (url.pathname === '/trust/oauth' && req.method === 'GET') {
+        const out = await consent.oauthCallback(req, url)
+        res.writeHead(out.status ?? 200, { ...TRUST_HEADERS, ...(out.headers ?? {}) })
+        return res.end(out.html)
+      }
       if (url.pathname === '/trust') {
         let out
         if (req.method === 'POST') out = await consent.post(req, res, await readRaw(req, 32 * 1024))
