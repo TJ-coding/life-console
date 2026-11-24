@@ -410,6 +410,7 @@ nav { display: flex; flex-direction: column; gap: 2px; overflow: auto; }
 .statusbar { height: 28px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 16px; border-top: 1px solid var(--border); background: var(--surface); font-size: 11px; color: var(--muted); overflow: hidden; white-space: nowrap; }
 .statusbar .kbd { margin-right: 4px; }
 .toast-act { margin-left: 10px; color: var(--text); }
+.toast-live { position: fixed; left: 0; bottom: 0; width: 0; height: 0; } /* announces messages without taking space */
 .toast { display: flex; align-items: center; position: fixed; bottom: 44px; left: 50%; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--accent); color: var(--accent); padding: 8px 14px; border-radius: 2px; z-index: 60; font-size: 12px; }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.15s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

@@ -93,13 +93,13 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
           <span class="ext-icon icon" aria-hidden="true">{{ p.icon }}</span>
           <div class="grow">
             <h3>{{ p.title }} <span class="mono tiny muted">{{ p.version }}</span><span v-if="p.mine" class="chip tiny">yours{{ p.visibility === 'public' ? ', shared' : '' }}</span></h3>
-            <p v-if="p.description" class="small muted">{{ p.description }}</p>
+            <p v-if="p.description" class="small muted desc">{{ p.description }}</p>
+            <div v-if="p.enabled && !p.pulled && whereShown(p.pkg).length" class="shows small">
+              <span class="muted">Shows on</span>
+              <template v-for="w in whereShown(p.pkg)" :key="w.label"><router-link class="pill" :to="w.path">{{ w.label }}<span class="icon sm" aria-hidden="true">arrow_outward</span></router-link></template>
+            </div>
+            <p v-else-if="p.enabled && !p.pulled && plugins.status === 'ready' && !plugins.failed[p.pkg]" class="small muted">Runs in the background</p>
           </div>
-          <div v-if="p.enabled && !p.pulled && whereShown(p.pkg).length" class="shows small">
-            <span class="muted">Shows on</span>
-            <template v-for="w in whereShown(p.pkg)" :key="w.label"><router-link v-if="w.path" class="pill" :to="w.path">{{ w.label }}<span class="icon sm" aria-hidden="true">arrow_outward</span></router-link><span v-else class="pill">{{ w.label }}</span></template>
-          </div>
-          <p v-else-if="p.enabled && !p.pulled && plugins.status === 'ready' && !plugins.failed[p.pkg]" class="shows small muted">Runs in the background</p>
         </div>
         <p v-if="stateOf(p)" class="small state" :class="stateOf(p).tone">{{ stateOf(p).text }}</p>
         <div class="card-actions row wrap">
@@ -172,7 +172,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
 </template>
 
 <style scoped>
-.ph { gap: 14px; padding: 16px; max-width: 960px; }
+.ph { gap: 14px; padding: 16px; }
 .ph-head h1 { font-size: 22px; margin: 0 0 2px; }
 .ph-head p { margin: 0; }
 .sum { display: flex; gap: 16px; margin: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
@@ -187,13 +187,15 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
 .card h3 { font-size: 15px; margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; text-transform: none; letter-spacing: 0; color: var(--text); }
 .card p { margin: 2px 0 0; }
 .ext-icon { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); flex: none; }
-.shows { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; margin: 0; }
+.shows { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.desc { max-width: 72ch; }
 .pill { display: inline-flex; align-items: center; gap: 2px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--text); text-decoration: none; }
 .pill:hover, .pill:focus-visible { border-color: var(--accent); color: var(--accent); }
 .state { margin: 0; }
-.card-actions { gap: 8px; align-items: center; }
+.card-actions { gap: 8px; align-items: center; flex-wrap: wrap; }
 .card-settings { border-top: 1px solid var(--border); padding-top: 10px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.grid:empty { display: none; }
 .grid .card + .card { margin-top: 0; }
 .find .btn { justify-content: center; }
 .empty { display: flex; gap: 12px; align-items: center; padding: 14px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); }
@@ -209,9 +211,8 @@ ul { margin: 4px 0 0; padding-left: 18px; }
 .ok { color: var(--accent); display: inline-flex; align-items: center; gap: 4px; }
 .warn { color: var(--warn); } .danger, .bad { color: var(--danger); } .muted.state { color: var(--muted); }
 @media (max-width: 640px) {
-  .card-top { flex-wrap: wrap; }
-  .shows { justify-content: flex-start; width: 100%; }
   .search { min-width: 0; width: 100%; }
   .sec-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .card-actions .spacer { display: none; }
 }
 </style>
