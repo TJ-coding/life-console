@@ -84,12 +84,13 @@ async function run({ code, name }) {
   const summary = {
     title: manifest.title ?? '', description: manifest.description ?? '', icon: manifest.icon ?? 'extension', sdk: manifest.sdk ?? 1,
     says: { internet: manifest.says?.internet ?? [], connections: manifest.says?.connections ?? [] }, replaces: manifest.replaces ?? [],
-    types: (manifest.types ?? []).map((t) => t.type), pages: (manifest.pages ?? []).length, slots: Object.keys(manifest.slots ?? {}),
+    types: vocabOf(pkg, manifest).types.map((t) => t.type), pages: (manifest.pages ?? []).length, pageTitles: (manifest.pages ?? []).map((p) => p.title ?? manifest.title ?? ''), slots: Object.keys(manifest.slots ?? {}),
   }
   // looks: fixed colours break the light or dark theme (a hint, not an error)
-  const fixed = [...new Set((code.match(/(?<![\w&])#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g) ?? []))].slice(0, 4)
-  const looks = fixed.length ? [`Looks: fixed colours (${fixed.join(', ')}) won't follow the light and dark themes. Use var(--accent), var(--text), var(--muted)… or the lc-* classes.`] : []
-  setTimeout(() => post({ type: 'result', ok: !errors.length, errors, problems: [...taxonomy.problems, ...looks], manifest: summary, activity: door.activity.slice(-20), height: document.body.scrollHeight }), 50)
+  // only values given to a colour property (an id like #add isn't a colour)
+  const fixed = [...new Set([...code.matchAll(/(?:color|background(?:-color)?|border(?:-[a-z]+)?|fill|stroke|outline|box-shadow)\s*:\s*[^;"'`}]*?(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\))/gi)].map((m) => m[1]))].slice(0, 4)
+  const looks = fixed.length ? [`Uses fixed colours (${fixed.join(', ')}), so it won't follow light and dark mode. Ask your AI to use the theme colours instead.`] : []
+  setTimeout(() => post({ type: 'result', ok: !errors.length, errors, problems: [...new Set(taxonomy.problems.map((x) => x.replace(/^preview\/[a-z0-9-]+: /, '')))].concat(looks), manifest: summary, activity: door.activity.slice(-20), height: document.body.scrollHeight }), 50)
 }
 
 window.addEventListener('message', (e) => {

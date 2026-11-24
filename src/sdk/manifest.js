@@ -27,7 +27,9 @@ export const nsOfPkg = (pkg) => String(pkg).split('/').pop().toLowerCase().repla
 
 /** The vocabulary part: what buildTaxonomy needs. */
 export function vocabOf(pkg, m) {
-  return { id: pkg, ns: nsOfPkg(pkg), types: m.types ?? [], tags: m.tags ?? [], links: m.links ?? [], traits: m.traits ?? [], events: m.events ?? [], sameAs: m.sameAs ?? [] }
+  // forgiving about shape: 'water.Morning' or { id } or { tag | name } all mean the same tag (AI drafts vary)
+  const ids = (list, key) => (Array.isArray(list) ? list : []).filter((x) => x != null).map((x) => typeof x === 'string' ? { [key]: x } : { ...x, [key]: x[key] ?? x.id ?? x.name ?? x.tag ?? x.type })
+  return { id: pkg, ns: nsOfPkg(pkg), types: ids(m.types, 'type'), tags: ids(m.tags, 'id'), links: ids(m.links, 'id'), traits: ids(m.traits, 'id'), events: (Array.isArray(m.events) ? m.events : []).map((e) => typeof e === 'string' ? e : e?.id ?? e?.name).filter(Boolean), sameAs: Array.isArray(m.sameAs) ? m.sameAs : [] }
 }
 
 /** The registry part: a module manifest. PageComponent renders a page's `mount` (src/views/PluginPage.vue). */

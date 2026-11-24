@@ -44,7 +44,9 @@ ${description || '(describe it here)'}
 
 ## The file
 - An ES module whose default export is the manifest. No imports from other sites, no eval, no minified code.
-- Fields: sdk: 1, title, icon (a Material Symbols name), description, types, tags, links, events, sameAs,
+- Fields: sdk: 1, title, icon (a Material Symbols name), description,
+  types: [{ type: '<name>.Thing', kindOf, traits }], tags: [{ id: '<name>.tag', label, parent? }],
+  links: [{ id: '<name>.link', kindOf, desc }], events: ['<name>.happened'], sameAs: [{ from, to }],
   pages: [{ title, icon?, mount(el, lc, { params, query }) }], slots: { '<slot>': { mount(el, lc, data) } },
   commands: [{ label, run(lc) }], chords: ['h'], settings: { mount(el, lc) }, styles: 'css', start(lc),
   says: { internet: ['host'], connections: ['name'] } (say every site you contact).
