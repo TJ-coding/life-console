@@ -53,7 +53,30 @@ export function checkCode(code, says = {}) {
   return { blocked, warnings, passed }
 }
 
-export function createRegistry(db, { log = () => {} } = {}) {
+export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = fetch } = {}) {
+  /* ── the upstream registry (REGISTRY_UPSTREAM, e.g. a self-hosted server installing from life-console.dev) ── */
+  const upJson = async (p) => {
+    if (!upstream) return null
+    try { const r = await fetchImpl(`${upstream}${p}`, { headers: { Accept: 'application/json' } }); return r.ok ? await r.json() : r.status === 404 ? { notFound: true } : null } catch { return null }
+  }
+  const upStatus = new Map() // hash → { pulled, at }: re-checked at most hourly
+  async function upstreamVersion(hash) {
+    const j = await upJson(`/api/registry/public/versions/${hash}`)
+    return j && !j.notFound ? j : null
+  }
+  /** Copy an upstream version here (after checking its code really has that hash), so it loads like a local one. */
+  async function mirrorUpstream(uid, name, hash) {
+    const v = await upstreamVersion(hash)
+    if (!v || v.packageName !== name || v.pulled) throw httpError(404, 'no such version')
+    const r = await fetchImpl(`${upstream}/api/registry/code/${hash}.js`)
+    const code = r.ok ? await r.text() : ''
+    if (sha256(code) !== hash) throw httpError(502, "the upstream registry's code doesn't match its hash")
+    const checks = checkCode(code, v.manifest?.says ?? {}) // checked again here: never trust another server's results
+    if (checks.blocked.length) throw httpError(422, `Not installed: ${checks.blocked.map((c) => c.msg).join('; ')}`)
+    await db.insert(pluginPackages).values({ name, ownerId: uid, visibility: 'public', title: clip(v.manifest?.title, 80), description: clip(v.manifest?.description, 400), icon: clip(v.manifest?.icon || 'extension', 40), upstream }).onConflictDoNothing()
+    await db.insert(pluginVersions).values({ hash, packageName: name, version: v.version, code, manifest: v.manifest ?? {}, checks, changelog: clip(v.changelog, 4000) }).onConflictDoNothing()
+  }
+
   const pkgOf = (name) => db.select().from(pluginPackages).where(eq(pluginPackages.name, name)).then((r) => r[0] ?? null)
   const canSee = (p, user) => p && (p.visibility === 'public' || (user && p.ownerId === user.id))
 
@@ -89,6 +112,7 @@ export function createRegistry(db, { log = () => {} } = {}) {
     const hash = sha256(code)
     const visibility = b.visibility === 'public' ? 'public' : 'private'
     const existing = await pkgOf(name)
+    if (existing?.upstream) throw httpError(403, `${name} comes from ${existing.upstream}: publish it there`)
     if (existing && existing.ownerId !== user.id) throw httpError(403, 'That plugin belongs to someone else')
     const [dupe] = await db.select({ hash: pluginVersions.hash }).from(pluginVersions).where(and(eq(pluginVersions.packageName, name), eq(pluginVersions.version, b.version)))
     if (dupe) throw httpError(409, `Version ${b.version} is already published: versions are fixed, publish a new one`)
@@ -121,7 +145,19 @@ export function createRegistry(db, { log = () => {} } = {}) {
     if (needle) pkgs = pkgs.filter((p) => p.name.includes(needle) || p.title.toLowerCase().includes(needle) || p.description.toLowerCase().includes(needle))
     const latest = await latestVersions(pkgs.map((p) => p.name))
     const counts = await reportCounts(pkgs.map((p) => p.name))
-    return pkgs.filter((p) => latest[p.name]).map((p) => card(p, latest[p.name], counts[p.name] ?? 0))
+    const local = pkgs.filter((p) => latest[p.name] && !p.upstream).map((p) => card(p, latest[p.name], counts[p.name] ?? 0))
+    if (!user || !upstream) return local
+    // public plugins from the upstream registry, after this server's own (installing copies the exact version here)
+    const up = await upJson(`/api/registry/public?q=${encodeURIComponent(q)}`)
+    const names = new Set(local.map((p) => p.name))
+    return [...local, ...(up?.plugins ?? []).filter((p) => !names.has(p.name)).map((p) => ({ ...p, source: upstream }))]
+  }
+  /** For other servers: public plugins only, no account needed. */
+  async function publicVersion(hash) {
+    const [v] = await db.select().from(pluginVersions).where(eq(pluginVersions.hash, String(hash)))
+    const p = v && (await pkgOf(v.packageName))
+    if (!v || p?.visibility !== 'public' || p.upstream) return null
+    return { packageName: v.packageName, version: v.version, manifest: v.manifest, checks: v.checks, changelog: v.changelog, pulled: v.pulled, pulledReason: v.pulledReason }
   }
   async function reportCounts(names) {
     if (!names.length) return {}
@@ -142,7 +178,11 @@ export function createRegistry(db, { log = () => {} } = {}) {
   /** A version, if this person may see it: public and not pulled, or their own. */
   async function version(user, hash) {
     const [v] = await db.select().from(pluginVersions).where(eq(pluginVersions.hash, String(hash)))
-    if (!v) return null
+    if (!v) {
+      // not here: an upstream version can be shown on the trusted page before it's copied
+      const u = user && (await upstreamVersion(hash))
+      return u && !u.pulled ? { ...u, hash, code: null, pkg: { name: u.packageName, visibility: 'public', upstream } } : null
+    }
     const p = await pkgOf(v.packageName)
     if (!canSee(p, user)) return null
     if (v.pulled && p.ownerId !== user?.id) return null
@@ -169,6 +209,8 @@ export function createRegistry(db, { log = () => {} } = {}) {
 
   /* ── installs (called only from the trusted page) ── */
   async function install(uid, name, hash) {
+    const [local] = await db.select({ h: pluginVersions.hash }).from(pluginVersions).where(eq(pluginVersions.hash, String(hash)))
+    if (!local && upstream) await mirrorUpstream(uid, name, hash)
     const v = await version({ id: uid }, hash)
     if (!v || v.packageName !== name || v.pulled) throw httpError(404, 'no such version')
     await db.insert(pluginInstalls).values({ userId: uid, packageName: name, hash, enabled: true })
@@ -184,6 +226,18 @@ export function createRegistry(db, { log = () => {} } = {}) {
   async function installed(uid) {
     const rows = await db.select().from(pluginInstalls).where(eq(pluginInstalls.userId, uid))
     if (!rows.length) return []
+    // a version pulled upstream is pulled here too (checked at most hourly per version)
+    if (upstream) {
+      const ups = await db.select({ name: pluginPackages.name }).from(pluginPackages).where(and(inArray(pluginPackages.name, rows.map((r) => r.packageName)), sql`${pluginPackages.upstream} is not null`))
+      for (const r of rows.filter((x) => ups.some((u) => u.name === x.packageName))) {
+        const c = upStatus.get(r.hash)
+        if (c && Date.now() - c.at < 3600000) continue
+        const u = await upJson(`/api/registry/public/versions/${r.hash}`)
+        const pulled = !!u && (u.notFound || u.pulled)
+        upStatus.set(r.hash, { pulled, at: Date.now() })
+        if (pulled) await db.update(pluginVersions).set({ pulled: true, pulledReason: u.pulledReason || 'pulled from the upstream registry' }).where(eq(pluginVersions.hash, r.hash))
+      }
+    }
     const vers = await db.select({ hash: pluginVersions.hash, version: pluginVersions.version, pulled: pluginVersions.pulled, pulledReason: pluginVersions.pulledReason, manifest: pluginVersions.manifest, packageName: pluginVersions.packageName })
       .from(pluginVersions).where(inArray(pluginVersions.hash, rows.map((r) => r.hash)))
     const byHash = Object.fromEntries(vers.map((v) => [v.hash, v]))
@@ -201,5 +255,5 @@ export function createRegistry(db, { log = () => {} } = {}) {
     })
   }
 
-  return { setHandle, publish, list, one, version, report, pull, install, uninstall, setEnabled, disableAll, installed }
+  return { setHandle, publish, list, one, version, publicVersion, report, pull, install, uninstall, setEnabled, disableAll, installed }
 }

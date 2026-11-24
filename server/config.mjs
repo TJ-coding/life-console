@@ -57,6 +57,8 @@ export function loadConfig(over = {}) {
     // the plugin platform (docs/PLATFORM.md). VAULT_KEY: 32 random bytes, base64 (openssl rand -base64 32); without it the
     // vault (saved connections) is off. Keep a copy: losing it loses every saved key. CONNECTIONS_ALLOW_PRIVATE=1 lets
     // the broker reach private addresses (tests and private-network self-hosting only).
+    // the registry to install public plugins from as well as this server's own (self-hosted: https://life-console.dev)
+    registryUpstream: (e.REGISTRY_UPSTREAM || '').replace(/\/$/, ''),
     vaultKey: e.VAULT_KEY || '',
     federationAllowPrivate: bool(e.FEDERATION_ALLOW_PRIVATE), // tests and private networks only: let ActivityPub reach private addresses over http
     podMirrorMs: Number(e.POD_MIRROR_MS) || 3000, // how long after a save the planner is written to the pod (goal 9)

@@ -89,7 +89,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const planner = createPlanner(db, cfg)
   const push = await createPush(db, cfg, log)
   const issues = createIssues(db)
-  const registry = createRegistry(db, { log })
+  const registry = createRegistry(db, { log, upstream: cfg.registryUpstream })
   const vault = createVault(db, cfg)
   const siteOf = (req) => cfg.appUrl || `http://${req?.headers?.host ?? 'localhost'}`
   const pods = createPods(db, { log, siteFor: siteOf })
@@ -456,6 +456,10 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
 
   async function api(req, res, url) {
     const route = `${req.method} ${url.pathname}`
+    // the registry for other servers (REGISTRY_UPSTREAM elsewhere): public plugins only, no account
+    if (req.method === 'GET' && url.pathname === '/api/registry/public') return send(res, 200, { plugins: await registry.list(null, url.searchParams.get('q') ?? '') })
+    const pubVer = req.method === 'GET' && url.pathname.match(/^\/api\/registry\/public\/versions\/([0-9a-f]{64})$/)?.[1]
+    if (pubVer) { const v = await registry.publicVersion(pubVer); return v ? send(res, 200, v) : send(res, 404, { error: 'not found' }) }
     // a plugin version's code, for the console to import: public versions for anyone, private ones for their owner
     const codeHash = req.method === 'GET' && url.pathname.match(/^\/api\/registry\/code\/([0-9a-f]{64})\.js$/)?.[1]
     if (codeHash) {

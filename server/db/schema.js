@@ -163,6 +163,7 @@ export const pluginPackages = pgTable('plugin_packages', {
   description: text('description').notNull().default(''),
   icon: text('icon').notNull().default('extension'),
   downloads: integer('downloads').notNull().default(0),
+  upstream: text('upstream'), // a copy of a plugin from another server's registry (REGISTRY_UPSTREAM): never published to here
   createdAt: created(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 }, (t) => [index('plugin_packages_owner_idx').on(t.ownerId)])

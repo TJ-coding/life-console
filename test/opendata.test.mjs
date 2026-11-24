@@ -15,7 +15,7 @@ if (!ADMIN_URL) throw new Error('set TEST_DATABASE_URL')
 const quiet = () => {}
 const servers = {}
 
-async function startServer(name) {
+async function startServer(name, env = {}) {
   const dbName = `lc_od_${name}_${process.pid}_${Date.now()}`
   const admin = new pg.Client({ connectionString: ADMIN_URL })
   await admin.connect(); await admin.query(`create database "${dbName}"`); await admin.end()
@@ -26,7 +26,7 @@ async function startServer(name) {
   const server = http.createServer((req, res) => app.handler(req, res))
   await new Promise((r) => server.listen(0, '127.0.0.1', r))
   const base = `http://127.0.0.1:${server.address().port}`
-  const cfg = loadConfig({ DATABASE_URL: dbUrl, PUSH_DRY_RUN: '1', APP_URL: base, ADMIN_EMAILS: '', DIST: '/nonexistent', VAULT_KEY: crypto.randomBytes(32).toString('base64'), FEDERATION_ALLOW_PRIVATE: '1', CONNECTIONS_ALLOW_PRIVATE: '1', POD_MIRROR_MS: '20' })
+  const cfg = loadConfig({ DATABASE_URL: dbUrl, PUSH_DRY_RUN: '1', APP_URL: base, ADMIN_EMAILS: '', DIST: '/nonexistent', VAULT_KEY: crypto.randomBytes(32).toString('base64'), FEDERATION_ALLOW_PRIVATE: '1', CONNECTIONS_ALLOW_PRIVATE: '1', POD_MIRROR_MS: '20', ...env })
   app = await createApp({ cfg, db: conn.db, pool: conn.pool, log: quiet })
   servers[name] = { app, server, base, conn, dbName, host: new URL(base).host }
 }
@@ -232,4 +232,34 @@ test('goal 9: Solid-OIDC: app credentials get a DPoP-bound token, and every requ
   const hdr = JSON.parse(Buffer.from(put.dpop.split('.')[0], 'base64url').toString())
   assert.equal(hdr.typ, 'dpop+jwt'); assert.equal(hdr.alg, 'ES256'); assert.equal(hdr.jwk.crv, 'P-256')
   assert.equal(issued, 1, 'the token is reused while it is fresh')
+})
+
+test('goal 6: a self-hosted server installs from an upstream registry; the copy is hash-checked and a pull upstream reaches it', async () => {
+  await startServer('c', { REGISTRY_UPSTREAM: servers.a.base })
+  // A: an admin and a public plugin
+  // the first account on A was alice (made admin); she publishes
+  const code = "export default { sdk: 1, title: 'Hello', slots: { 'today.card': { mount(el) { el.textContent = 'hi' } } } }\n"
+  const pub = await alice('POST', '/api/registry/publish', { name: 'alice/hello', version: '1.0.0', code, visibility: 'public', manifest: { title: 'Hello' } })
+  assert.equal(pub.status, 201, pub.text)
+  // C: dave sees it, turns plugins on and installs it on C's trusted page
+  const dave = client('c')
+  await dave('POST', '/api/auth/signup', { email: 'dave@c.test', password: 'pw-dave-1234' })
+  const list = (await dave('GET', '/api/registry/plugins')).body.plugins
+  const hello = list.find((p) => p.name === 'alice/hello')
+  assert.ok(hello, 'listed from upstream')
+  assert.equal(hello.source, servers.a.base)
+  await confirm(dave, 'do=enable-plugins')
+  const done = await confirm(dave, `do=install&pkg=alice/hello&hash=${pub.body.hash}`)
+  assert.match(done.text, /Installed alice\/hello 1\.0\.0/)
+  assert.equal((await dave('GET', `/api/registry/code/${pub.body.hash}.js`)).text, code, 'C serves its own checked copy')
+  // C can't publish into a package that comes from upstream
+  await dave('POST', '/api/registry/handle', { handle: 'alice' })
+  assert.equal((await dave('POST', '/api/registry/publish', { name: 'alice/hello', version: '9.9.9', code })).status, 403)
+  // A pulls it: C stops loading it
+  const me = (await alice('GET', '/api/auth/me')).body.user
+  assert.equal(me.role, 'admin', "alice is A's first account, so its admin")
+  assert.equal((await alice('POST', '/api/admin/registry/pull', { hash: pub.body.hash, reason: 'test pull' })).status, 200)
+  const inst = (await dave('GET', '/api/plugins/installed')).body.plugins[0]
+  assert.equal(inst.pulled, true)
+  assert.equal(inst.enabled, false)
 })
