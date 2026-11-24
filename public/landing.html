@@ -467,6 +467,15 @@ dialog img { max-width: 96vw; max-height: 88vh; width: auto; border-radius: 4px;
 dialog p { color: #c9d1d9; font: 13px/1.5 var(--mono); text-align: center; margin: 10px 0 0; }
 
 /* faq */
+.next-lead { color: var(--muted); max-width: 62ch; margin: 0 0 28px; }
+.next-links { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.next-links a { display: block; color: var(--text); padding: 16px 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); text-decoration: none; transition: border-color .15s; }
+.next-links a:hover { border-color: var(--accent); }
+.next-links b { display: block; font-weight: 600; margin-bottom: 4px; }
+.next-links b::after { content: " →"; color: var(--accent); }
+.next-links span { display: block; color: var(--muted); font-size: 14px; line-height: 1.4; }
+@media (max-width: 900px) { .next-links { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .next-links { grid-template-columns: 1fr; } }
 .faq { max-width: 760px; }
 .faq details { border-bottom: 1px solid var(--border); }
 .faq details:first-of-type { border-top: 1px solid var(--border); }
@@ -776,6 +785,21 @@ footer a { color: var(--muted); }
     </div>
   </section>
 
+  <section id="next">
+    <div class="wrap">
+      <p class="label">Where it's going</p>
+      <h2>A planner you can make your own.</h2>
+      <p class="next-lead">Life Console is opening up to plugins: a small core, plugins that can do anything with your consent, and one shared language so they add up. It isn't built yet, and the plans are public.</p>
+      <nav class="next-links" aria-label="Where Life Console is going">
+        <a href="/manifesto" data-umami-event="platform" data-umami-event-place="manifesto"><b>Manifesto</b><span>What we believe</span></a>
+        <a href="/roadmap" data-umami-event="platform" data-umami-event-place="roadmap"><b>Roadmap</b><span>Live, next and later</span></a>
+        <a href="/whitepaper" data-umami-event="platform" data-umami-event-place="whitepaper"><b>White paper</b><span>How the plugin platform works</span></a>
+        <a href="/plugins" data-umami-event="platform" data-umami-event-place="plugins"><b>Plugin docs</b><span>Culture, SDK and vocabulary</span></a>
+        <a href="/blog" data-umami-event="platform" data-umami-event-place="blog"><b>Blog</b><span>Why it's becoming extensible</span></a>
+      </nav>
+    </div>
+  </section>
+
   <section id="faq" class="alt">
     <div class="wrap">
       <p class="label">FAQ</p>
@@ -807,7 +831,7 @@ footer a { color: var(--muted); }
 <footer>
   <div class="wrap">
     <span>Life Console · free software under AGPL-3.0</span>
-    <nav aria-label="Footer"><a href="/app" data-umami-event="open-app" data-umami-event-place="footer">App</a><a href="https://github.com/TJ-coding/life-console" rel="noopener" data-umami-event="github" data-umami-event-place="footer">GitHub</a><a href="https://discord.gg/bWZS5QvPYd" rel="noopener" data-umami-event="discord" data-umami-event-place="footer">Discord</a><a href="/docs/self-hosting" rel="noopener">Self-hosting</a><a href="/docs/guide">Guide</a><a href="/alternatives">Alternatives</a><a href="/alternatives/time-blocking-apps">Time blocking apps</a><a href="/templates/personal-strategic-plan">Strategic plan template</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://buymeacoffee.com/tjcoding" rel="noopener">Buy me a coffee</a></nav>
+    <nav aria-label="Footer"><a href="/app" data-umami-event="open-app" data-umami-event-place="footer">App</a><a href="https://github.com/TJ-coding/life-console" rel="noopener" data-umami-event="github" data-umami-event-place="footer">GitHub</a><a href="https://discord.gg/bWZS5QvPYd" rel="noopener" data-umami-event="discord" data-umami-event-place="footer">Discord</a><a href="/docs/self-hosting" rel="noopener">Self-hosting</a><a href="/docs/guide">Guide</a><a href="/alternatives">Alternatives</a><a href="/manifesto">Manifesto</a><a href="/roadmap">Roadmap</a><a href="/blog">Blog</a><a href="/alternatives/time-blocking-apps">Time blocking apps</a><a href="/templates/personal-strategic-plan">Strategic plan template</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://buymeacoffee.com/tjcoding" rel="noopener">Buy me a coffee</a></nav>
   </div>
 </footer>
 

@@ -31,7 +31,9 @@ fs.writeFileSync(path.join(dist, 'vs', 'sunsama.html'), '<head><title>VS-SUNSAMA
 fs.writeFileSync(path.join(dist, 'alternatives.html'), '<head><title>HUB</title></head>')
 fs.mkdirSync(path.join(dist, 'templates'))
 fs.writeFileSync(path.join(dist, 'templates', 'personal-strategic-plan.html'), '<head><title>TEMPLATE</title></head>')
-fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify([{ path: '/alternatives', updated: '2026-11-18' }, { path: '/vs/sunsama', updated: '2026-11-17' }, { path: '/templates/personal-strategic-plan', updated: '2026-11-23' }, { path: '/../index', updated: 'x' }]))
+fs.writeFileSync(path.join(dist, 'roadmap.html'), '<head><title>ROADMAP</title></head>')
+fs.writeFileSync(path.join(dist, 'manifesto.html'), '<head><title>MANIFESTO</title></head>')
+fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify([{ path: '/alternatives', updated: '2026-11-18' }, { path: '/vs/sunsama', updated: '2026-11-17' }, { path: '/templates/personal-strategic-plan', updated: '2026-11-23' }, { path: '/roadmap', updated: '2026-11-24' }, { path: '/manifesto', updated: '2026-11-24', draft: true }, { path: '/../index', updated: 'x' }]))
 fs.mkdirSync(path.join(dist, 'media'))
 const VIDEO = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 256))
 fs.writeFileSync(path.join(dist, 'media', 'clip.mp4'), VIDEO)
@@ -326,6 +328,39 @@ test('scripts/compare-pages.mjs: front matter is checked, pages link to each oth
   assert.ok(!renderHub([a, b]).includes('/templates/'))
   assert.throws(() => parsePage('---\npath: /vs/x\n---\n'), /needs "title"/)
   assert.throws(() => parsePage('# no front matter'), /no front matter/)
+})
+
+test('platform pages: served on the public site, tagged "platform"; drafts served but left out of the sitemap', async () => {
+  const page = await get(on, '/roadmap')
+  assert.equal(page.status, 200)
+  assert.match(page.body.toString(), /ROADMAP/)
+  assert.match((await get(on, '/manifesto')).body.toString(), /MANIFESTO/)
+  const map = (await get(on, '/sitemap.xml')).body.toString()
+  assert.ok(map.includes('https://lc.test/roadmap</loc>'))
+  assert.ok(!map.includes('/manifesto'), 'a draft stays out of the sitemap')
+})
+
+test('scripts/compare-pages.mjs: platform pages (manifesto, roadmap, blog, plugins) get their own crumbs, ?from=platform, status and noindex drafts', async () => {
+  const { parsePage, renderPage, renderBlog, isPlatform } = await import('../scripts/compare-pages.mjs')
+  const src = (p, extra = '') => `---\npath: ${p}\ntitle: T ${p}\ndescription: D\ncard: Card ${p}\nupdated: 2026-11-24\n${extra}---\n# Heading\n`
+  const road = parsePage(src('/roadmap', 'status: Not built yet\n'))
+  const html = renderPage(road, [parsePage(src('/manifesto'))])
+  assert.ok(html.includes('href="/app?from=platform"'))
+  assert.ok(html.includes('<p class="status">Not built yet</p>'))
+  assert.ok(!html.includes('name="robots"'), 'not a draft: indexable')
+  assert.ok(!html.includes('>Comparisons</a> /'), 'no Comparisons crumb')
+  assert.ok(html.includes('<a href="/manifesto">Card /manifesto</a>'))
+  const doc = parsePage(src('/plugins/sdk', 'draft: true\n'))
+  const dHtml = renderPage(doc, [])
+  assert.ok(dHtml.includes('<meta name="robots" content="noindex" />'))
+  assert.ok(dHtml.includes('<p class="crumbs"><a href="/plugins">Plugins</a> /</p>'))
+  const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/.exec(dHtml)[1])['@graph']
+  assert.deepEqual(ld[1].breadcrumb.itemListElement.map((c) => c.name), ['Life Console', 'Plugins', 'T /plugins/sdk'])
+  assert.throws(() => parsePage(src('/blog/post')), /needs date/)
+  const post = parsePage(src('/blog/post', 'date: 2026-11-24\ndraft: true\n'))
+  const blog = renderBlog([post])
+  assert.ok(blog.includes('href="/blog/post"') && blog.includes('noindex'), 'the list is noindex while a post is a draft')
+  assert.ok(isPlatform('/blog') && isPlatform('/plugins/sdk') && !isPlatform('/vs/sunsama'))
 })
 
 test('LANDING=on: duplicate URLs 301 to the canonical one (http://, landing files by name, .html of plain URLs)', async () => {

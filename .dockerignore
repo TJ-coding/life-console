@@ -13,3 +13,4 @@ test
 trailers
 .claude
 !compare/*.md
+!platform/*.md

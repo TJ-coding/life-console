@@ -1,5 +1,6 @@
-// Builds the comparison pages (life-console.dev/vs/<app>, /alternatives/<app> and the /alternatives hub) and the
-// free planning templates (/templates/<name>) from compare/*.md. Runs after `vite build` and writes into dist/, plus dist/compare-pages.json, which the server reads
+// Builds the comparison pages (life-console.dev/vs/<app>, /alternatives/<app> and the /alternatives hub), the
+// free planning templates (/templates/<name>) from compare/*.md, and the platform pages (/manifesto, /roadmap,
+// /whitepaper, /blog and /blog/<post>, /plugins and /plugins/<doc>) from platform/*.md. Runs after `vite build` and writes into dist/, plus dist/compare-pages.json, which the server reads
 // to route the pages and list them in the sitemap.
 //
 // Each source file starts with a front-matter block:
@@ -9,6 +10,9 @@
 //   description: …                     (meta description, ~155 characters)
 //   card: …                            (one line for the hub)
 //   updated: 2026-11-18                (sitemap <lastmod>: bump when the page changes)
+//   status: …                          (optional: a note shown above the page, e.g. "Proposal: not built yet")
+//   draft: true                        (optional: noindex and left out of the sitemap until it's announced)
+//   date: 2026-11-24                   (blog posts: the publication date shown on the post and the /blog list)
 //   ---
 // The body is markdown. Write it by hand, check every fact about the other app, and say where they're better:
 // these pages only work if they're honest (see docs/COMPARE.md).
@@ -20,7 +24,12 @@ import { marked } from 'marked'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SITE = 'https://life-console.dev'
 const REPO = 'https://github.com/TJ-coding/life-console'
-export const PATH_RE = /^\/(vs|alternatives|templates)\/[a-z0-9-]+$/
+export const PATH_RE = /^\/(?:(?:vs|alternatives|templates|blog|plugins)\/[a-z0-9-]+|manifesto|roadmap|whitepaper|plugins)$/
+/** The platform pages: where Life Console is going (manifesto, roadmap, white paper, blog, plugin docs). */
+export const isPlatform = (p) => /^\/(manifesto|roadmap|whitepaper|blog|plugins)(\/|$)/.test(p)
+/** A platform page's section, if it sits under one: /blog/… → Blog, /plugins/… → Plugins. */
+const SECTIONS = { '/blog': 'Blog', '/plugins': 'Plugins' }
+const sectionOf = (p) => Object.keys(SECTIONS).find((s) => p.startsWith(`${s}/`))
 /** Templates aren't comparisons: no Comparisons crumb, not on the hub, and they don't list the comparison pages. */
 export const isTemplate = (p) => p.startsWith('/templates/')
 
@@ -37,9 +46,10 @@ export function parsePage(src, name = 'page') {
     if (kv) meta[kv[1]] = kv[2].trim()
   }
   for (const k of ['path', 'title', 'description', 'card', 'updated']) if (!meta[k]) throw new Error(`${name}: front matter needs "${k}"`)
-  if (!PATH_RE.test(meta.path)) throw new Error(`${name}: path must look like /vs/<app>, /alternatives/<app> or /templates/<name>`)
+  if (!PATH_RE.test(meta.path)) throw new Error(`${name}: path must look like /vs/<app>, /alternatives/<app>, /templates/<name> or a platform page`)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(meta.updated)) throw new Error(`${name}: updated must be YYYY-MM-DD`)
-  return { ...meta, body: m[2] }
+  if (meta.path.startsWith('/blog/') && !/^\d{4}-\d{2}-\d{2}$/.test(meta.date ?? '')) throw new Error(`${name}: a blog post needs date: YYYY-MM-DD`)
+  return { ...meta, draft: meta.draft === 'true', body: m[2] }
 }
 
 // the app as structured data, so search engines and AI answers can read price, licence and platforms. The same
@@ -52,7 +62,10 @@ const APP = {
 }
 /** This page (with its last update and breadcrumb trail) and the app it is about. */
 function pageLd({ title, description, canonical, updated }) {
-  const crumbs = [['Life Console', '/'], ...(canonical === '/alternatives' || isTemplate(canonical) ? [] : [['Comparisons', '/alternatives']]), [title, canonical]]
+  const section = sectionOf(canonical)
+  const middle = isPlatform(canonical) ? (section ? [[SECTIONS[section], section]] : [])
+    : canonical === '/alternatives' || isTemplate(canonical) ? [] : [['Comparisons', '/alternatives']]
+  const crumbs = [['Life Console', '/'], ...middle, [title, canonical]]
   return JSON.stringify({
     '@context': 'https://schema.org',
     '@graph': [
@@ -70,7 +83,9 @@ function pageLd({ title, description, canonical, updated }) {
   }).replace(/</g, '\\u003c')
 }
 
-const cta = (place) => `<aside class="closer"><div class="box"><div><p class="line">Try Life Console free</p><p class="sub">No account needed to try it. <a href="/docs/self-hosting">Or run it on your own server.</a></p></div><a class="btn primary big" href="/app?from=compare" data-umami-event="open-app" data-umami-event-place="${esc(place)}">Try it now</a></div></aside>`
+/** Where a visit came from, for /app?from=…: comparison pages and templates say compare, platform pages platform. */
+const fromOf = (place) => (isPlatform(place) ? 'platform' : 'compare')
+const cta = (place) => `<aside class="closer"><div class="box"><div><p class="line">Try Life Console free</p><p class="sub">No account needed to try it. <a href="/docs/self-hosting">Or run it on your own server.</a></p></div><a class="btn primary big" href="/app?from=${fromOf(place)}" data-umami-event="open-app" data-umami-event-place="${esc(place)}">Try it now</a></div></aside>`
 
 // the landing page's header and footer, so these pages feel like part of the site
 const header = (place) => `<header>
@@ -80,18 +95,22 @@ const header = (place) => `<header>
       <a class="opt" href="/alternatives"${place === '/alternatives' ? ' aria-current="page"' : ''}>Comparisons</a>
       <a class="opt" href="/docs/guide">Guide</a>
       <a class="opt" href="/docs/self-hosting">Self-host</a>
+      <a class="opt" href="/roadmap"${place === '/roadmap' ? ' aria-current="page"' : ''}>Roadmap</a>
     </nav>
-    <a class="btn primary" href="/app?from=compare" data-umami-event="open-app" data-umami-event-place="${esc(place)} header">Try it now</a>
+    <a class="btn primary" href="/app?from=${fromOf(place)}" data-umami-event="open-app" data-umami-event-place="${esc(place)} header">Try it now</a>
   </div>
 </header>`
 const footer = `<footer>
   <div class="wrap">
     <span>Life Console · free software under AGPL-3.0</span>
-    <nav aria-label="Footer"><a href="/">Home</a><a href="${REPO}" rel="noopener">GitHub</a><a href="/docs/self-hosting">Self-hosting</a><a href="/docs/guide">Guide</a><a href="/alternatives">Alternatives</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+    <nav aria-label="Footer"><a href="/">Home</a><a href="${REPO}" rel="noopener">GitHub</a><a href="/docs/self-hosting">Self-hosting</a><a href="/docs/guide">Guide</a><a href="/alternatives">Alternatives</a><a href="/manifesto">Manifesto</a><a href="/roadmap">Roadmap</a><a href="/blog">Blog</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
   </div>
 </footer>`
 
-function shell({ title, description, canonical, body, place, updated }) {
+function shell({ title, description, canonical, body, place, updated, draft = false, status = '' }) {
+  const section = sectionOf(canonical)
+  const crumbs = isPlatform(place) ? (section ? `<p class="crumbs"><a href="${section}">${SECTIONS[section]}</a> /</p>\n` : '')
+    : place === '/alternatives' || isTemplate(place) ? '' : '<p class="crumbs"><a href="/alternatives">Comparisons</a> /</p>\n'
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -99,7 +118,7 @@ function shell({ title, description, canonical, body, place, updated }) {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}" />
-<link rel="canonical" href="${SITE}${canonical}" />
+${draft ? '<meta name="robots" content="noindex" />\n' : ''}<link rel="canonical" href="${SITE}${canonical}" />
 <meta property="og:type" content="article" />
 <meta property="og:site_name" content="Life Console" />
 <meta property="og:title" content="${esc(title)}" />
@@ -117,7 +136,7 @@ function shell({ title, description, canonical, body, place, updated }) {
 ${header(place)}
 <main>
 <article>
-${place === '/alternatives' || isTemplate(place) ? '' : '<p class="crumbs"><a href="/alternatives">Comparisons</a> /</p>\n'}${body}
+${crumbs}${status ? `<p class="status">${esc(status)}</p>\n` : ''}${body}
 </article>
 ${cta(place)}
 </main>
@@ -155,17 +174,19 @@ const cards = (list) => `<nav class="cards">${list.map((o) => `<a href="${o.path
 
 /** One comparison page. `others`: the rest of the pages, linked at the bottom so each page leads to the next. */
 export function renderPage(page, others = []) {
+  const platform = isPlatform(page.path)
   const renderer = new marked.Renderer()
   renderer.heading = function ({ tokens, depth }) {
     const text = this.parser.parseInline(tokens)
     return `<h${depth} id="${slugify(text)}">${text}</h${depth}>\n`
   }
   renderer.image = ({ href, title, text }) => `<img src="${esc(href)}" alt="${esc(text)}" loading="lazy"${title ? ` title="${esc(title)}"` : ''} />`
-  const more = others.length
-    ? `<h2 id="more-comparisons">More comparisons</h2>\n${cards(others)}`
-    : ''
-  const body = pickCards(labelCells(marked.parse(page.body, { renderer, gfm: true }))) + more
-  return shell({ title: page.title, description: page.description, canonical: page.path, body, place: page.path, updated: page.updated })
+  const more = !others.length ? ''
+    : platform ? `<h2 id="more">Where Life Console is going</h2>\n${cards(others)}`
+    : `<h2 id="more-comparisons">More comparisons</h2>\n${cards(others)}`
+  const dated = page.date ? `<p class="meta">${esc(page.date)}${page.author ? ` · ${esc(page.author)}` : ''}</p>\n` : ''
+  const body = dated + pickCards(labelCells(marked.parse(page.body, { renderer, gfm: true }))) + more
+  return shell({ title: page.title, description: page.description, canonical: page.path, body, place: page.path, updated: page.updated, draft: page.draft, status: page.status })
 }
 
 /** The /alternatives hub: every page, grouped into head-to-heads and roundups. */
@@ -186,10 +207,25 @@ ${vs ? `<h2 id="head-to-head">Head to head</h2>\n${vs}` : ''}
   })
 }
 
-/** Reads compare/*.md, sorted by path. */
-export function loadPages(dir = path.join(root, 'compare')) {
-  return fs.readdirSync(dir).filter((f) => f.endsWith('.md')).sort()
-    .map((f) => parsePage(fs.readFileSync(path.join(dir, f), 'utf8'), f))
+/** The /blog list: every post, newest first. Drafts stay off search engines while any post is a draft. */
+export function renderBlog(posts) {
+  const list = [...posts].sort((a, b) => b.date.localeCompare(a.date))
+  const items = list.map((p) => `<a href="${p.path}"><span class="when">${esc(p.date)}</span>${esc(p.card)}</a>`).join('')
+  const body = `<h1>Blog</h1>
+<p class="summary">Notes on building Life Console: what we're making, why, and what we learned on the way.</p>
+<nav class="cards posts">${items}</nav>`
+  return shell({
+    title: 'Life Console blog: building an open-source planner',
+    description: 'Posts about Life Console, the free and open-source planner: design decisions, the plugin platform and what is coming next.',
+    canonical: '/blog', body, place: '/blog', updated: list.map((p) => p.updated).sort().at(-1),
+    draft: list.some((p) => p.draft),
+  })
+}
+
+/** Reads compare/*.md and platform/*.md, sorted by path. */
+export function loadPages(dirs = [path.join(root, 'compare'), path.join(root, 'platform')]) {
+  return [dirs].flat().filter((dir) => fs.existsSync(dir)).flatMap((dir) => fs.readdirSync(dir).filter((f) => f.endsWith('.md')).sort()
+    .map((f) => parsePage(fs.readFileSync(path.join(dir, f), 'utf8'), f)))
     .sort((a, b) => a.path.localeCompare(b.path))
 }
 
@@ -202,12 +238,18 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     seen.add(p.path)
     const file = path.join(dist, `${p.path}.html`)
     fs.mkdirSync(path.dirname(file), { recursive: true })
-    fs.writeFileSync(file, renderPage(p, isTemplate(p.path) ? [] : pages.filter((o) => o !== p && !isTemplate(o.path))))
+    const others = isTemplate(p.path) ? []
+      : isPlatform(p.path) ? pages.filter((o) => o !== p && isPlatform(o.path) && !o.path.startsWith('/blog/'))
+      : pages.filter((o) => o !== p && !isTemplate(o.path) && !isPlatform(o.path))
+    fs.writeFileSync(file, renderPage(p, others))
   }
-  const comparisons = pages.filter((p) => !isTemplate(p.path))
+  const comparisons = pages.filter((p) => !isTemplate(p.path) && !isPlatform(p.path))
   fs.writeFileSync(path.join(dist, 'alternatives.html'), renderHub(comparisons))
   const updated = comparisons.map((p) => p.updated).sort().at(-1)
-  const manifest = [{ path: '/alternatives', updated }, ...pages.map((p) => ({ path: p.path, updated: p.updated }))]
+  const posts = pages.filter((p) => p.path.startsWith('/blog/'))
+  if (posts.length) fs.writeFileSync(path.join(dist, 'blog.html'), renderBlog(posts))
+  const entry = (p) => ({ path: p.path, updated: p.updated, ...(p.draft ? { draft: true } : {}) })
+  const manifest = [{ path: '/alternatives', updated }, ...(posts.length ? [{ path: '/blog', updated: posts.map((p) => p.updated).sort().at(-1), ...(posts.some((p) => p.draft) ? { draft: true } : {}) }] : []), ...pages.map(entry)]
   fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify(manifest, null, 1) + '\n')
   console.log(`comparison pages: ${manifest.map((p) => p.path).join(', ')}`)
 }

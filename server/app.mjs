@@ -26,8 +26,10 @@ const MIME = {
 }
 const LEGAL = new Set(['/privacy', '/terms'])
 const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
+/** Pages built by scripts/compare-pages.mjs (its PATH_RE): comparisons, templates and the platform pages. */
+const PAGE_PATH = /^\/(?:(?:vs|alternatives|templates|blog|plugins)\/[a-z0-9-]+|manifesto|roadmap|whitepaper|plugins)$/
 const DOCS_DATE = '2026-11-23' // sitemap <lastmod> for the docs pages: bump when they change
-const LANDING_DATE = '2026-11-23' // sitemap <lastmod> for the landing page: bump when it changes
+const LANDING_DATE = '2026-11-24' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
 function send(res, status, body, headers = {}) {
@@ -56,10 +58,14 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   try { BUILD = (fs.readFileSync(path.join(dist, 'index.html'), 'utf8').match(/assets\/(index-[\w-]+\.js)/) || [])[1] || 'dev' } catch { /* no dist yet */ }
 
   // comparison pages (/alternatives, /vs/…, /alternatives/…) and templates (/templates/…): built by scripts/compare-pages.mjs, public site only
+  // and the platform pages (/manifesto, /roadmap, /whitepaper, /blog, /plugins…); a draft is served but left out of the sitemap
   let COMPARE = new Map()
+  const DRAFTS = new Set()
   try {
-    COMPARE = new Map(JSON.parse(fs.readFileSync(path.join(dist, 'compare-pages.json'), 'utf8'))
-      .filter((p) => p.path === '/alternatives' || /^\/(vs|alternatives|templates)\/[a-z0-9-]+$/.test(p.path)).map((p) => [p.path, p.updated]))
+    const pages = JSON.parse(fs.readFileSync(path.join(dist, 'compare-pages.json'), 'utf8'))
+      .filter((p) => ['/alternatives', '/blog'].includes(p.path) || PAGE_PATH.test(p.path))
+    COMPARE = new Map(pages.map((p) => [p.path, p.updated]))
+    for (const p of pages) if (p.draft) DRAFTS.add(p.path)
   } catch { /* not built yet */ }
 
   const signups = createSignups(db, cfg)
@@ -403,7 +409,7 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
 ${Object.keys(EDITION_LANDINGS).map((p) => `<url><loc>${site}${p}</loc><lastmod>${LANDING_DATE}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`).join('\n')}
 <url><loc>${site}/docs/self-hosting</loc><lastmod>${DOCS_DATE}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
 <url><loc>${site}/docs/guide</loc><lastmod>${DOCS_DATE}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmod><changefreq>monthly</changefreq><priority>${p === '/alternatives' ? '0.7' : '0.8'}</priority></url>`).join('\n')}
+${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmod><changefreq>monthly</changefreq><priority>${p === '/alternatives' ? '0.7' : '0.8'}</priority></url>`).join('\n')}
 <url><loc>${site}/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 <url><loc>${site}/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>
@@ -494,7 +500,7 @@ ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmo
         res.end(req.method === 'HEAD' ? undefined : body)
       })
     }
-    const pageTag = DOCS.has(rel.slice(0, -5)) ? 'docs' : COMPARE.has(rel.slice(0, -5)) ? 'compare' : null
+    const pageTag = DOCS.has(rel.slice(0, -5)) ? 'docs' : COMPARE.has(rel.slice(0, -5)) ? (/^\/(manifesto|roadmap|whitepaper|blog|plugins)(\/|$)/.test(rel) ? 'platform' : 'compare') : null
     if (pageTag && docsTag()) {
       return fs.readFile(file, 'utf8', (err, html) => {
         if (err) return send(res, 404, 'not found')
