@@ -53,6 +53,23 @@ const fromMin = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(
 const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const wd = (date) => WD[new Date(`${date}T00:00:00Z`).getUTCDay()]
 const clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
+/** At most this many plugin reminders per day per account, whatever plugins ask for. */
+export const REMINDERS_PER_DAY = 30
+const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+/** Does a reminder starting on `start` fire on `date`? No repeat: only that day. */
+export function remindsOn(r, start, date) {
+  if (date < start) return false
+  const rep = r.repeat
+  if (!rep) return date === start
+  const dow = new Date(`${date}T00:00:00Z`).getUTCDay()
+  if (rep === 'daily') return true
+  if (rep === 'weekdays') return dow >= 1 && dow <= 5
+  const w = /^weekly:([a-z,]+)$/.exec(rep)
+  if (w) return w[1].split(',').includes(DAY_NAMES[dow])
+  const e = /^every:(\d{1,3})$/.exec(rep)
+  if (e && Number(e[1]) > 0) return Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) % Number(e[1]) === 0
+  return false
+}
 
 /* ── planner queries (mirror of the client store, kept minimal) ── */
 const todosOn = (state, date) => (state.todos ?? []).filter((t) => t.scheduled?.date === date)
@@ -196,5 +213,27 @@ export function computeEvents(state, fromMs, toMs) {
       add({ ...base, key: `goal:${g.key}:${g.date}:0d`, at: zoned(g.date, s.briefingTime, tz), title: `Goal date today · ${clip(g.title, 60)}`, body })
     }
   }
+
+  // plugin reminders (goal 4, gap G2): records in state.reminders, written through the data door. Data, not code:
+  // a plugin never runs on the server. { at: 'YYYY-MM-DDTHH:MM' local, repeat?: daily|weekdays|weekly:mon,..|every:n, title, open?, by? }
+  if (s.notify.reminders !== false) {
+    const muted = state.settings?.mutedPlugins ?? {}
+    let perDay = {}
+    for (const r of state.reminders ?? []) {
+      if (!r || typeof r.at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(r.at) || (r.by && muted[r.by]) || r.done) continue
+      const start = r.at.slice(0, 10), hhmm = r.at.slice(11, 16)
+      for (const D of days) {
+        if (!remindsOn(r, start, D)) continue
+        perDay[D] = (perDay[D] ?? 0) + 1
+        if (perDay[D] > REMINDERS_PER_DAY) continue
+        add({
+          key: `reminder:${r.id}:${D}:${hhmm}`, at: zoned(D, hhmm, tz),
+          title: clip(String(r.title ?? r.text ?? 'Reminder'), 80), body: r.body ? clip(String(r.body), 120) : (r.by ? `From ${r.by}` : ''),
+          url: typeof r.open === 'string' && r.open.startsWith('/#/') ? r.open : '/#/', tag: `reminder-${r.id}`,
+        })
+      }
+    }
+  }
+
   return out.sort((a, b) => a.at - b.at)
 }
