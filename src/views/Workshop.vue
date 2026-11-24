@@ -35,7 +35,7 @@ function renameTerms(from, to) {
   return true
 }
 watch(slug, (now, before) => {
-  if (renameTerms(ns(before), ns(now))) { toast(`Renamed ${ns(before)}.* to ${ns(now)}.* to match the plugin's name`); run() }
+  if (renameTerms(ns(before), ns(now))) { toast(`Renamed ${ns(before)}.* to ${ns(now)}.* to match the extension's name`); run() }
 })
 /** Terms named after something other than the plugin, from the preview's problems: { from, to } or null. */
 const mismatch = computed(() => {
@@ -103,12 +103,12 @@ async function shareIt() {
 
 <template>
   <div class="ws">
-    <div class="ws-bar"><span class="icon sm">construction</span><b>Workshop</b><span class="muted small">editing mode: drafts run on demo data in a sandbox, never on your planner</span><span class="spacer"></span><router-link to="/m/plugins" class="btn">Done</router-link></div>
+    <div class="ws-bar"><span class="icon sm">construction</span><b>Workshop</b><span class="muted small">editing mode: drafts run on demo data in a sandbox, never on your planner</span><span class="spacer"></span><router-link to="/m/extensions" class="btn">Done</router-link></div>
     <div class="ws-grid">
       <section class="panel col">
         <div class="panel-h"><h2>1 · Name and describe it</h2></div>
         <div class="panel-b col">
-          <label class="small name">Name <input v-model="slug" class="mono" aria-label="Plugin name" @change="persist" /></label>
+          <label class="small name">Name <input v-model="slug" class="mono" aria-label="Extension name" @change="persist" /></label>
           <textarea v-model="describe" rows="4" placeholder="e.g. Track my reading: books with a status, a Today card with what I'm reading, and a reminder at 21:00" @change="persist"></textarea>
           <div class="row wrap">
             <button class="btn primary" @click="copyPrompt"><span class="icon sm">content_copy</span>Copy prompt for your AI</button>
@@ -117,9 +117,9 @@ async function shareIt() {
           <p class="small muted">The prompt has the SDK, the vocabulary and the culture, and none of your data. Paste the file your AI writes into step 2.</p>
           <textarea v-if="showPrompt" class="mono small" rows="10" readonly :value="promptText"></textarea>
         </div>
-        <div class="panel-h"><h2>2 · The plugin file</h2><span class="spacer"></span><button class="btn" title="Paste from the clipboard" @click="pasteClipboard">Paste</button><button class="btn primary" @click="run"><span class="icon sm">play_arrow</span>Try it</button></div>
+        <div class="panel-h"><h2>2 · The extension file</h2><span class="spacer"></span><button class="btn" title="Paste from the clipboard" @click="pasteClipboard">Paste</button><button class="btn primary" @click="run"><span class="icon sm">play_arrow</span>Try it</button></div>
         <div class="panel-b col">
-          <textarea v-model="code" class="mono code" rows="22" spellcheck="false" aria-label="Plugin file" @keydown.meta.enter="run" @keydown.ctrl.enter="run"></textarea>
+          <textarea v-model="code" class="mono code" rows="22" spellcheck="false" aria-label="Extension file" @keydown.meta.enter="run" @keydown.ctrl.enter="run"></textarea>
           <p class="small muted">⌘/Ctrl + Enter to try it.</p>
         </div>
       </section>
@@ -128,11 +128,11 @@ async function shareIt() {
           <span v-if="result" class="chip" :class="result.ok ? 'ok' : 'bad'">{{ result.ok ? 'runs' : 'has problems' }}</span>
         </div>
         <div class="panel-b col">
-          <iframe ref="frame" class="preview" sandbox="allow-scripts" src="/preview.html" title="Plugin preview" :style="{ height: height + 'px' }"></iframe>
+          <iframe ref="frame" class="preview" sandbox="allow-scripts" src="/preview.html" title="Extension preview" :style="{ height: height + 'px' }"></iframe>
           <ul v-if="result?.errors?.length" class="small bad"><li v-for="e in result.errors" :key="e">{{ e }}</li></ul>
           <div v-if="mismatch" class="fix small">
-            <span>Your plugin is called <b class="mono">{{ mismatch.to }}</b>, but its types are named <b class="mono">{{ mismatch.from }}.…</b> A plugin's own names start with its name.</span>
-            <div class="row wrap"><button class="btn primary" @click="fixByRenaming">Rename them to {{ mismatch.to }}.…</button><button class="btn" @click="fixByName">Call the plugin {{ mismatch.from }}</button></div>
+            <span>Your extension is called <b class="mono">{{ mismatch.to }}</b>, but its types are named <b class="mono">{{ mismatch.from }}.…</b> An extension's own names start with its name.</span>
+            <div class="row wrap"><button class="btn primary" @click="fixByRenaming">Rename them to {{ mismatch.to }}.…</button><button class="btn" @click="fixByName">Call the extension {{ mismatch.from }}</button></div>
           </div>
           <ul v-else-if="result?.problems?.length" class="small warn"><li v-for="p in result.problems" :key="p">{{ p }}</li></ul>
           <div v-if="result?.manifest" class="small muted">
@@ -151,7 +151,7 @@ async function shareIt() {
             <div class="col share">
               <input v-model="changelog" placeholder="What's new (people see this when they update)" aria-label="What's new" />
               <div class="row wrap"><button class="btn" :disabled="busy || !result?.ok" @click="shareIt"><span class="icon sm">public</span>Share {{ slug }}</button></div>
-              <p v-if="published" class="muted">Shared as <span class="mono">{{ published.name }} {{ published.version }}</span>. Others find it in Plugins → Add plugins.</p>
+              <p v-if="published" class="muted">Shared as <span class="mono">{{ published.name }} {{ published.version }}</span>. Others find it in Extensions → Add extensions.</p>
               <ul v-if="published?.checks?.warnings?.length" class="warn"><li v-for="w in published.checks.warnings" :key="w.id">{{ w.msg }}</li></ul>
             </div>
           </details>

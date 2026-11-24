@@ -7,7 +7,7 @@ export async function api(method, path, body) {
 }
 /** The trusted page for an action. It opens in this tab and comes back to where you are, with a short notice. */
 export function trustUrl(kind, params = {}, backTo = null) {
-  const here = backTo ?? `/app${(typeof location !== 'undefined' ? location.hash : '#/m/plugins').split('?')[0]}`
+  const here = backTo ?? `/app${(typeof location !== 'undefined' ? location.hash : '#/m/extensions').split('?')[0]}`
   const q = new URLSearchParams({ do: kind, ...params, back: here })
   return `/trust?${q}`
 }

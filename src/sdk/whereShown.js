@@ -17,7 +17,7 @@ export function whereShown(pkg) {
   if (!m || m.pkg !== pkg) return []
   const out = m.routes.map((r) => ({ label: `its page, ${r.meta?.title ?? m.title}`, path: r.path }))
   for (const s of Object.keys(m.slots ?? {})) if (SLOT_SCREENS[s]) out.push(SLOT_SCREENS[s])
-  if (m.settings) out.push({ label: 'Plugins', path: '/m/plugins' })
+  if (m.settings) out.push({ label: 'Extensions', path: '/m/extensions' })
   if (m.commands?.length) out.push({ label: 'the command palette (⌘K)', path: null })
   return out
 }

@@ -4,6 +4,6 @@ export default {
   name: 'Life Console',
   short: 'Base',
   tagline: 'Strategise, distribute, execute',
-  modules: ['today', 'week', 'focus', 'briefing', 'todos', 'deadlines', 'strategy', 'intelligence', 'research', 'study', 'wellbeing', 'standards', 'plugins'],
+  modules: ['today', 'week', 'focus', 'briefing', 'todos', 'deadlines', 'strategy', 'intelligence', 'research', 'study', 'wellbeing', 'standards', 'extensions'],
   features: {},
 }

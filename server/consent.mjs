@@ -31,9 +31,9 @@ export const isDocumentNavigation = (req) => req.headers['sec-fetch-dest'] === '
 const KINDS = {
   'enable-plugins': { title: 'Turn on Public plugins', danger: true },
   'disable-plugins': { title: 'Turn off all Public plugins' },
-  install: { title: 'Install a plugin', danger: true },
-  remove: { title: 'Remove a plugin' },
-  toggle: { title: 'Switch a plugin on or off' },
+  install: { title: 'Install an extension', danger: true },
+  remove: { title: 'Remove an extension' },
+  toggle: { title: 'Switch an extension on or off' },
   token: { title: 'Create an access token', danger: true },
   'vault-save': { title: 'Save a connection key', danger: true },
   connect: { title: 'Connect an account', danger: true },
@@ -64,11 +64,11 @@ label{display:block;margin:12px 0 4px;font-weight:600}input[type=text],input[typ
 button.yes{background:var(--accent);border-color:var(--accent);color:var(--bg)}button.yes.danger{background:var(--danger);border-color:var(--danger);color:#fff}code{font:13px ui-monospace,Menlo,monospace}
 .check{display:flex;gap:8px;align-items:flex-start;font-weight:400}footer{margin-top:18px;font-size:13px;color:var(--muted)}
 </style></head><body><main><div class="badge">🔒 LIFE CONSOLE · TRUSTED PAGE</div><div class="card">${body}</div>
-<footer>This page never runs plugins or scripts. Life Console only asks for consent, keys and passwords here. <a href="${appPath}?safe=1" style="color:inherit">Open the console without Public plugins</a></footer></main></body></html>`
+<footer>This page never runs extensions or scripts. Life Console only asks for consent, keys and passwords here. <a href="${appPath}?safe=1" style="color:inherit">Open the console without Public extensions</a></footer></main></body></html>`
     return { status, html }
   }
   /** Where to go back to in the console: only a path in this app (never another site). */
-  const safeBack = (v) => (typeof v === 'string' && /^\/app(#\/[\w\-/.?=&%]*)?$/.test(v) ? v : `${appPath}#/m/plugins`)
+  const safeBack = (v) => (typeof v === 'string' && /^\/app(#\/[\w\-/.?=&%]*)?$/.test(v) ? v : `${appPath}#/m/extensions`)
   /** Add a notice (and other query values) to a console address, for the console to show when you're back. */
   const withQuery = (back, params) => {
     const [path, hash = '/'] = back.split('#')
@@ -94,17 +94,17 @@ button.yes{background:var(--accent);border-color:var(--accent);color:var(--bg)}b
     const action = { kind }
     let details = '', fields = '', warning = '', formAction = ''
     if (kind === 'enable-plugins') {
-      warning = 'Public plugins are made by other people. A plugin you install can see and change everything in your planner and send it anywhere. Only install plugins from people you trust.'
+      warning = 'Public extensions are made by other people. An extension you install can see and change everything in your planner and send it anywhere. Only install extensions from people you trust.'
       details = '<p class="muted">From now on, creating access tokens, changing your password and deleting your account also need this page.</p>'
     } else if (kind === 'disable-plugins') {
-      details = '<p>Every Public plugin is switched off. Your planner and the plugins\' data stay; you can switch them on again one by one.</p>'
+      details = '<p>Every Public extension is switched off. Your planner and the extensions\' data stay; you can switch them on again one by one.</p>'
     } else if (kind === 'install') {
       const v = await registry.version(user, q.get('hash'))
       if (!v || v.packageName !== q.get('pkg') || v.pulled) return { missing: true }
       action.pkg = v.packageName; action.hash = v.hash
       const says = v.manifest.says ?? {}
       const warnings = v.checks.warnings ?? []
-      details = `<dl><dt>Plugin</dt><dd><b>${esc(v.manifest.title)}</b> <code>${esc(v.packageName)}</code></dd><dt>Version</dt><dd>${esc(v.version)}</dd>
+      details = `<dl><dt>Extension</dt><dd><b>${esc(v.manifest.title)}</b> <code>${esc(v.packageName)}</code></dd><dt>Version</dt><dd>${esc(v.version)}</dd>
 <dt>Made by</dt><dd>${esc(v.packageName.split('/')[0])}</dd><dt>Visibility</dt><dd>${esc(v.pkg.visibility)}</dd>
 <dt>Talks to</dt><dd>${says.internet?.length ? esc(says.internet.join(', ')) : 'no sites (it says)'}</dd>
 ${says.connections?.length ? `<dt>Uses connections</dt><dd>${esc(says.connections.join(', '))}</dd>` : ''}
@@ -114,9 +114,9 @@ ${warnings.length ? `<p><b>Automated checks found:</b></p><ul>${warnings.map((w)
 ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : ''}`
       const own = user.handle && v.packageName.startsWith(`${user.handle}/`)
       warning = own
-        ? 'This is your own plugin. Like any plugin, it can see and change everything in your planner.'
-        : 'It will be able to see and change everything in your planner and send it to the sites it talks to (listed below). Only install plugins from people you trust.'
-      if (!user.publicPlugins) details += '<p class="muted">This is your first plugin: installing it also turns on plugins for your account. From then on, creating access tokens, changing your password and deleting your account are confirmed on this page too.</p>'
+        ? 'This is your own extension. Like any extension, it can see and change everything in your planner.'
+        : 'It will be able to see and change everything in your planner and send it to the sites it talks to (listed below). Only install extensions from people you trust.'
+      if (!user.publicPlugins) details += '<p class="muted">This is your first extension: installing it also turns on extensions for your account. From then on, creating access tokens, changing your password and deleting your account are confirmed on this page too.</p>'
     } else if (kind === 'remove' || kind === 'toggle') {
       action.pkg = String(q.get('pkg') ?? '')
       if (kind === 'toggle') action.on = q.get('on') === '1'
@@ -129,7 +129,7 @@ ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : 
       action.name = String(q.get('name') ?? '').toLowerCase().slice(0, 30)
       action.site = String(q.get('site') ?? '').toLowerCase().slice(0, 200)
       action.scheme = String(q.get('scheme') ?? 'bearer').slice(0, 60)
-      details = `<p>Paste the key for <b>${esc(action.name || 'this connection')}</b>. It's stored encrypted and never shown again, to plugins or to you. It is only ever sent to <b>${esc(action.site || 'the site you name')}</b>.</p>`
+      details = `<p>Paste the key for <b>${esc(action.name || 'this connection')}</b>. It's stored encrypted and never shown again, to extensions or to you. It is only ever sent to <b>${esc(action.site || 'the site you name')}</b>.</p>`
       fields = `${action.name ? '' : '<label for="n">Name</label><input id="n" type="text" name="name" placeholder="strava" required>'}
 ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name="site" placeholder="www.strava.com" required>'}
 <label for="k">Key</label><input id="k" type="password" name="secret" autocomplete="off" required>`
@@ -141,7 +141,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       formAction = new URL(p.authUrl).origin // the form's POST answers with a redirect there: CSP form-action must allow it
       details = `<p>Connect your <b>${esc(p.title)}</b> account. You'll sign in on ${esc(p.title)}'s own site and come back here.</p>
 <dl><dt>Access asked for</dt><dd><code>${esc(p.scope || 'basic')}</code></dd><dt>Sent only to</dt><dd>${esc(p.site)}</dd></dl>
-<p class="muted">The tokens are stored encrypted and never shown, to plugins or to you. Plugins that say they use the ${esc(p.name)} connection can ask Life Console to make requests with it.</p>`
+<p class="muted">The tokens are stored encrypted and never shown, to extensions or to you. Extensions that say they use the ${esc(p.name)} connection can ask Life Console to make requests with it.</p>`
     } else if (kind === 'pod-use' || kind === 'pod-import') {
       details = kind === 'pod-use'
         ? '<p>From now on, every time your planner is saved it is also written to this Solid pod, as JSON-LD any Solid app can read. Life Console keeps its working copy here too.</p>'
@@ -174,7 +174,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       details = '<p>Your planner goes back to being written to the pod built into this server. Your own pod keeps what it already has.</p>'
     } else if (kind === 'vault-remove') {
       action.name = String(q.get('name') ?? '').slice(0, 30)
-      details = `<p>Remove the saved key <b>${esc(action.name)}</b>. Plugins that use it stop working until you add it again.</p>`
+      details = `<p>Remove the saved key <b>${esc(action.name)}</b>. Extensions that use it stop working until you add it again.</p>`
     } else if (kind === 'password') {
       if (!user.passwordHash) return { noPassword: true }
       fields = '<label for="c">Current password</label><input id="c" type="password" name="current" autocomplete="current-password" required><label for="p">New password</label><input id="p" type="password" name="password" autocomplete="new-password" required minlength="8">'
@@ -192,9 +192,9 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     const user = who.user
     const d = await describe(user, url.searchParams)
     if (!d) return page('Trusted page', `<h1>Trusted page</h1><p>Nothing to confirm.</p><p class="muted">Life Console asks for consent, keys and passwords only on this page.</p>${back()}`)
-    if (d.missing) return page('Not found', `<h1>That plugin version isn't available</h1><p>It may have been pulled from the registry.</p>${back()}`)
+    if (d.missing) return page('Not found', `<h1>That extension version isn't available</h1><p>It may have been pulled from the registry.</p>${back()}`)
     if (d.vaultOff) return page('Vault off', `<h1>Connections are off on this server</h1><p>The server's admin hasn't set a vault key (VAULT_KEY).</p>${back()}`)
-    if (d.noHandle) return page('Choose a handle', `<h1>Choose a handle first</h1><p>Your handle is your address for sharing (Plugins → Publishing).</p>${back()}`)
+    if (d.noHandle) return page('Choose a handle', `<h1>Choose a handle first</h1><p>Your handle is your address for sharing (Extensions → Publishing).</p>${back()}`)
     if (d.noPassword) return page('No password', `<h1>This account signs in with Google</h1><p>It has no password to change.</p>${back()}`)
     const backTo = safeBack(url.searchParams.get('back'))
     d.action.back = backTo
@@ -214,10 +214,10 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     switch (a.kind) {
       case 'enable-plugins':
         await db.update(users).set({ publicPlugins: true, updatedAt: new Date() }).where(eq(users.id, uid))
-        return { msg: 'Public plugins are on for your account. Install plugins from Settings → Plugins.' }
+        return { msg: 'Public extensions are on for your account. Install extensions from Settings → Extensions.' }
       case 'disable-plugins':
         await registry.disableAll(uid)
-        return { msg: 'Every Public plugin is switched off.' }
+        return { msg: 'Every Public extension is switched off.' }
       case 'install': {
         if (!user.publicPlugins) await db.update(users).set({ publicPlugins: true, updatedAt: new Date() }).where(eq(users.id, uid))
         const r = await registry.install(uid, a.pkg, a.hash)
@@ -341,7 +341,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     if (!who || who.via !== 'session') return page('Sign in first', `<h1>Sign in first</h1>${back('Go to Life Console')}`)
     const state = String(url.searchParams.get('state') ?? '')
     const [row] = state ? await db.select().from(consentNonces).where(and(eq(consentNonces.nonceHash, sha256(state)), eq(consentNonces.userId, who.user.id), isNull(consentNonces.usedAt))) : []
-    if (!row || row.action.kind !== 'connect-callback' || Date.now() - new Date(row.createdAt).getTime() > NONCE_TTL) return { status: 400, html: page('Expired', `<h1>This connection attempt expired</h1><p>Start again from Plugins → Connections.</p>${back()}`).html }
+    if (!row || row.action.kind !== 'connect-callback' || Date.now() - new Date(row.createdAt).getTime() > NONCE_TTL) return { status: 400, html: page('Expired', `<h1>This connection attempt expired</h1><p>Start again from Extensions → Connections.</p>${back()}`).html }
     await db.update(consentNonces).set({ usedAt: new Date() }).where(eq(consentNonces.nonceHash, row.nonceHash))
     const p = providers[row.action.provider]
     if (!p) return { status: 404, html: page('Not set up', `<h1>That provider is not set up on this server</h1>${back()}`).html }
@@ -350,7 +350,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       const tokens = await tokenRequest(p, { grant_type: 'authorization_code', code: url.searchParams.get('code'), redirect_uri: `${origin(req)}/trust/oauth` })
       await vault.saveOAuth(who.user.id, p, tokens)
       log(`[consent] ${who.user.id.slice(0, 8)} connected ${p.name}`)
-      return page('Connected', `<h1>Connected</h1><p>Your ${esc(p.title)} account is connected. Plugins that use it can make requests to ${esc(p.site)}; you can remove it any time in Plugins → Connections.</p>${back()}`)
+      return page('Connected', `<h1>Connected</h1><p>Your ${esc(p.title)} account is connected. Extensions that use it can make requests to ${esc(p.site)}; you can remove it any time in Extensions → Connections.</p>${back()}`)
     } catch (e) {
       return { status: 502, html: page('Not connected', `<h1>Not connected</h1><p>${esc(e.message)}</p>${back()}`).html }
     }

@@ -3,7 +3,7 @@
 // platform/plugins-vocabulary.md and platform/plugins-the-life-console-way.md.
 import { CORE_TYPES, COMMON_TYPES, TRAITS, LINKS, CORE_TAGS, CORE_EVENTS } from './vocabulary.js'
 
-export const STARTER = `// A Life Console plugin: one file, default export = its manifest.
+export const STARTER = `// A Life Console extension: one file, default export = its manifest.
 export default {
   sdk: 1,
   title: 'Water',
@@ -33,9 +33,9 @@ export default {
 const list = (o) => Object.entries(o).map(([k, v]) => `- ${k}: ${v.label ?? v.desc ?? v}${v.kindOf ? ` (kind of ${v.kindOf})` : ''}${v.traits ? ` [${v.traits.join(', ')}]` : ''}`).join('\n')
 
 export function workshopPrompt(description, currentCode = '') {
-  return `You are writing a plugin for Life Console, an open-source planner. Reply with ONE JavaScript file and nothing else (no explanation, no markdown fences).
+  return `You are writing an extension for Life Console, an open-source planner. Reply with ONE JavaScript file and nothing else (no explanation, no markdown fences).
 
-What the plugin should do:
+What the extension should do:
 ${description || '(describe it here)'}
 
 ## The file
@@ -65,7 +65,7 @@ Traits: ${Object.keys(TRAITS).join(', ')}
 Links: ${Object.keys(LINKS).join(', ')} (your own links must be a kind of one of these)
 Tag trees: ${Object.keys(CORE_TAGS).filter((k) => !CORE_TAGS[k].parent).join(', ')}
 Events: ${CORE_EVENTS.join(', ')}
-Your own terms live in your namespace (the plugin's name), e.g. 'water.Glass'. Anything with a time belongs on the planner:
+Your own terms live in your namespace (the extension's name), e.g. 'water.Glass'. Anything with a time belongs on the planner:
 create a core.Todo, core.TimeBlock, core.Deadline or core.Reminder ({ title, at: 'YYYY-MM-DDTHH:MM', repeat?: 'daily'|'weekdays'|'weekly:mon,thu'|'every:3', open: '/#/m/<name>' }).
 
 ## Style

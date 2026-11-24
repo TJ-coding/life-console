@@ -157,7 +157,7 @@ function toggleBoDay(b, i) {
           <div><b>{{ e.name }}</b><div class="small muted">{{ e.tagline }}</div></div>
         </label>
         <!-- plugins: parts of other screens (sleep, caffeine, routines), off unless switched on -->
-        <div class="tiny upper muted">Plugins<span class="muted"> · {{ edition.name }} · all your devices</span></div>
+        <div class="tiny upper muted">Extensions<span class="muted"> · {{ edition.name }} · all your devices</span></div>
         <label v-for="p in plugins" :key="p.module" class="row ed-opt">
           <input type="checkbox" :checked="isEnabled(p.module)" @change="setAddOn(p.module, $event.target.checked)" />
           <span class="icon sm muted">{{ p.icon }}</span><div><b>{{ p.label }}</b><div class="small muted">{{ p.desc }}</div></div>
@@ -172,10 +172,10 @@ function toggleBoDay(b, i) {
       </div>
     </section>
     <section v-if="auth.user" id="plugins" class="panel">
-      <div class="panel-h"><span class="icon sm">extension</span><h2>Plugins</h2><span class="spacer"></span><span class="tiny muted">extend the console</span></div>
+      <div class="panel-h"><span class="icon sm">extension</span><h2>Extensions</h2><span class="spacer"></span><span class="tiny muted">extend the console</span></div>
       <div class="panel-b col">
         <p class="small muted">Add screens, records and integrations made by others or by you. Installing and saving keys happen on the trusted page.</p>
-        <div class="row"><router-link class="btn" to="/m/plugins"><span class="icon sm">extension</span>Plugins</router-link><router-link class="btn" to="/m/plugins/workshop"><span class="icon sm">construction</span>Workshop</router-link><router-link class="btn" to="/m/plugins/sharing"><span class="icon sm">share</span>Sharing and your data</router-link></div>
+        <div class="row"><router-link class="btn" to="/m/extensions"><span class="icon sm">extension</span>Extensions</router-link><router-link class="btn" to="/m/extensions/workshop"><span class="icon sm">construction</span>Workshop</router-link><router-link class="btn" to="/m/extensions/sharing"><span class="icon sm">share</span>Sharing and your data</router-link></div>
         <PluginSlot name="settings.section" />
       </div>
     </section>

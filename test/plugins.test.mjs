@@ -163,13 +163,13 @@ test('consent: the trusted page refuses fetch(), frames and posts without its no
 test('consent: enable Public plugins, install from the registry, load, update, toggle, remove', async () => {
   assert.equal((await bob('GET', '/api/plugins/installed')).body.publicPlugins, false)
   // the first install says it also turns plugins on: one confirmation, not two
-  const early = await bob('GET', `/trust?do=install&pkg=alice/habits&hash=${published.hash}&back=/app%23/m/plugins`, undefined, NAV)
-  assert.match(early.text, /This is your first plugin/)
-  assert.match(early.text, /href="\/app#\/m\/plugins">Cancel/, 'Cancel goes back where you came from')
+  const early = await bob('GET', `/trust?do=install&pkg=alice/habits&hash=${published.hash}&back=/app%23/m/extensions`, undefined, NAV)
+  assert.match(early.text, /This is your first extension/)
+  assert.match(early.text, /href="\/app#\/m\/extensions">Cancel/, 'Cancel goes back where you came from')
   assert.equal((await bob('GET', `/trust?do=install&pkg=alice/habits&hash=${published.hash}&back=https://evil.test/`, undefined, NAV)).text.includes('evil.test'), false, 'never back to another site')
   const done = await confirm(bob, `do=install&pkg=alice/habits&hash=${published.hash}`)
   assert.equal(done.status, 303, 'straight back to the console')
-  assert.match(done.headers.get('location'), /^\/app#\/m\/plugins\?notice=Installed/, 'back where it started, with a notice')
+  assert.match(done.headers.get('location'), /^\/app#\/m\/extensions\?notice=Installed/, 'back where it started, with a notice')
   assert.equal((await bob('GET', '/api/auth/me')).body.user.publicPlugins, true, 'the first install turned plugins on')
   assert.match(done.text, /Installed alice\/habits 1\.1\.0/)
   const inst = (await bob('GET', '/api/plugins/installed')).body.plugins

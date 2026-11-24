@@ -75,7 +75,7 @@ async function run({ code, name }) {
       if (typeof c === 'function') cleanups.push(c)
     } catch (e) { errors.push(`${label}: ${e.message}`); box.innerHTML = `<p class="err">${String(e.message).replace(/</g, '&lt;')}</p>` }
   }
-  if (!parts.length) out.innerHTML = '<p style="color:var(--muted)">This plugin has no pages, slots or settings to show.</p>'
+  if (!parts.length) out.innerHTML = '<p style="color:var(--muted)">This extension has no pages, slots or settings to show.</p>'
   const summary = {
     title: manifest.title ?? '', description: manifest.description ?? '', icon: manifest.icon ?? 'extension', sdk: manifest.sdk ?? 1,
     says: { internet: manifest.says?.internet ?? [], connections: manifest.says?.connections ?? [] }, replaces: manifest.replaces ?? [],

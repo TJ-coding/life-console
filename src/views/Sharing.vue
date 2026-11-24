@@ -48,7 +48,7 @@ const writeNow = async () => { await api('POST', '/api/pod/mirror'); toast('Writ
     <section class="panel">
       <div class="panel-h"><span class="icon sm">share</span><h2>Sharing</h2><span class="spacer"></span><span v-if="me?.address" class="mono small">{{ me.address }}</span></div>
       <div class="panel-b col">
-        <p v-if="me && !me.address" class="small muted">Choose a handle in <router-link to="/m/plugins">Plugins → Publishing</router-link>: it becomes your address for sharing.</p>
+        <p v-if="me && !me.address" class="small muted">Choose a handle in <router-link to="/m/extensions">Extensions → Publishing</router-link>: it becomes your address for sharing.</p>
         <p v-if="me?.movedTo" class="small warn">This account moved to {{ me.movedTo }}: this server forwards to it.</p>
         <template v-if="me?.address && !me.movedTo">
           <div class="row wrap">

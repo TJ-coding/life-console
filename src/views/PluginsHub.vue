@@ -35,7 +35,7 @@ onMounted(() => {
   refresh()
   // a plugin was removed with "also delete its data": do it here, where the planner lives
   const f = route.query.forget
-  if (typeof f === 'string' && f) { door.forget(f); toast(`Deleted ${f}'s data from your planner`); router.replace('/m/plugins') }
+  if (typeof f === 'string' && f) { door.forget(f); toast(`Deleted ${f}'s data from your planner`); router.replace('/m/extensions') }
 })
 
 const installed = computed(() => status.value?.plugins ?? [])
@@ -49,17 +49,17 @@ const mine = (p) => auth.user?.handle && p.name.startsWith(`${auth.user.handle}/
   <div class="ph col">
     <div v-if="plugins.safe" class="note row wrap">
       <span class="icon sm">health_and_safety</span>
-      <span class="grow">{{ plugins.crashed ? 'Plugins were switched off for this visit because the console crashed while loading them.' : 'Plugins are switched off for this visit (safe mode).' }}</span>
+      <span class="grow">{{ plugins.crashed ? 'Extensions were switched off for this visit because the console crashed while loading them.' : 'Extensions are switched off for this visit (safe mode).' }}</span>
       <button class="btn" @click="leaveSafeMode">Switch them back on</button>
     </div>
     <p v-if="err" class="danger small">{{ err }}</p>
 
     <section class="panel">
-      <div class="panel-h"><span class="icon sm">extension</span><h2>Your plugins</h2><span class="spacer"></span>
-        <router-link class="btn" to="/m/plugins/workshop"><span class="icon sm">construction</span>Make your own</router-link>
+      <div class="panel-h"><span class="icon sm">extension</span><h2>Your extensions</h2><span class="spacer"></span>
+        <router-link class="btn" to="/m/extensions/workshop"><span class="icon sm">construction</span>Make your own</router-link>
       </div>
       <div class="panel-b col">
-        <p v-if="status && !installed.length" class="muted">None yet. Plugins add things to Life Console: a card on Today, a new page, a connection to another app. Find one below, or make your own.</p>
+        <p v-if="status && !installed.length" class="muted">None yet. Extensions add things to Life Console: a card on Today, a new page, a connection to another app. Find one below, or make your own.</p>
         <div v-for="p in installed" :key="p.pkg" class="item">
           <div class="row">
             <span class="icon">{{ p.icon }}</span>
@@ -83,8 +83,8 @@ const mine = (p) => auth.user?.handle && p.name.startsWith(`${auth.user.handle}/
     </section>
 
     <section class="panel">
-      <div class="panel-h"><span class="icon sm">add_circle</span><h2>Add plugins</h2><span class="spacer"></span>
-        <input v-model="q" class="search" type="search" placeholder="Search" aria-label="Search plugins" />
+      <div class="panel-h"><span class="icon sm">add_circle</span><h2>Add extensions</h2><span class="spacer"></span>
+        <input v-model="q" class="search" type="search" placeholder="Search" aria-label="Search extensions" />
       </div>
       <div class="panel-b col">
         <p v-if="!toFind.length" class="muted small">{{ q ? 'Nothing matches.' : 'Nothing new to add right now.' }}</p>
@@ -92,7 +92,7 @@ const mine = (p) => auth.user?.handle && p.name.startsWith(`${auth.user.handle}/
           <span class="icon">{{ p.icon }}</span>
           <div class="grow">
             <b>{{ p.title }}</b> <span class="small muted">by {{ mine(p) ? 'you' : p.name.split('/')[0] }}</span>
-            <span v-if="p.worksWithEverything" class="chip ok" title="Uses only the SDK and the data route, so it works with other plugins">works with everything</span>
+            <span v-if="p.worksWithEverything" class="chip ok" title="Uses only the SDK and the data route, so it works with other extensions">works with everything</span>
             <div class="small">{{ p.description }}</div>
             <div v-if="p.latest?.checks?.warnings?.length" class="small warn">Check before installing: {{ p.latest.checks.warnings.map((w) => w.msg).join('; ') }}</div>
           </div>
@@ -105,7 +105,7 @@ const mine = (p) => auth.user?.handle && p.name.startsWith(`${auth.user.handle}/
       <summary class="panel-h"><span class="icon sm">tune</span><h2>More</h2></summary>
       <div class="panel-b col">
         <h3>Connections</h3>
-        <p class="small muted">Accounts plugins can use without ever seeing your password or key.</p>
+        <p class="small muted">Accounts extensions can use without ever seeing your password or key.</p>
         <p v-if="!conns.on" class="small muted">Off on this server (its admin sets VAULT_KEY).</p>
         <template v-else>
           <div v-for="c in conns.connections" :key="c.name" class="row small"><span class="mono grow">{{ c.name }} → {{ c.site }}</span><a class="btn" :href="trustUrl('vault-remove', { name: c.name })">Remove</a></div>
@@ -118,12 +118,12 @@ const mine = (p) => auth.user?.handle && p.name.startsWith(`${auth.user.handle}/
         </template>
         <h3>Safety</h3>
         <div class="row wrap small">
-          <a :href="trustUrl('disable-plugins')">Switch off every plugin</a>
+          <a :href="trustUrl('disable-plugins')">Switch off every extension</a>
           <span class="muted">·</span>
-          <a href="/app?safe=1">Open once without plugins</a>
+          <a href="/app?safe=1">Open once without extensions</a>
         </div>
-        <details v-if="plugins.conflicts.length" class="small"><summary class="muted">{{ plugins.conflicts.length }} things plugins asked for but didn't get</summary><ul><li v-for="c in plugins.conflicts" :key="c" class="mono">{{ c }}</li></ul></details>
-        <p v-if="auth.user?.handle" class="small muted">You publish plugins as <span class="mono">{{ auth.user.handle }}</span>.</p>
+        <details v-if="plugins.conflicts.length" class="small"><summary class="muted">{{ plugins.conflicts.length }} things extensions asked for but didn't get</summary><ul><li v-for="c in plugins.conflicts" :key="c" class="mono">{{ c }}</li></ul></details>
+        <p v-if="auth.user?.handle" class="small muted">You publish extensions as <span class="mono">{{ auth.user.handle }}</span>.</p>
       </div>
     </details>
   </div>

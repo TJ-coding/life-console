@@ -103,7 +103,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
       const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.handle, h))
       if (!taken) { await db.update(users).set({ handle: h, updatedAt: new Date() }).where(eq(users.id, user.id)); user.handle = h; return h }
     }
-    throw httpError(409, 'Choose a publisher name in Plugins first')
+    throw httpError(409, 'Choose a publisher name in Extensions first')
   }
 
   async function publish(user, b) {
@@ -111,7 +111,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     // a bare name ("water") is published under your publisher name
     let name = String(b.name ?? '').toLowerCase()
     if (!name.includes('/')) name = `${user.handle}/${name}`
-    if (!NAME.test(name)) throw httpError(400, 'A plugin name looks like your-handle/plugin-name')
+    if (!NAME.test(name)) throw httpError(400, 'An extension name looks like your-handle/extension-name')
     if (name.split('/')[0] !== user.handle) throw httpError(403, `You can only publish under ${user.handle}/`)
     const code = String(b.code ?? '')
     // no version given ("Use it" in the workshop): the same code reuses its version, new code gets the next one
@@ -124,8 +124,8 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     }
     if (!VERSION.test(String(b.version ?? ''))) throw httpError(400, 'version must look like 1.0.0')
     if (!code.trim()) throw httpError(400, 'code is empty')
-    if (Buffer.byteLength(code) > MAX_CODE) throw httpError(413, `A plugin is at most ${MAX_CODE / 1024} KB`)
-    if (!/export\s+default\b/.test(code)) throw httpError(400, 'The plugin file needs `export default { … }` (its manifest)')
+    if (Buffer.byteLength(code) > MAX_CODE) throw httpError(413, `An extension is at most ${MAX_CODE / 1024} KB`)
+    if (!/export\s+default\b/.test(code)) throw httpError(400, 'The extension file needs `export default { … }` (its manifest)')
     const m = b.manifest && typeof b.manifest === 'object' ? b.manifest : {}
     const manifest = {
       title: clip(m.title || name.split('/')[1], 80), description: clip(m.description, 400), icon: clip(m.icon || 'extension', 40), sdk: m.sdk ?? 1,
@@ -137,7 +137,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     const visibility = b.visibility === 'public' ? 'public' : 'private'
     const existing = await pkgOf(name)
     if (existing?.upstream) throw httpError(403, `${name} comes from ${existing.upstream}: publish it there`)
-    if (existing && existing.ownerId !== user.id) throw httpError(403, 'That plugin belongs to someone else')
+    if (existing && existing.ownerId !== user.id) throw httpError(403, 'That extension belongs to someone else')
     const [dupe] = await db.select({ hash: pluginVersions.hash }).from(pluginVersions).where(and(eq(pluginVersions.packageName, name), eq(pluginVersions.version, b.version)))
     if (dupe) throw httpError(409, `Version ${b.version} is already published: versions are fixed, publish a new one`)
     await db.transaction(async (tx) => {
@@ -215,7 +215,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
 
   async function report(user, b) {
     const p = await pkgOf(String(b.name ?? ''))
-    if (!canSee(p, user)) throw httpError(404, 'no such plugin')
+    if (!canSee(p, user)) throw httpError(404, 'no such extension')
     const reason = clip(b.reason, 2000).trim()
     if (!reason) throw httpError(400, 'Say what is wrong')
     await db.insert(pluginReports).values({ packageName: p.name, hash: clip(b.hash, 64), reporterId: user.id, reason })
