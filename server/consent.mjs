@@ -135,7 +135,7 @@ ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : 
       action.name = String(q.get('name') ?? 'Mac app').slice(0, 60)
       details = `<p>An access token lets the app named <b>${esc(action.name)}</b> read your planner and mark tasks done, without signing in. It replaces that name's previous token.</p>`
     } else if (kind === 'claude') {
-      details = '<p>Claude (Claude Code, or another app that supports MCP) can read and change the draft in your workshop, see its preview and read your extensions\' code. It can\'t see your planner, and installing still asks you here.</p><p class="muted">Connecting again replaces the previous connection.</p>'
+      details = '<p>Claude (Claude Code, or another app that supports MCP) can work in your workshop and manage your extensions: publish, edit listings, remove and switch off. It can\'t see your planner, and installing, updating or switching on still asks you here.</p><p class="muted">Connecting again replaces the previous connection.</p>'
     } else if (kind === 'vault-save') {
       if (!vault.on) return { vaultOff: true }
       action.name = String(q.get('name') ?? '').toLowerCase().slice(0, 30)

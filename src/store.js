@@ -380,12 +380,12 @@ export function toggleTheme() {
   applyTheme()
 }
 let toastTimer
-export function toast(msg, action = null) {
+export function toast(msg, action = null, ms = 0) {
   ui.toast = msg
   ui.toastAction = action // optional { label, run }
   clearTimeout(toastTimer)
   // undo toasts stay longer: on a phone you need time to notice them and reach the button
-  toastTimer = setTimeout(() => { ui.toast = ''; ui.toastAction = null }, action ? 9000 : 2200)
+  toastTimer = setTimeout(() => { ui.toast = ''; ui.toastAction = null }, ms || (action ? 9000 : 2200))
 }
 
 /* ───────────── todos ───────────── */

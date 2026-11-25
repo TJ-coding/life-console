@@ -290,6 +290,8 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
 
     switch (route) {
       /* ── the live workshop: an AI app changes the draft over /mcp (server/mcp.mjs), this page shows it ── */
+      case 'GET /api/live':
+        return live.watch(uid, req, res, SECURITY_HEADERS)
       case 'GET /api/workshop/live':
         return live.subscribe(uid, req, res, SECURITY_HEADERS)
       case 'POST /api/workshop/live/draft': {

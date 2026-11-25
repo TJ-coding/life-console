@@ -68,7 +68,10 @@ speaks MCP over HTTP works the same way. With the workshop open, ask Claude to m
 writes appears in the workshop at once, runs in the sandboxed preview on demo data, and the preview's findings
 (errors, problems, what each part shows) come back to Claude so it can fix them. Claude can open your extensions or
 someone else's (as your own copy), read what you changed by hand, and take the workshop to the confirmation page.
-The token works for this connection only: it can't read your planner, and nothing is installed without your click.
+Claude can manage your extensions too: search the registry, publish a version, edit a listing, like, remove or
+switch off. Installing, updating and switching on run code with your planner data, so Claude asks and you confirm:
+the request appears on whatever Life Console page you have open (or Claude gives you the link). The token works for
+this connection only: it can't read your planner, and nothing is installed without your click.
 
 ## The data door
 

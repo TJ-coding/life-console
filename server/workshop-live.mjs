@@ -9,7 +9,7 @@ export function createWorkshopLive() {
   const rooms = new Map()
   const room = (uid) => {
     let r = rooms.get(uid)
-    if (!r) rooms.set(uid, (r = { draft: null, results: new Map(), clients: new Set(), waiters: new Set(), aiAt: 0 }))
+    if (!r) rooms.set(uid, (r = { draft: null, results: new Map(), clients: new Set(), watchers: new Set(), waiters: new Set(), aiAt: 0 }))
     return r
   }
   const write = (res, msg) => { try { res.write(`data: ${JSON.stringify(msg)}\n\n`) } catch { /* gone */ } }
@@ -25,6 +25,16 @@ export function createWorkshopLive() {
     write(res, { type: 'hello', draft: r.draft?.from === 'ai' && !r.draft.seen ? r.draft : null, aiAt: r.aiAt })
     const ping = setInterval(() => { try { res.write(': ping\n\n') } catch { /* gone */ } }, 25000)
     req.on('close', () => { clearInterval(ping); r.clients.delete(res); wake(r) })
+  }
+
+  /** Any page of the console listens too (GET /api/live): Claude's requests to confirm, and what it changed. */
+  function watch(uid, req, res, headers = {}) {
+    res.writeHead(200, { ...headers, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' })
+    const r = room(uid)
+    r.watchers.add(res)
+    write(res, { type: 'hello' })
+    const ping = setInterval(() => { try { res.write(': ping\n\n') } catch { /* gone */ } }, 25000)
+    req.on('close', () => { clearInterval(ping); r.watchers.delete(res) })
   }
 
   /** A new draft, from the workshop page ('you') or the AI ('ai', sent on to the page). */
@@ -71,12 +81,15 @@ export function createWorkshopLive() {
   const resultFor = (uid, key, ms = 8000) => until(uid, (r) => r.results.get(key), ms)
 
   return {
-    subscribe, setDraft, report, until, resultFor,
+    subscribe, watch, setDraft,
+    /** Tell every open console page: { type: 'ask', … } (confirm something) or { type: 'changed', … }. */
+    notify: (uid, msg) => { const r = room(uid); r.aiAt = Date.now(); for (const res of r.watchers) write(res, msg); return r.watchers.size },
+    report, until, resultFor,
     draft: (uid) => room(uid).draft,
     result: (uid, key) => room(uid).results.get(key) ?? null,
     open: (uid) => room(uid).clients.size,
     /** Ask the workshop page to do something: { type: 'open', pkg } or { type: 'use' }. */
     tell: (uid, msg) => { room(uid).aiAt = Date.now(); broadcast(uid, msg) },
-    close() { for (const r of rooms.values()) for (const res of r.clients) try { res.end() } catch { /* gone */ } rooms.clear() },
+    close() { for (const r of rooms.values()) for (const res of [...r.clients, ...r.watchers]) try { res.end() } catch { /* gone */ } rooms.clear() },
   }
 }

@@ -437,3 +437,83 @@ test('live workshop over MCP: a workshop-only token, drafts reach the open works
   assert.equal((await tool(other, 'use_draft')).isError, true)
   stream.destroy()
 })
+
+/** Server-sent events from `p` for client `c`: next(type) resolves with the next event of that type. */
+function sse(c, p) {
+  const events = []
+  let wake = () => {}
+  const req = http.request(base + p, { headers: { Cookie: c.cookie() } }, (res) => {
+    let buf = ''
+    res.on('data', (ch) => {
+      buf += ch
+      for (let i; (i = buf.indexOf('\n\n')) >= 0;) { const line = buf.slice(0, i); buf = buf.slice(i + 2); if (line.startsWith('data: ')) { events.push(JSON.parse(line.slice(6))); wake() } }
+    })
+  })
+  req.end()
+  const next = (type) => new Promise((resolve) => { const look = () => { const e = events.find((x) => x.type === type && !x.taken); if (e) { e.taken = true; resolve(e) } else wake = look }; look() })
+  return { next, close: () => req.destroy() }
+}
+async function mcpToken(c) {
+  const done = await confirm(c, 'do=claude')
+  return /Bearer (lct_[^&"\s]+)/.exec(done.text)[1]
+}
+async function mcpTool(tok, name, args = {}) {
+  const r = await raw('POST', '/mcp', JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }), { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` })
+  return JSON.parse(r.text).result
+}
+
+test('managing extensions over MCP: search, install with your click, switch, remove, publish, edit the listing', async () => {
+  const ann = client(); const ben = client(); const cal = client()
+  for (const [c, e] of [[ann, 'mgmt-ann'], [ben, 'mgmt-ben'], [cal, 'mgmt-cal']]) await c('POST', '/api/auth/signup', { email: `${e}@x.test`, password: 'pw-mgmt-1234' })
+  const tea = await ann('POST', '/api/registry/publish', { name: 'tea', code: CODE.replace("title: 'Habits'", "title: 'Tea'").replaceAll('habits.', 'tea.'), visibility: 'public', changelog: 'First brew', manifest: { title: 'Tea', description: 'Cups of tea' } })
+  assert.equal(tea.status, 201)
+  const tok = await mcpToken(ben)
+  const t = async (name, args) => { const r = await mcpTool(tok, name, args); return { ...r, text: r.content[0].text } }
+
+  assert.match((await t('search_extensions', { query: 'tea' })).text, /mgmt-ann\/tea 0\.1\.0: Tea: Cups of tea \(by mgmt-ann/)
+  const info = (await t('extension_info', { name: 'mgmt-ann/tea' })).text
+  assert.match(info, /Not installed/)
+  assert.match(info, /0\.1\.0: First brew/)
+
+  // installing waits for the person: the request reaches every open console page; they confirm on the trusted page
+  const page = sse(ben, '/api/live')
+  await page.next('hello')
+  const installing = t('install_extension', { name: 'mgmt-ann/tea' })
+  const asked = await page.next('ask')
+  assert.equal(asked.kind, 'install')
+  assert.match(asked.text, /Install Tea \(mgmt-ann\/tea\) 0\.1\.0/)
+  assert.equal((await ben('GET', '/api/plugins/installed')).body.plugins.length, 0, 'nothing installed before the click')
+  await confirm(ben, new URLSearchParams({ do: 'install', ...asked.params }).toString())
+  assert.match((await installing).text, /Done: they confirmed/)
+  assert.match((await t('install_extension', { name: 'mgmt-ann/tea' })).text, /already installed/)
+
+  // switching off and removing happen at once (and the console pages hear about it); switching on asks
+  assert.match((await t('switch_extension', { name: 'mgmt-ann/tea', on: false })).text, /Switched off/)
+  assert.match((await page.next('changed')).text, /switched off Tea/)
+  assert.equal((await ben('GET', '/api/plugins/installed')).body.plugins[0].enabled, false)
+  page.close()
+  const noPage = await t('switch_extension', { name: 'mgmt-ann/tea', on: true })
+  assert.match(noPage.text, /No Life Console page is open[\s\S]*\/trust\?do=toggle&pkg=mgmt-ann%2Ftea&on=1/)
+  assert.equal((await ben('GET', '/api/plugins/installed')).body.plugins[0].enabled, false, 'still off until they confirm')
+  assert.match((await t('remove_extension', { name: 'mgmt-ann/tea' })).text, /Removed/)
+  assert.equal((await ben('GET', '/api/plugins/installed')).body.plugins.length, 0)
+  assert.equal((await t('remove_extension', { name: 'mgmt-ann/tea' })).isError, true)
+
+  // publishing the workshop's draft: only one that previews without errors
+  assert.equal((await t('publish_extension', {})).isError, true, 'no draft yet')
+  const code = "export default { sdk: 1, title: 'Steps', slots: { 'today.card': { mount(el) { el.textContent = '0 steps' } } } }\n"
+  const workshop = sse(ben, '/api/workshop/live')
+  await workshop.next('hello')
+  const writing = t('write_draft', { code, name: 'steps' })
+  const d = (await workshop.next('draft')).draft
+  await ben('POST', '/api/workshop/live/result', { key: d.key, result: { ok: true, manifest: { title: 'Steps', description: 'Count steps', icon: 'directions_walk', slots: ['today.card'] } } })
+  await writing
+  const pub = await t('publish_extension', { changelog: 'First' })
+  assert.match(pub.text, /Published mgmt-ben\/steps 0\.1\.0 \(private\)/)
+  workshop.close()
+  assert.equal((await cal('GET', '/api/registry/plugins/mgmt-ben/steps')).status, 404, 'private: others never see it')
+  assert.match((await t('update_listing', { name: 'mgmt-ben/steps', title: 'Step counter', visibility: 'public' })).text, /Step counter · public/)
+  assert.equal((await cal('GET', '/api/registry/plugins/mgmt-ben/steps')).body.title, 'Step counter')
+  assert.equal((await t('update_listing', { name: 'mgmt-ann/tea', title: 'Mine now' })).isError, true, "someone else's listing")
+  assert.match((await t('like_extension', { name: 'mgmt-ann/tea' })).text, /Liked mgmt-ann\/tea \(1 likes\)/)
+})

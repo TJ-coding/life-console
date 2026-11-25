@@ -3,6 +3,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
 import { registry, attachRouter } from './sdk'
 import { loadPlugins, plugins } from './sdk/loader.js'
+import { startLive } from './live.js'
 import { whereShown } from './sdk/whereShown.js'
 import { nsOfPkg } from './sdk/manifest.js'
 import { setLcRouter } from './sdk/lc.js'
@@ -57,6 +58,7 @@ const swReady = 'serviceWorker' in navigator && window.isSecureContext && import
 setSignedInHandler(async () => {
   await resumeSync()
   loadPlugins()
+  startLive()
   analyticsReady(router.currentRoute.value)
   loadIssues()
   if (swReady) refreshPush().catch(() => {})
@@ -64,7 +66,7 @@ setSignedInHandler(async () => {
 // sync with the server (no-op without one), then the service worker for offline + push
 if (swReady) navigator.serviceWorker.register('/sw.js').catch((e) => console.warn('service worker', e))
 startSync().then(() => {
-  if (auth.status === 'signed-in') loadPlugins() // Public plugins installed for this account (src/sdk/loader.js)
+  if (auth.status === 'signed-in') { loadPlugins(); startLive() } // Public plugins installed for this account (src/sdk/loader.js); Claude's requests (src/live.js)
   if (auth.status === 'signed-in' || auth.status === 'none') loadIssues() // issue counts; also sends reports queued offline
   if (auth.status === 'signed-in') analyticsReady(router.currentRoute.value)
   if (auth.status === 'signed-in' && swReady) navigator.serviceWorker.ready.then(() => refreshPush()).catch(() => {})

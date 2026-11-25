@@ -3,6 +3,7 @@
 // I add? how do I make my own? Installing, updating, switching and removing each take one confirmation on the
 // trusted page, which opens in this tab and brings you straight back.
 import { ref, computed, onMounted, watch } from 'vue'
+import { live } from '../live.js'
 import { useRoute, useRouter } from 'vue-router'
 import { api, trustUrl } from '../sdk/client.js'
 import { plugins, leaveSafeMode } from '../sdk/loader.js'
@@ -37,6 +38,7 @@ async function refresh() {
 }
 let qTimer
 watch(q, () => { clearTimeout(qTimer); qTimer = setTimeout(refresh, 250) })
+watch(() => live.tick, () => refresh()) // Claude changed something (src/live.js)
 onMounted(() => {
   refresh()
   // an extension was removed with "also delete its data": do it here, where the planner lives
