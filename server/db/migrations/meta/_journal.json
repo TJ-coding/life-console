@@ -64,6 +64,13 @@
       "when": 1795526998045,
       "tag": "0008_plugin_forks",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795589606165,
+      "tag": "0009_token_scope",
+      "breakpoints": true
     }
   ]
 }

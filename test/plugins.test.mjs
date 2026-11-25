@@ -65,6 +65,7 @@ function client() {
     try { json = JSON.parse(res.text) } catch { /* html or js */ }
     return { status: res.status, body: json, text: res.text, headers: res.headers }
   }
+  c.cookie = () => cookie
   return c
 }
 const NAV = { 'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-User': '?1' }
@@ -348,4 +349,91 @@ test('OAuth connections: connect on the trusted page, tokens in the vault, refre
     assert.equal(r.status, 200)
     assert.equal(seen.at(-1).auth, 'Bearer fresh-2', 'the expired token was refreshed first')
   } finally { base = saveBase; app2.close(); s2.close(); prov.close() }
+})
+
+test('live workshop over MCP: a workshop-only token, drafts reach the open workshop, its preview comes back', async () => {
+  const tokenOf = async (c) => {
+    const done = await confirm(c, 'do=claude')
+    assert.equal(done.status, 200, done.text.slice(0, 300))
+    assert.match(done.text, /claude mcp add --transport http life-console http:\/\/lc\.test\/mcp/)
+    return /Bearer (lct_[^&"\s]+)/.exec(done.text)[1]
+  }
+  const bob = client(); const alice = client()
+  await bob('POST', '/api/auth/signup', { email: 'live-b@x.test', password: 'pw-live-1234' })
+  await alice('POST', '/api/auth/signup', { email: 'live-a@x.test', password: 'pw-live-1234' })
+  const token = await tokenOf(bob)
+  const rpc = async (tok, method, params, id = 1) => {
+    const r = await raw('POST', '/mcp', JSON.stringify({ jsonrpc: '2.0', id, method, params }), { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` })
+    return { status: r.status, body: r.text ? JSON.parse(r.text) : null }
+  }
+  const tool = async (tok, name, args = {}) => (await rpc(tok, 'tools/call', { name, arguments: args })).body.result
+
+  // the token opens the workshop connection and nothing else
+  assert.equal((await raw('GET', '/api/state', undefined, { Authorization: `Bearer ${token}` })).status, 401)
+  assert.equal((await raw('POST', '/mcp', '{}', { 'Content-Type': 'application/json', Cookie: bob.cookie() })).status, 401, 'a browser session is not a connection')
+  const init = await rpc(token, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } })
+  assert.equal(init.body.result.protocolVersion, '2025-06-18')
+  assert.ok(init.body.result.capabilities.tools)
+  assert.equal((await raw('POST', '/mcp', JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }), { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` })).status, 202)
+  const names = (await rpc(token, 'tools/list', {})).body.result.tools.map((t) => t.name)
+  for (const n of ['guide', 'list_extensions', 'open_extension', 'read_draft', 'write_draft', 'edit_draft', 'use_draft']) assert.ok(names.includes(n), n)
+  assert.match((await tool(token, 'guide')).content[0].text, /lc-card/, 'the guide has the look kit')
+  assert.match((await tool(token, 'list_extensions')).content[0].text, /alice\/habits|Installed/)
+
+  // no workshop open: the draft waits for it
+  const WATER = "export default { sdk: 1, title: 'Water', slots: { 'today.card': { mount(el) { el.innerHTML = '<div class=\"lc-card\">Water 0 / 8</div>' } } } }\n"
+  const first = await tool(token, 'write_draft', { code: WATER, name: 'water' })
+  assert.match(first.content[0].text, /isn't open/)
+
+  // the workshop opens (server-sent events): it gets the waiting draft, then each new one, and reports its preview
+  const events = []
+  let push = () => {}
+  const stream = await new Promise((resolve) => {
+    const req = http.request(base + '/api/workshop/live', { headers: { Cookie: bob.cookie() } }, (res) => {
+      let buf = ''
+      res.on('data', (ch) => {
+        buf += ch
+        for (let i; (i = buf.indexOf('\n\n')) >= 0;) { const line = buf.slice(0, i); buf = buf.slice(i + 2); if (line.startsWith('data: ')) { events.push(JSON.parse(line.slice(6))); push() } }
+      })
+      resolve(req)
+    })
+    req.end()
+  })
+  const next = (type) => new Promise((resolve) => { const look = () => { const e = events.find((x) => x.type === type && !x.taken); if (e) { e.taken = true; resolve(e) } else push = look }; look() })
+  const hello = await next('hello')
+  assert.equal(hello.draft.code, WATER)
+  assert.equal(hello.draft.slug, 'water')
+  // the workshop previews what it got
+  const preview = async (draft, result) => assert.equal((await bob('POST', '/api/workshop/live/result', { key: draft.key, result })).status, 200)
+  await preview(hello.draft, { ok: true, errors: [], problems: [], manifest: { slots: ['today.card'], types: [] }, parts: [{ label: 'On Today', text: 'Water 0 / 8' }] })
+  const read = (await tool(token, 'read_draft')).content[0].text
+  assert.match(read, /Preview: works/)
+  assert.match(read, /\[On Today\] Water 0 \/ 8/)
+
+  // an edit shows up at once, and the tool answers with the preview of exactly that code
+  const editing = tool(token, 'edit_draft', { old_text: '0 / 8', new_text: '0 / 10' })
+  const changed = await next('draft')
+  assert.match(changed.draft.code, /0 \/ 10/)
+  await preview(changed.draft, { ok: false, errors: ['On Today: boom'], parts: [] })
+  const edited = await editing
+  assert.equal(edited.isError, true)
+  assert.match(edited.content[0].text, /HAS ERRORS[\s\S]*boom/)
+  assert.equal((await tool(token, 'edit_draft', { old_text: 'not there', new_text: 'x' })).isError, true)
+  assert.equal((await tool(token, 'use_draft')).isError, true, 'not while it has errors')
+
+  // the person edits by hand: Claude reads their version
+  const mine = WATER.replace('0 / 8', '0 / 12')
+  await bob('POST', '/api/workshop/live/draft', { code: mine, slug: 'water' })
+  const theirs = (await tool(token, 'read_draft')).content[0].text
+  assert.match(theirs, /0 \/ 12/)
+  assert.match(theirs, /changed by the person/)
+  await bob('POST', '/api/workshop/live/result', { key: (await bob('POST', '/api/workshop/live/draft', { code: mine, slug: 'water' })).body.key, result: { ok: true } })
+  assert.equal((await tool(token, 'use_draft')).isError, undefined)
+  assert.ok((await next('use')), 'the workshop is asked to go to the confirmation page')
+
+  // other accounts never see it
+  const other = await tokenOf(alice)
+  assert.match((await tool(other, 'read_draft')).content[0].text, /No draft yet/)
+  assert.equal((await tool(other, 'use_draft')).isError, true)
+  stream.destroy()
 })

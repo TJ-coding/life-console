@@ -100,13 +100,15 @@ export function createAuth(db, cfg, signups = null) {
   }
   const clearCookie = (secure) => `${COOKIE}=; ${cookieAttrs(0, secure)}`
 
-  /** Who is calling: a session cookie or `Authorization: Bearer <api token>`. Returns { user, via, tokenHash } or null. */
-  async function identify(req) {
+  /** Who is calling: a session cookie or `Authorization: Bearer <api token>`. Returns { user, via, tokenHash } or null.
+   *  A token with a scope only counts where that scope is asked for (`identify(req, { scope: 'extensions' })`). */
+  async function identify(req, { scope = '' } = {}) {
     const bearer = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization || '')?.[1]
     if (bearer) {
       const h = sha256(bearer)
       const row = (await db.select({ u: users, t: apiTokens }).from(apiTokens).innerJoin(users, eq(users.id, apiTokens.userId)).where(eq(apiTokens.tokenHash, h)).limit(1))[0]
       if (!row || row.u.disabled) return null
+      if (row.t.scope && row.t.scope !== scope) return null
       if (!row.t.lastUsedAt || Date.now() - row.t.lastUsedAt.getTime() > 3600000) await db.update(apiTokens).set({ lastUsedAt: new Date() }).where(eq(apiTokens.id, row.t.id))
       return { user: row.u, via: 'token' }
     }
@@ -161,15 +163,15 @@ export function createAuth(db, cfg, signups = null) {
     await endOtherSessions(row.userId) // a reset signs every device out
     return row.userId
   }
-  async function createApiToken(userId, name = '') {
+  async function createApiToken(userId, name = '', scope = '') {
     const token = newToken('lct_')
-    await db.insert(apiTokens).values({ tokenHash: sha256(token), userId, name: String(name).slice(0, 60) })
+    await db.insert(apiTokens).values({ tokenHash: sha256(token), userId, name: String(name).slice(0, 60), scope })
     return token
   }
   /** A token for one named device (e.g. "Mac app"): connecting it again replaces the old one, so tokens don't pile up. */
-  async function replaceApiToken(userId, name) {
+  async function replaceApiToken(userId, name, scope = '') {
     await db.delete(apiTokens).where(and(eq(apiTokens.userId, userId), eq(apiTokens.name, String(name).slice(0, 60))))
-    return createApiToken(userId, name)
+    return createApiToken(userId, name, scope)
   }
   async function purgeExpired() {
     await db.delete(sessions).where(lt(sessions.expiresAt, new Date()))

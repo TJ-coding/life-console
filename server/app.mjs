@@ -17,6 +17,8 @@ import { createSignups } from './signups.mjs'
 import { createRegistry } from './registry.mjs'
 import { createVault } from './vault.mjs'
 import { createConsent, TRUST_HEADERS } from './consent.mjs'
+import { createWorkshopLive } from './workshop-live.mjs'
+import { createMcp } from './mcp.mjs'
 import { createPods, podClient } from './pod.mjs'
 import { createFederation } from './federation.mjs'
 import { settingsOf } from './schedule.mjs'
@@ -134,6 +136,8 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   const secureFor = (req) => cfg.cookieSecure && (!appHost || req.headers.host === appHost)
 
   const consent = createConsent({ db, auth, registry, vault, log, secureFor: (req) => secureFor(req), providers: cfg.oauthProviders ?? {}, appUrl: cfg.appUrl, planner, pods, podClient, siteOf, fed })
+  const live = createWorkshopLive()
+  const mcp = createMcp({ auth, registry, live, limit, log, build: BUILD, siteOf })
   /** Account actions a plugin could abuse need the trusted page once Public plugins are on (goal 3). */
   const viaTrust = (user, action) => { if (user.publicPlugins) throw Object.assign(httpError(403, 'Confirm this on the trusted page'), { trust: `/trust?do=${action}` }) }
 
@@ -285,6 +289,24 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     if (regDecline && req.method === 'POST') return send(res, 200, await registry.decline(user, regDecline))
 
     switch (route) {
+      /* ── the live workshop: an AI app changes the draft over /mcp (server/mcp.mjs), this page shows it ── */
+      case 'GET /api/workshop/live':
+        return live.subscribe(uid, req, res, SECURITY_HEADERS)
+      case 'POST /api/workshop/live/draft': {
+        const b = await body(req, 800 * 1024)
+        const d = live.setDraft(uid, { code: b.code, slug: b.slug, forkOf: b.forkOf ?? null, editing: b.editing ?? null }, 'you')
+        return send(res, 200, { key: d.key })
+      }
+      case 'POST /api/workshop/live/result': {
+        const b = await body(req, 128 * 1024)
+        const r = b.result ?? {}
+        const list = (x, n = 20) => (Array.isArray(x) ? x.slice(0, n).map((y) => String(y).slice(0, 500)) : [])
+        live.report(uid, String(b.key ?? ''), {
+          ok: !!r.ok, errors: list(r.errors), problems: list(r.problems), manifest: r.manifest && typeof r.manifest === 'object' ? r.manifest : null,
+          parts: Array.isArray(r.parts) ? r.parts.slice(0, 12).map((x) => ({ label: String(x?.label ?? '').slice(0, 80), text: String(x?.text ?? '').slice(0, 800) })) : [],
+        })
+        return send(res, 200, { ok: true })
+      }
       /* ── the plugin platform (docs/PLATFORM.md) ── */
       case 'GET /api/plugins/installed':
         return send(res, 200, { publicPlugins: !!user.publicPlugins, plugins: user.publicPlugins ? await registry.installed(uid) : [] })
@@ -674,6 +696,7 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
     const url = new URL(req.url, 'http://localhost')
     try {
       if (url.pathname.startsWith('/api/')) return await api(req, res, url)
+      if (url.pathname === '/mcp') return await mcp.handle(req, res, { send, readBody })
       // the trusted page (server/consent.mjs): consent, keys and passwords, never inside the console
       // ActivityPub (server/federation.mjs): WebFinger, actors, inboxes and shared records
       if (url.pathname === '/.well-known/webfinger') {
@@ -731,5 +754,5 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
 
   metrics.start()
   updates.start()
-  return { handler, scheduler, auth, planner, push, issues, registry, vault, pods, metrics, updates, build: BUILD, close: () => { clearInterval(sweep); for (const t of mirrorTimers.values()) clearTimeout(t); scheduler.stop(); metrics.stop(); updates.stop() } }
+  return { handler, scheduler, auth, planner, push, issues, registry, vault, pods, metrics, updates, build: BUILD, close: () => { clearInterval(sweep); live.close(); for (const t of mirrorTimers.values()) clearTimeout(t); scheduler.stop(); metrics.stop(); updates.stop() } }
 }

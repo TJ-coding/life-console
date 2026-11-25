@@ -60,6 +60,16 @@ The same rules as our own screens apply ([design guidelines](https://github.com/
 
 The kit's classes are a stable contract: they keep working when the console's own styles change. The workshop's AI prompt teaches all of this, so drafts start out looking native.
 
+## Writing one with Claude
+
+In the workshop, **Connect Claude** makes an access token on the trusted page and shows one command for Claude Code
+(`claude mcp add --transport http life-console <your server>/mcp --header "Authorization: Bearer …"`); any app that
+speaks MCP over HTTP works the same way. With the workshop open, ask Claude to make or change an extension: what it
+writes appears in the workshop at once, runs in the sandboxed preview on demo data, and the preview's findings
+(errors, problems, what each part shows) come back to Claude so it can fix them. Claude can open your extensions or
+someone else's (as your own copy), read what you changed by hand, and take the workshop to the confirmation page.
+The token works for this connection only: it can't read your planner, and nothing is installed without your click.
+
 ## The data door
 
 All data goes through `lc.data`, ours included.

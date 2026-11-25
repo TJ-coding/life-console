@@ -35,6 +35,7 @@ const KINDS = {
   remove: { title: 'Remove an extension' },
   toggle: { title: 'Switch an extension on or off' },
   token: { title: 'Create an access token', danger: true },
+  claude: { title: 'Connect Claude to the workshop' },
   'vault-save': { title: 'Save a connection key', danger: true },
   connect: { title: 'Connect an account', danger: true },
   'pod-use': { title: 'Keep your planner in your own Solid pod', danger: true },
@@ -133,6 +134,8 @@ ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : 
     } else if (kind === 'token') {
       action.name = String(q.get('name') ?? 'Mac app').slice(0, 60)
       details = `<p>An access token lets the app named <b>${esc(action.name)}</b> read your planner and mark tasks done, without signing in. It replaces that name's previous token.</p>`
+    } else if (kind === 'claude') {
+      details = '<p>Claude (Claude Code, or another app that supports MCP) can read and change the draft in your workshop, see its preview and read your extensions\' code. It can\'t see your planner, and installing still asks you here.</p><p class="muted">Connecting again replaces the previous connection.</p>'
     } else if (kind === 'vault-save') {
       if (!vault.on) return { vaultOff: true }
       action.name = String(q.get('name') ?? '').toLowerCase().slice(0, 30)
@@ -244,6 +247,11 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
         log(`[consent] api token "${a.name}" for ${uid.slice(0, 8)}`)
         return { msg: `Token for ${a.name} created. It is shown once.`, token }
       }
+      case 'claude': {
+        const token = await auth.replaceApiToken(uid, 'Claude (workshop)', 'extensions')
+        log(`[consent] workshop token for ${uid.slice(0, 8)}`)
+        return { msg: 'Claude can now work in your workshop. Run this once in a terminal, then ask Claude to make or change an extension with the workshop open.', command: `claude mcp add --transport http life-console ${origin(req)}/mcp --header "Authorization: Bearer ${token}"`, url: `${origin(req)}/mcp`, token }
+      }
       case 'vault-save': {
         const saved = await vault.save(uid, { name: a.name || form.get('name'), site: a.site || form.get('site'), scheme: a.scheme || 'bearer', secret: form.get('secret') })
         return { msg: `Saved the ${saved.name} key for ${saved.site}. It won't be shown again.` }
@@ -332,7 +340,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     try {
       const r = await run(who, row.action, form, req)
       if (r.redirect) return { status: 303, html: '', headers: { Location: r.redirect } }
-      const extra = r.token ? `<label>Token</label><input type="text" readonly value="${esc(r.token)}"><div class="row"><a class="btn" href="lifeconsole-now://connect?server=${encodeURIComponent(`${req.headers['x-forwarded-proto'] ?? 'http'}://${req.headers.host}`)}&token=${encodeURIComponent(r.token)}">Open in the Mac app</a></div>` : ''
+      const extra = r.command ? `<label for="cmd">Claude Code</label><textarea id="cmd" readonly rows="4" style="width:100%;padding:9px 10px;border-radius:2px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:13px ui-monospace,Menlo,monospace;resize:vertical">${esc(r.command)}</textarea><details><summary class="muted">Another app</summary><p class="muted">Add an MCP server at <code>${esc(r.url)}</code> (HTTP) with the header <code>Authorization: Bearer …</code> and this token:</p><input type="text" readonly value="${esc(r.token)}"></details><p class="muted">It's shown once.</p>` : r.token ? `<label>Token</label><input type="text" readonly value="${esc(r.token)}"><div class="row"><a class="btn" href="lifeconsole-now://connect?server=${encodeURIComponent(`${req.headers['x-forwarded-proto'] ?? 'http'}://${req.headers.host}`)}&token=${encodeURIComponent(r.token)}">Open in the Mac app</a></div>` : ''
       if (!r.token && !r.deleted) return { status: 303, html: '', headers: { Location: withQuery(backTo, { notice: r.msg, forget: r.forget, added: r.added }) } }
       const next = r.deleted ? '/' : backTo
       const headers = r.deleted ? { 'Set-Cookie': auth.clearCookie(secureFor(req)) } : {}

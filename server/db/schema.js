@@ -48,6 +48,8 @@ export const apiTokens = pgTable('api_tokens', {
   tokenHash: text('token_hash').notNull(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   name: text('name').notNull().default(''),
+  /** '' = the whole API (Mac app, scripts); 'extensions' = only the workshop connection for an AI (/mcp) */
+  scope: text('scope').notNull().default(''),
   createdAt: created(),
   lastUsedAt: ts('last_used_at'),
 }, (t) => [uniqueIndex('api_tokens_hash_key').on(t.tokenHash)])

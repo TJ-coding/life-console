@@ -90,7 +90,15 @@ async function run({ code, name }) {
   // only values given to a colour property (an id like #add isn't a colour)
   const fixed = [...new Set([...code.matchAll(/(?:color|background(?:-color)?|border(?:-[a-z]+)?|fill|stroke|outline|box-shadow)\s*:\s*[^;"'`}]*?(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\))/gi)].map((m) => m[1]))].slice(0, 4)
   const looks = fixed.length ? [`Uses fixed colours (${fixed.join(', ')}), so it won't follow light and dark mode. Ask your AI to use the theme colours instead.`] : []
-  setTimeout(() => post({ type: 'result', ok: !errors.length, errors, problems: [...new Set(taxonomy.problems.map((x) => x.replace(/^preview\/[a-z0-9-]+: /, '')))].concat(looks), manifest: summary, activity: door.activity.slice(-20), height: document.body.scrollHeight }), 50)
+  setTimeout(() => post({ type: 'result', ok: !errors.length, errors, problems: [...new Set(taxonomy.problems.map((x) => x.replace(/^preview\/[a-z0-9-]+: /, '')))].concat(looks), manifest: summary, activity: door.activity.slice(-20), parts: partsText(), height: document.body.scrollHeight }), 50)
+}
+
+/** What each part shows, as text (for an AI working in the live workshop: it can't see the preview). */
+function partsText() {
+  return [...out.querySelectorAll('.part')].map((box) => {
+    const el = box.shadowRoot ? [...box.shadowRoot.children].find((n) => n.tagName !== 'STYLE') : box
+    return { label: box.previousElementSibling?.textContent ?? '', text: String(el?.innerText ?? el?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 800) }
+  })
 }
 
 window.addEventListener('message', (e) => {

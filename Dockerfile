@@ -21,6 +21,8 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY server ./server
 # modules/*/data.js: the modules' pure data contracts (link types, namespace migrations) that server/schema.mjs uses
 COPY modules ./modules
+# src/sdk: the pure SDK files the AI workshop connection (server/mcp.mjs) shares with the browser
+COPY src/sdk ./src/sdk
 COPY editions ./editions
 COPY --from=build /app/dist ./dist
 # /updates: shared with the optional `updater` service (one-click updates, see docker-compose.yml)

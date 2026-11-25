@@ -6,6 +6,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, trustUrl } from '../sdk/client.js'
 import { workshopPrompt, STARTER } from '../sdk/prompt.js'
+import { draftKey } from '../sdk/live.js'
 import { auth } from '../auth'
 import { toast } from '../store'
 
@@ -26,7 +27,57 @@ const route = useRoute()
 const SLOT_NAMES = { 'today.card': 'Today', 'week.strip': 'Plan week', 'strategy.plan': 'Strategic plans', 'todo.panel': 'Todo details', 'settings.section': 'Settings' }
 const forkOf = ref(saved?.forkOf ?? null) // the extension this draft is a fork of (only its author changes the original)
 const suggestion = ref(null) // reviewing a suggestion to your extension: { id, by, message, fromPackage, version, base }
-const persist = () => { try { localStorage.setItem(DRAFT, JSON.stringify({ describe: describe.value, code: code.value, slug: slug.value, version: version.value, forkOf: forkOf.value })) } catch { /* storage off */ } }
+const persist = () => {
+  try { localStorage.setItem(DRAFT, JSON.stringify({ describe: describe.value, code: code.value, slug: slug.value, version: version.value, forkOf: forkOf.value })) } catch { /* storage off */ }
+  sendDraft()
+}
+
+// live: Claude (or another AI app connected over MCP, server/mcp.mjs) changes this draft; the preview reports back
+const aiAt = ref(0) // when Claude last changed something here
+let fromAi = false // the draft on screen is the one Claude sent (the server has it already)
+let sentKey = ''
+let sendTimer = 0
+function sendDraft() {
+  if (fromAi) return
+  clearTimeout(sendTimer)
+  sendTimer = setTimeout(() => {
+    const key = draftKey(code.value)
+    if (key === sentKey) return
+    sentKey = key
+    api('POST', '/api/workshop/live/draft', { code: code.value, slug: slug.value, forkOf: forkOf.value, editing: editing.value?.pkg ?? null }).catch(() => { sentKey = '' })
+  }, 150)
+}
+function applyAiDraft(d) {
+  fromAi = true
+  sentKey = d.key
+  if (d.slug && d.slug !== slug.value) { slugQuiet = true; slug.value = d.slug }
+  // a new extension (Claude named it): no longer editing or copying the one that was open
+  if (!d.editing && editing.value) editing.value = null
+  if ((d.forkOf ?? null) !== forkOf.value) forkOf.value = d.forkOf ?? null
+  code.value = d.code
+  aiAt.value = Date.now()
+  run()
+  fromAi = false
+}
+let source = null
+let useAfterRun = false // Claude asked to use it while the preview was still running
+function useWhenReady() {
+  useAfterRun = false
+  if (result.value?.ok && !busy.value) useIt()
+  else toast('Claude asked to use it, but the preview has problems')
+}
+function listen() {
+  if (typeof EventSource === 'undefined') return
+  source = new EventSource('/api/workshop/live')
+  source.onmessage = (e) => {
+    let m
+    try { m = JSON.parse(e.data) } catch { return }
+    if (m.type === 'hello') { if (m.aiAt) aiAt.value = m.aiAt; if (m.draft) applyAiDraft(m.draft); else { sentKey = ''; sendDraft() } }
+    else if (m.type === 'draft') applyAiDraft(m.draft)
+    else if (m.type === 'open') { aiAt.value = Date.now(); load(m.pkg) }
+    else if (m.type === 'use') { aiAt.value = Date.now(); if (result.value) useWhenReady(); else useAfterRun = true }
+  }
+}
 
 // a plugin's own terms start with its name (water.Glass for a plugin called water): when the name changes, rename
 // them too, and when they don't match, say so and offer both fixes
@@ -55,24 +106,37 @@ function fixByRenaming() { if (renameTerms(mismatch.value.from, mismatch.value.t
 function fixByName() { const f = mismatch.value.from; slug.value = f }
 
 const name = computed(() => `${auth.user?.handle ?? 'you'}/${slug.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`)
+let runKey = ''
 function run() {
   persist()
+  runKey = draftKey(code.value)
   result.value = null
   frame.value?.contentWindow?.postMessage({ type: 'run', code: code.value, name: slug.value, theme: document.documentElement.dataset.theme }, '*')
 }
 function onMessage(e) {
   if (e.source !== frame.value?.contentWindow || e.data?.source !== 'lc-preview') return
   if (e.data.type === 'ready') run()
-  else if (e.data.type === 'result') { result.value = e.data; if (e.data.height) height.value = Math.min(900, Math.max(240, e.data.height + 24)) }
+  else if (e.data.type === 'result') {
+    result.value = e.data
+    if (e.data.height) height.value = Math.min(900, Math.max(240, e.data.height + 24))
+    const { ok, errors, problems, manifest, parts } = e.data
+    api('POST', '/api/workshop/live/result', { key: runKey, result: { ok, errors, problems, manifest, parts } }).catch(() => {})
+    if (useAfterRun) useWhenReady()
+  }
   else if (e.data.type === 'toast') toast(`Preview: ${e.data.text}`)
   else if (e.data.type === 'error') result.value = { ...(result.value ?? {}), ok: false, errors: [...(result.value?.errors ?? []), e.data.text] }
 }
-onMounted(async () => {
+onMounted(() => {
   window.addEventListener('message', onMessage)
+  listen()
   // ?edit=<yours> opens your extension (?suggestion=<id> to review a suggestion to it); anything else is forked
   const q = route.query
   const pkg = typeof q.edit === 'string' ? q.edit : typeof q.fork === 'string' ? q.fork : ''
-  if (!pkg) return
+  if (pkg) load(pkg, q.suggestion)
+})
+/** Open an extension here: yours to edit, anyone else's as your own copy. */
+async function load(pkg, suggestionId = null) {
+  const q = { suggestion: suggestionId }
   try {
     const codeOf = async (hash) => { const r = await fetch(`/api/registry/code/${hash}.js`, { credentials: 'same-origin' }); if (!r.ok) throw new Error(`couldn't load it (${r.status})`); return r.text() }
     // installed, or only published (then its newest version)
@@ -101,10 +165,10 @@ onMounted(async () => {
     persist()
     run()
   } catch (e) { toast(e.message) }
-})
+}
 const editing = ref(null)
 let slugQuiet = false
-onBeforeUnmount(() => window.removeEventListener('message', onMessage))
+onBeforeUnmount(() => { window.removeEventListener('message', onMessage); source?.close(); clearTimeout(sendTimer) })
 
 async function copyPrompt() {
   persist()
@@ -112,6 +176,7 @@ async function copyPrompt() {
   try { await navigator.clipboard.writeText(text); toast('Prompt copied: paste it into your AI, then paste its file below') } catch { toast("Couldn't copy: select the text in the prompt box instead") }
 }
 const showPrompt = ref(false)
+const claudeLink = trustUrl('claude', {}, '/app#/m/extensions/workshop')
 const promptText = computed(() => workshopPrompt(describe.value, code.value === STARTER ? '' : code.value))
 function pasteBack(text) {
   const t = String(text ?? '').replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/, '').trim()
@@ -196,6 +261,7 @@ async function shareIt() {
         <li v-for="st in steps" :key="st.n" :class="{ done: st.done }"><span aria-hidden="true">{{ st.done ? '✓' : st.n }}</span> {{ st.label }}<span v-if="st.done" class="sr"> (done)</span></li>
       </ol>
       <span class="spacer"></span>
+      <span v-if="aiAt" class="mono small ai" role="status" title="Claude is connected and can change this draft">● Claude</span>
       <router-link to="/m/extensions" class="btn"><span class="icon sm" aria-hidden="true">arrow_back</span>Back to Extensions</router-link>
     </div>
     <div class="ws-grid">
@@ -210,6 +276,7 @@ async function shareIt() {
             <div class="row wrap">
               <button class="btn primary" @click="copyPrompt"><span class="icon sm" aria-hidden="true">content_copy</span>Copy prompt for your AI</button>
               <button class="btn" :aria-expanded="showPrompt" @click="showPrompt = !showPrompt">{{ showPrompt ? 'Hide' : 'Show' }} prompt</button>
+              <a class="btn" :href="claudeLink" title="Let Claude write and change it here, with the preview updating as it works"><span class="icon sm" aria-hidden="true">link</span>Connect Claude</a>
             </div>
             <textarea v-if="showPrompt" class="mono small" rows="10" readonly :value="promptText" aria-label="Prompt for your AI"></textarea>
           </div>
@@ -305,5 +372,6 @@ label.col { gap: 4px; }
 .diff span { display: block; min-height: 1.5em; }
 .diff .add { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); display: block; }
 .diff .del { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); display: block; }
+.ai { color: var(--accent); }
 .fix { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--warn); border-radius: 4px; }
 </style>
