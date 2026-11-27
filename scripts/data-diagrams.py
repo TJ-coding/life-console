@@ -113,4 +113,21 @@ for i, (t, when, keep) in enumerate(rows):
           txt(80, y + 30, t, 't'), txt(270, y + 30, when, 'p'), txt(604, y + 30, keep, 'm', 'end')]
 b += [line(32, 30, 32, 314, 'mu', 'g', wd=1.5), f'<text class="m" transform="translate(24 172) rotate(-90)" text-anchor="middle">further back</text>']
 svg('data-safety.svg', 640, 20 + 5 * 62 + 8, 'Five copies of your planner: the browser copy, the server document, hourly snapshots, daily backups and your own export', '\n'.join(b))
+# 6. Solid pod (coming next)
+b = []
+b += [box(20, 24, 170, 120), laptop(34, 40), txt(72, 54, 'Your devices', 't'),
+      box(34, 72, 142, 56, 'in'), txt(46, 96, 'Browser copy', 'p'), txt(46, 115, 'as today', 'm')]
+b += [box(222, 24, 170, 120), server(236, 40), txt(272, 54, 'Life Console', 't'),
+      box(236, 72, 142, 56, 'in'), txt(248, 96, 'Database', 'p'), txt(248, 115, 'sync · merge', 'm')]
+b += [line(176, 100, 236, 100, both=True)]
+b += [box(424, 24, 196, 238), '<circle cx="446" cy="48" r="11" class="gl"/>', '<circle cx="446" cy="48" r="4" class="h"/>',
+      txt(466, 54, 'Your Solid pod', 't')]
+for i, f in enumerate(['todos.jsonld', 'deadlines.jsonld', 'plans.jsonld', 'settings.jsonld', 'blocks/2026-11.jsonld', 'other.json']):
+    y = 110 + i * 26
+    b += [f'<path class="gl" d="M440 {y-12}h9l4 4v12h-13z"/>', txt(462, y + 1, f, 'm')]
+b += [line(378, 100, 432, 100), txt(440, 80, 'copied after each save', 'm')]
+b += [box(20, 168, 372, 94, 'in'), txt(34, 194, 'Stays on the server, never in the pod', 'p'),
+      txt(34, 218, 'sign-in · sessions · tokens', 'm'), txt(34, 240, 'notification devices · key vault', 'm')]
+b += [txt(20, 286, 'The pod: built into Life Console, or your own Solid server', 'm')]
+svg('data-pod.svg', 640, 300, 'Coming next: after each save, Life Console writes the planner to your Solid pod as standard JSON-LD files; sign-in, sessions, notification devices and keys stay on the server', '\n'.join(b))
 print('ok')

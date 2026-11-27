@@ -75,6 +75,19 @@ If you start the app without signing in, the planner stays in that browser only 
 - **Sign out:** signing out removes the planner copy from that browser. Your account still has it.
 - **Delete:** Settings → Account → **Delete account** removes your account, planner, snapshots and notification devices from the live database straight away, and from backups once they expire.
 
+## Coming next: your data in a Solid pod
+
+[Solid](https://solidproject.org/) is an open standard, led by the web's inventor Tim Berners-Lee, for keeping your personal data in a **pod**: a data store you choose, which any app you approve can read and write. Life Console's next release puts your planner in one. It's built and being tested now; it isn't on life-console.dev yet.
+
+![Coming next: after each save, Life Console copies the planner to your Solid pod as standard JSON-LD files. Sign-in, sessions, notification devices and keys stay on the server](media/data-pod.svg)
+
+- **Every save is copied to your pod**, a few seconds later, as a handful of standard JSON-LD files: tasks, deadlines, plans and settings, time blocks one file per month, and everything else in one more file. Each record keeps all its fields, so another Solid app can read what's in your planner, and the copy loads back exactly.
+- **Where the pod runs is up to you:** by default it's built into Life Console, at `/pods/<your handle>/`; or point Life Console at your own Solid server or a Solid provider, and the planner is written there instead.
+- **Moving is a copy.** *Copy my planner from a pod* loads it into any Life Console server, hosted or self-hosted.
+- **What stays out of the pod:** your sign-in, sessions and access tokens, which devices get notifications, and the vault of connection keys. Any Solid app you approve can open a pod, so secrets don't belong there.
+
+In this first version, everything above this section still works the same way: the database does the syncing, merging and snapshots, and the pod is a copy written after it. Later the pod becomes the main home of your planner, and the database keeps only what the service needs to run.
+
 ## Running it yourself
 
 Life Console is open source (AGPL-3.0). A server you run yourself works in exactly the same way: one PostgreSQL database holds the documents, snapshots and daily backups, and you decide where it lives. See [Self-hosting](SELF_HOSTING.md) to set it up and [Backups and restore](SELF_HOSTING.md#6-backups-and-restore) to keep copies off the server.
