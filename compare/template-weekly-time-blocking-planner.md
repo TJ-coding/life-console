@@ -1,9 +1,9 @@
 ---
 path: /templates/weekly-time-blocking-planner
 title: Weekly planner template with time blocking (free printable PDF)
-description: A free printable weekly planner with time blocking: a backlog, a 7-hour workload per day and an hourly schedule, plus a one-page daily time-blocking sheet. A4 PDF.
+description: A free printable time block planner for the week: a backlog, a 7-hour workload per day and an hourly schedule, plus a one-page daily time-blocking sheet. A4 PDF.
 card: Weekly time-blocking planner template: free printable PDF, weekly and daily
-updated: 2026-11-23
+updated: 2026-11-28
 ---
 <p class="crumbs"><a href="/">Life Console</a> / Templates /</p>
 
@@ -24,7 +24,7 @@ updated: 2026-11-23
 
 - **Page 1: the week.** Up to three goals for the week, and a backlog of every task with its estimate in minutes, its due date and the day it goes on.
 - **Pages 2 and 3: the days.** Monday to Friday and the weekend, each with a to-do list, a **7-hour workload bar** and an hourly **schedule from 06:00 to 22:00** with half-hour lines, notes, and three boxes to tick: *Planned*, *Reviewed*, *Done*.
-- **Daily sheet:** one day on one page with more room: a top 3, everything else, the workload bar, a schedule from 05:00 to 22:00 and an evening review.
+- **Daily sheet:** one day on one page with more room: a top 3, everything else, the workload bar, a schedule from 05:00 to 22:00 and an evening review. It has [its own page](/templates/daily-time-blocking-planner) with a walk-through.
 
 ## How to time-block a week with it
 
@@ -36,6 +36,10 @@ updated: 2026-11-23
 ### Why 7 hours?
 
 Because a working day is never 8 or 9 hours of tasks: there are meetings, messages, breaks and things that take longer than planned. Capping each day at about 7 hours of planned work, and spreading the load evenly across the week, is what makes a plan you can actually finish. If your days are shorter, shade the boxes you don't have before you start.
+
+### Is this like Cal Newport's Time-Block Planner?
+
+Same idea, different shape. Cal Newport's *Time-Block Planner* is a paid, spiral-bound daily planner: each day you fill out a time block grid "with a preliminary plan that gives every minute a job", and update it when the day knocks you off course. This template is free, adds a **week page** with a backlog, and caps each day at about **7 hours** of planned work so you plan days you can finish. If you like his method, both work; this one is free to print.
 
 ## The same planner, without the paper
 
