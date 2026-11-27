@@ -25,6 +25,7 @@ import AuthScreen from './components/AuthScreen.vue'
 import TourOverlay from './components/TourOverlay.vue'
 import PluginPart from './components/PluginPart.vue'
 import { makeLc } from './sdk/lc.js'
+import { typingIn, textFieldIn, fromPart } from './keys.js'
 
 const SYNC_TEXT = { outdated: 'RELOAD', choose: 'CHOOSE', starting: '…', local: 'LOCAL', syncing: 'SAVING', synced: 'SYNCED', offline: 'OFFLINE', 'signed-out': 'SIGNED OUT', guest: 'GUEST', error: 'ERROR' }
 const SYNC_ICON = { outdated: 'system_update', choose: 'sync_problem', starting: 'sync', local: 'save', syncing: 'sync', synced: 'cloud_done', offline: 'cloud_off', 'signed-out': 'lock', guest: 'person_off', error: 'error' }
@@ -87,6 +88,8 @@ let gPending = false
 let gTimer
 function onKey(e) {
   if (showAuth.value) return // the sign-in screen is up: no app shortcuts
+  // an extension that handled the key itself (preventDefault, e.g. arrow keys moving its own item) keeps it
+  if (fromPart(e) && e.defaultPrevented) return
   // a plugin that replaces the shortcuts (replaces: ['core/shortcuts']) sees keys first; returning true consumes one
   const sk = registry.shell?.shortcuts
   if (sk?.part?.keydown) {
@@ -112,17 +115,15 @@ function onKey(e) {
   // ISS-30: undo / redo — except in a text field, where the browser's own undo of the typing applies
   const zKey = e.key.toLowerCase()
   if ((e.metaKey || e.ctrlKey) && !e.altKey && (zKey === 'z' || (zKey === 'y' && e.ctrlKey && !e.metaKey))) {
-    const el = e.target
-    const textField = el.closest?.('textarea, [contenteditable="true"]') || (el.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'range', 'color', 'submit'].includes(el.type))
-    if (textField || ui.palette || issues.dialog) return
+    if (textFieldIn(e) || ui.palette || issues.dialog) return
     e.preventDefault()
     const isRedo = zKey === 'y' || e.shiftKey
     const ok = isRedo ? redo() : undo()
     toast(ok ? (isRedo ? 'Redone' : 'Undone') : (isRedo ? 'Nothing to redo' : 'Nothing to undo'))
     return
   }
-  const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]')
-  if (typing || ui.palette || ui.splitId || ui.deadlineId || ui.blockId || issues.dialog) return
+  // typing in a field, also inside an extension's part (src/keys.js: the event is retargeted out of its shadow root)
+  if (typingIn(e) || ui.palette || ui.splitId || ui.deadlineId || ui.blockId || issues.dialog) return
   // schedule multi-select: arrows move the selected blocks, Delete takes them off the schedule
   if (ui.selBlocks.length && !e.metaKey && !e.ctrlKey && !e.altKey) {
     const step = e.shiftKey ? 60 : 15

@@ -11,6 +11,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { useRouter } from 'vue-router'
 import { edition, isEnabled } from '../edition'
 import { state, ui, toast, clearPlanner, todayISO, isLeaf, workload, capH, addDays, mondayOf, diffDays } from '../store'
+import { typingIn } from '../keys.js'
 
 const isPhone = () => innerWidth <= 640
 const T = () => todayISO()
@@ -314,7 +315,7 @@ watch(i, async () => {
 
 /* the tour owns the keyboard while it's open (no app shortcuts underneath), except on "your turn" stops */
 function onKey(e) {
-  if (waiting.value) { if (e.key === 'Escape' && !e.target.closest?.('input, textarea')) skip(); return }
+  if (waiting.value) { if (e.key === 'Escape' && !typingIn(e)) skip(); return }
   e.stopImmediatePropagation()
   if (e.key === 'Escape') { e.preventDefault(); skip() }
   else if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); go(i.value + 1) }

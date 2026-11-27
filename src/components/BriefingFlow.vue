@@ -9,6 +9,7 @@ import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } 
 import { state, wd, parseISO, MONTHS, todayISO, blocksFrom, toMin, fromMin } from '../store'
 import { simTodos, simStats, simVerdict, untimedIn, objectiveIn, applySim, windDownAt, dur } from '../review'
 import DayTimeline from './DayTimeline.vue'
+import { typingIn } from '../keys.js'
 
 const props = defineProps({
   title: String, date: String, finish: String,
@@ -229,7 +230,7 @@ onMounted(redraw)
 
 /* ── keys ── */
 function onKey(e) {
-  if (e.target.closest?.('input, textarea, select, [contenteditable="true"]') || e.metaKey || e.ctrlKey || e.altKey) return
+  if (typingIn(e) || e.metaKey || e.ctrlKey || e.altKey) return
   if (idx.value >= n.value) { if (e.key === 'ArrowLeft') { e.preventDefault(); go(n.value - 1) } return }
   const L = opts.value.length
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (L) cursor.value = (cur.value + (e.key === 'ArrowDown' ? 1 : -1) + L) % L }
