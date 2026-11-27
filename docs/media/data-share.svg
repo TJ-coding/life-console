@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 296" width="640" height="296" role="img" aria-label="Coming next: share a plan with someone on another server. Another Life Console reads it live with signed requests and sends edits back; other fediverse servers get a copy; your pod is never opened from outside">
+<title>Coming next: share a plan with someone on another server. Another Life Console reads it live with signed requests and sends edits back; other fediverse servers get a copy; your pod is never opened from outside</title>
+<style>
+.pg{fill:#0f1216;stroke:#2a313b}.cd{fill:#171b21;stroke:#2a313b}.in{fill:#0f1216;stroke:#2a313b}
+.t{fill:#e6e9ee;font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.p{fill:#e6e9ee;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.m{fill:#9aa4b2;font:13px ui-monospace,"JetBrains Mono",Menlo,monospace}
+.k{fill:#2bd4e6;font:600 13px ui-monospace,"JetBrains Mono",Menlo,monospace}
+.h{fill:#2bd4e6}.hs{stroke:#2bd4e6}.ib{fill:#5aa2ff}.is{stroke:#5aa2ff}.w{fill:#e5a03a}.ws{stroke:#e5a03a}
+.ln{stroke:#2a313b}.mu{stroke:#9aa4b2}.gl{fill:none;stroke:#9aa4b2;stroke-width:1.6}
+.band{fill:#e5a03a;fill-opacity:.14;stroke:#e5a03a;stroke-opacity:.5}
+.hl{fill:#2bd4e6;fill-opacity:.12}.hli{fill:#5aa2ff;fill-opacity:.14}
+@media (prefers-color-scheme: light){
+.pg{fill:#f4f5f7;stroke:#d9dde3}.cd{fill:#fff;stroke:#d9dde3}.in{fill:#f4f5f7;stroke:#d9dde3}
+.t,.p{fill:#1b1f24}.m{fill:#5d6673}.k{fill:#1f8a63}.h{fill:#1f8a63}.hs{stroke:#1f8a63}.ib{fill:#1f62c9}.is{stroke:#1f62c9}
+.w{fill:#a15c00}.ws{stroke:#a15c00}.ln{stroke:#d9dde3}.mu{stroke:#5d6673}.gl{stroke:#5d6673}
+.band{fill:#a15c00;stroke:#a15c00}.hl{fill:#1f8a63}.hli{fill:#1f62c9}}
+</style>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="h"/></marker>
+<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ib"/></marker>
+<marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:#9aa4b2"/></marker>
+</defs>
+<rect class="pg" x=".5" y=".5" width="639" height="295" rx="3"/>
+<rect class="cd" x="20" y="24" width="250" height="222" rx="2"/>
+<rect class="gl" x="34" y="40" width="24" height="7" rx="1"/><rect class="gl" x="34" y="50" width="24" height="7" rx="1"/><circle cx="53" cy="43.5" r="1.3" class="h"/><circle cx="53" cy="53.5" r="1.3" class="h"/>
+<text class="t" x="70" y="56" text-anchor="start">Your Life Console</text>
+<rect class="in" x="34" y="72" width="222" height="66" rx="2"/>
+<text class="p" x="48" y="98" text-anchor="start">Shared plan SP-03</text>
+<text class="m" x="48" y="120" text-anchor="start">view or edit · revocable</text>
+<rect class="in" x="34" y="160" width="222" height="70" rx="2"/>
+<circle cx="54" cy="188" r="9" class="gl"/>
+<circle cx="54" cy="188" r="3.5" class="h"/>
+<text class="p" x="72" y="193" text-anchor="start">Your pod</text>
+<text class="m" x="48" y="216" text-anchor="start">only your server opens it</text>
+<rect class="cd" x="400" y="56" width="220" height="84" rx="2"/>
+<rect class="gl" x="414" y="72" width="24" height="7" rx="1"/><rect class="gl" x="414" y="82" width="24" height="7" rx="1"/><circle cx="433" cy="75.5" r="1.3" class="h"/><circle cx="433" cy="85.5" r="1.3" class="h"/>
+<text class="t" x="450" y="88" text-anchor="start">Their Life Console</text>
+<text class="m" x="414" y="112" text-anchor="start">reads it live</text>
+<text class="m" x="414" y="130" text-anchor="start">sends edits back</text>
+<rect class="cd" x="400" y="168" width="220" height="70" rx="2"/>
+<text class="t" x="414" y="196" text-anchor="start">Mastodon and co.</text>
+<text class="m" x="414" y="220" text-anchor="start">gets a copy</text>
+<line x1="256" y1="98" x2="400" y2="98" class="hs" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
+<text class="k" x="328" y="88" text-anchor="middle">live, signed</text>
+<line x1="256" y1="118" x2="398" y2="198" class="is" stroke-width="2" marker-end="url(#b)"/>
+<text class="m" x="336" y="188" text-anchor="end">a copy</text>
+<text class="m" x="20" y="276" text-anchor="start">Revoke: your server stops answering and tells theirs</text>
+</svg>

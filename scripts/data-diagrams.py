@@ -130,4 +130,16 @@ b += [box(20, 168, 372, 94, 'in'), txt(34, 194, 'Stays on the server, never in t
       txt(34, 218, 'sign-in · sessions · tokens', 'm'), txt(34, 240, 'notification devices · key vault', 'm')]
 b += [txt(20, 286, 'The pod: built into Life Console, or your own Solid server', 'm')]
 svg('data-pod.svg', 640, 300, 'Coming next: after each save, Life Console writes the planner to your Solid pod as standard JSON-LD files; sign-in, sessions, notification devices and keys stay on the server', '\n'.join(b))
+# 7. Sharing over ActivityPub (coming next)
+b = []
+b += [box(20, 24, 250, 222), server(34, 40), txt(70, 56, 'Your Life Console', 't'),
+      box(34, 72, 222, 66, 'in'), txt(48, 98, 'Shared plan SP-03', 'p'), txt(48, 120, 'view or edit · revocable', 'm'),
+      box(34, 160, 222, 70, 'in'), '<circle cx="54" cy="188" r="9" class="gl"/>', '<circle cx="54" cy="188" r="3.5" class="h"/>',
+      txt(72, 193, 'Your pod', 'p'), txt(48, 216, 'only your server opens it', 'm')]
+b += [box(400, 56, 220, 84), server(414, 72), txt(450, 88, 'Their Life Console', 't'), txt(414, 112, 'reads it live', 'm'), txt(414, 130, 'sends edits back', 'm')]
+b += [box(400, 168, 220, 70), txt(414, 196, 'Mastodon and co.', 't'), txt(414, 220, 'gets a copy', 'm')]
+b += [line(256, 98, 400, 98, both=True), txt(328, 88, 'live, signed', 'k', 'middle'),
+      line(256, 118, 398, 198, 'is', 'b'), txt(336, 188, 'a copy', 'm', 'end')]
+b += [txt(20, 276, 'Revoke: your server stops answering and tells theirs', 'm')]
+svg('data-share.svg', 640, 296, 'Coming next: share a plan with someone on another server. Another Life Console reads it live with signed requests and sends edits back; other fediverse servers get a copy; your pod is never opened from outside', '\n'.join(b))
 print('ok')
