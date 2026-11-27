@@ -116,7 +116,14 @@ async function run({ code, files, name }) {
 function partsText() {
   return [...out.querySelectorAll('.part')].map((box) => {
     const el = box.shadowRoot ? [...box.shadowRoot.children].find((n) => n.tagName !== 'STYLE') : box
-    return { label: box.previousElementSibling?.textContent ?? '', text: String(el?.innerText ?? el?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 800) }
+    if (!el) return { label: box.previousElementSibling?.textContent ?? '', text: '' }
+    // icons' ligature names ("close", "scatter_plot") are left out: they aren't what the part says
+    const c = el.cloneNode(true)
+    for (const i of c.querySelectorAll('.lc-icon,.icon,.material-symbols-outlined')) i.remove()
+    document.body.append(c)
+    const text = c.innerText ?? c.textContent
+    c.remove()
+    return { label: box.previousElementSibling?.textContent ?? '', text: String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 800) }
   })
 }
 

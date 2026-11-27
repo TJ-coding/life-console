@@ -13,12 +13,12 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 
 const VIEWPORTS = { phone: { width: 390, height: 844, mobile: true, deviceScaleFactor: 2 }, desktop: { width: 1280, height: 900, mobile: false, deviceScaleFactor: 1 } }
-const RUN_MS = 20000
+const RUN_MS = 40000
 const ORIGIN = 'http://lc-preview.invalid' // never resolved: every request to it is answered by the app
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png' }
 const PAGE_CSP = `default-src 'none'; script-src ${ORIGIN} blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src ${ORIGIN}; connect-src 'none'; base-uri 'none'; form-action 'none'`
 const MAX_AT_ONCE = 2
-const MAX_STEPS = 30
+const MAX_STEPS = 80
 
 /** A tiny DevTools-protocol client over one WebSocket (flat sessions). */
 function cdp(wsUrl) {
@@ -50,22 +50,36 @@ const PAGE_HELPERS = `(() => {
   const roots = () => { const out = [document]; for (let i = 0; i < out.length; i++) for (const el of out[i].querySelectorAll('*')) if (el.shadowRoot) out.push(el.shadowRoot); return out }
   const find = (sel) => {
     const text = /^text=(.*)$/s.exec(sel)
-    for (const r of roots()) {
-      if (text) { for (const el of r.querySelectorAll('button,a,label,summary,option,[role=button],span,div,p,b,h1,h2,h3,text')) if ((el.textContent || '').trim() === text[1].trim() && ![...el.children].some((c) => (c.textContent || '').trim() === text[1].trim())) return el }
-      else { const el = r.querySelector(sel); if (el) return el }
-    }
+    if (!text) { for (const r of roots()) { const el = r.querySelector(sel); if (el) return el } return null }
+    // text=…: something you can act on first (a button before a label that says the same), then anything
+    const want = text[1].trim()
+    const same = (el) => (el.textContent || '').trim() === want && ![...el.children].some((c) => (c.textContent || '').trim() === want)
+    for (const q of ['button,a,[role=button],[role=tab],summary,input[type=submit]', 'label,option,span,div,p,b,h1,h2,h3,li,td,text'])
+      for (const r of roots()) for (const el of r.querySelectorAll(q)) if (same(el)) return el
     return null
   }
   const box = (sel) => { const el = find(sel); if (!el) return null; el.scrollIntoView({ block: 'center' }); const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 } }
   const focus = (sel) => { const el = find(sel); if (!el) return false; el.focus(); if ('value' in el && el.select) el.select(); return true }
+  // what each part shows, as text; icons' ligature names ("close", "scatter_plot") left out
+  const textOf = (el) => { const c = el.cloneNode(true); for (const i of c.querySelectorAll('.lc-icon,.icon,.material-symbols-outlined')) i.remove(); document.body.append(c); const t = c.innerText ?? c.textContent; c.remove(); return t }
   const parts = () => [...document.querySelectorAll('#out .part')].map((p) => {
     const el = p.shadowRoot ? [...p.shadowRoot.children].find((n) => n.tagName !== 'STYLE') : p
-    return { label: p.previousElementSibling?.textContent ?? '', text: String(el?.innerText ?? el?.textContent ?? '').replace(/\\s+/g, ' ').trim().slice(0, 800) }
+    return { label: p.previousElementSibling?.textContent ?? '', text: String(el ? textOf(el) : '').replace(/\\s+/g, ' ').trim().slice(0, 800) }
   })
+  /** Choose an option in a <select> by its value or its visible text, as a person would. */
+  const choose = (sel, want) => {
+    const el = find(sel)
+    if (!el || el.tagName !== 'SELECT') return 'not a select'
+    const o = [...el.options].find((x) => x.value === want || x.textContent.trim() === want)
+    if (!o) return 'no option "' + want + '" (has: ' + [...el.options].map((x) => x.textContent.trim()).slice(0, 8).join(', ') + ')'
+    el.value = o.value
+    el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }))
+    return ''
+  }
   // no icon font here (no internet): an icon becomes an icon-sized dashed box, not its name as a long word
   const ICONS = '.lc-icon,.icon,.material-symbols-outlined{display:inline-block!important;width:1.2em!important;height:1.2em!important;overflow:hidden!important;color:transparent!important;border:1px dashed var(--muted,#888);box-sizing:border-box;vertical-align:middle;font-size:inherit}'
   const iconBoxes = () => { for (const r of roots()) if (!r.querySelector?.(':scope > style[data-lc-icons]')) { const st = document.createElement('style'); st.dataset.lcIcons = '1'; st.textContent = ICONS; (r === document ? document.head : r).appendChild(st) } }
-  window.__lc = { find, box, focus, parts, iconBoxes }
+  window.__lc = { find, box, focus, parts, iconBoxes, choose }
   window.__lcOut = { result: null, errors: [], toasts: [] }
   window.addEventListener('message', (e) => {
     const d = e.data
@@ -169,7 +183,10 @@ export function createPreviewer({ url = '', dist = '', log = () => {} } = {}) {
       // the agent's steps: real input events, so pointer and keyboard handlers run as they do for a person
       const mouse = (type, x, y, buttons = 1) => s('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons, clickCount: 1, pointerType: 'mouse' })
       const did = []
-      for (const st of (Array.isArray(steps) ? steps : []).slice(0, MAX_STEPS)) {
+      const midShots = []
+      const list = Array.isArray(steps) ? steps : []
+      if (list.length > MAX_STEPS) did.push(`only the first ${MAX_STEPS} of ${list.length} steps run`)
+      for (const st of list.slice(0, MAX_STEPS)) {
         if (Date.now() - started > RUN_MS) { did.push('stopped: out of time'); break }
         try {
           if (st.click || st.drag) {
@@ -195,6 +212,15 @@ export function createPreviewer({ url = '', dist = '', log = () => {} } = {}) {
             await s('Input.dispatchKeyEvent', { type: 'keyDown', ...base, ...(key === 'Enter' ? { text: '\r' } : key.length === 1 ? { text: key } : {}) })
             await s('Input.dispatchKeyEvent', { type: 'keyUp', ...base })
             did.push(`pressed ${st.shift ? 'Shift+' : ''}${key}`)
+          } else if (st.select) {
+            const err = await evaluate(`window.__lc.choose(${JSON.stringify(String(st.select))}, ${JSON.stringify(String(st.value ?? st.option ?? ''))})`)
+            did.push(err ? `select ${st.select}: ${err}` : `chose "${st.value ?? st.option}" in ${st.select}`)
+          } else if (st.screenshot) {
+            // a picture now, in the middle of the steps (the first viewport), e.g. before and after a drag
+            await evaluate('window.__lc.iconBoxes()')
+            const { data } = await s('Page.captureScreenshot', { format: 'png' })
+            midShots.push({ viewport: `${viewports[0] ?? 'desktop'}: ${String(st.screenshot === true ? `after step ${did.length}` : st.screenshot).slice(0, 60)}`, png: data })
+            did.push(`screenshot${st.screenshot === true ? '' : ` "${st.screenshot}"`}`)
           } else if (st.wait) {
             await new Promise((r) => setTimeout(r, Math.min(Number(st.wait) || 0, 2000)))
             did.push(`waited ${st.wait}ms`)
@@ -204,7 +230,7 @@ export function createPreviewer({ url = '', dist = '', log = () => {} } = {}) {
       }
       const after = await evaluate('(window.__lc.iconBoxes(), { parts: window.__lc.parts(), errors: window.__lcOut.errors, toasts: window.__lcOut.toasts })')
       const errors = [...new Set([...(result.errors ?? []), ...after.errors])]
-      const out = { ...result, ok: result.ok && !errors.length, parts: after.parts, errors, toasts: after.toasts, steps: did, shots: [] }
+      const out = { ...result, ok: result.ok && !errors.length, parts: after.parts, errors, toasts: after.toasts, steps: did, shots: shots ? midShots : [] }
       if (shots) {
         for (const v of viewports.slice(0, 2)) {
           await vp(v)

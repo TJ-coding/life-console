@@ -222,7 +222,10 @@ export function createDataDoor({ getState, taxonomy: taxonomyIn, now = () => new
       try { oRef = tax().tags[to] ? to : stableRef(to) } catch { /* a deleted target */ }
       const before = s.relations.length
       s.relations = s.relations.filter((l) => !(l.s === sRef && l.p === link && l.o === oRef && (core || l.by === by)))
-      return s.relations.length < before
+      if (s.relations.length === before) return false
+      log(by, 'unrelate', `${sRef} ${link} ${oRef}`)
+      emit('record.changed', { op: 'unrelate', type: 'link', id: sRef, by }) // as relate does, so views redraw
+      return true
     }
     /** Links from or to a record. */
     function links(ref) {

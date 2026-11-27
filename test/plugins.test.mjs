@@ -658,6 +658,21 @@ test('server previewer: Claude previews, screenshots and clicks through a draft 
       assert.equal(imgs.length, 2, 'phone and desktop')
       assert.equal(Buffer.from(imgs[0].data, 'base64').subarray(1, 4).toString(), 'PNG')
 
+      // the step tools: choose in a select, text= prefers what you can act on, a picture mid-way, icons out of the text
+      const FORM = `export default { sdk: 1, title: 'Form', pages: [{ title: 'Form', mount(el) {
+        el.innerHTML = '<label>Go</label><span class="lc-icon">close</span><select id="s"><option value="a">Apple</option><option value="b">Banana</option></select><button id="go">Go</button><output id="o">none</output>'
+        el.querySelector('#go').onclick = () => { el.querySelector('#o').textContent = 'picked ' + el.querySelector('#s').value }
+      } }] }\n`
+      await mcpTool(tok, 'write_draft', { code: FORM })
+      const f = await mcpTool(tok, 'preview_draft', { steps: [{ select: '#s', value: 'Banana' }, { screenshot: 'before' }, { click: 'text=Go' }, { select: '#s', value: 'Cherry' }] })
+      const ft = f.content[0].text
+      assert.match(ft, /chose "Banana" in #s[\s\S]*clicked text=Go[\s\S]*no option "Cherry" \(has: Apple, Banana\)/)
+      assert.match(ft, /\[Page 1: Form\] Go Apple Banana Go ?picked b/, 'text=Go clicked the button, not the label')
+      assert.doesNotMatch(ft, /close/, 'icon names are left out of the text')
+      assert.equal(f.content.filter((x) => x.type === 'image').length, 2, 'the mid-way picture and the final one')
+      const many = await mcpTool(tok, 'preview_draft', { screenshots: false, steps: Array.from({ length: 85 }, () => ({ wait: 1 })) })
+      assert.match(many.content[0].text, /only the first 80 of 85 steps run/)
+
       // several files and a curated library, run for real in the browser
       const split = await mcpTool(tok, 'write_draft', { files: {
         'index.js': "import { pct } from './fmt.js'\nexport default { sdk: 1, title: 'Split', pages: [{ title: 'Split', mount(el) { el.innerHTML = '<div class=\"lc-card\">' + pct(0.25) + '</div>' } }] }\n",

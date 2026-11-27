@@ -149,3 +149,16 @@ test('reminders are data: computeEvents sends plugin reminders with repeats, mut
   const many = { ...state, reminders: Array.from({ length: 40 }, (_, i) => ({ id: `RM-${i}`, title: `R${i}`, at: '2026-11-24T07:00' })) }
   assert.equal(computeEvents(many, from, to).filter((e) => e.key.startsWith('reminder:')).length, REMINDERS_PER_DAY)
 })
+
+test('data door: removing a link tells listeners, as adding one does (views redraw on record.changed)', () => {
+  const { events, door } = setup()
+  const h = door.as('alice/habits')
+  const habit = h.create('habits.Habit', { title: 'Run 5k', cadence: 'weekdays', target: 3 })
+  h.relate('core.Todo/T-101', 'serves', habit.ref)
+  events.length = 0
+  assert.equal(h.unrelate('core.Todo/T-101', 'serves', habit.ref), true)
+  assert.deepEqual(events.map(([e, p]) => [e, p.op]), [['record.changed', 'unrelate']])
+  events.length = 0
+  assert.equal(h.unrelate('core.Todo/T-101', 'serves', habit.ref), false, 'nothing to remove: no event')
+  assert.equal(events.length, 0)
+})
