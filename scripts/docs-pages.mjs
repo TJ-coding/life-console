@@ -27,7 +27,7 @@ export const DOC_PAGES = {
     src: 'docs/DATA.md',
     label: 'How data is stored',
     title: 'How Life Console stores your data: local-first sync, merging and backups',
-    description: 'How the Life Console planner stores and syncs your data: one document per account, a full copy in your browser for offline use, three-way merging between devices, snapshots, backups and JSON export.',
+    description: 'How the Life Console planner stores and syncs your data: one document per account, a full copy in your browser for offline use, three-way merging between devices, snapshots, backups, JSON export and, next, a Solid pod you own.',
   },
 }
 
