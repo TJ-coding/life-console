@@ -623,7 +623,9 @@ test('server previewer: Claude previews, screenshots and clicks through a draft 
   assert.ok(fs.existsSync(path.join(dist, 'preview.html')), 'npm run build first')
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-chrome-'))
   const port = 9300 + (process.pid % 500)
-  const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', 'about:blank'], { stdio: 'ignore' })
+  const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run',
+    // like the previewer container (no internet): outside hosts never answer, so a request there would hang
+    '--host-resolver-rules=MAP fonts.googleapis.com 10.255.255.1, MAP fonts.gstatic.com 10.255.255.1', 'about:blank'], { stdio: 'ignore' })
   let app2, s2
   try {
     for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://127.0.0.1:${port}/json/version`)).ok) break } catch { /* starting */ } await new Promise((r) => setTimeout(r, 200)) }

@@ -112,6 +112,16 @@ export function createPreviewer({ url = '', pageUrl = '', log = () => {} } = {})
       const vp = (v) => s('Emulation.setDeviceMetricsOverride', VIEWPORTS[v])
       await s('Page.enable')
       await s('Runtime.enable')
+      // only the app's own files load: anything else (Google Fonts, a draft's fetch) fails at once. The container
+      // has no internet anyway, but a request there hangs, and a hanging stylesheet holds back the preview's script
+      const origin = new URL(pageUrl).origin
+      c.on((m) => {
+        if (m.method !== 'Fetch.requestPaused' || m.sessionId !== sessionId) return
+        const { requestId, request } = m.params
+        const own = request.url.startsWith(`${origin}/`)
+        s(own ? 'Fetch.continueRequest' : 'Fetch.failRequest', own ? { requestId } : { requestId, errorReason: 'BlockedByClient' }).catch(() => {})
+      })
+      await s('Fetch.enable', { patterns: [{ urlPattern: '*' }] })
       await s('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: theme === 'light' ? 'light' : 'dark' }] })
       await vp(viewports[0] ?? 'desktop')
       await s('Page.addScriptToEvaluateOnNewDocument', { source: PAGE_HELPERS })

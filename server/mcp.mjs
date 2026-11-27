@@ -127,7 +127,8 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
     // the server's own previewer: no browser of theirs needed (server/previewer.mjs)
     if (previewer.on && !s.errors.length) {
       const r = await previewer.run({ code: draft.code, name: draft.slug || 'draft' })
-      if (!r.previewerFailed) {
+      if (r.previewerFailed) s.warnings.unshift(`the server's previewer failed (${r.errors[0]}): checked without it`)
+      else {
         live.report(uid, draft.key, r, { byServer: true })
         const extra = s.warnings.length ? `\nPublishing will warn:\n${s.warnings.map((e) => `- ${e}`).join('\n')}` : ''
         const where = live.open(uid) ? 'It shows in their workshop now.' : "They'll see it when they open the workshop."
