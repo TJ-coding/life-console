@@ -88,6 +88,21 @@ If you start the app without signing in, the planner stays in that browser only 
 
 In this first version, everything above this section still works the same way: the database does the syncing, merging and snapshots, and the pod is a copy written after it. Later the pod becomes the main home of your planner, and the database keeps only what the service needs to run.
 
+## Coming next: sharing with other servers (ActivityPub)
+
+[ActivityPub](https://www.w3.org/TR/activitypub/) is the open W3C standard behind Mastodon and the rest of the fediverse: servers run by different people talk to each other, the way email works between providers. With it, Life Console's next release lets you share a plan with someone on another server, whether that's life-console.dev, a self-hosted Life Console or Mastodon. Like the pod, it's built and being tested, and isn't on life-console.dev yet.
+
+![Coming next: share a plan with someone on another server. Another Life Console reads it live with signed requests and sends edits back; other fediverse servers get a copy; your pod is never opened from outside](media/data-share.svg)
+
+- **You get an address,** like an email address: `you@life-console.dev`. Other servers find you by it.
+- **Nothing leaves your server unless you share it,** one plan at a time, with view or edit access.
+- **Another Life Console reads the plan live** from your server, so they always see the current version. Every request is signed (HTTP Signatures, as Mastodon uses), and your server answers only the people you shared with.
+- **Edits come back to you.** With edit access, they can update progress and status; your server applies the change to your plan.
+- **Other fediverse servers,** such as Mastodon, can't read a plan live, so they get a copy when you share.
+- **Revoking** is immediate: your server stops answering and tells theirs. A copy a Mastodon server already received may stay there.
+- **Your pod stays private.** Other servers only ever talk to your Life Console, never to your pod.
+- **Moving server keeps your address.** Your old address points to the new place, links to your plans redirect, the people you share with are told, and messages that arrive late wait in a mailbox for your new server to collect.
+
 ## Running it yourself
 
 Life Console is open source (AGPL-3.0). A server you run yourself works in exactly the same way: one PostgreSQL database holds the documents, snapshots and daily backups, and you decide where it lives. See [Self-hosting](SELF_HOSTING.md) to set it up and [Backups and restore](SELF_HOSTING.md#6-backups-and-restore) to keep copies off the server.
