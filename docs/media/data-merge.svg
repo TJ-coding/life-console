@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 440" width="640" height="440" role="img" aria-label="Three-way merge: the base, this device and the server are compared item by item, so an edit on one device and a change on another are both kept">
+<title>Three-way merge: the base, this device and the server are compared item by item, so an edit on one device and a change on another are both kept</title>
+<style>
+.pg{fill:#0f1216;stroke:#2a313b}.cd{fill:#171b21;stroke:#2a313b}.in{fill:#0f1216;stroke:#2a313b}
+.t{fill:#e6e9ee;font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.p{fill:#e6e9ee;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.m{fill:#9aa4b2;font:13px ui-monospace,"JetBrains Mono",Menlo,monospace}
+.k{fill:#2bd4e6;font:600 13px ui-monospace,"JetBrains Mono",Menlo,monospace}
+.h{fill:#2bd4e6}.hs{stroke:#2bd4e6}.ib{fill:#5aa2ff}.is{stroke:#5aa2ff}.w{fill:#e5a03a}.ws{stroke:#e5a03a}
+.ln{stroke:#2a313b}.mu{stroke:#9aa4b2}.gl{fill:none;stroke:#9aa4b2;stroke-width:1.6}
+.band{fill:#e5a03a;fill-opacity:.14;stroke:#e5a03a;stroke-opacity:.5}
+.hl{fill:#2bd4e6;fill-opacity:.12}.hli{fill:#5aa2ff;fill-opacity:.14}
+@media (prefers-color-scheme: light){
+.pg{fill:#f4f5f7;stroke:#d9dde3}.cd{fill:#fff;stroke:#d9dde3}.in{fill:#f4f5f7;stroke:#d9dde3}
+.t,.p{fill:#1b1f24}.m{fill:#5d6673}.k{fill:#1f8a63}.h{fill:#1f8a63}.hs{stroke:#1f8a63}.ib{fill:#1f62c9}.is{stroke:#1f62c9}
+.w{fill:#a15c00}.ws{stroke:#a15c00}.ln{stroke:#d9dde3}.mu{stroke:#5d6673}.gl{stroke:#5d6673}
+.band{fill:#a15c00;stroke:#a15c00}.hl{fill:#1f8a63}.hli{fill:#1f62c9}}
+</style>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="h"/></marker>
+<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ib"/></marker>
+<marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:#9aa4b2"/></marker>
+</defs>
+<rect class="pg" x=".5" y=".5" width="639" height="439" rx="3"/>
+<rect class="cd" x="20" y="20" width="190" height="176" rx="2"/>
+<text class="t" x="34" y="46" text-anchor="start">Base</text>
+<text class="m" x="196" y="46" text-anchor="end">last sync</text>
+<text class="m" x="34" y="80" text-anchor="start">T-1 Draft report 60m</text>
+<text class="m" x="34" y="112" text-anchor="start">T-2 Gym</text>
+<text class="m" x="34" y="144" text-anchor="start">T-3 Call bank</text>
+<rect class="cd" x="225" y="20" width="190" height="176" rx="2"/>
+<text class="t" x="239" y="46" text-anchor="start">This device</text>
+<text class="m" x="401" y="46" text-anchor="end">yours</text>
+<rect class="hl" x="233" y="62" width="174" height="26" rx="2"/>
+<text class="m" x="239" y="80" text-anchor="start">T-1 Draft report 90m</text>
+<text class="m" x="239" y="112" text-anchor="start">T-2 Gym</text>
+<text class="m" x="239" y="144" text-anchor="start">T-3 Call bank</text>
+<rect class="hl" x="233" y="158" width="174" height="26" rx="2"/>
+<text class="m" x="239" y="176" text-anchor="start">T-4 Book dentist</text>
+<rect class="cd" x="430" y="20" width="190" height="176" rx="2"/>
+<text class="t" x="444" y="46" text-anchor="start">Server</text>
+<text class="m" x="606" y="46" text-anchor="end">other device</text>
+<text class="m" x="444" y="80" text-anchor="start">T-1 Draft report 60m</text>
+<rect class="hli" x="438" y="94" width="174" height="26" rx="2"/>
+<text class="m" x="444" y="112" text-anchor="start">T-2 Gym ✓ done</text>
+<text class="m" x="444" y="144" text-anchor="start">T-3 Call bank</text>
+<line x1="442" y1="140" x2="546" y2="140" class="mu" stroke-width="1.5"/>
+<line x1="115" y1="198" x2="230" y2="240" class="mu" stroke-width="1.5" marker-end="url(#g)"/>
+<line x1="320" y1="198" x2="320" y2="240" class="mu" stroke-width="1.5" marker-end="url(#g)"/>
+<line x1="525" y1="198" x2="410" y2="240" class="mu" stroke-width="1.5" marker-end="url(#g)"/>
+<rect class="cd" x="120" y="244" width="400" height="176" rx="2"/>
+<text class="t" x="134" y="270" text-anchor="start">Merged</text>
+<text class="m" x="506" y="270" text-anchor="end">every change kept</text>
+<rect class="hl" x="128" y="286" width="384" height="26" rx="2"/>
+<text class="m" x="134" y="304" text-anchor="start">T-1 Draft report 90m</text>
+<text class="m" x="506" y="304" text-anchor="end">this device</text>
+<rect class="hli" x="128" y="318" width="384" height="26" rx="2"/>
+<text class="m" x="134" y="336" text-anchor="start">T-2 Gym ✓ done</text>
+<text class="m" x="506" y="336" text-anchor="end">server</text>
+<text class="m" x="134" y="368" text-anchor="start">T-3 Call bank</text>
+<text class="m" x="506" y="368" text-anchor="end">deleted on server</text>
+<line x1="132" y1="364" x2="236" y2="364" class="mu" stroke-width="1.5"/>
+<rect class="hl" x="128" y="382" width="384" height="26" rx="2"/>
+<text class="m" x="134" y="400" text-anchor="start">T-4 Book dentist</text>
+<text class="m" x="506" y="400" text-anchor="end">this device</text>
+</svg>

@@ -238,6 +238,15 @@ test('scripts/docs-pages.mjs: markdown links become site links or GitHub links',
   assert.ok(html.includes('href="https://umami.is"'))
 })
 
+test('scripts/docs-pages.mjs: docs/media images are served from /media/docs/, heading ids drop entities', async () => {
+  const { renderDoc } = await import('../scripts/docs-pages.mjs')
+  const html = renderDoc('data', "# Data\n\n![A diagram](media/data-where.svg)\n\n## Old versions can't overwrite\n")
+  assert.ok(html.includes('src="/media/docs/data-where.svg"'))
+  assert.ok(html.includes('<a href="/media/docs/data-where.svg"><img'), 'tap to open full size')
+  assert.match(html, /<img loading="lazy" /)
+  assert.match(html, /<h2 id="old-versions-cant-overwrite">/)
+})
+
 test('docs pages carry the Umami tag (tag "docs") where analytics is on, and never the recorder', async () => {
   const r = await get(heat, '/docs/guide')
   const html = r.body.toString()

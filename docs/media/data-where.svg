@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 312" width="640" height="312" role="img" aria-label="Each device keeps a full copy of the planner in its browser and syncs it with one document on the server, which keeps snapshots and daily backups">
+<title>Each device keeps a full copy of the planner in its browser and syncs it with one document on the server, which keeps snapshots and daily backups</title>
+<style>
+.pg{fill:#0f1216;stroke:#2a313b}.cd{fill:#171b21;stroke:#2a313b}.in{fill:#0f1216;stroke:#2a313b}
+.t{fill:#e6e9ee;font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.p{fill:#e6e9ee;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.m{fill:#9aa4b2;font:13px ui-monospace,"JetBrains Mono",Menlo,monospace}
+.k{fill:#2bd4e6;font:600 13px ui-monospace,"JetBrains Mono",Menlo,monospace}
+.h{fill:#2bd4e6}.hs{stroke:#2bd4e6}.ib{fill:#5aa2ff}.is{stroke:#5aa2ff}.w{fill:#e5a03a}.ws{stroke:#e5a03a}
+.ln{stroke:#2a313b}.mu{stroke:#9aa4b2}.gl{fill:none;stroke:#9aa4b2;stroke-width:1.6}
+.band{fill:#e5a03a;fill-opacity:.14;stroke:#e5a03a;stroke-opacity:.5}
+.hl{fill:#2bd4e6;fill-opacity:.12}.hli{fill:#5aa2ff;fill-opacity:.14}
+@media (prefers-color-scheme: light){
+.pg{fill:#f4f5f7;stroke:#d9dde3}.cd{fill:#fff;stroke:#d9dde3}.in{fill:#f4f5f7;stroke:#d9dde3}
+.t,.p{fill:#1b1f24}.m{fill:#5d6673}.k{fill:#1f8a63}.h{fill:#1f8a63}.hs{stroke:#1f8a63}.ib{fill:#1f62c9}.is{stroke:#1f62c9}
+.w{fill:#a15c00}.ws{stroke:#a15c00}.ln{stroke:#d9dde3}.mu{stroke:#5d6673}.gl{stroke:#5d6673}
+.band{fill:#a15c00;stroke:#a15c00}.hl{fill:#1f8a63}.hli{fill:#1f62c9}}
+</style>
+<defs>
+<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="h"/></marker>
+<marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ib"/></marker>
+<marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:#9aa4b2"/></marker>
+</defs>
+<rect class="pg" x=".5" y=".5" width="639" height="311" rx="3"/>
+<rect class="cd" x="20" y="24" width="230" height="120" rx="2"/>
+<rect class="gl" x="37" y="42" width="22" height="14" rx="1.5"/><path class="gl" d="M34 59h28"/>
+<text class="t" x="72" y="56" text-anchor="start">Laptop</text>
+<rect class="in" x="36" y="76" width="198" height="52" rx="2"/>
+<text class="p" x="50" y="98" text-anchor="start">Browser copy</text>
+<text class="m" x="50" y="117" text-anchor="start">whole planner, offline</text>
+<rect class="cd" x="20" y="168" width="230" height="120" rx="2"/>
+<rect class="gl" x="41" y="184" width="13" height="21" rx="2.5"/><path class="gl" d="M45.5 201h4"/>
+<text class="t" x="72" y="200" text-anchor="start">Phone</text>
+<rect class="in" x="36" y="220" width="198" height="52" rx="2"/>
+<text class="p" x="50" y="242" text-anchor="start">Browser copy</text>
+<text class="m" x="50" y="261" text-anchor="start">whole planner, offline</text>
+<rect class="cd" x="390" y="24" width="230" height="264" rx="2"/>
+<rect class="gl" x="404" y="40" width="24" height="7" rx="1"/><rect class="gl" x="404" y="50" width="24" height="7" rx="1"/><circle cx="423" cy="43.5" r="1.3" class="h"/><circle cx="423" cy="53.5" r="1.3" class="h"/>
+<text class="t" x="442" y="56" text-anchor="start">Server</text>
+<rect class="in" x="406" y="76" width="198" height="52" rx="2"/>
+<text class="p" x="420" y="98" text-anchor="start">Planner document</text>
+<text class="m" x="420" y="117" text-anchor="start">one per account · v42</text>
+<rect class="in" x="406" y="146" width="198" height="52" rx="2"/>
+<text class="p" x="420" y="168" text-anchor="start">Snapshots</text>
+<text class="m" x="420" y="187" text-anchor="start">hourly · last 200</text>
+<line x1="505" y1="129" x2="505" y2="144" class="mu" stroke-width="1.5" marker-end="url(#g)"/>
+<rect class="in" x="406" y="216" width="198" height="52" rx="2"/>
+<text class="p" x="420" y="238" text-anchor="start">Daily backups</text>
+<text class="m" x="420" y="257" text-anchor="start">kept 14 days</text>
+<line x1="505" y1="199" x2="505" y2="214" class="mu" stroke-width="1.5" marker-end="url(#g)"/>
+<line x1="236" y1="102" x2="404" y2="102" class="hs" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
+<line x1="236" y1="246" x2="404" y2="112" class="hs" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
+<text class="k" x="320" y="92" text-anchor="middle">sync</text>
+</svg>

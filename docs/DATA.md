@@ -2,11 +2,15 @@
 
 Life Console keeps your whole planner as **one document**: a single JSON file per account. That document lives in two places: in your browser, where the app reads and writes it, and on the server, which keeps every device in step. This page explains how the two stay in sync, what happens when they disagree, and how you get your data back out.
 
+![Each device keeps a full copy of the planner in its browser and syncs it with one document on the server, which keeps snapshots and daily backups](media/data-where.svg)
+
 ## One planner, one document
 
 Everything you put into the planner is in that one document: tasks, schedules, deadlines, goals and milestones, notes, routines, sleep and caffeine logs, and your settings. Plugins keep their data in the same document, each in its own section with its own version number.
 
 On the server, the document is a single row in a PostgreSQL database, stored as `jsonb`, with a version number that goes up by one on every save. There's no table per kind of item, so the planner you export is exactly the planner the server holds.
+
+![The planner document: tasks, timeline blocks, deadlines, plans, daily logs, settings and plugin data, all in one file per account](media/data-document.svg)
 
 ## Your browser comes first
 
@@ -15,6 +19,8 @@ The app never waits for the server:
 - **Every change is saved in your browser straight away.** A full copy of the planner sits in the browser's local storage, so the app opens instantly and works offline.
 - **The change is sent to the server** about a second and a half after you stop editing, and again whenever you switch away from the tab.
 - **Changes from your other devices are fetched** every 30 seconds while the app is open, when you come back to the tab, and when your connection returns. If nothing changed, the server answers in a few bytes.
+
+![An edit is saved in the browser at once and reaches the server about 1.5 seconds later. The phone pulls it. While offline the phone keeps editing, and its edits go up when it's back online](media/data-sync.svg)
 
 Offline, the app shows *Offline: changes are kept and will sync*, and keeps working from the browser copy. The changes go up when you're back online.
 
@@ -25,6 +31,8 @@ Every save says which version it was based on. If another device saved in the me
 1. **The base:** the last version this device synced.
 2. **This device's copy.**
 3. **The server's copy.**
+
+![A three-way merge: this device lengthened T-1 and added T-4, while the other device marked T-2 done and deleted T-3. The merged planner keeps all four changes](media/data-merge.svg)
 
 Lists such as tasks, deadlines and goals merge item by item, so:
 
@@ -42,6 +50,8 @@ When an update changes how the planner is stored, the server upgrades the docume
 ## Snapshots and backups
 
 There are two safety nets on the server, for mistakes and bugs:
+
+![Five copies of your planner, from newest to furthest back: the browser copy, the server document, hourly snapshots, daily backups and your own export](media/data-safety.svg)
 
 - **Snapshots:** while your planner is changing, the server keeps a copy at most once an hour, and always before a save replaces the server's copy outright. It keeps up to the 200 most recent per account. The operator of the server can restore one (`npm run admin -- restore`), so if something goes wrong, ask.
 - **Database backups:** a full backup every day, kept for 14 days. A backup taken before each update is kept for 28 days.
