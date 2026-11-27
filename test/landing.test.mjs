@@ -26,6 +26,7 @@ fs.writeFileSync(path.join(dist, 'llms.txt'), '# Life Console')
 fs.mkdirSync(path.join(dist, 'docs'))
 fs.writeFileSync(path.join(dist, 'docs', 'guide.html'), '<head><title>GUIDE</title></head>')
 fs.writeFileSync(path.join(dist, 'docs', 'self-hosting.html'), '<title>SELF-HOSTING</title>')
+fs.writeFileSync(path.join(dist, 'docs', 'data.html'), '<title>DATA</title>')
 fs.mkdirSync(path.join(dist, 'vs'))
 fs.writeFileSync(path.join(dist, 'vs', 'sunsama.html'), '<head><title>VS-SUNSAMA</title></head>')
 fs.writeFileSync(path.join(dist, 'alternatives.html'), '<head><title>HUB</title></head>')
@@ -211,7 +212,7 @@ test('/api/health tells the app about analytics only when it is configured', asy
 
 test('/docs/guide and /docs/self-hosting: served on every server, listed in the sitemap, never cached as the app shell', async () => {
   for (const base of [on, off]) {
-    for (const [p, title] of [['/docs/guide', 'GUIDE'], ['/docs/self-hosting', 'SELF-HOSTING']]) {
+    for (const [p, title] of [['/docs/guide', 'GUIDE'], ['/docs/self-hosting', 'SELF-HOSTING'], ['/docs/data', 'DATA']]) {
       const r = await get(base, p)
       assert.equal(r.status, 200, p)
       assert.match(r.body.toString(), new RegExp(`<title>${title}</title>`))
@@ -223,7 +224,7 @@ test('/docs/guide and /docs/self-hosting: served on every server, listed in the 
   assert.match((await get(on, '/docs/nope')).body.toString(), /APP/)
   assert.equal((await get(on, '/app')).headers.get('x-lc-page'), null, 'the app shell stays cacheable')
   const map = (await get(on, '/sitemap.xml')).body.toString()
-  for (const p of ['/docs/guide', '/docs/self-hosting']) assert.ok(map.includes(`<loc>https://lc.test${p}</loc>`), p)
+  for (const p of ['/docs/guide', '/docs/self-hosting', '/docs/data']) assert.ok(map.includes(`<loc>https://lc.test${p}</loc>`), p)
 })
 
 test('scripts/docs-pages.mjs: markdown links become site links or GitHub links', async () => {
