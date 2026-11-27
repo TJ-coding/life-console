@@ -38,6 +38,10 @@ export function loadConfig(over = {}) {
     adminEmails: (e.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
     sessionDays: num(e.SESSION_DAYS, 90),
     cookieSecure: bool(e.COOKIE_SECURE, appUrl.startsWith('https://')),
+    // the server's own extension previewer (server/previewer.mjs): a headless Chromium's DevTools address, and the
+    // address it opens this app's /preview.html at (inside the compose network). Off unless PREVIEWER_URL is set.
+    previewerUrl: e.PREVIEWER_URL || '',
+    previewPageUrl: e.PREVIEW_PAGE_URL || (e.PREVIEWER_URL ? `http://app:${e.PORT || 8080}/preview.html` : ''),
     trustProxy: bool(e.TRUST_PROXY), // take the client IP from CF-Connecting-IP / X-Forwarded-For (rate limits)
     maxStateBytes: num(e.MAX_STATE_BYTES, 4 * 1024 * 1024),
     revisionEveryMin: num(e.REVISION_EVERY_MIN, 60), // snapshot a planner at most this often while it changes

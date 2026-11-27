@@ -33,6 +33,7 @@ async function run({ code, name }) {
   cleanups = []
   listeners.clear()
   out.innerHTML = ''
+  for (const st of document.querySelectorAll('style[data-draft]')) st.remove() // the last run's shadow: false styles
   const errors = []
   const pkg = `preview/${nsOfPkg(name || 'draft')}`
   let manifest
@@ -74,6 +75,8 @@ async function run({ code, name }) {
       if (typeof part?.mount !== 'function') throw new Error('needs mount(el, lc)')
       const root = part.shadow === false ? box : box.attachShadow({ mode: 'open' })
       if (root !== box) { const st = document.createElement('style'); st.textContent = KIT; root.appendChild(st) }
+      // its own styles, as in the console (src/sdk/mount.js): inside each shadow root, or on the page for shadow: false
+      if (typeof manifest.styles === 'string') { const st = document.createElement('style'); st.textContent = manifest.styles; if (root === box) st.dataset.draft = '1'; (root !== box ? root : document.head).appendChild(st) }
       const el = document.createElement('div')
       root.appendChild(el)
       const c = part.mount(el, lc, props)

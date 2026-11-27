@@ -72,6 +72,9 @@ services:
       LC_VERSION: ${LC_VERSION:-latest}
       UPDATE_DIR: /updates
       AUTO_UPDATE: ${AUTO_UPDATE:-on} # the auto-update switch's starting value; it only acts while the updater runs
+      # the extension previewer for AI apps (the `previewer` service below): http://previewer:9222 to use it
+      PREVIEWER_URL: ${PREVIEWER_URL:-}
+    networks: [default, preview]
     ports:
       # host port; "127.0.0.1:18080" keeps it local when a reverse proxy on the same Docker network serves it
       - "${LC_PORT:-8080}:8080"
@@ -147,6 +150,29 @@ services:
           sleep 5
         done
     healthcheck: { disable: true }
+
+  # Optional: a headless Chromium that runs extension drafts for AI apps (server/previewer.mjs), so Claude can build
+  # and check an extension without your browser open; you open the workshop only to try the result. Off by default:
+  # COMPOSE_PROFILES=previewer and PREVIEWER_URL=http://previewer:9222 in .env turn it on (about 1 GB of disk and
+  # 200-700 MB of memory while it runs). Drafts are code someone wrote, so it's walled off: no internet (an internal
+  # network shared only with the app, not the database), no Linux capabilities, no privilege escalation, memory and
+  # process limits, and every run is a throwaway browser profile on demo data.
+  previewer:
+    image: chromedp/headless-shell:158.0.8127.37
+    profiles: [previewer]
+    restart: unless-stopped
+    networks: [preview]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    shm_size: 256m
+    mem_limit: 768m
+    pids_limit: 256
+    healthcheck: { disable: true }
+
+networks:
+  default:
+  preview:
+    internal: true # no route to the internet; only the app and the previewer are on it
 
 volumes:
   db:

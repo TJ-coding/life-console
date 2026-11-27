@@ -9,7 +9,7 @@ import { KIT, KIT_CLASSES } from './kit.js'
 const isVueComponent = (p) => p && typeof p === 'object' && !p.mount && (p.setup || p.render || p.template || p.__name || p.name || p.components)
 
 /** Mount `part` into `el`; returns a cleanup function. onError(e) is called when it fails. */
-export function mountPart(el, part, { pluginId, props = {}, publicPart = false, onError = () => {} } = {}) {
+export function mountPart(el, part, { pluginId, props = {}, publicPart = false, styles = null, onError = () => {} } = {}) {
   if (!el || !part) return () => {}
   try {
     if (isVueComponent(part) || typeof part === 'function') {
@@ -22,6 +22,8 @@ export function mountPart(el, part, { pluginId, props = {}, publicPart = false, 
       const root = el.shadowRoot ?? el.attachShadow({ mode: 'open' })
       // the look kit: plain HTML looks native and the lc-* classes work (src/sdk/kit.js)
       root.innerHTML = `<style>${KIT}</style><div></div>`
+      // the plugin's own `styles`: the copy in <head> (loader.js) can't reach inside a shadow root
+      if (styles) { const st = document.createElement('style'); st.textContent = styles; root.insertBefore(st, root.lastElementChild) }
       target = root.lastElementChild
     } else if (publicPart && !document.getElementById('lc-kit')) {
       const st = document.createElement('style'); st.id = 'lc-kit'; st.textContent = KIT_CLASSES; document.head.appendChild(st)

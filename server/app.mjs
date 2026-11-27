@@ -19,6 +19,7 @@ import { createVault } from './vault.mjs'
 import { createConsent, TRUST_HEADERS, CLAUDE_TOKEN } from './consent.mjs'
 import { createWorkshopLive } from './workshop-live.mjs'
 import { createMcp } from './mcp.mjs'
+import { createPreviewer } from './previewer.mjs'
 import { createPods, podClient } from './pod.mjs'
 import { createFederation } from './federation.mjs'
 import { settingsOf } from './schedule.mjs'
@@ -137,7 +138,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
 
   const consent = createConsent({ db, auth, registry, vault, log, secureFor: (req) => secureFor(req), providers: cfg.oauthProviders ?? {}, appUrl: cfg.appUrl, planner, pods, podClient, siteOf, fed })
   const live = createWorkshopLive()
-  const mcp = createMcp({ auth, registry, live, limit, log, build: BUILD, siteOf, planner, onPlannerSaved: (user, req) => mirrorSoon(user, req) })
+  const mcp = createMcp({ auth, registry, live, limit, log, build: BUILD, siteOf, planner, onPlannerSaved: (user, req) => mirrorSoon(user, req), previewer: createPreviewer({ url: cfg.previewerUrl, pageUrl: cfg.previewPageUrl, log }) })
   /** Account actions a plugin could abuse need the trusted page once Public plugins are on (goal 3). */
   const viaTrust = (user, action) => { if (user.publicPlugins) throw Object.assign(httpError(403, 'Confirm this on the trusted page'), { trust: `/trust?do=${action}` }) }
 

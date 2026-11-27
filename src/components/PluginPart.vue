@@ -14,7 +14,7 @@ const title = () => registry.byId[props.module]?.title ?? props.module
 function mount() {
   cleanup()
   failed.value = false
-  cleanup = mountPart(el.value, props.part, { pluginId: registry.byId[props.module]?.pkg ?? props.module, props: props.data, publicPart: publicIds.has(props.module), onError: () => { failed.value = true } })
+  cleanup = mountPart(el.value, props.part, { pluginId: registry.byId[props.module]?.pkg ?? props.module, props: props.data, publicPart: publicIds.has(props.module), styles: registry.byId[props.module]?.styles ?? null, onError: () => { failed.value = true } })
 }
 onMounted(mount)
 watch(() => props.part, mount)

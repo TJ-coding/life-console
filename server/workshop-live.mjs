@@ -54,12 +54,13 @@ export function createWorkshopLive() {
     return draft
   }
 
-  /** The workshop's preview ran a draft: POST /api/workshop/live/result. */
-  function report(uid, key, result) {
+  /** The workshop's preview ran a draft: POST /api/workshop/live/result. `byServer`: the server's previewer ran it
+   *  (server/previewer.mjs), so no workshop page has shown it yet: it still loads when one opens. */
+  function report(uid, key, result, { byServer = false } = {}) {
     const r = room(uid)
     r.results.set(String(key), { ...result, at: Date.now() })
     if (r.results.size > 20) r.results.delete(r.results.keys().next().value)
-    if (r.draft?.key === key) r.draft.seen = true
+    if (r.draft?.key === key && !byServer) r.draft.seen = true
     wake(r)
   }
 

@@ -610,3 +610,57 @@ test('Settings → Claude: shows whether Claude is connected and may see the pla
   assert.equal((await raw('GET', '/api/claude', undefined, { Authorization: `Bearer ${tok}` })).status, 401, "Claude's own token can't read it")
   assert.equal((await gus('POST', '/api/claude', {})).status, 404, 'no way to switch it outside the trusted page')
 })
+
+// The server's previewer (server/previewer.mjs) against a real headless Chrome. Runs when PREVIEW_CHROME names a
+// Chrome binary and the app is built (dist/preview.html); skipped otherwise.
+const CHROME = process.env.PREVIEW_CHROME
+test('server previewer: Claude previews, screenshots and clicks through a draft with no browser of theirs', { skip: !CHROME && 'set PREVIEW_CHROME to a Chrome binary' }, async () => {
+  const { spawn } = await import('node:child_process')
+  const fs = await import('node:fs')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  const dist = path.resolve(import.meta.dirname, '../dist')
+  assert.ok(fs.existsSync(path.join(dist, 'preview.html')), 'npm run build first')
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-chrome-'))
+  const port = 9300 + (process.pid % 500)
+  const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', 'about:blank'], { stdio: 'ignore' })
+  let app2, s2
+  try {
+    for (let i = 0; i < 50; i++) { try { if ((await fetch(`http://127.0.0.1:${port}/json/version`)).ok) break } catch { /* starting */ } await new Promise((r) => setTimeout(r, 200)) }
+    s2 = http.createServer((q, r) => app2.handler(q, r))
+    await new Promise((r) => s2.listen(0, '127.0.0.1', r))
+    const appPort = s2.address().port
+    const cfg = loadConfig({ DATABASE_URL: dbUrl, PUSH_DRY_RUN: '1', APP_URL: `http://127.0.0.1:${appPort}`, DIST: dist, PREVIEWER_URL: `http://127.0.0.1:${port}`, PREVIEW_PAGE_URL: `http://127.0.0.1:${appPort}/preview.html`, TRUST_PROXY: '1' })
+    app2 = await createApp({ cfg, db: conn.db, pool: conn.pool, log: quiet })
+    const saveBase = base
+    base = `http://127.0.0.1:${appPort}`
+    try {
+      const hal = client()
+      await hal('POST', '/api/auth/signup', { email: 'prev-hal@x.test', password: 'pw-prev-1234' }, { 'X-Forwarded-For': '10.8.8.8' })
+      const tok = await mcpToken(hal)
+      const COUNTER = `export default { sdk: 1, title: 'Counter', pages: [{ title: 'Counter', mount(el) {
+        let n = 0
+        const draw = () => { el.innerHTML = '<div class="lc-card"><span class="lc-big">' + n + '</span> <button class="lc-btn" id="up">Add one</button><input id="name"></div>'; el.querySelector('#up').onclick = () => { n++; draw() } }
+        draw()
+      } }] }\n`
+      const w = await mcpTool(tok, 'write_draft', { code: COUNTER, name: 'counter' })
+      assert.equal(w.isError, undefined, w.content[0].text)
+      assert.match(w.content[0].text, /Preview: works[\s\S]*\[Page 1: Counter\] 0 Add one/)
+      assert.match((await mcpTool(tok, 'read_draft')).content[0].text, /Preview: works/, 'the result is kept for publish and use_draft')
+
+      const p = await mcpTool(tok, 'preview_draft', { viewport: 'both', steps: [{ click: '#up' }, { click: 'text=Add one' }, { type: 'Ann', into: '#name' }] })
+      assert.equal(p.isError, undefined, p.content[0].text)
+      assert.match(p.content[0].text, /\[Page 1: Counter\] 2 Add one/)
+      assert.match(p.content[0].text, /clicked #up[\s\S]*clicked text=Add one[\s\S]*typed "Ann" into #name/)
+      const imgs = p.content.filter((x) => x.type === 'image')
+      assert.equal(imgs.length, 2, 'phone and desktop')
+      assert.equal(Buffer.from(imgs[0].data, 'base64').subarray(1, 4).toString(), 'PNG')
+
+      const boom = await mcpTool(tok, 'write_draft', { code: "export default { sdk: 1, title: 'Boom', pages: [{ title: 'Boom', mount() { throw new Error('kaboom') } }] }\n" })
+      assert.equal(boom.isError, true)
+      assert.match(boom.content[0].text, /HAS ERRORS[\s\S]*kaboom/)
+    } finally { base = saveBase }
+  } finally {
+    app2?.close(); s2?.close(); chrome.kill()
+  }
+})
