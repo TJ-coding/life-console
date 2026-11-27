@@ -554,6 +554,10 @@ test('planner over MCP: a separate permission on the trusted page, read today, a
   assert.match(added.text, /T-104 Email supervisor/)
   assert.match((await t('change_task', { id: 'T-101', done: true })).text, /T-101[^\n]*done/)
   assert.match((await t('add_deadline', { title: 'Conference paper', due: `${day}T18:00` })).text, /DL-1 Conference paper/)
+  assert.match((await t('add_deadline', { title: 'Old form', due: '2020-01-01' })).text, /DL-2 Old form/)
+  const after = (await t('today')).text
+  assert.match(after, /Deadlines passed, not marked done:\n- DL-2 Old form/)
+  assert.doesNotMatch(after.split('Deadlines in the next 14 days:')[1], /Old form/, 'a passed deadline is not listed as coming up')
   // bad input and containers are refused, and nothing is written
   assert.equal((await t('change_task', { id: 'T-102', done: true })).isError, true, 'a task with subtasks is done when they are')
   assert.equal((await t('add_task', { title: 'Bad', date: 'tomorrow' })).isError, true)

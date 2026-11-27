@@ -41,12 +41,16 @@ export function today(state, ms = Date.now()) {
   const todays = leaves.filter((t) => t.scheduled?.date === date).sort((a, b) => (a.scheduled.start ?? '99').localeCompare(b.scheduled.start ?? '99'))
   const overdue = leaves.filter((t) => !t.done && ((t.due && t.due < date) || (t.scheduled?.date && t.scheduled.date < date)))
   const soon = addDays(date, 14)
-  const deadlines = (state.deadlines ?? []).filter((d) => !d.done && String(d.due).slice(0, 10) <= soon).sort((a, b) => String(a.due).localeCompare(String(b.due)))
+  const now = `${date}T${time}`
+  const open = (state.deadlines ?? []).filter((d) => !d.done).sort((a, b) => String(a.due).localeCompare(String(b.due)))
+  const missed = open.filter((d) => String(d.due) < now)
+  const deadlines = open.filter((d) => String(d.due) >= now && String(d.due).slice(0, 10) <= soon)
   const backlog = leaves.filter((t) => !t.done && !t.scheduled).length
   const out = [`Today is ${date}, ${time} (${tz}).`]
   out.push('', 'Time blocks today:', ...(blocks.length ? blocks.map((b) => `- ${b.start}-${b.end} ${b.title}${b.category ? ` [${b.category}]` : ''}`) : ['(none)']))
   out.push('', 'Tasks today:', ...(todays.length ? todays.map((t) => todoLine(state, t)) : ['(none)']))
-  if (overdue.length) out.push('', 'Overdue:', ...overdue.slice(0, 20).map((t) => todoLine(state, t)))
+  if (overdue.length) out.push('', 'Overdue tasks:', ...overdue.slice(0, 20).map((t) => todoLine(state, t)))
+  if (missed.length) out.push('', 'Deadlines passed, not marked done:', ...missed.slice(0, 20).map(deadlineLine))
   out.push('', 'Deadlines in the next 14 days:', ...(deadlines.length ? deadlines.map(deadlineLine) : ['(none)']))
   out.push('', `Backlog: ${backlog} unscheduled task${backlog === 1 ? '' : 's'} (find_in_planner lists them).`)
   return out.join('\n')
