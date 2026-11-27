@@ -666,3 +666,67 @@ test('server previewer: Claude previews, screenshots and clicks through a draft 
     app2?.close(); s2?.close(); chrome.kill()
   }
 })
+
+test('live test: the draft runs on the real planner only after the trusted page, only its current version, with undo', async () => {
+  const ivy = client(); const joe = client()
+  for (const [c, e] of [[ivy, 'dev-ivy'], [joe, 'dev-joe']]) await c('POST', '/api/auth/signup', { email: `${e}@x.test`, password: 'pw-dev-12345' }, { 'X-Forwarded-For': '10.7.7.7' })
+  assert.equal((await ivy('PUT', '/api/state', { state: { schemaVersion: 2, todos: [{ id: 'T-101', title: 'Before' }], timeBlocks: [], deadlines: [], plans: [] }, baseVersion: 0 })).status, 200)
+  const tok = await mcpToken(ivy)
+  assert.match((await ivy('GET', '/trust?do=dev-test', undefined, NAV)).text, /no draft to test/)
+  const CODE1 = "export default { sdk: 1, title: 'Try', pages: [{ title: 'Try', mount(el) { el.textContent = 'one' } }] }\n"
+  await mcpTool(tok, 'write_draft', { code: CODE1, name: 'try' })
+  assert.deepEqual((await ivy('GET', '/api/workshop/dev')).body, { on: false })
+  // Claude can only ask: without the person's click nothing runs
+  const asked = await mcpTool(tok, 'live_test', { on: true })
+  assert.match(asked.content[0].text, /\/trust\?do=dev-test/)
+  assert.deepEqual((await ivy('GET', '/api/workshop/dev')).body, { on: false })
+  const page = await ivy('GET', '/trust?do=dev-test', undefined, NAV)
+  assert.match(page.text, /can change while it runs[\s\S]*60 minutes[\s\S]*Stop and undo/)
+  await confirm(ivy, 'do=dev-test')
+  const dev = (await ivy('GET', '/api/workshop/dev')).body
+  assert.equal(dev.on, true); assert.equal(dev.undo, true); assert.match(dev.pkg, /\/try$/)
+  const code = await ivy('GET', `/api/workshop/dev/code/${dev.key}.js`)
+  assert.equal(code.status, 200); assert.equal(code.text, CODE1)
+  assert.equal(code.headers.get('cache-control'), 'no-store')
+  // only the current version, only for this person's browser session
+  assert.equal((await joe('GET', `/api/workshop/dev/code/${dev.key}.js`)).status, 404)
+  assert.equal((await raw('GET', `/api/workshop/dev/code/${dev.key}.js`, undefined, { Authorization: `Bearer ${tok}` })).status, 401)
+  const edited = await mcpTool(tok, 'edit_draft', { old_text: "'one'", new_text: "'two'" })
+  assert.match(edited.content[0].text, /Live test on/)
+  assert.equal((await ivy('GET', `/api/workshop/dev/code/${dev.key}.js`)).status, 404, 'an old version no longer loads')
+  const dev2 = (await ivy('GET', '/api/workshop/dev')).body
+  assert.match((await ivy('GET', `/api/workshop/dev/code/${dev2.key}.js`)).text, /'two'/)
+  // a version that fails the publishing checks never loads
+  await mcpTool(tok, 'write_draft', { code: "export default { sdk: 1, title: 'Try', start() { eval('1') } }\n" })
+  const bad = (await ivy('GET', '/api/workshop/dev')).body
+  assert.equal((await ivy('GET', `/api/workshop/dev/code/${bad.key}.js`)).status, 409)
+  await mcpTool(tok, 'write_draft', { code: CODE1 })
+
+  // the planner changes during the test; Stop and undo puts it back
+  const cur = (await ivy('GET', '/api/state')).body
+  await ivy('PUT', '/api/state', { state: { ...cur.state, todos: [{ id: 'T-101', title: 'Changed by the draft' }] }, baseVersion: cur.version })
+  const stop = await ivy('POST', '/api/workshop/dev/stop', { undo: true })
+  assert.equal(stop.body.restored, true)
+  assert.equal((await ivy('GET', '/api/state')).body.state.todos[0].title, 'Before')
+  assert.deepEqual((await ivy('GET', '/api/workshop/dev')).body, { on: false })
+  assert.equal((await ivy('GET', `/api/workshop/dev/code/${dev.key}.js`)).status, 404, 'off: nothing loads')
+
+  // Claude can switch it off itself (never on)
+  await confirm(ivy, 'do=dev-test')
+  assert.equal((await ivy('GET', '/api/workshop/dev')).body.on, true)
+  assert.match((await mcpTool(tok, 'live_test', { on: false })).content[0].text, /Stopped/)
+  assert.equal((await ivy('GET', '/api/workshop/dev')).body.on, false)
+})
+
+test('open_extension works with no workshop open: the installed version, theirs to edit or a copy', async () => {
+  const kim = client(); const lee = client()
+  for (const [c, e] of [[kim, 'open-kim'], [lee, 'open-lee']]) await c('POST', '/api/auth/signup', { email: `${e}@x.test`, password: 'pw-open-1234' }, { 'X-Forwarded-For': '10.6.6.6' })
+  const pub = await kim('POST', '/api/registry/publish', { name: 'notes', code: CODE.replace("title: 'Habits'", "title: 'Notes'").replaceAll('habits.', 'notes.'), visibility: 'public', manifest: { title: 'Notes' } })
+  assert.equal(pub.status, 201, JSON.stringify(pub.body))
+  const kt = await mcpToken(kim)
+  const mine = await mcpTool(kt, 'open_extension', { name: pub.body.name })
+  assert.equal(mine.isError, undefined, mine.content[0].text)
+  assert.match(mine.content[0].text, /Editing their extension[\s\S]*The code:[\s\S]*notes\.Habit/)
+  const lt = await mcpTool(await mcpToken(lee), 'open_extension', { name: pub.body.name })
+  assert.match(lt.content[0].text, /Their own copy of/)
+})

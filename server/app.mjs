@@ -18,7 +18,7 @@ import { createRegistry } from './registry.mjs'
 import { createVault } from './vault.mjs'
 import { createConsent, TRUST_HEADERS, CLAUDE_TOKEN } from './consent.mjs'
 import { createWorkshopLive } from './workshop-live.mjs'
-import { createMcp } from './mcp.mjs'
+import { createMcp, staticCheck } from './mcp.mjs'
 import { createPreviewer } from './previewer.mjs'
 import { createPods, podClient } from './pod.mjs'
 import { createFederation } from './federation.mjs'
@@ -136,8 +136,8 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   /** Secure cookies on the public https address; plain ones on other hosts (e.g. a private-network http URL). */
   const secureFor = (req) => cfg.cookieSecure && (!appHost || req.headers.host === appHost)
 
-  const consent = createConsent({ db, auth, registry, vault, log, secureFor: (req) => secureFor(req), providers: cfg.oauthProviders ?? {}, appUrl: cfg.appUrl, planner, pods, podClient, siteOf, fed })
   const live = createWorkshopLive()
+  const consent = createConsent({ db, auth, registry, vault, log, secureFor: (req) => secureFor(req), providers: cfg.oauthProviders ?? {}, appUrl: cfg.appUrl, planner, pods, podClient, siteOf, fed, live, checkDraft: staticCheck })
   const mcp = createMcp({ auth, registry, live, limit, log, build: BUILD, siteOf, planner, onPlannerSaved: (user, req) => mirrorSoon(user, req), previewer: createPreviewer({ url: cfg.previewerUrl, dist: cfg.dist, log }) })
   /** Account actions a plugin could abuse need the trusted page once Public plugins are on (goal 3). */
   const viaTrust = (user, action) => { if (user.publicPlugins) throw Object.assign(httpError(403, 'Confirm this on the trusted page'), { trust: `/trust?do=${action}` }) }
@@ -295,6 +295,20 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         return live.watch(uid, req, res, SECURITY_HEADERS)
       case 'GET /api/workshop/live':
         return live.subscribe(uid, req, res, SECURITY_HEADERS)
+      /* ── live test: the draft runs in this person's console on their real planner (consented on /trust?do=dev-test) ── */
+      case 'GET /api/workshop/dev': {
+        const dev = live.dev(uid)
+        const d = live.draft(uid)
+        if (!dev || !d) return send(res, 200, { on: false }, { 'Cache-Control': 'no-store' })
+        return send(res, 200, { on: true, pkg: d.editing ?? `${user.handle || 'you'}/${d.slug || 'draft'}`, key: d.key, until: dev.until, undo: !!dev.checkpoint }, { 'Cache-Control': 'no-store' })
+      }
+      case 'POST /api/workshop/dev/stop': {
+        const b = await body(req)
+        const was = live.stopDev(uid)
+        if (b.undo && was?.checkpoint) { await planner.restore(uid, was.checkpoint); mirrorSoon(user, req) }
+        log(`[workshop] live test off for ${uid.slice(0, 8)}${b.undo && was?.checkpoint ? ', planner restored' : ''}`)
+        return send(res, 200, { ok: true, restored: !!(b.undo && was?.checkpoint) })
+      }
       case 'POST /api/workshop/live/draft': {
         const b = await body(req, 800 * 1024)
         const d = live.setDraft(uid, { code: b.code, slug: b.slug, forkOf: b.forkOf ?? null, editing: b.editing ?? null }, 'you')
@@ -508,6 +522,19 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       const v = await registry.version(who?.user ?? null, codeHash)
       if (!v) return send(res, 404, 'not found')
       return send(res, 200, v.code, { 'Content-Type': MIME['.js'], 'Cache-Control': v.pkg.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, max-age=31536000, immutable' })
+    }
+    // the draft under a live test, for this person's console only: while the test is on, the current version only,
+    // and only if it passes the checks a published version must pass (server/mcp.mjs staticCheck)
+    const devKey = req.method === 'GET' && url.pathname.match(/^\/api\/workshop\/dev\/code\/([\w:-]{1,80})\.js$/)?.[1]
+    if (devKey) {
+      if (req.headers['service-worker'] === 'script' || req.headers['sec-fetch-dest'] === 'serviceworker') return send(res, 403, 'not a service worker')
+      const who = await auth.identify(req)
+      if (!who || who.via !== 'session') return send(res, 401, 'signed out')
+      const d = live.draft(who.user.id)
+      if (!live.dev(who.user.id) || !d || d.key !== devKey) return send(res, 404, 'not under a live test')
+      const blocked = staticCheck(d.code).errors
+      if (blocked.length) return send(res, 409, `// blocked: ${blocked.join('; ')}`, { 'Content-Type': MIME['.js'] })
+      return send(res, 200, d.code, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' })
     }
     checkCsrf(req)
     if ((await publicRoute(req, res, route)) !== undefined || res.writableEnded) return

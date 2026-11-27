@@ -8,7 +8,9 @@ import { toModule, vocabOf, sdkOk } from './manifest.js'
 import PluginPage from '../views/PluginPage.vue'
 
 const LOADING = 'life-console/plugins-loading'
-export const plugins = reactive({ status: 'idle', safe: false, crashed: false, installed: [], failed: {}, conflicts: [], highlight: null })
+export const plugins = reactive({ status: 'idle', safe: false, crashed: false, installed: [], failed: {}, conflicts: [], highlight: null, dev: null })
+// start() runs once per loaded file: reloading for a live test must not start the other extensions twice
+const started = new Set()
 
 function wantsSafe() {
   try {
@@ -49,6 +51,20 @@ export async function loadPlugins() {
     list = (await r.json()).plugins ?? []
   } catch { plugins.status = 'offline'; return }
   plugins.installed = list
+  // a live test (consented on the trusted page): the workshop's draft runs too, in place of the installed version
+  // it edits. Never in safe mode. Its code comes from the server only while the test is on and passes the checks.
+  plugins.dev = null
+  if (!safe) {
+    try {
+      const r = await fetch('/api/workshop/dev', { credentials: 'same-origin' })
+      const d = r.ok ? await r.json() : null
+      if (d?.on && d.key) {
+        plugins.dev = d
+        delete plugins.failed[d.pkg]
+        list = [...list.filter((p) => p.pkg !== d.pkg), { pkg: d.pkg, enabled: true, devKey: d.key }]
+      }
+    } catch { /* offline: no live test */ }
+  }
   if (safe || !list.length) { plugins.status = safe ? 'safe' : 'none'; if (safe === 'crashed') try { localStorage.removeItem(LOADING) } catch { /* ignore */ } return }
   try { localStorage.setItem(LOADING, String(Date.now())) } catch { /* ignore */ }
   plugins.status = 'loading'
@@ -58,11 +74,12 @@ export async function loadPlugins() {
   for (const m of registry.modules) if (m.routes?.[0] && !m.tier) replacedPaths[m.id] = { path: m.routes[0].path, name: m.routes[0].name, navKey: m.nav?.[0]?.key }
   for (const p of list.filter((x) => x.enabled !== false)) {
     try {
-      const mod = await import(/* @vite-ignore */ `/api/registry/code/${p.hash}.js`)
+      const src = p.devKey ? `/api/workshop/dev/code/${p.devKey}.js` : `/api/registry/code/${p.hash}.js`
+      const mod = await import(/* @vite-ignore */ src)
       const manifest = mod.default
       if (!manifest || typeof manifest !== 'object') throw new Error('the file has no default export')
       if (!sdkOk(manifest.sdk ?? 1)) throw new Error(`needs SDK ${manifest.sdk}; this server runs SDK 1`)
-      loaded.push({ pkg: p.pkg, manifest })
+      loaded.push({ pkg: p.pkg, manifest, src })
     } catch (e) {
       plugins.failed[p.pkg] = String(e.message ?? e)
     }
@@ -71,7 +88,9 @@ export async function loadPlugins() {
   const next = setPublicPlugins(loaded.map(({ pkg, manifest }) => toModule(pkg, manifest, { PageComponent: PluginPage, replacedPaths })))
   plugins.conflicts = [...next.conflicts, ...tax.problems]
   applyStyles(next.styles)
-  for (const { pkg, manifest } of loaded) {
+  for (const { pkg, manifest, src } of loaded) {
+    if (started.has(src)) continue
+    started.add(src)
     if (typeof manifest.start === 'function') try { manifest.start(makeLc(pkg)) } catch (e) { plugins.failed[pkg] = `start: ${e.message}` }
   }
   plugins.status = 'ready'

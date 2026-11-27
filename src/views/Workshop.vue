@@ -51,8 +51,9 @@ function applyAiDraft(d) {
   fromAi = true
   sentKey = d.key
   if (d.slug && d.slug !== slug.value) { slugQuiet = true; slug.value = d.slug }
-  // a new extension (Claude named it): no longer editing or copying the one that was open
-  if (!d.editing && editing.value) editing.value = null
+  // Claude opened one of theirs to edit (server/mcp.mjs open_extension), or started a new one
+  if (d.editing && editing.value?.pkg !== d.editing) editing.value = { pkg: d.editing, mine: true }
+  else if (!d.editing && editing.value) editing.value = null
   if ((d.forkOf ?? null) !== forkOf.value) forkOf.value = d.forkOf ?? null
   code.value = d.code
   aiAt.value = Date.now()

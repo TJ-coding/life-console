@@ -15,6 +15,8 @@ export function createWorkshopLive() {
   const write = (res, msg) => { try { res.write(`data: ${JSON.stringify(msg)}\n\n`) } catch { /* gone */ } }
   const broadcast = (uid, msg) => { for (const res of room(uid).clients) write(res, msg) }
   const wake = (r) => { for (const w of [...r.waiters]) w.check() }
+  /** The live test, if it's on and hasn't run out (it's never stored: a restart ends it). */
+  const devOf = (r) => { if (r.dev && r.dev.until <= Date.now()) r.dev = null; return r.dev }
 
   /** The workshop page listens: GET /api/workshop/live. */
   function subscribe(uid, req, res, headers = {}) {
@@ -50,6 +52,8 @@ export function createWorkshopLive() {
     }
     r.draft = draft
     if (from === 'ai') { r.aiAt = draft.at; broadcast(uid, { type: 'draft', draft }) }
+    // a live test is on: every console page loads the new version
+    if (devOf(r)) for (const res of r.watchers) write(res, { type: 'dev', key: draft.key })
     wake(r)
     return draft
   }
@@ -86,6 +90,21 @@ export function createWorkshopLive() {
     /** Tell every open console page: { type: 'ask', … } (confirm something) or { type: 'changed', … }. */
     notify: (uid, msg) => { const r = room(uid); r.aiAt = Date.now(); for (const res of r.watchers) write(res, msg); return r.watchers.size },
     report, until, resultFor,
+    /** Live test (consented on the trusted page): the draft runs in their console on their real planner, for `ms`. */
+    startDev(uid, { checkpoint = null, ms = 60 * 60000 } = {}) {
+      const r = room(uid)
+      r.dev = { since: Date.now(), until: Date.now() + ms, checkpoint }
+      for (const res of r.watchers) write(res, { type: 'dev', key: r.draft?.key ?? null })
+      return r.dev
+    },
+    dev: (uid) => devOf(room(uid)),
+    stopDev(uid) {
+      const r = room(uid)
+      const was = r.dev
+      r.dev = null
+      if (was) for (const res of r.watchers) write(res, { type: 'dev-off' })
+      return was
+    },
     draft: (uid) => room(uid).draft,
     result: (uid, key) => room(uid).results.get(key) ?? null,
     open: (uid) => room(uid).clients.size,

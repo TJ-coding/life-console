@@ -60,7 +60,7 @@ const slugOf = (title) => String(title ?? '').toLowerCase().replace(/[^a-z0-9]+/
 const TOOLS = [
   { name: 'guide', title: 'How to write an extension', description: 'The extension SDK: the file format, the data API, the shared vocabulary and the look kit (CSS classes that make it look native). Read it before writing an extension.', inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
   { name: 'list_extensions', title: 'List extensions', description: "The person's installed extensions and the ones they made, with their names (handle/name) for open_extension.", inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
-  { name: 'open_extension', title: 'Open an extension', description: "Open an extension in the workshop to change it. The person's own opens for editing; anyone else's becomes their own copy (it replaces the original when they use it). Returns its code and preview. Needs the workshop open in their browser.", inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'handle/name, e.g. ann/water' } }, required: ['name'] } },
+  { name: 'open_extension', title: 'Open an extension', description: "Open an extension in the workshop to change it: the installed version if they have it, else the newest. The person's own opens for editing; anyone else's becomes their own copy (it replaces the original when they use it). Returns its code and preview. Their installed copy keeps running unchanged until they update it.", inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'handle/name, e.g. ann/water' } }, required: ['name'] } },
   { name: 'read_draft', title: 'Read the draft', description: "The draft in the person's workshop (they may have edited it by hand) and its latest preview.", inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
   { name: 'write_draft', title: 'Write the draft', description: 'Replace the whole draft with a new file. It shows in the workshop at once; returns the preview (errors, problems, what each part shows).', inputSchema: { type: 'object', properties: { code: { type: 'string', description: 'The whole extension file (an ES module, default export = manifest)' }, name: { type: 'string', description: 'Optional: the extension name (lowercase, a-z 0-9 -) for a new extension' } }, required: ['code'] } },
   { name: 'edit_draft', title: 'Edit the draft', description: 'Change part of the draft: replaces old_text (must appear exactly once) with new_text. Returns the preview.', inputSchema: { type: 'object', properties: { old_text: { type: 'string' }, new_text: { type: 'string' } }, required: ['old_text', 'new_text'] } },
@@ -79,6 +79,7 @@ const TOOLS = [
   { name: 'change_task', title: 'Change a task', description: 'Change a task by id (T-123): only the fields given. done: true completes it. date: null moves it to the backlog. Needs planner access.', inputSchema: { type: 'object', properties: TASK_FIELDS({ id: { type: 'string' }, done: { type: 'boolean' } }), required: ['id'] } },
   { name: 'add_deadline', title: 'Add a deadline', description: 'Add a deadline (an external due date, e.g. a submission). Needs planner access.', inputSchema: { type: 'object', properties: { title: { type: 'string' }, due: { type: 'string', description: 'YYYY-MM-DD or YYYY-MM-DDTHH:MM (their time zone; end of day if no time)' }, source: { type: 'string', description: 'Optional: who set it' } }, required: ['title', 'due'] } },
   { name: 'preview_draft', title: 'Preview with screenshots', description: "Run the draft in the server's previewer (no browser of theirs needed) and see it: screenshots, the text each part shows, errors. steps act on it first, as a person would: { click: sel } · { type: text, into?: sel } · { key: 'Enter'|'Tab'|'ArrowLeft'…, shift? } · { drag: sel, by: [dx, dy] } · { wait: ms }. A selector is CSS (it reaches inside each part's shadow root) or text=Exact text. Data changes from steps last for this run only. Icons show as dashed boxes (no icon font in the previewer).", inputSchema: { type: 'object', properties: { viewport: { type: 'string', enum: ['desktop', 'phone', 'both'], description: 'default desktop' }, theme: { type: 'string', enum: ['dark', 'light'] }, steps: { type: 'array', items: { type: 'object' } }, screenshots: { type: 'boolean', description: 'default true; false for text only' } } } },
+  { name: 'live_test', title: 'Live test on their planner', description: "on: ask the person to run the draft in their console on their real planner for up to 60 minutes; they confirm on the trusted page (a snapshot is taken first, and they can stop and undo). While it's on, each edit loads in their console at once. off: stop it. Only when they ask to try it for real; the previewer is for checking.", inputSchema: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] } },
   { name: 'use_draft', title: 'Use the draft', description: 'When the draft works and the person wants it: takes their workshop to the confirmation page, where they install it (or update theirs). Nothing is installed without their click.', inputSchema: { type: 'object', properties: {} } },
 ]
 
@@ -131,15 +132,17 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       else {
         live.report(uid, draft.key, r, { byServer: true })
         const extra = s.warnings.length ? `\nPublishing will warn:\n${s.warnings.map((e) => `- ${e}`).join('\n')}` : ''
-        const where = live.open(uid) ? 'It shows in their workshop now.' : "They'll see it when they open the workshop."
+        const dev = live.dev(uid)
+        const where = dev ? `Live test on: it's loading in their console now, on their real planner (${Math.ceil((dev.until - Date.now()) / 60000)} min left).` : live.open(uid) ? 'It shows in their workshop now.' : "They'll see it when they open the workshop."
         return text(`${describeResult(r)}${extra}\n${where} preview_draft shows screenshots and can try it out.`, !r.ok)
       }
     }
     const found = [...(s.errors.length ? ['Errors:', ...s.errors.map((e) => `- ${e}`)] : []), ...(s.warnings.length ? ['Warnings:', ...s.warnings.map((e) => `- ${e}`)] : [])]
-    if (!live.open(uid)) return text([`Saved the draft. ${needWorkshop(req)} It loads there when they do.`, `Checked without the preview (syntax and publishing rules only): ${s.errors.length ? 'HAS ERRORS' : 'no errors'}.`, ...found].join('\n'), s.errors.length > 0)
+    const devNote = live.dev(uid) ? [`Live test on: it's loading in their console now, on their real planner.`] : []
+    if (!live.open(uid)) return text([...devNote, `Saved the draft. ${needWorkshop(req)} It loads there when they do.`, `Checked without the preview (syntax and publishing rules only): ${s.errors.length ? 'HAS ERRORS' : 'no errors'}.`, ...found].join('\n'), s.errors.length > 0)
     const r = await live.resultFor(uid, draft.key)
     const extra = s.warnings.length ? `\nPublishing will warn:\n${s.warnings.map((e) => `- ${e}`).join('\n')}` : ''
-    return text(describeResult(r) + extra, !r || !r.ok)
+    return text([...devNote, describeResult(r) + extra].join('\n'), !r || !r.ok)
   }
 
   // planner access (a separate permission)
@@ -171,7 +174,19 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
     async open_extension(a, user, req) {
       const pkg = String(a.name ?? '').trim()
       if (!/^[a-z0-9-]+\/[a-z0-9-]+$/.test(pkg)) return fail('name must look like handle/name')
-      if (!(await registry.one(user, pkg))) return fail(`There's no extension called ${pkg} that they can see.`)
+      const p = await registry.one(user, pkg)
+      if (!p) return fail(`There's no extension called ${pkg} that they can see.`)
+      // on the server: the installed version, or the newest one (no browser needed). Only a version copied from
+      // another server's registry has no code here yet; then the open workshop fetches it, as before
+      const inst = await installedOf(user, pkg)
+      const v = await registry.version(user, inst?.hash ?? p.latest?.hash)
+      if (v?.code) {
+        const own = !!p.mine
+        const draft = live.setDraft(user.id, { code: v.code, slug: pkg.split('/')[1], editing: own ? pkg : null, forkOf: own ? p.forkedFrom ?? null : pkg }, 'ai')
+        const about = own ? `Editing their extension ${pkg} (${inst ? `installed ${inst.version}` : `version ${v.version}`}).` : `Their own copy of ${pkg} (named ${draft.slug}): using it replaces the original for them.`
+        const res = await afterWrite(req, user.id, draft)
+        return text(`${about} Their installed copy keeps running until they update it.\n\n${res.content[0].text}\n\nThe code:\n${draft.code}`, res.isError)
+      }
       if (!live.open(user.id)) return fail(needWorkshop(req))
       const since = Date.now()
       live.tell(user.id, { type: 'open', pkg })
@@ -303,6 +318,15 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       if (r.steps?.length) lines.push('Steps:', ...r.steps.map((x) => `- ${x}`))
       if (r.toasts?.length) lines.push('Toasts:', ...r.toasts.map((x) => `- ${x}`))
       return { content: [{ type: 'text', text: lines.join('\n') }, ...r.shots.map((sh) => ({ type: 'image', data: sh.png, mimeType: 'image/png' }))], ...(r.ok ? {} : { isError: true }) }
+    },
+    async live_test(a, user, req) {
+      if (!a.on) return text(live.stopDev(user.id) ? 'Stopped the live test. What it saved stays; they can undo from a snapshot if needed.' : 'No live test was on.')
+      const d = live.draft(user.id)
+      if (!d) return fail('There is no draft: write one first.')
+      const s = staticCheck(d.code)
+      if (s.errors.length) return fail(`The draft can't run as it is: ${s.errors.join('; ')}`)
+      if (live.dev(user.id)) return text('The live test is already on: each edit loads in their console.')
+      return ask(req, user, 'dev-test', {}, 'Live test the draft on your real planner (60 minutes, with undo)', async () => !!live.dev(user.id))
     },
     async use_draft(_a, user, req) {
       if (!live.open(user.id)) return fail(needWorkshop(req))

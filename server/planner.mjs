@@ -80,6 +80,15 @@ export function createPlanner(db, cfg) {
     return db.select({ id: plannerRevisions.id, version: plannerRevisions.version, schemaVersion: plannerRevisions.schemaVersion, device: plannerRevisions.device, reason: plannerRevisions.reason, createdAt: plannerRevisions.createdAt, bytes: sql`octet_length(${plannerRevisions.state}::text)::int` })
       .from(plannerRevisions).where(eq(plannerRevisions.userId, userId)).orderBy(desc(plannerRevisions.id)).limit(limit)
   }
+  /** Snapshot the planner as it is now (e.g. before a live test of a draft extension); returns the revision id. */
+  async function checkpoint(userId, reason) {
+    return db.transaction(async (tx) => {
+      const [row] = await tx.select().from(plannerDocs).where(eq(plannerDocs.userId, userId)).for('update')
+      if (!row || row.version === 0) return null
+      const [rev] = await tx.insert(plannerRevisions).values({ userId, version: row.version, schemaVersion: row.schemaVersion, state: row.state, device: row.device, reason }).returning({ id: plannerRevisions.id })
+      return rev.id
+    })
+  }
   async function restore(userId, revisionId) {
     const [rev] = await db.select().from(plannerRevisions).where(and(eq(plannerRevisions.userId, userId), eq(plannerRevisions.id, revisionId))).limit(1)
     if (!rev) throw httpError(404, 'revision not found')
@@ -100,5 +109,5 @@ export function createPlanner(db, cfg) {
     return r.rows
   }
 
-  return { get, version, save, revisions, restore, versionsWithDevices, EMPTY }
+  return { get, version, save, revisions, checkpoint, restore, versionsWithDevices, EMPTY }
 }

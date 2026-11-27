@@ -40,6 +40,7 @@ const KINDS = {
   claude: { title: 'Connect Claude to the workshop' },
   'claude-planner': { title: 'Let Claude see and change your planner', danger: true },
   'claude-planner-off': { title: 'Stop Claude seeing your planner' },
+  'dev-test': { title: 'Live test a draft on your real planner', danger: true },
   'vault-save': { title: 'Save a connection key', danger: true },
   connect: { title: 'Connect an account', danger: true },
   'pod-use': { title: 'Keep your planner in your own Solid pod', danger: true },
@@ -53,7 +54,7 @@ const KINDS = {
   'delete-account': { title: 'Delete your account', danger: true },
 }
 
-export function createConsent({ db, auth, registry, vault, log = () => {}, appPath = '/app', secureFor = () => false, providers = {}, appUrl = '', planner = null, pods = null, podClient = null, siteOf = () => '', fed = null }) {
+export function createConsent({ db, auth, registry, vault, log = () => {}, appPath = '/app', secureFor = () => false, providers = {}, appUrl = '', planner = null, pods = null, podClient = null, siteOf = () => '', fed = null, live = null, checkDraft = () => ({ errors: [] }) }) {
   const origin = (req) => appUrl || `${secureFor(req) ? 'https' : 'http'}://${req.headers.host}`
   function page(title, body, { status = 200 } = {}) {
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} · Life Console trusted page</title>
@@ -149,6 +150,17 @@ ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : 
       } else {
         details = `<p>Claude keeps working in your workshop, but can no longer read or change your planner.${has ? '' : ' <span class="muted">(It can\'t now either.)</span>'}</p>`
       }
+    } else if (kind === 'dev-test') {
+      const d = live?.draft(user.id)
+      if (!d) return { noDraft: true }
+      const name = d.editing ?? `${user.handle || 'you'}/${d.slug || 'draft'}`
+      action.name = name
+      const blocked = checkDraft(d.code).errors
+      warning = 'The draft will see and change everything in your planner. Unlike an installed version, its code can change while it runs: each time Claude (or you) edits it, the new version loads without asking you again.'
+      details = `<dl><dt>Draft</dt><dd><code>${esc(name)}</code>${d.editing ? ' (in place of your installed version)' : ''}</dd><dt>For</dt><dd>60 minutes at most. A server restart ends it too.</dd>
+<dt>Safety net</dt><dd>A snapshot of your planner is taken now. The <b>Live test</b> bar in the console has <b>Stop</b> and <b>Stop and undo</b>: undo puts your planner back as it is now (your own changes in the meantime too).</dd>
+<dt>Checks</dt><dd>${blocked.length ? `<span class="warn">This version is blocked: ${esc(blocked.join('; '))}</span>` : 'Each version is checked before it runs (no code from elsewhere, no eval); a blocked one doesn\'t load.'}</dd></dl>
+<p class="muted">Anything it saves in your planner stays after the test, unless you undo.</p>`
     } else if (kind === 'vault-save') {
       if (!vault.on) return { vaultOff: true }
       action.name = String(q.get('name') ?? '').toLowerCase().slice(0, 30)
@@ -220,6 +232,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     if (d.missing) return page('Not found', `<h1>That extension version isn't available</h1><p>It may have been pulled from the registry.</p>${back()}`)
     if (d.vaultOff) return page('Vault off', `<h1>Connections are off on this server</h1><p>The server's admin hasn't set a vault key (VAULT_KEY).</p>${back()}`)
     if (d.noHandle) return page('Choose a handle', `<h1>Choose a handle first</h1><p>Your handle is your address for sharing (Extensions → Publishing).</p>${back()}`)
+    if (d.noDraft) return page('No draft', `<h1>There's no draft to test</h1><p>Open the workshop, or ask Claude to write one, then try again.</p>${back()}`)
     if (d.noClaude) return page('Connect Claude first', `<h1>Connect Claude first</h1><p>Planner access is added to Claude's workshop connection: <a href="/trust?do=claude" style="color:inherit">connect Claude</a>, then come back here.</p>${back()}`)
     if (d.noPassword) return page('No password', `<h1>This account signs in with Google</h1><p>It has no password to change.</p>${back()}`)
     const backTo = safeBack(url.searchParams.get('back'))
@@ -265,6 +278,13 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
         const token = await auth.replaceApiToken(uid, CLAUDE_TOKEN, 'extensions')
         log(`[consent] workshop token for ${uid.slice(0, 8)}`)
         return { msg: 'Claude can now work in your workshop. Run this once in a terminal, then ask Claude to make or change an extension with the workshop open.', command: `claude mcp add --transport http life-console ${origin(req)}/mcp --header "Authorization: Bearer ${token}"`, url: `${origin(req)}/mcp`, token }
+      }
+      case 'dev-test': {
+        if (!live?.draft(uid)) return { msg: 'There is no draft to test any more.' }
+        const checkpoint = await planner.checkpoint(uid, 'before live test')
+        live.startDev(uid, { checkpoint })
+        log(`[consent] live test on for ${uid.slice(0, 8)}`)
+        return { msg: 'Live test on for 60 minutes: the draft runs on your planner. Stop it from the bar at the top.' }
       }
       case 'claude-planner':
       case 'claude-planner-off': {
