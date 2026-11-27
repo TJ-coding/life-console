@@ -16,7 +16,7 @@ import { createGoogle } from './google.mjs'
 import { createSignups } from './signups.mjs'
 import { createRegistry } from './registry.mjs'
 import { createVault } from './vault.mjs'
-import { createConsent, TRUST_HEADERS } from './consent.mjs'
+import { createConsent, TRUST_HEADERS, CLAUDE_TOKEN } from './consent.mjs'
 import { createWorkshopLive } from './workshop-live.mjs'
 import { createMcp } from './mcp.mjs'
 import { createPods, podClient } from './pod.mjs'
@@ -348,6 +348,10 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       case 'POST /api/connections/request': {
         limit(`conn:${uid}`, 120, 60000)
         return send(res, 200, await vault.request(uid, await body(req, 128 * 1024)))
+      }
+      case 'GET /api/claude': { // Settings → Claude: is Claude connected, and may it see the planner (changed only on the trusted page)
+        const planner = await auth.hasTokenScope(uid, CLAUDE_TOKEN, 'planner')
+        return send(res, 200, { connected: planner !== null, planner: !!planner })
       }
       case 'GET /api/auth/me':
         return send(res, 200, { user: publicUser(user) })

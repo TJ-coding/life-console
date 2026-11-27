@@ -594,3 +594,15 @@ test('workshop drafts are checked on the server when no workshop is open', async
   assert.equal(fine.isError, undefined, fine.content[0].text)
   assert.match(fine.content[0].text, /no errors/)
 })
+
+test('Settings → Claude: shows whether Claude is connected and may see the planner', async () => {
+  const gus = client()
+  await gus('POST', '/api/auth/signup', { email: 'set-gus@x.test', password: 'pw-set-12345' }, OWN_IP)
+  assert.deepEqual((await gus('GET', '/api/claude')).body, { connected: false, planner: false })
+  const tok = await mcpToken(gus)
+  assert.deepEqual((await gus('GET', '/api/claude')).body, { connected: true, planner: false })
+  await confirm(gus, 'do=claude-planner&back=/app%23/settings')
+  assert.deepEqual((await gus('GET', '/api/claude')).body, { connected: true, planner: true })
+  assert.equal((await raw('GET', '/api/claude', undefined, { Authorization: `Bearer ${tok}` })).status, 401, "Claude's own token can't read it")
+  assert.equal((await gus('POST', '/api/claude', {})).status, 404, 'no way to switch it outside the trusted page')
+})

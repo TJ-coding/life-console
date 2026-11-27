@@ -13,6 +13,12 @@ import { serverUpdate, loadUpdate, checkUpdate, applyUpdate, setAutoUpdate } fro
 import { signupsAdmin, loadSignups, setSignups } from '../signups'
 import { useRoute } from 'vue-router'
 import PluginSlot from '../components/PluginSlot.vue'
+import { api, trustUrl } from '../sdk/client.js'
+
+/* ── Claude: planner access is its own permission, switched on the trusted page (server/consent.mjs) ── */
+const claude = ref({ connected: false, planner: false })
+const claudeLink = (on) => trustUrl(on ? 'claude-planner' : 'claude-planner-off', {}, '/app#/settings')
+onMounted(async () => { if (auth.user) try { claude.value = await api('GET', '/api/claude') } catch { /* older server, or offline */ } })
 
 /* ── account ── */
 const acctName = ref(auth.user?.name ?? '')
@@ -177,6 +183,16 @@ function toggleBoDay(b, i) {
         <p class="small muted">Add screens, records and integrations made by others or by you. Installing and saving keys happen on the trusted page.</p>
         <div class="row"><router-link class="btn" to="/m/extensions"><span class="icon sm">extension</span>Extensions</router-link><router-link class="btn" to="/m/extensions/workshop"><span class="icon sm">construction</span>Workshop</router-link><router-link class="btn" to="/m/extensions/sharing"><span class="icon sm">share</span>Sharing and your data</router-link></div>
         <PluginSlot name="settings.section" />
+      </div>
+    </section>
+    <section v-if="claude.connected" id="claude" class="panel">
+      <div class="panel-h"><span class="icon sm">smart_toy</span><h2>Claude</h2><span class="spacer"></span><span class="tiny muted">connected to the workshop</span></div>
+      <div class="panel-b col">
+        <div class="row">
+          <div class="grow"><b>Planner access: {{ claude.planner ? 'on' : 'off' }}</b><div class="small muted">{{ claude.planner ? 'Claude can read your tasks, time blocks, deadlines and plans, add tasks and deadlines, and change or complete tasks. It never deletes anything.' : 'Claude can build extensions but can\'t see your planner.' }}</div></div>
+          <a class="btn" :href="claudeLink(!claude.planner)">{{ claude.planner ? 'Turn off' : 'Turn on' }}</a>
+        </div>
+        <p class="tiny muted">Changes are confirmed on the trusted page.</p>
       </div>
     </section>
     <section v-if="auth.user" class="panel">
