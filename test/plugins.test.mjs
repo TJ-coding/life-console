@@ -632,7 +632,7 @@ test('server previewer: Claude previews, screenshots and clicks through a draft 
     s2 = http.createServer((q, r) => app2.handler(q, r))
     await new Promise((r) => s2.listen(0, '127.0.0.1', r))
     const appPort = s2.address().port
-    const cfg = loadConfig({ DATABASE_URL: dbUrl, PUSH_DRY_RUN: '1', APP_URL: `http://127.0.0.1:${appPort}`, DIST: dist, PREVIEWER_URL: `http://127.0.0.1:${port}`, PREVIEW_PAGE_URL: `http://127.0.0.1:${appPort}/preview.html`, TRUST_PROXY: '1' })
+    const cfg = loadConfig({ DATABASE_URL: dbUrl, PUSH_DRY_RUN: '1', APP_URL: `http://127.0.0.1:${appPort}`, DIST: dist, PREVIEWER_URL: `http://127.0.0.1:${port}`, TRUST_PROXY: '1' })
     app2 = await createApp({ cfg, db: conn.db, pool: conn.pool, log: quiet })
     const saveBase = base
     base = `http://127.0.0.1:${appPort}`

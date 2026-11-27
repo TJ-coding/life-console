@@ -2,14 +2,21 @@
 // browser, and the workshop page is only where they look at the result.
 //
 // It drives a headless Chromium in a separate container (the `previewer` service in docker-compose.yml: no internet,
-// on a network only the app shares) over the DevTools protocol, and opens the same /preview.html the workshop
-// frames. So a draft runs exactly as it does for the person: on demo data, never on a real planner, and the browser
-// has no cookies or storage of anyone's. Each run gets its own throwaway browser context.
+// on a network only the app shares) over the DevTools protocol, and opens the same preview.html the workshop
+// frames. The browser fetches nothing over the network: the app answers every request itself, from its built files,
+// through the protocol (Fetch.fulfillRequest), so the container needs no route to the app and a draft can't reach
+// anything. A draft runs as it does for the person: on demo data, never on a real planner, with no cookies or storage
+// of anyone's. Each run gets its own throwaway browser context.
 // Off unless PREVIEWER_URL is set (self-hosters can leave it off and keep the in-browser preview only).
 import dns from 'node:dns/promises'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 
 const VIEWPORTS = { phone: { width: 390, height: 844, mobile: true, deviceScaleFactor: 2 }, desktop: { width: 1280, height: 900, mobile: false, deviceScaleFactor: 1 } }
 const RUN_MS = 20000
+const ORIGIN = 'http://lc-preview.invalid' // never resolved: every request to it is answered by the app
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png' }
+const PAGE_CSP = `default-src 'none'; script-src ${ORIGIN} blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src ${ORIGIN}; connect-src 'none'; base-uri 'none'; form-action 'none'`
 const MAX_AT_ONCE = 2
 const MAX_STEPS = 30
 
@@ -55,7 +62,10 @@ const PAGE_HELPERS = `(() => {
     const el = p.shadowRoot ? [...p.shadowRoot.children].find((n) => n.tagName !== 'STYLE') : p
     return { label: p.previousElementSibling?.textContent ?? '', text: String(el?.innerText ?? el?.textContent ?? '').replace(/\\s+/g, ' ').trim().slice(0, 800) }
   })
-  window.__lc = { find, box, focus, parts }
+  // no icon font here (no internet): an icon becomes an icon-sized dashed box, not its name as a long word
+  const ICONS = '.lc-icon,.icon,.material-symbols-outlined{display:inline-block!important;width:1.2em!important;height:1.2em!important;overflow:hidden!important;color:transparent!important;border:1px dashed var(--muted,#888);box-sizing:border-box;vertical-align:middle;font-size:inherit}'
+  const iconBoxes = () => { for (const r of roots()) if (!r.querySelector?.(':scope > style[data-lc-icons]')) { const st = document.createElement('style'); st.dataset.lcIcons = '1'; st.textContent = ICONS; (r === document ? document.head : r).appendChild(st) } }
+  window.__lc = { find, box, focus, parts, iconBoxes }
   window.__lcOut = { result: null, errors: [], toasts: [] }
   window.addEventListener('message', (e) => {
     const d = e.data
@@ -66,8 +76,20 @@ const PAGE_HELPERS = `(() => {
   })
 })()`
 
-export function createPreviewer({ url = '', pageUrl = '', log = () => {} } = {}) {
-  if (!url || !pageUrl) return { on: false }
+export function createPreviewer({ url = '', dist = '', log = () => {} } = {}) {
+  if (!url || !dist) return { on: false }
+  const pageUrl = `${ORIGIN}/preview.html`
+  /** A request from the preview page: only preview.html and the built assets, read from disk. */
+  async function answer(reqUrl) {
+    const u = new URL(reqUrl)
+    if (u.origin !== ORIGIN || !(u.pathname === '/preview.html' || /^\/assets\/[\w.-]+$/.test(u.pathname))) return null
+    try {
+      const body = await fs.readFile(path.join(dist, u.pathname))
+      const headers = [{ name: 'Content-Type', value: TYPES[path.extname(u.pathname)] ?? 'application/octet-stream' }]
+      if (u.pathname === '/preview.html') headers.push({ name: 'Content-Security-Policy', value: PAGE_CSP })
+      return { responseCode: 200, responseHeaders: headers, body: body.toString('base64') }
+    } catch { return { responseCode: 404, responseHeaders: [{ name: 'Content-Type', value: 'text/plain' }], body: '' } }
+  }
   let running = 0
   const queue = []
   const slot = () => new Promise((resolve) => { if (running < MAX_AT_ONCE) { running++; resolve() } else queue.push(resolve) })
@@ -112,15 +134,21 @@ export function createPreviewer({ url = '', pageUrl = '', log = () => {} } = {})
       const vp = (v) => s('Emulation.setDeviceMetricsOverride', VIEWPORTS[v])
       await s('Page.enable')
       await s('Runtime.enable')
-      // only the app's own files load: anything else (Google Fonts, a draft's fetch) fails at once. The container
-      // has no internet anyway, but a request there hangs, and a hanging stylesheet holds back the preview's script
-      const origin = new URL(pageUrl).origin
+      // every request is answered here: the preview's own files from disk, anything else (Google Fonts, a draft's
+      // fetch) fails at once (a request that hangs would hold back the preview's script)
+      const seen = { blocked: [], console: [] }
       c.on((m) => {
-        if (m.method !== 'Fetch.requestPaused' || m.sessionId !== sessionId) return
-        const { requestId, request } = m.params
-        const own = request.url.startsWith(`${origin}/`)
-        s(own ? 'Fetch.continueRequest' : 'Fetch.failRequest', own ? { requestId } : { requestId, errorReason: 'BlockedByClient' }).catch(() => {})
+        if (m.sessionId !== sessionId) return
+        if (m.method === 'Fetch.requestPaused') {
+          const { requestId, request } = m.params
+          answer(request.url).then((r) => r
+            ? s('Fetch.fulfillRequest', { requestId, ...r })
+            : (seen.blocked.push(request.url.slice(0, 120)), s('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' })))
+            .catch(() => {})
+        } else if (m.method === 'Runtime.exceptionThrown') seen.console.push(m.params.exceptionDetails?.exception?.description?.split('\n')[0] ?? m.params.exceptionDetails?.text)
+        else if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') seen.console.push(m.params.entry.text)
       })
+      await s('Log.enable')
       await s('Fetch.enable', { patterns: [{ urlPattern: '*' }] })
       await s('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: theme === 'light' ? 'light' : 'dark' }] })
       await vp(viewports[0] ?? 'desktop')
@@ -131,7 +159,12 @@ export function createPreviewer({ url = '', pageUrl = '', log = () => {} } = {})
       if (!(await until('!!window.__lc', 4000))) throw new Error("the preview page didn't load")
       await evaluate(`window.postMessage(${JSON.stringify({ type: 'run', code, name, theme })}, '*')`)
       const result = await until('window.__lcOut.result', Math.min(8000, left()))
-      if (!result) throw new Error('the preview gave no result in time (an endless loop, or a crash?)')
+      if (result) await evaluate('window.__lc.iconBoxes()')
+      if (!result) {
+        const at = await evaluate('location.href + " (" + document.readyState + ")"').catch(() => '?')
+        const why = [...seen.console.slice(0, 3), ...(seen.blocked.length ? [`blocked: ${seen.blocked.slice(0, 3).join(', ')}`] : [])].join('; ')
+        throw new Error(`the preview gave no result in time at ${at}${why ? `: ${why}` : ' (an endless loop?)'}`)
+      }
 
       // the agent's steps: real input events, so pointer and keyboard handlers run as they do for a person
       const mouse = (type, x, y, buttons = 1) => s('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons, clickCount: 1, pointerType: 'mouse' })
@@ -169,7 +202,7 @@ export function createPreviewer({ url = '', pageUrl = '', log = () => {} } = {})
           await new Promise((r) => setTimeout(r, 60))
         } catch (e) { did.push(`step failed: ${e.message}`) }
       }
-      const after = await evaluate('({ parts: window.__lc.parts(), errors: window.__lcOut.errors, toasts: window.__lcOut.toasts })')
+      const after = await evaluate('(window.__lc.iconBoxes(), { parts: window.__lc.parts(), errors: window.__lcOut.errors, toasts: window.__lcOut.toasts })')
       const errors = [...new Set([...(result.errors ?? []), ...after.errors])]
       const out = { ...result, ok: result.ok && !errors.length, parts: after.parts, errors, toasts: after.toasts, steps: did, shots: [] }
       if (shots) {

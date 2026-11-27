@@ -155,8 +155,9 @@ services:
   # and check an extension without your browser open; you open the workshop only to try the result. Off by default:
   # COMPOSE_PROFILES=previewer and PREVIEWER_URL=http://previewer:9222 in .env turn it on (about 1 GB of disk and
   # 200-700 MB of memory while it runs). Drafts are code someone wrote, so it's walled off: no internet (an internal
-  # network shared only with the app, not the database), no Linux capabilities, no privilege escalation, memory and
-  # process limits, and every run is a throwaway browser profile on demo data.
+  # network shared only with the app, not the database), and the browser fetches nothing at all: the app answers its
+  # requests over the DevTools connection. No Linux capabilities, no privilege escalation, memory and process limits,
+  # and every run is a throwaway browser profile on demo data.
   previewer:
     image: chromedp/headless-shell:158.0.8127.37
     profiles: [previewer]
