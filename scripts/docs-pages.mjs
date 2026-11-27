@@ -42,8 +42,11 @@ function rewriteHref(href) {
   return `${REPO}/${repoPath}${hash ? `#${hash}` : ''}`
 }
 
+// images sit in docs/media/ (so GitHub shows them too); the site serves that folder at /media/docs/
+const imageHref = (href) => (/^(https?:|\/)/.test(href) ? href : href.replace(/^(\.\/)?media\//, '/media/docs/'))
+
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-const slugify = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+const slugify = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/&(#\d+|[a-z]+);/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 /** The doc as a web page about the app (the landing page's #app entity), with a breadcrumb trail. */
 const docLd = (slug, page) => JSON.stringify({
@@ -62,6 +65,11 @@ export function renderDoc(slug, md) {
   const renderer = new marked.Renderer()
   const link = renderer.link.bind(renderer)
   renderer.link = (tok) => link({ ...tok, href: rewriteHref(tok.href) })
+  const image = renderer.image.bind(renderer)
+  renderer.image = (tok) => { // a diagram opens full size on a tap (its small text on phones)
+    const href = imageHref(tok.href)
+    return `<a href="${href}">${image({ ...tok, href }).replace('<img ', '<img loading="lazy" ')}</a>`
+  }
   renderer.heading = function ({ tokens, depth }) {
     const text = this.parser.parseInline(tokens)
     return `<h${depth} id="${slugify(text)}">${text}</h${depth}>\n`
@@ -100,6 +108,7 @@ ${body}
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const out = path.join(root, 'dist', 'docs')
   fs.mkdirSync(out, { recursive: true })
+  fs.cpSync(path.join(root, 'docs', 'media'), path.join(root, 'dist', 'media', 'docs'), { recursive: true })
   for (const [slug, page] of Object.entries(DOC_PAGES)) {
     fs.writeFileSync(path.join(out, `${slug}.html`), renderDoc(slug, fs.readFileSync(path.join(root, page.src), 'utf8')))
   }
