@@ -19,6 +19,8 @@ import { sha256, verifyPassword, normEmail, httpError } from './auth.mjs'
 import { tokenRequest } from './oauth.mjs'
 
 const NONCE_TTL = 15 * 60000
+/** The token Claude's MCP connection uses (server/mcp.mjs): scope 'extensions', plus 'planner' once confirmed here. */
+export const CLAUDE_TOKEN = 'Claude (workshop)'
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 export const TRUST_HEADERS = {
   'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
@@ -36,6 +38,8 @@ const KINDS = {
   toggle: { title: 'Switch an extension on or off' },
   token: { title: 'Create an access token', danger: true },
   claude: { title: 'Connect Claude to the workshop' },
+  'claude-planner': { title: 'Let Claude see and change your planner', danger: true },
+  'claude-planner-off': { title: 'Stop Claude seeing your planner' },
   'vault-save': { title: 'Save a connection key', danger: true },
   connect: { title: 'Connect an account', danger: true },
   'pod-use': { title: 'Keep your planner in your own Solid pod', danger: true },
@@ -91,7 +95,7 @@ button.yes{background:var(--accent);border-color:var(--accent);color:var(--bg)}b
   }
 
   /** What the page shows for an action (and the extra fields it asks for). */
-  async function describe(user, q) {
+  async function describe(user, q, req) {
     const kind = q.get('do')
     const k = KINDS[kind]
     if (!k) return null
@@ -135,7 +139,16 @@ ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : 
       action.name = String(q.get('name') ?? 'Mac app').slice(0, 60)
       details = `<p>An access token lets the app named <b>${esc(action.name)}</b> read your planner and mark tasks done, without signing in. It replaces that name's previous token.</p>`
     } else if (kind === 'claude') {
-      details = '<p>Claude (Claude Code, or another app that supports MCP) can work in your workshop and manage your extensions: publish, edit listings, remove and switch off. It can\'t see your planner, and installing, updating or switching on still asks you here.</p><p class="muted">Connecting again replaces the previous connection.</p>'
+      details = '<p>Claude (Claude Code, or another app that supports MCP) can work in your workshop and manage your extensions: publish, edit listings, remove and switch off. It can\'t see your planner, and installing, updating or switching on still asks you here.</p><p class="muted">Connecting again replaces the previous connection (and switches planner access off).</p>'
+    } else if (kind === 'claude-planner' || kind === 'claude-planner-off') {
+      const has = await auth.hasTokenScope(user.id, CLAUDE_TOKEN, 'planner')
+      if (has === null) return { noClaude: true }
+      if (kind === 'claude-planner') {
+        warning = 'Claude will read your tasks, time blocks, deadlines and plans, and the app you connected sends them to Anthropic (or whichever AI it uses). It can add tasks and deadlines and change or complete tasks. It can\'t delete anything.'
+        details = `<p>This is separate from the workshop: Claude already connected there can't see your planner until you confirm here.${has ? ' <b>It already can.</b>' : ''}</p><p class="muted">Every change is labelled "Claude" and kept in your planner's snapshots. Switch it off any time at <a href="/trust?do=claude-planner-off" style="color:inherit">${esc(origin(req))}/trust?do=claude-planner-off</a>, or by connecting Claude again.</p>`
+      } else {
+        details = `<p>Claude keeps working in your workshop, but can no longer read or change your planner.${has ? '' : ' <span class="muted">(It can\'t now either.)</span>'}</p>`
+      }
     } else if (kind === 'vault-save') {
       if (!vault.on) return { vaultOff: true }
       action.name = String(q.get('name') ?? '').toLowerCase().slice(0, 30)
@@ -202,11 +215,12 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
     const who = await auth.identify(req)
     if (!who || who.via !== 'session') return page('Sign in first', `<h1>Sign in first</h1><p>Sign in to Life Console in this browser, then try again.</p>${back('Go to Life Console')}`)
     const user = who.user
-    const d = await describe(user, url.searchParams)
+    const d = await describe(user, url.searchParams, req)
     if (!d) return page('Trusted page', `<h1>Trusted page</h1><p>Nothing to confirm.</p><p class="muted">Life Console asks for consent, keys and passwords only on this page.</p>${back()}`)
     if (d.missing) return page('Not found', `<h1>That extension version isn't available</h1><p>It may have been pulled from the registry.</p>${back()}`)
     if (d.vaultOff) return page('Vault off', `<h1>Connections are off on this server</h1><p>The server's admin hasn't set a vault key (VAULT_KEY).</p>${back()}`)
     if (d.noHandle) return page('Choose a handle', `<h1>Choose a handle first</h1><p>Your handle is your address for sharing (Extensions → Publishing).</p>${back()}`)
+    if (d.noClaude) return page('Connect Claude first', `<h1>Connect Claude first</h1><p>Planner access is added to Claude's workshop connection: <a href="/trust?do=claude" style="color:inherit">connect Claude</a>, then come back here.</p>${back()}`)
     if (d.noPassword) return page('No password', `<h1>This account signs in with Google</h1><p>It has no password to change.</p>${back()}`)
     const backTo = safeBack(url.searchParams.get('back'))
     d.action.back = backTo
@@ -248,9 +262,16 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
         return { msg: `Token for ${a.name} created. It is shown once.`, token }
       }
       case 'claude': {
-        const token = await auth.replaceApiToken(uid, 'Claude (workshop)', 'extensions')
+        const token = await auth.replaceApiToken(uid, CLAUDE_TOKEN, 'extensions')
         log(`[consent] workshop token for ${uid.slice(0, 8)}`)
         return { msg: 'Claude can now work in your workshop. Run this once in a terminal, then ask Claude to make or change an extension with the workshop open.', command: `claude mcp add --transport http life-console ${origin(req)}/mcp --header "Authorization: Bearer ${token}"`, url: `${origin(req)}/mcp`, token }
+      }
+      case 'claude-planner':
+      case 'claude-planner-off': {
+        const on = a.kind === 'claude-planner'
+        if (!(await auth.setTokenScope(uid, CLAUDE_TOKEN, 'planner', on))) return { msg: 'Connect Claude to the workshop first.' }
+        log(`[consent] claude planner access ${on ? 'on' : 'off'} for ${uid.slice(0, 8)}`)
+        return { msg: on ? 'Claude can now see and change your planner.' : 'Claude can no longer see your planner.' }
       }
       case 'vault-save': {
         const saved = await vault.save(uid, { name: a.name || form.get('name'), site: a.site || form.get('site'), scheme: a.scheme || 'bearer', secret: form.get('secret') })

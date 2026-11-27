@@ -28,7 +28,7 @@ before(async () => {
   echo = http.createServer((req, res) => { seen.push({ url: req.url, auth: req.headers.authorization }); res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true, echoedKey: req.headers.authorization })) })
   await new Promise((r) => echo.listen(0, '127.0.0.1', r))
   echoBase = `http://127.0.0.1:${echo.address().port}`
-  const cfg = loadConfig({ DATABASE_URL: dbUrl, PUSH_DRY_RUN: '1', APP_URL: 'http://lc.test', ADMIN_EMAILS: 'admin@x.test', DIST: '/nonexistent', VAULT_KEY: crypto.randomBytes(32).toString('base64'), CONNECTIONS_ALLOW_PRIVATE: '1' })
+  const cfg = loadConfig({ DATABASE_URL: dbUrl, PUSH_DRY_RUN: '1', APP_URL: 'http://lc.test', ADMIN_EMAILS: 'admin@x.test', DIST: '/nonexistent', VAULT_KEY: crypto.randomBytes(32).toString('base64'), CONNECTIONS_ALLOW_PRIVATE: '1', TRUST_PROXY: '1' })
   app = await createApp({ cfg, db: conn.db, pool: conn.pool, log: quiet })
   server = http.createServer(app.handler)
   await new Promise((r) => server.listen(0, '127.0.0.1', r))
@@ -68,6 +68,8 @@ function client() {
   c.cookie = () => cookie
   return c
 }
+/** Sign-ups are limited per address (10 an hour): later tests sign up from their own. */
+const OWN_IP = { 'X-Forwarded-For': '10.9.9.9' }
 const NAV = { 'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-User': '?1' }
 const nonceOf = (html) => /name="nonce" value="([^"]+)"/.exec(html)?.[1]
 /** Open the trusted page for an action and confirm it, the way a person would (form fields as extra). */
@@ -516,4 +518,79 @@ test('managing extensions over MCP: search, install with your click, switch, rem
   assert.equal((await cal('GET', '/api/registry/plugins/mgmt-ben/steps')).body.title, 'Step counter')
   assert.equal((await t('update_listing', { name: 'mgmt-ann/tea', title: 'Mine now' })).isError, true, "someone else's listing")
   assert.match((await t('like_extension', { name: 'mgmt-ann/tea' })).text, /Liked mgmt-ann\/tea \(1 likes\)/)
+})
+
+test('planner over MCP: a separate permission on the trusted page, read today, add and change tasks, never other accounts', async () => {
+  const dee = client(); const eve = client()
+  for (const [c, e] of [[dee, 'plan-dee'], [eve, 'plan-eve']]) await c('POST', '/api/auth/signup', { email: `${e}@x.test`, password: 'pw-plan-1234' }, OWN_IP)
+  const day = new Date().toISOString().slice(0, 10)
+  const state = { schemaVersion: 2, settings: { timezone: 'UTC' }, todos: [
+    { id: 'T-101', title: 'Write the abstract', timeMin: 45, done: false, priority: 2, scheduled: { date: day, start: '09:00' } },
+    { id: 'T-102', title: 'Thesis chapter', done: false, scheduled: null },
+    { id: 'T-103', title: 'Outline', done: false, parent: 'T-102', scheduled: null },
+  ], timeBlocks: [{ id: 'B-1', date: day, start: '13:00', end: '14:00', title: 'Lab meeting', category: 'research' }], deadlines: [], plans: [] }
+  assert.equal((await dee('PUT', '/api/state', { state, baseVersion: 0 })).status, 200)
+  const tok = await mcpToken(dee)
+  const t = async (name, args) => { const r = await mcpTool(tok, name, args); return { ...r, text: r.content[0].text } }
+
+  // the workshop connection alone can't see the planner: the tool says where to ask
+  const denied = await t('today')
+  assert.equal(denied.isError, true)
+  assert.match(denied.text, /separate permission[\s\S]*\/trust\?do=claude-planner/)
+  assert.equal((await t('add_task', { title: 'x' })).isError, true)
+  // no Claude connection yet: nothing to add access to
+  assert.match((await eve('GET', '/trust?do=claude-planner', undefined, NAV)).text, /Connect Claude first/)
+
+  const page = await dee('GET', '/trust?do=claude-planner', undefined, NAV)
+  assert.match(page.text, /sends them to Anthropic/)
+  await confirm(dee, 'do=claude-planner')
+  const today = await t('today')
+  assert.match(today.text, /T-101 Write the abstract \([^)]*09:00/)
+  assert.match(today.text, /13:00-14:00 Lab meeting/)
+  assert.match((await t('find_in_planner', { query: 'thesis' })).text, /T-102 Thesis chapter[^\n]*has subtasks/)
+
+  const added = await t('add_task', { title: 'Email supervisor', date: day, start: '16:30', minutes: 15 })
+  assert.equal(added.isError, undefined, added.text)
+  assert.match(added.text, /T-104 Email supervisor/)
+  assert.match((await t('change_task', { id: 'T-101', done: true })).text, /T-101[^\n]*done/)
+  assert.match((await t('add_deadline', { title: 'Conference paper', due: `${day}T18:00` })).text, /DL-1 Conference paper/)
+  // bad input and containers are refused, and nothing is written
+  assert.equal((await t('change_task', { id: 'T-102', done: true })).isError, true, 'a task with subtasks is done when they are')
+  assert.equal((await t('add_task', { title: 'Bad', date: 'tomorrow' })).isError, true)
+  assert.equal((await t('change_task', { id: 'T-999', done: true })).isError, true)
+  const doc = (await dee('GET', '/api/state')).body
+  assert.equal(doc.state.todos.length, 4)
+  assert.equal(doc.state.todos.find((x) => x.id === 'T-101').done, true)
+  assert.equal(doc.state.todos.find((x) => x.id === 'T-102').done, false)
+  assert.equal(doc.state.deadlines[0].due, `${day}T18:00`)
+  assert.equal(doc.device, 'Claude')
+
+  // planner access still opens only /mcp, never the rest of the API
+  assert.equal((await raw('GET', '/api/state', undefined, { Authorization: `Bearer ${tok}` })).status, 401)
+  // another account's token sees its own (empty) planner, never this one
+  const evesTok = await mcpToken(eve)
+  await confirm(eve, 'do=claude-planner')
+  assert.doesNotMatch((await mcpTool(evesTok, 'find_in_planner', { query: '' })).content[0].text, /Email supervisor/)
+
+  // switching it off, or connecting Claude again, takes planner access away
+  await confirm(dee, 'do=claude-planner-off')
+  assert.equal((await t('today')).isError, true)
+  assert.equal((await t('list_extensions')).isError, undefined, 'the workshop keeps working')
+  await confirm(dee, 'do=claude-planner')
+  const fresh = await mcpToken(dee)
+  assert.equal((await mcpTool(fresh, 'today')).isError, true, 'a new connection starts without planner access')
+})
+
+test('workshop drafts are checked on the server when no workshop is open', async () => {
+  const fay = client()
+  await fay('POST', '/api/auth/signup', { email: 'static-fay@x.test', password: 'pw-static-1234' }, OWN_IP)
+  const tok = await mcpToken(fay)
+  const broken = await mcpTool(tok, 'write_draft', { code: "export default { sdk: 1, title: 'Oops', pages: [ }\n", name: 'oops' })
+  assert.equal(broken.isError, true)
+  assert.match(broken.content[0].text, /isn't open[\s\S]*HAS ERRORS[\s\S]*syntax/)
+  const evil = await mcpTool(tok, 'write_draft', { code: "export default { sdk: 1, title: 'E', start() { eval('1') } }\n" })
+  assert.match(evil.content[0].text, /eval[\s\S]*publishing refuses/)
+  const fine = await mcpTool(tok, 'write_draft', { code: "export const n = 1\nexport default { sdk: 1, title: 'Fine' }\n" })
+  assert.equal(fine.isError, undefined, fine.content[0].text)
+  assert.match(fine.content[0].text, /no errors/)
 })

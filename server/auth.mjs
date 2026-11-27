@@ -101,16 +101,18 @@ export function createAuth(db, cfg, signups = null) {
   const clearCookie = (secure) => `${COOKIE}=; ${cookieAttrs(0, secure)}`
 
   /** Who is calling: a session cookie or `Authorization: Bearer <api token>`. Returns { user, via, tokenHash } or null.
-   *  A token with a scope only counts where that scope is asked for (`identify(req, { scope: 'extensions' })`). */
+   *  A token with a scope only counts where that scope is asked for (`identify(req, { scope: 'extensions' })`).
+   *  A scope can hold several, space-separated ('extensions planner'): `scopes` lists them. */
   async function identify(req, { scope = '' } = {}) {
     const bearer = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization || '')?.[1]
     if (bearer) {
       const h = sha256(bearer)
       const row = (await db.select({ u: users, t: apiTokens }).from(apiTokens).innerJoin(users, eq(users.id, apiTokens.userId)).where(eq(apiTokens.tokenHash, h)).limit(1))[0]
       if (!row || row.u.disabled) return null
-      if (row.t.scope && row.t.scope !== scope) return null
+      const scopes = row.t.scope ? row.t.scope.split(' ') : []
+      if (scopes.length && !scopes.includes(scope)) return null
       if (!row.t.lastUsedAt || Date.now() - row.t.lastUsedAt.getTime() > 3600000) await db.update(apiTokens).set({ lastUsedAt: new Date() }).where(eq(apiTokens.id, row.t.id))
-      return { user: row.u, via: 'token' }
+      return { user: row.u, via: 'token', scopes }
     }
     const token = parseCookies(req.headers.cookie)[COOKIE]
     if (!token) return null
@@ -173,12 +175,28 @@ export function createAuth(db, cfg, signups = null) {
     await db.delete(apiTokens).where(and(eq(apiTokens.userId, userId), eq(apiTokens.name, String(name).slice(0, 60))))
     return createApiToken(userId, name, scope)
   }
+  /** Add or remove one scope on a named token (e.g. planner access for 'Claude (workshop)'). False if there's no such token. */
+  async function setTokenScope(userId, name, scope, on) {
+    const where = and(eq(apiTokens.userId, userId), eq(apiTokens.name, String(name).slice(0, 60)))
+    const [t] = await db.select({ scope: apiTokens.scope }).from(apiTokens).where(where).limit(1)
+    if (!t) return false
+    const set = new Set((t.scope || '').split(' ').filter(Boolean))
+    if (!set.size) return false // an unscoped token already opens everything: never touch it
+    if (on) set.add(scope); else set.delete(scope)
+    if (!set.size) return false // emptying the scope would open the whole API
+    await db.update(apiTokens).set({ scope: [...set].join(' ') }).where(where)
+    return true
+  }
+  async function hasTokenScope(userId, name, scope) {
+    const [t] = await db.select({ scope: apiTokens.scope }).from(apiTokens).where(and(eq(apiTokens.userId, userId), eq(apiTokens.name, String(name).slice(0, 60)))).limit(1)
+    return t ? (t.scope || '').split(' ').includes(scope) : null
+  }
   async function purgeExpired() {
     await db.delete(sessions).where(lt(sessions.expiresAt, new Date()))
     await db.delete(passwordResets).where(lt(passwordResets.expiresAt, new Date(Date.now() - 86400000)))
   }
 
-  return { findUserByEmail, createUser, googleSignIn, startSession, clearCookie, identify, endSession, endOtherSessions, setPassword, createResetToken, useResetToken, createApiToken, replaceApiToken, purgeExpired }
+  return { findUserByEmail, createUser, googleSignIn, startSession, clearCookie, identify, endSession, endOtherSessions, setPassword, createResetToken, useResetToken, createApiToken, replaceApiToken, setTokenScope, hasTokenScope, purgeExpired }
 }
 
 export function parseCookies(header = '') {
