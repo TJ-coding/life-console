@@ -71,6 +71,20 @@
       "when": 1795589606165,
       "tag": "0009_token_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795797647805,
+      "tag": "0010_plugin_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795797657087,
+      "tag": "0011_workshop_drafts",
+      "breakpoints": true
     }
   ]
 }

@@ -1,16 +1,39 @@
 // The live workshop: one room per account, in memory. The workshop page listens (server-sent events) and sends its
 // draft and preview results; the AI connection (server/mcp.mjs) changes the draft and waits for the preview.
-// Nothing here is stored: a draft lives in the browser (localStorage) and in this room until the server restarts.
+// The draft (its files) is also saved in the database (workshop_drafts), so a restart or a deploy doesn't lose it;
+// call ensure(uid) before reading a room. Preview results and the live test are only in memory.
+import { eq } from 'drizzle-orm'
 import { draftKey } from '../src/sdk/live.js'
+import { ENTRY, filesOf, canonical } from '../src/sdk/files.js'
+import { workshopDrafts } from './db/schema.js'
 
 const MAX_CODE = 700 * 1024
 
-export function createWorkshopLive() {
+export function createWorkshopLive({ db = null, log = () => {} } = {}) {
   const rooms = new Map()
   const room = (uid) => {
     let r = rooms.get(uid)
-    if (!r) rooms.set(uid, (r = { draft: null, results: new Map(), clients: new Set(), watchers: new Set(), waiters: new Set(), aiAt: 0 }))
+    if (!r) rooms.set(uid, (r = { draft: null, results: new Map(), clients: new Set(), watchers: new Set(), waiters: new Set(), aiAt: 0, loaded: !db }))
     return r
+  }
+  /** Load this account's saved draft into its room (once per server start). */
+  async function ensure(uid) {
+    const r = room(uid)
+    if (r.loaded) return r
+    r.loading ??= db.select().from(workshopDrafts).where(eq(workshopDrafts.userId, uid)).then(([row]) => {
+      if (row && !r.draft) { const d = row.draft; const files = filesOf(d.files ?? d.code); r.draft = { ...d, files, code: files[ENTRY] ?? '', key: draftKey(canonical(files)) } }
+      r.loaded = true
+    }).catch((e) => { log(`[workshop] loading a draft failed: ${e.message}`); r.loaded = true })
+    await r.loading
+    return r
+  }
+  /** Save the draft (in the background: a failed save only means it won't survive a restart). */
+  function persist(uid, d) {
+    if (!db) return
+    const draft = { files: d.files, slug: d.slug, forkOf: d.forkOf, editing: d.editing, from: d.from, at: d.at, seen: d.seen }
+    db.insert(workshopDrafts).values({ userId: uid, draft, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: workshopDrafts.userId, set: { draft, updatedAt: new Date() } })
+      .catch((e) => log(`[workshop] saving a draft failed: ${e.message}`))
   }
   const write = (res, msg) => { try { res.write(`data: ${JSON.stringify(msg)}\n\n`) } catch { /* gone */ } }
   const broadcast = (uid, msg) => { for (const res of room(uid).clients) write(res, msg) }
@@ -39,18 +62,19 @@ export function createWorkshopLive() {
     req.on('close', () => { clearInterval(ping); r.watchers.delete(res) })
   }
 
-  /** A new draft, from the workshop page ('you') or the AI ('ai', sent on to the page). */
+  /** A new draft, from the workshop page ('you') or the AI ('ai', sent on to the page): `files` or one `code`. */
   function setDraft(uid, d, from) {
-    const code = String(d.code ?? '')
-    if (code.length > MAX_CODE) throw Object.assign(new Error('the file is too big (700 KB at most)'), { status: 413 })
+    const files = filesOf(d.files && typeof d.files === 'object' ? d.files : String(d.code ?? ''))
+    if (canonical(files).length > MAX_CODE) throw Object.assign(new Error('the extension is too big (700 KB at most)'), { status: 413 })
     const r = room(uid)
     const draft = {
-      code, key: draftKey(code), from, at: Date.now(), seen: from !== 'ai',
+      files, code: files[ENTRY] ?? '', key: draftKey(canonical(files)), from, at: Date.now(), seen: from !== 'ai',
       slug: String(d.slug ?? r.draft?.slug ?? '').toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40),
       forkOf: d.forkOf === undefined ? r.draft?.forkOf ?? null : d.forkOf || null,
       editing: d.editing === undefined ? r.draft?.editing ?? null : d.editing || null,
     }
     r.draft = draft
+    persist(uid, draft)
     if (from === 'ai') { r.aiAt = draft.at; broadcast(uid, { type: 'draft', draft }) }
     // a live test is on: every console page loads the new version
     if (devOf(r)) for (const res of r.watchers) write(res, { type: 'dev', key: draft.key })
@@ -64,7 +88,7 @@ export function createWorkshopLive() {
     const r = room(uid)
     r.results.set(String(key), { ...result, at: Date.now() })
     if (r.results.size > 20) r.results.delete(r.results.keys().next().value)
-    if (r.draft?.key === key && !byServer) r.draft.seen = true
+    if (r.draft?.key === key && !byServer && !r.draft.seen) { r.draft.seen = true; persist(uid, r.draft) }
     wake(r)
   }
 
@@ -86,7 +110,7 @@ export function createWorkshopLive() {
   const resultFor = (uid, key, ms = 8000) => until(uid, (r) => r.results.get(key), ms)
 
   return {
-    subscribe, watch, setDraft,
+    ensure, subscribe, watch, setDraft,
     /** Tell every open console page: { type: 'ask', … } (confirm something) or { type: 'changed', … }. */
     notify: (uid, msg) => { const r = room(uid); r.aiAt = Date.now(); for (const res of r.watchers) write(res, msg); return r.watchers.size },
     report, until, resultFor,

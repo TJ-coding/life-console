@@ -74,7 +74,8 @@ export async function loadPlugins() {
   for (const m of registry.modules) if (m.routes?.[0] && !m.tier) replacedPaths[m.id] = { path: m.routes[0].path, name: m.routes[0].name, navKey: m.nav?.[0]?.key }
   for (const p of list.filter((x) => x.enabled !== false)) {
     try {
-      const src = p.devKey ? `/api/workshop/dev/code/${p.devKey}.js` : `/api/registry/code/${p.hash}.js`
+      // its files sit side by side under one address, so its relative imports ('./layout.js') resolve
+      const src = p.devKey ? `/api/workshop/dev/code/${p.devKey}/index.js` : `/api/registry/code/${p.hash}/index.js`
       const mod = await import(/* @vite-ignore */ src)
       const manifest = mod.default
       if (!manifest || typeof manifest !== 'object') throw new Error('the file has no default export')

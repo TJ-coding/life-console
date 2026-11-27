@@ -82,7 +82,7 @@ export function createPreviewer({ url = '', dist = '', log = () => {} } = {}) {
   /** A request from the preview page: only preview.html and the built assets, read from disk. */
   async function answer(reqUrl) {
     const u = new URL(reqUrl)
-    if (u.origin !== ORIGIN || !(u.pathname === '/preview.html' || /^\/assets\/[\w.-]+$/.test(u.pathname))) return null
+    if (u.origin !== ORIGIN || !(u.pathname === '/preview.html' || /^\/(assets|vendor)\/[\w.-]+$/.test(u.pathname))) return null
     try {
       const body = await fs.readFile(path.join(dist, u.pathname))
       const headers = [{ name: 'Content-Type', value: TYPES[path.extname(u.pathname)] ?? 'application/octet-stream' }]
@@ -107,11 +107,11 @@ export function createPreviewer({ url = '', dist = '', log = () => {} } = {}) {
   }
 
   /**
-   * Run a draft: { code, name, theme: 'dark'|'light', viewports: ['phone'|'desktop'], steps: [...], shots: bool }.
+   * Run a draft: { files (or code), name, theme: 'dark'|'light', viewports: ['phone'|'desktop'], steps: [...], shots: bool }.
    * Steps (after the first render): { click: sel } · { type: text, into?: sel } · { key: 'Enter'|'Tab'|'ArrowLeft'… }
    * · { drag: sel, by: [dx, dy] } · { wait: ms }. Returns the preview's result plus { steps: [...], shots: [{ viewport, png }] }.
    */
-  async function run({ code, name = 'draft', theme = 'dark', viewports = ['desktop'], steps = [], shots = false }) {
+  async function run({ code, files, name = 'draft', theme = 'dark', viewports = ['desktop'], steps = [], shots = false }) {
     await slot()
     let c, ctx
     const started = Date.now()
@@ -157,7 +157,7 @@ export function createPreviewer({ url = '', dist = '', log = () => {} } = {}) {
       await s('Page.navigate', { url: pageUrl })
       await Promise.race([loaded, new Promise((r) => setTimeout(r, 8000))])
       if (!(await until('!!window.__lc', 4000))) throw new Error("the preview page didn't load")
-      await evaluate(`window.postMessage(${JSON.stringify({ type: 'run', code, name, theme })}, '*')`)
+      await evaluate(`window.postMessage(${JSON.stringify({ type: 'run', files: files ?? { 'index.js': code }, name, theme })}, '*')`)
       const result = await until('window.__lcOut.result', Math.min(8000, left()))
       if (result) await evaluate('window.__lc.iconBoxes()')
       if (!result) {

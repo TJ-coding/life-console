@@ -42,8 +42,11 @@ export function workshopPrompt(description, currentCode = '') {
 What the extension should do:
 ${description || '(describe it here)'}
 
-## The file
-- An ES module whose default export is the manifest. No imports from other sites, no eval, no minified code.
+## The files
+- index.js is an ES module whose default export is the manifest. Small extensions are just index.js; bigger ones split
+  into more files that import each other with relative paths (import { layout } from './layout.js').
+- Libraries: only the curated ones the app serves (import * as d3 from 'lc:d3' for d3 v7: scales, shapes, force
+  layouts, hierarchies). Nothing from other sites, no eval, no minified code.
 - Fields: sdk: 1, title, icon (a Material Symbols name), description,
   types: [{ type: '<name>.Thing', kindOf, traits }], tags: [{ id: '<name>.tag', label, parent? }],
   links: [{ id: '<name>.link', kindOf, desc }], events: ['<name>.happened'], sameAs: [{ from, to }],

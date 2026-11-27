@@ -19,6 +19,10 @@ import { createVault } from './vault.mjs'
 import { createConsent, TRUST_HEADERS, CLAUDE_TOKEN } from './consent.mjs'
 import { createWorkshopLive } from './workshop-live.mjs'
 import { createMcp, staticCheck } from './mcp.mjs'
+import { ENTRY, LIBS, rewriteImports } from '../src/sdk/files.js'
+
+/** An extension file as the console imports it: library imports ('lc:d3') point at the app's /vendor/ copy. */
+const servable = (src, file) => { try { return rewriteImports(src, file, (spec) => LIBS[spec] ?? null) } catch { return src } }
 import { createPreviewer } from './previewer.mjs'
 import { createPods, podClient } from './pod.mjs'
 import { createFederation } from './federation.mjs'
@@ -136,7 +140,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
   /** Secure cookies on the public https address; plain ones on other hosts (e.g. a private-network http URL). */
   const secureFor = (req) => cfg.cookieSecure && (!appHost || req.headers.host === appHost)
 
-  const live = createWorkshopLive()
+  const live = createWorkshopLive({ db, log })
   const consent = createConsent({ db, auth, registry, vault, log, secureFor: (req) => secureFor(req), providers: cfg.oauthProviders ?? {}, appUrl: cfg.appUrl, planner, pods, podClient, siteOf, fed, live, checkDraft: staticCheck })
   const mcp = createMcp({ auth, registry, live, limit, log, build: BUILD, siteOf, planner, onPlannerSaved: (user, req) => mirrorSoon(user, req), previewer: createPreviewer({ url: cfg.previewerUrl, dist: cfg.dist, log }) })
   /** Account actions a plugin could abuse need the trusted page once Public plugins are on (goal 3). */
@@ -289,6 +293,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     const regDecline = url.pathname.match(/^\/api\/registry\/suggestions\/(\d+)\/decline$/)?.[1]
     if (regDecline && req.method === 'POST') return send(res, 200, await registry.decline(user, regDecline))
 
+    if (url.pathname.startsWith('/api/workshop/') || url.pathname === '/api/live') await live.ensure(uid) // its saved draft
     switch (route) {
       /* ── the live workshop: an AI app changes the draft over /mcp (server/mcp.mjs), this page shows it ── */
       case 'GET /api/live':
@@ -311,7 +316,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       }
       case 'POST /api/workshop/live/draft': {
         const b = await body(req, 800 * 1024)
-        const d = live.setDraft(uid, { code: b.code, slug: b.slug, forkOf: b.forkOf ?? null, editing: b.editing ?? null }, 'you')
+        const d = live.setDraft(uid, { files: b.files, code: b.code, slug: b.slug, forkOf: b.forkOf ?? null, editing: b.editing ?? null }, 'you')
         return send(res, 200, { key: d.key })
       }
       case 'POST /api/workshop/live/result': {
@@ -514,27 +519,45 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
     const pubVer = req.method === 'GET' && url.pathname.match(/^\/api\/registry\/public\/versions\/([0-9a-f]{64})$/)?.[1]
     if (pubVer) { const v = await registry.publicVersion(pubVer); return v ? send(res, 200, v) : send(res, 404, { error: 'not found' }) }
     // a plugin version's code, for the console to import: public versions for anyone, private ones for their owner
-    const codeHash = req.method === 'GET' && url.pathname.match(/^\/api\/registry\/code\/([0-9a-f]{64})\.js$/)?.[1]
-    if (codeHash) {
+    // /api/registry/code/<hash>.js is the entry file; /api/registry/code/<hash>/<file>.js any of its files, so its
+    // relative imports resolve. Library imports ('lc:d3') point at /vendor/ (?raw=1: exactly as published, for hashing)
+    // all of a version's files as published (the workshop opens them), for whoever may see that version
+    const filesHashReq = req.method === 'GET' && url.pathname.match(/^\/api\/registry\/files\/([0-9a-f]{64})$/)?.[1]
+    if (filesHashReq) {
+      const who = await auth.identify(req)
+      const v = await registry.version(who?.user ?? null, filesHashReq)
+      if (!v || !v.code) return send(res, 404, { error: 'not found' })
+      return send(res, 200, { files: v.files ?? { [ENTRY]: v.code } })
+    }
+    const codeMatch = req.method === 'GET' && url.pathname.match(/^\/api\/registry\/code\/([0-9a-f]{64})(?:\.js|\/((?:[a-z0-9_-]+\/){0,3}[a-z0-9_-]+\.js))$/i)
+    if (codeMatch) {
       // never as a service worker: a plugin could otherwise keep running after it's removed
       if (req.headers['service-worker'] === 'script' || req.headers['sec-fetch-dest'] === 'serviceworker') return send(res, 403, 'not a service worker')
       const who = await auth.identify(req)
-      const v = await registry.version(who?.user ?? null, codeHash)
+      const v = await registry.version(who?.user ?? null, codeMatch[1])
       if (!v) return send(res, 404, 'not found')
-      return send(res, 200, v.code, { 'Content-Type': MIME['.js'], 'Cache-Control': v.pkg.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, max-age=31536000, immutable' })
+      const file = codeMatch[2] ?? ENTRY
+      const src = v.files ? v.files[file] : file === ENTRY ? v.code : undefined
+      if (src === undefined) return send(res, 404, 'not found')
+      const body = url.searchParams.has('raw') ? src : servable(src, file)
+      return send(res, 200, body, { 'Content-Type': MIME['.js'], 'Cache-Control': v.pkg.visibility === 'public' ? 'public, max-age=31536000, immutable' : 'private, max-age=31536000, immutable' })
     }
     // the draft under a live test, for this person's console only: while the test is on, the current version only,
     // and only if it passes the checks a published version must pass (server/mcp.mjs staticCheck)
-    const devKey = req.method === 'GET' && url.pathname.match(/^\/api\/workshop\/dev\/code\/([\w:-]{1,80})\.js$/)?.[1]
+    const devMatch = req.method === 'GET' && url.pathname.match(/^\/api\/workshop\/dev\/code\/([\w:-]{1,80})(?:\.js|\/((?:[a-z0-9_-]+\/){0,3}[a-z0-9_-]+\.js))$/i)
+    const devKey = devMatch?.[1]
     if (devKey) {
       if (req.headers['service-worker'] === 'script' || req.headers['sec-fetch-dest'] === 'serviceworker') return send(res, 403, 'not a service worker')
       const who = await auth.identify(req)
       if (!who || who.via !== 'session') return send(res, 401, 'signed out')
+      await live.ensure(who.user.id)
       const d = live.draft(who.user.id)
       if (!live.dev(who.user.id) || !d || d.key !== devKey) return send(res, 404, 'not under a live test')
-      const blocked = staticCheck(d.code).errors
+      const blocked = staticCheck(d.files).errors
       if (blocked.length) return send(res, 409, `// blocked: ${blocked.join('; ')}`, { 'Content-Type': MIME['.js'] })
-      return send(res, 200, d.code, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' })
+      const file = devMatch[2] ?? ENTRY
+      if (!(file in d.files)) return send(res, 404, 'not found')
+      return send(res, 200, servable(d.files[file], file), { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' })
     }
     checkCsrf(req)
     if ((await publicRoute(req, res, route)) !== undefined || res.writableEnded) return
@@ -705,7 +728,8 @@ ${[...COMPARE].filter(([p]) => !DRAFTS.has(p)).map(([p, d]) => `<url><loc>${site
         delete headers['X-Frame-Options']
         headers['Content-Security-Policy'] = `default-src 'none'; script-src ${self} blob:; style-src 'unsafe-inline' https://fonts.googleapis.com; img-src data: blob:; font-src ${self} https://fonts.gstatic.com; connect-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`
       }
-      if (rel.startsWith('/assets/')) headers['Access-Control-Allow-Origin'] = '*'
+      // the workshop preview (a sandbox with no origin) imports these: assets, and the curated libraries for extensions
+      if (rel.startsWith('/assets/') || rel.startsWith('/vendor/')) headers['Access-Control-Allow-Origin'] = '*'
       if (vary) headers.Vary = 'Cookie'
       if (landingPage) headers['X-LC-Page'] = 'landing' // the service worker never caches it as the app shell
       else if (rel.endsWith('.html') && rel !== '/index.html') headers['X-LC-Page'] = 'page' // /privacy, /terms, /docs/…: not the app shell either

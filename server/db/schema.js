@@ -156,6 +156,13 @@ export const consentNonces = pgTable('consent_nonces', {
   usedAt: ts('used_at'),
 }, (t) => [index('consent_nonces_user_idx').on(t.userId)])
 
+/** The workshop's draft, one per account (server/workshop-live.mjs), so a restart or deploy doesn't lose it. */
+export const workshopDrafts = pgTable('workshop_drafts', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  draft: jsonb('draft').notNull(), // { files, slug, forkOf, editing, from, at }
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+})
+
 /** The registry (goal 6): packages named author/name, public or private. */
 export const pluginPackages = pgTable('plugin_packages', {
   name: text('name').primaryKey(), // alice/habits
@@ -176,7 +183,8 @@ export const pluginVersions = pgTable('plugin_versions', {
   hash: text('hash').primaryKey(),
   packageName: text('package_name').notNull().references(() => pluginPackages.name, { onDelete: 'cascade' }),
   version: text('version').notNull(),
-  code: text('code').notNull(),
+  code: text('code').notNull(), // the entry file (index.js)
+  files: jsonb('files'), // { 'index.js': …, 'layout.js': … } for an extension in several files; null = just `code`
   manifest: jsonb('manifest').notNull(), // what the registry read from the code: title, says, replaces, sdk…
   checks: jsonb('checks').notNull(), // automated check results
   changelog: text('changelog').notNull().default(''),

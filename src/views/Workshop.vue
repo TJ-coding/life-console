@@ -7,13 +7,37 @@ import { useRoute } from 'vue-router'
 import { api, trustUrl } from '../sdk/client.js'
 import { workshopPrompt, STARTER } from '../sdk/prompt.js'
 import { draftKey } from '../sdk/live.js'
+import { ENTRY, canonical } from '../sdk/files.js'
 import { auth } from '../auth'
 import { toast } from '../store'
 
 const DRAFT = 'life-console/workshop-draft'
 const saved = (() => { try { return JSON.parse(localStorage.getItem(DRAFT) || 'null') } catch { return null } })()
 const describe = ref(saved?.describe ?? '')
-const code = ref(saved?.code ?? STARTER)
+// the extension's files (index.js is the entry); the editor shows one at a time
+const files = ref(saved?.files ?? { [ENTRY]: saved?.code ?? STARTER })
+const current = ref(ENTRY)
+const code = computed({ get: () => files.value[current.value] ?? '', set: (v) => { files.value = { ...files.value, [current.value]: v } } })
+const isStarter = computed(() => Object.keys(files.value).length === 1 && files.value[ENTRY] === STARTER)
+const fileNames = computed(() => [ENTRY, ...Object.keys(files.value).filter((n) => n !== ENTRY).sort()])
+const allCode = () => (Object.keys(files.value).length === 1 ? files.value[ENTRY] : fileNames.value.map((n) => `// --- ${n} ---\n${files.value[n]}`).join('\n'))
+const newFile = ref(null) // the name being typed for a new file, or null
+function addFile() {
+  const n = String(newFile.value ?? '').trim().replace(/^\.\//, '').replace(/(\.js)?$/, '.js')
+  if (!/^(?:[a-z0-9_-]+\/){0,3}[a-z0-9_-]+\.js$/i.test(n)) return toast('A file name is letters, digits, - or _ (e.g. layout.js)')
+  if (!(n in files.value)) files.value = { ...files.value, [n]: `// ${n}: import it from index.js with \`import { … } from './${n}'\`\n` }
+  current.value = n
+  newFile.value = null
+  persist()
+}
+function removeFile(n) {
+  if (n === ENTRY || !confirm(`Delete ${n}?`)) return
+  const next = { ...files.value }
+  delete next[n]
+  files.value = next
+  if (current.value === n) current.value = ENTRY
+  run()
+}
 const slug = ref(saved?.slug ?? 'water')
 const version = ref(saved?.version ?? '0.1.0')
 const visibility = ref('private')
@@ -28,7 +52,7 @@ const SLOT_NAMES = { 'today.card': 'Today', 'week.strip': 'Plan week', 'strategy
 const forkOf = ref(saved?.forkOf ?? null) // the extension this draft is a fork of (only its author changes the original)
 const suggestion = ref(null) // reviewing a suggestion to your extension: { id, by, message, fromPackage, version, base }
 const persist = () => {
-  try { localStorage.setItem(DRAFT, JSON.stringify({ describe: describe.value, code: code.value, slug: slug.value, version: version.value, forkOf: forkOf.value })) } catch { /* storage off */ }
+  try { localStorage.setItem(DRAFT, JSON.stringify({ describe: describe.value, files: files.value, slug: slug.value, version: version.value, forkOf: forkOf.value })) } catch { /* storage off */ }
   sendDraft()
 }
 
@@ -41,10 +65,10 @@ function sendDraft() {
   if (fromAi) return
   clearTimeout(sendTimer)
   sendTimer = setTimeout(() => {
-    const key = draftKey(code.value)
+    const key = draftKey(canonical(files.value))
     if (key === sentKey) return
     sentKey = key
-    api('POST', '/api/workshop/live/draft', { code: code.value, slug: slug.value, forkOf: forkOf.value, editing: editing.value?.pkg ?? null }).catch(() => { sentKey = '' })
+    api('POST', '/api/workshop/live/draft', { files: files.value, slug: slug.value, forkOf: forkOf.value, editing: editing.value?.pkg ?? null }).catch(() => { sentKey = '' })
   }, 150)
 }
 function applyAiDraft(d) {
@@ -55,7 +79,8 @@ function applyAiDraft(d) {
   if (d.editing && editing.value?.pkg !== d.editing) editing.value = { pkg: d.editing, mine: true }
   else if (!d.editing && editing.value) editing.value = null
   if ((d.forkOf ?? null) !== forkOf.value) forkOf.value = d.forkOf ?? null
-  code.value = d.code
+  files.value = d.files ?? { [ENTRY]: d.code }
+  if (!(current.value in files.value)) current.value = ENTRY
   aiAt.value = Date.now()
   run()
   fromAi = false
@@ -86,9 +111,9 @@ const ns = (s) => String(s).toLowerCase().replace(/[^a-z0-9-]/g, '-')
 const termPrefix = (s) => new RegExp(`(['"\`])${s.replace(/[-]/g, '\\-')}\\.(?=[A-Za-z])`, 'g')
 function renameTerms(from, to) {
   if (!from || !to || from === to) return false
-  const next = code.value.replace(termPrefix(from), `$1${to}.`)
-  if (next === code.value) return false
-  code.value = next
+  const next = Object.fromEntries(Object.entries(files.value).map(([n, c]) => [n, c.replace(termPrefix(from), `$1${to}.`)]))
+  if (canonical(next) === canonical(files.value)) return false
+  files.value = next
   return true
 }
 watch(slug, (now, before) => {
@@ -110,9 +135,9 @@ const name = computed(() => `${auth.user?.handle ?? 'you'}/${slug.value.toLowerC
 let runKey = ''
 function run() {
   persist()
-  runKey = draftKey(code.value)
+  runKey = draftKey(canonical(files.value))
   result.value = null
-  frame.value?.contentWindow?.postMessage({ type: 'run', code: code.value, name: slug.value, theme: document.documentElement.dataset.theme }, '*')
+  frame.value?.contentWindow?.postMessage({ type: 'run', files: JSON.parse(JSON.stringify(files.value)), name: slug.value, theme: document.documentElement.dataset.theme }, '*')
 }
 function onMessage(e) {
   if (e.source !== frame.value?.contentWindow || e.data?.source !== 'lc-preview') return
@@ -139,7 +164,8 @@ onMounted(() => {
 async function load(pkg, suggestionId = null) {
   const q = { suggestion: suggestionId }
   try {
-    const codeOf = async (hash) => { const r = await fetch(`/api/registry/code/${hash}.js`, { credentials: 'same-origin' }); if (!r.ok) throw new Error(`couldn't load it (${r.status})`); return r.text() }
+    // every file of a version, as published
+    const codeOf = async (hash) => (await api('GET', `/api/registry/files/${hash}`)).files
     // installed, or only published (then its newest version)
     let it = (await api('GET', '/api/plugins/installed')).plugins.find((p) => p.pkg === pkg)
     if (!it) { const r = await api('GET', `/api/registry/plugins/${pkg}`); if (!r.latest) return; it = { pkg, title: r.title, description: r.description, version: r.latest.version, hash: r.latest.hash, forkedFrom: r.forkedFrom } }
@@ -151,7 +177,7 @@ async function load(pkg, suggestionId = null) {
       forkOf.value = it.forkedFrom ?? null
       if (q.suggestion) {
         const x = (await api('GET', '/api/registry/suggestions')).incoming.find((y) => String(y.id) === String(q.suggestion))
-        if (x) { suggestion.value = { ...x, base: text }; text = await codeOf(x.fromHash) }
+        if (x) { suggestion.value = { ...x, base: text[ENTRY] ?? '' }; text = await codeOf(x.fromHash) }
       }
       toast(suggestion.value ? `Reviewing ${suggestion.value.by}'s suggestion` : `Editing ${it.title}`)
     } else {
@@ -161,7 +187,8 @@ async function load(pkg, suggestionId = null) {
     }
     slugQuiet = true
     slug.value = pkg.split('/')[1]
-    code.value = text
+    files.value = text
+    current.value = ENTRY
     describe.value = it.description || describe.value
     persist()
     run()
@@ -173,12 +200,12 @@ onBeforeUnmount(() => { window.removeEventListener('message', onMessage); source
 
 async function copyPrompt() {
   persist()
-  const text = workshopPrompt(describe.value, code.value === STARTER ? '' : code.value)
+  const text = workshopPrompt(describe.value, isStarter.value ? '' : allCode())
   try { await navigator.clipboard.writeText(text); toast('Prompt copied: paste it into your AI, then paste its file below') } catch { toast("Couldn't copy: select the text in the prompt box instead") }
 }
 const showPrompt = ref(false)
 const claudeLink = trustUrl('claude', {}, '/app#/m/extensions/workshop')
-const promptText = computed(() => workshopPrompt(describe.value, code.value === STARTER ? '' : code.value))
+const promptText = computed(() => workshopPrompt(describe.value, isStarter.value ? '' : allCode()))
 function pasteBack(text) {
   const t = String(text ?? '').replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/, '').trim()
   if (t) { code.value = t + '\n'; run() }
@@ -196,8 +223,8 @@ const summary = computed(() => {
 })
 // how far along you are: shown as steps at the top
 const steps = computed(() => [
-  { n: 1, label: 'Describe', done: !!describe.value.trim() || code.value !== STARTER },
-  { n: 2, label: 'The file', done: code.value !== STARTER || !!editing.value || !!result.value?.ok },
+  { n: 1, label: 'Describe', done: !!describe.value.trim() || !isStarter.value },
+  { n: 2, label: 'The file', done: !isStarter.value || !!editing.value || !!result.value?.ok },
   { n: 3, label: 'Preview', done: !!result.value?.ok },
   { n: 4, label: 'Use it', done: false },
 ])
@@ -205,7 +232,7 @@ const steps = computed(() => [
 async function useIt() {
   busy.value = true
   try {
-    const r = await api('POST', '/api/registry/publish', { name: slug.value, code: code.value, visibility: 'private', manifest: manifestOf(), forkOf: forkOf.value, proposal: suggestion.value?.id })
+    const r = await api('POST', '/api/registry/publish', { name: slug.value, files: files.value, visibility: 'private', manifest: manifestOf(), forkOf: forkOf.value, proposal: suggestion.value?.id })
     if (r.name && auth.user && !auth.user.handle) auth.user.handle = r.name.split('/')[0]
     persist()
     location.href = trustUrl('install', { pkg: r.name, hash: r.hash }, '/app#/')
@@ -217,7 +244,7 @@ const sent = ref(null)
 async function suggestIt() {
   busy.value = true
   try {
-    const r = await api('POST', '/api/registry/publish', { name: slug.value, code: code.value, visibility: 'private', manifest: manifestOf(), forkOf: forkOf.value })
+    const r = await api('POST', '/api/registry/publish', { name: slug.value, files: files.value, visibility: 'private', manifest: manifestOf(), forkOf: forkOf.value })
     const x = await api('POST', `/api/registry/plugins/${forkOf.value}/suggest`, { hash: r.hash, message: suggestMsg.value })
     sent.value = { to: forkOf.value, version: r.version }
     toast(x.already ? 'Already suggested' : `Suggested to ${forkOf.value.split('/')[0]}`)
@@ -247,7 +274,7 @@ const changes = computed(() => {
 async function shareIt() {
   busy.value = true
   try {
-    const r = await api('POST', '/api/registry/publish', { name: slug.value, code: code.value, visibility: 'public', changelog: changelog.value, manifest: manifestOf(), forkOf: forkOf.value })
+    const r = await api('POST', '/api/registry/publish', { name: slug.value, files: files.value, visibility: 'public', changelog: changelog.value, manifest: manifestOf(), forkOf: forkOf.value })
     published.value = r
     toast(r.reused ? `${r.name} ${r.version} is already published` : `Published ${r.name} ${r.version} for everyone`)
   } catch (e) { toast(e.message) }
@@ -293,7 +320,15 @@ async function shareIt() {
               <span><span class="icon sm" aria-hidden="true">build</span>Your extension is called <b class="mono">{{ mismatch.to }}</b>, but its types are named <b class="mono">{{ mismatch.from }}.…</b> They need to match.</span>
               <div class="row wrap"><button class="btn primary" @click="fixByRenaming">Rename them to {{ mismatch.to }}.…</button><button class="btn" @click="fixByName">Call the extension {{ mismatch.from }}</button></div>
             </div>
-            <textarea v-model="code" class="mono code" rows="20" spellcheck="false" aria-label="Extension file" @keydown.meta.enter="run" @keydown.ctrl.enter="run"></textarea>
+            <div class="files row wrap" role="tablist" aria-label="Files">
+              <span v-for="n in fileNames" :key="n" class="file" :class="{ on: n === current }">
+                <button role="tab" :aria-selected="n === current" class="mono small" @click="current = n">{{ n }}</button>
+                <button v-if="n !== ENTRY" class="x" :aria-label="`Delete ${n}`" @click="removeFile(n)"><span class="icon sm" aria-hidden="true">close</span></button>
+              </span>
+              <input v-if="newFile !== null" v-model="newFile" class="mono small newfile" placeholder="layout.js" aria-label="New file name" @keydown.enter.prevent="addFile" @keydown.esc="newFile = null" @blur="newFile = null" />
+              <button v-else class="btn sm" title="Add a file (index.js imports it with ./name.js)" @click="newFile = ''"><span class="icon sm" aria-hidden="true">add</span>File</button>
+            </div>
+            <textarea v-model="code" class="mono code" rows="20" spellcheck="false" :aria-label="`File ${current}`" @keydown.meta.enter="run" @keydown.ctrl.enter="run"></textarea>
             <div class="row wrap"><button class="btn primary" title="⌘/Ctrl + Enter" @click="run"><span class="icon sm" aria-hidden="true">play_arrow</span>Preview it</button></div>
           </div>
         </section>
@@ -355,6 +390,14 @@ textarea, input, select { width: 100%; background: var(--surface-2); color: var(
 .share { gap: 8px; margin-top: 8px; }
 .big { padding: 10px 18px; font-size: 14px; }
 .code { font-size: 12px; line-height: 1.45; tab-size: 2; white-space: pre; }
+.files { gap: 4px; align-items: center; }
+.files .file { display: inline-flex; align-items: stretch; border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
+.files .file button { border: 0; background: transparent; color: var(--muted); padding: 3px 8px; cursor: pointer; }
+.files .file.on { border-color: var(--accent); }
+.files .file.on button { color: var(--text); background: var(--surface-2); }
+.files .file .x { padding: 3px 4px; opacity: .5; }
+.files .file .x:hover, .files .file .x:focus-visible { opacity: 1; }
+.files .newfile { width: 140px; padding: 3px 6px; }
 .preview { width: 100%; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
 .chip.ok { color: var(--accent); } .chip.bad, .bad { color: var(--danger); } .warn { color: var(--warn); }
 ul { margin: 0; padding-left: 18px; }

@@ -151,11 +151,12 @@ ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : 
         details = `<p>Claude keeps working in your workshop, but can no longer read or change your planner.${has ? '' : ' <span class="muted">(It can\'t now either.)</span>'}</p>`
       }
     } else if (kind === 'dev-test') {
+      await live?.ensure?.(user.id)
       const d = live?.draft(user.id)
       if (!d) return { noDraft: true }
       const name = d.editing ?? `${user.handle || 'you'}/${d.slug || 'draft'}`
       action.name = name
-      const blocked = checkDraft(d.code).errors
+      const blocked = checkDraft(d.files).errors
       warning = 'The draft will see and change everything in your planner. Unlike an installed version, its code can change while it runs: each time Claude (or you) edits it, the new version loads without asking you again.'
       details = `<dl><dt>Draft</dt><dd><code>${esc(name)}</code>${d.editing ? ' (in place of your installed version)' : ''}</dd><dt>For</dt><dd>60 minutes at most. A server restart ends it too.</dd>
 <dt>Safety net</dt><dd>A snapshot of your planner is taken now. The <b>Live test</b> bar in the console has <b>Stop</b> and <b>Stop and undo</b>: undo puts your planner back as it is now (your own changes in the meantime too).</dd>
@@ -280,6 +281,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
         return { msg: 'Claude can now work in your workshop. Run this once in a terminal, then ask Claude to make or change an extension with the workshop open.', command: `claude mcp add --transport http life-console ${origin(req)}/mcp --header "Authorization: Bearer ${token}"`, url: `${origin(req)}/mcp`, token }
       }
       case 'dev-test': {
+        await live?.ensure?.(uid)
         if (!live?.draft(uid)) return { msg: 'There is no draft to test any more.' }
         const checkpoint = await planner.checkpoint(uid, 'before live test')
         live.startDev(uid, { checkpoint })

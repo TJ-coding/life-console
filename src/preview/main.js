@@ -5,6 +5,22 @@ import { buildTaxonomy } from '../sdk/vocabulary.js'
 import { createDataDoor } from '../sdk/data.js'
 import { vocabOf, nsOfPkg, sdkOk } from '../sdk/manifest.js'
 import { KIT, KIT_CLASSES } from '../sdk/kit.js'
+import { ENTRY, LIBS, filesOf, checkFiles, order, resolve, rewriteImports } from '../sdk/files.js'
+
+/** Load an extension's files as modules: each becomes a blob URL with its imports pointing at the others' (and the
+ *  curated libraries at the app's /vendor/ copy). Returns the entry module. */
+async function importFiles(files) {
+  const { errors, graph } = checkFiles(files)
+  if (errors.length) throw new Error(errors.join('\n'))
+  const urls = {}
+  try {
+    for (const f of order(graph)) {
+      const code = rewriteImports(files[f], f, (spec, from) => (LIBS[spec] ? new URL(LIBS[spec], import.meta.url).href : urls[resolve(from, spec)]))
+      urls[f] = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }))
+    }
+    return await import(/* @vite-ignore */ urls[ENTRY])
+  } finally { for (const u of Object.values(urls)) URL.revokeObjectURL(u) }
+}
 
 { const st = document.createElement('style'); st.textContent = KIT_CLASSES; document.head.appendChild(st) } // for shadow: false parts
 
@@ -28,7 +44,9 @@ function demo() {
 
 let cleanups = []
 const listeners = new Map()
-async function run({ code, name }) {
+async function run({ code, files, name }) {
+  files = filesOf(files ?? code)
+  code = Object.values(files).join('\n')
   for (const c of cleanups) try { c() } catch { /* ignore */ }
   cleanups = []
   listeners.clear()
@@ -38,9 +56,7 @@ async function run({ code, name }) {
   const pkg = `preview/${nsOfPkg(name || 'draft')}`
   let manifest
   try {
-    const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }))
-    manifest = (await import(/* @vite-ignore */ url)).default
-    URL.revokeObjectURL(url)
+    manifest = (await importFiles(files)).default
     if (!manifest || typeof manifest !== 'object') throw new Error('The file needs `export default { … }`')
     if (!sdkOk(manifest.sdk ?? 1)) throw new Error(`needs SDK ${manifest.sdk}; this console runs SDK 1`)
   } catch (e) {

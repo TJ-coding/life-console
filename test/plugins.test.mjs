@@ -658,6 +658,13 @@ test('server previewer: Claude previews, screenshots and clicks through a draft 
       assert.equal(imgs.length, 2, 'phone and desktop')
       assert.equal(Buffer.from(imgs[0].data, 'base64').subarray(1, 4).toString(), 'PNG')
 
+      // several files and a curated library, run for real in the browser
+      const split = await mcpTool(tok, 'write_draft', { files: {
+        'index.js': "import { pct } from './fmt.js'\nexport default { sdk: 1, title: 'Split', pages: [{ title: 'Split', mount(el) { el.innerHTML = '<div class=\"lc-card\">' + pct(0.25) + '</div>' } }] }\n",
+        'fmt.js': "import * as d3 from 'lc:d3'\nexport const pct = (x) => 'Share ' + d3.format('.0%')(x)\n",
+      } })
+      assert.equal(split.isError, undefined, split.content[0].text)
+      assert.match(split.content[0].text, /\[Page 1: Split\] Share 25%/)
       const boom = await mcpTool(tok, 'write_draft', { code: "export default { sdk: 1, title: 'Boom', pages: [{ title: 'Boom', mount() { throw new Error('kaboom') } }] }\n" })
       assert.equal(boom.isError, true)
       assert.match(boom.content[0].text, /HAS ERRORS[\s\S]*kaboom/)
@@ -726,7 +733,69 @@ test('open_extension works with no workshop open: the installed version, theirs 
   const kt = await mcpToken(kim)
   const mine = await mcpTool(kt, 'open_extension', { name: pub.body.name })
   assert.equal(mine.isError, undefined, mine.content[0].text)
-  assert.match(mine.content[0].text, /Editing their extension[\s\S]*The code:[\s\S]*notes\.Habit/)
+  assert.match(mine.content[0].text, /Editing their extension[\s\S]*The files:[\s\S]*notes\.Habit/)
   const lt = await mcpTool(await mcpToken(lee), 'open_extension', { name: pub.body.name })
   assert.match(lt.content[0].text, /Their own copy of/)
+})
+
+test('an extension in several files: published, hashed and served together; library imports point at /vendor/', async () => {
+  const ola = client()
+  await ola('POST', '/api/auth/signup', { email: 'files-ola@x.test', password: 'pw-files-1234' }, { 'X-Forwarded-For': '10.5.5.5' })
+  const files = {
+    'index.js': "import { label } from './lib/label.js'\nimport * as d3 from 'lc:d3'\nexport default { sdk: 1, title: 'Split', pages: [{ title: 'Split', mount(el) { el.textContent = label(d3.format('.0%')(0.5)) } }] }\n",
+    'lib/label.js': 'export const label = (x) => `Half: ${x}`\n',
+  }
+  const pub = await ola('POST', '/api/registry/publish', { name: 'split', files, visibility: 'public', manifest: { title: 'Split' } })
+  assert.equal(pub.status, 201, JSON.stringify(pub.body))
+  const { filesHash } = await import('../server/registry.mjs')
+  assert.equal(pub.body.hash, filesHash(pub.body.name, files), 'one hash over every file')
+  const entry = await ola('GET', `/api/registry/code/${pub.body.hash}/index.js`)
+  assert.equal(entry.status, 200)
+  assert.match(entry.text, /from "\/vendor\/d3\.js"/, 'the console gets the library from this server')
+  assert.match(entry.text, /from '\.\/lib\/label\.js'/, 'relative imports stay relative (they resolve next to it)')
+  assert.match((await ola('GET', `/api/registry/code/${pub.body.hash}/index.js?raw=1`)).text, /from 'lc:d3'/, 'raw: exactly as published')
+  assert.match((await ola('GET', `/api/registry/code/${pub.body.hash}/lib/label.js`)).text, /Half/)
+  assert.equal((await ola('GET', `/api/registry/code/${pub.body.hash}/nope.js`)).status, 404)
+  assert.deepEqual((await ola('GET', `/api/registry/files/${pub.body.hash}`)).body.files, files)
+  assert.deepEqual((await raw('GET', `/api/registry/public/versions/${pub.body.hash}`)).text && JSON.parse((await raw('GET', `/api/registry/public/versions/${pub.body.hash}`)).text).files.sort(), ['index.js', 'lib/label.js'])
+  // a one-file version keeps its old hash and address
+  const one = await ola('POST', '/api/registry/publish', { name: 'one', code: "export default { sdk: 1, title: 'One' }\n", manifest: {} })
+  assert.match((await ola('GET', `/api/registry/code/${one.body.hash}.js`)).text, /One/)
+  // nothing from elsewhere, and imports must be its own files
+  const evil = await ola('POST', '/api/registry/publish', { name: 'evil', files: { 'index.js': "import 'https://evil.test/x.js'\nexport default { sdk: 1 }\n" }, manifest: {} })
+  assert.equal(evil.status, 422)
+  const missing = await ola('POST', '/api/registry/publish', { name: 'gap', files: { 'index.js': "import './gone.js'\nexport default { sdk: 1 }\n" }, manifest: {} })
+  assert.equal(missing.status, 422)
+})
+
+test('workshop drafts in several files, saved in the database: a restart keeps them', async () => {
+  const pam = client()
+  await pam('POST', '/api/auth/signup', { email: 'files-pam@x.test', password: 'pw-files-1234' }, { 'X-Forwarded-For': '10.5.5.6' })
+  const tok = await mcpToken(pam)
+  const w = await mcpTool(tok, 'write_draft', { name: 'parts', files: { 'index.js': "import { n } from './n.js'\nexport default { sdk: 1, title: 'Parts', pages: [{ title: 'P', mount(el) { el.textContent = n } }] }\n", 'n.js': 'export const n = 1\n' } })
+  assert.equal(w.isError, undefined, w.content[0].text)
+  assert.equal((await mcpTool(tok, 'write_file', { path: 'm.js', code: 'export const m = 2\n' })).isError, undefined)
+  assert.equal((await mcpTool(tok, 'edit_draft', { file: 'n.js', old_text: 'n = 1', new_text: 'n = 3' })).isError, undefined)
+  assert.equal((await mcpTool(tok, 'edit_draft', { file: 'nope.js', old_text: 'a', new_text: 'b' })).isError, true)
+  assert.equal((await mcpTool(tok, 'delete_file', { path: 'index.js' })).isError, true, 'the entry stays')
+  assert.equal((await mcpTool(tok, 'delete_file', { path: 'm.js' })).isError, undefined)
+  const bad = await mcpTool(tok, 'write_file', { path: 'n.js', code: "import x from 'https://evil.test/x.js'\nexport const n = x\n" })
+  assert.equal(bad.isError, true)
+  assert.match(bad.content[0].text, /only its own files/)
+  await mcpTool(tok, 'write_file', { path: 'n.js', code: 'export const n = 3\n' })
+  const read = (await mcpTool(tok, 'read_draft')).content[0].text
+  assert.match(read, /--- index\.js ---[\s\S]*--- n\.js ---\nexport const n = 3/)
+  assert.doesNotMatch(read, /m\.js/)
+
+  // a fresh room (as after a restart or deploy) loads the saved draft
+  await new Promise((r) => setTimeout(r, 200)) // saving runs in the background
+  const { createWorkshopLive } = await import('../server/workshop-live.mjs')
+  const me = (await pam('GET', '/api/auth/me')).body
+  const fresh = createWorkshopLive({ db: conn.db })
+  await fresh.ensure(me.user?.id ?? me.id)
+  const d = fresh.draft(me.user?.id ?? me.id)
+  assert.deepEqual(Object.keys(d.files).sort(), ['index.js', 'n.js'])
+  assert.equal(d.files['n.js'], 'export const n = 3\n')
+  assert.equal(d.slug, 'parts')
+  fresh.close()
 })

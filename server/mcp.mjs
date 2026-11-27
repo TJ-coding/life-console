@@ -6,15 +6,16 @@
 // the trusted page: `use_draft` only takes the open workshop to it.
 // Planner tools (today, find, add/change a task, add a deadline: server/mcp-planner.mjs) need a second permission
 // the person gives on the trusted page (/trust?do=claude-planner adds the 'planner' scope to the same token).
-import vm from 'node:vm'
 import { workshopPrompt } from '../src/sdk/prompt.js'
-import { checkCode } from './registry.mjs'
+import { checkFilesCode } from './registry.mjs'
+import { ENTRY, filesOf } from '../src/sdk/files.js'
 import * as plan from './mcp-planner.mjs'
 
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05']
 const WORKSHOP = '/app#/m/extensions/workshop'
 
-const INSTRUCTIONS = `Life Console is a planner; extensions are one-file JavaScript add-ons for it. You work in the person's workshop:
+const INSTRUCTIONS = `Life Console is a planner; extensions are JavaScript add-ons for it (index.js plus any files it imports, and
+curated libraries such as 'lc:d3'). You work in the person's workshop:
 each change you make runs on demo data in a sandboxed preview and returns what it found (errors, problems, what it
 shows), and the draft appears in their workshop (at once if it's open). Read \`guide\` before writing your first
 extension. Keep the draft working: after a change, fix any errors it reports.
@@ -41,20 +42,15 @@ const TASK_FIELDS = (extra) => ({
 })
 const PLANNER_TOOLS = new Set(['today', 'find_in_planner', 'add_task', 'change_task', 'add_deadline'])
 
-/** Checks the server can do without the browser: blocked code (as at publishing) and syntax. Never runs the code. */
-export function staticCheck(code) {
-  const errors = [], warnings = []
-  const c = checkCode(code)
-  errors.push(...c.blocked.map((b) => `${b.msg} (publishing refuses this)`))
-  warnings.push(...c.warnings.map((w) => w.msg))
-  if (/^\s*import\s/m.test(code)) errors.push("imports aren't supported: an extension is one file (bundle anything it needs into it)")
-  else if (!/^\s*export\s+default\b/m.test(code)) errors.push('no `export default`: the manifest must be the default export')
-  else {
-    const script = code.replace(/^(\s*)export\s+default\s+/m, '$1void ').replace(/^(\s*)export\s+(?=(const|let|var|function|class|async)\b)/gm, '$1')
-    try { new vm.Script(script, { filename: 'extension.js' }) } catch (e) { errors.push(`syntax: ${e.message}`) }
-  }
-  return { errors, warnings }
+/** Checks the server can do without the browser, over every file: syntax, imports (its own files and the curated
+ *  libraries only) and what publishing blocks. Never runs the code. Takes the files, or one file's code. */
+export function staticCheck(filesOrCode) {
+  const c = checkFilesCode(filesOf(filesOrCode))
+  return { errors: c.blocked.map((b) => (b.id === 'files' ? b.msg : `${b.msg} (publishing refuses this)`)), warnings: c.warnings.map((w) => w.msg) }
 }
+/** The draft's files as text for the AI: each under its name. */
+const showFiles = (d) => Object.entries(d.files ?? { [ENTRY]: d.code }).map(([n, c]) => `--- ${n} ---\n${c}`).join('\n')
+const stripFence = (s) => String(s ?? '').replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/, '').trimEnd() + '\n'
 const slugOf = (title) => String(title ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
 
 const TOOLS = [
@@ -62,8 +58,10 @@ const TOOLS = [
   { name: 'list_extensions', title: 'List extensions', description: "The person's installed extensions and the ones they made, with their names (handle/name) for open_extension.", inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
   { name: 'open_extension', title: 'Open an extension', description: "Open an extension in the workshop to change it: the installed version if they have it, else the newest. The person's own opens for editing; anyone else's becomes their own copy (it replaces the original when they use it). Returns its code and preview. Their installed copy keeps running unchanged until they update it.", inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'handle/name, e.g. ann/water' } }, required: ['name'] } },
   { name: 'read_draft', title: 'Read the draft', description: "The draft in the person's workshop (they may have edited it by hand) and its latest preview.", inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
-  { name: 'write_draft', title: 'Write the draft', description: 'Replace the whole draft with a new file. It shows in the workshop at once; returns the preview (errors, problems, what each part shows).', inputSchema: { type: 'object', properties: { code: { type: 'string', description: 'The whole extension file (an ES module, default export = manifest)' }, name: { type: 'string', description: 'Optional: the extension name (lowercase, a-z 0-9 -) for a new extension' } }, required: ['code'] } },
-  { name: 'edit_draft', title: 'Edit the draft', description: 'Change part of the draft: replaces old_text (must appear exactly once) with new_text. Returns the preview.', inputSchema: { type: 'object', properties: { old_text: { type: 'string' }, new_text: { type: 'string' } }, required: ['old_text', 'new_text'] } },
+  { name: 'write_draft', title: 'Write the draft', description: "Replace the whole draft: `files` ({ 'index.js': …, 'layout.js': … }; index.js is the entry with the manifest) or just `code` (one file, index.js). Files import each other with relative paths ('./layout.js') and may import the curated libraries ('lc:d3'). It shows in the workshop at once; returns the preview.", inputSchema: { type: 'object', properties: { files: { type: 'object', additionalProperties: { type: 'string' }, description: 'file name → code' }, code: { type: 'string', description: 'The whole extension as one file (index.js)' }, name: { type: 'string', description: 'Optional: the extension name (lowercase, a-z 0-9 -) for a new extension' } } } },
+  { name: 'write_file', title: 'Write one file', description: "Add or replace one file of the draft (e.g. 'layout.js'). Returns the preview.", inputSchema: { type: 'object', properties: { path: { type: 'string' }, code: { type: 'string' } }, required: ['path', 'code'] } },
+  { name: 'delete_file', title: 'Delete one file', description: 'Remove one file from the draft (not index.js). Returns the preview.', inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } },
+  { name: 'edit_draft', title: 'Edit the draft', description: 'Change part of one file (index.js unless `file` says another): replaces old_text (must appear exactly once in it) with new_text. Returns the preview.', inputSchema: { type: 'object', properties: { file: { type: 'string' }, old_text: { type: 'string' }, new_text: { type: 'string' } }, required: ['old_text', 'new_text'] } },
   { name: 'search_extensions', title: 'Search extensions', description: 'Find extensions in the registry (public ones and theirs) by words in the name, title or description. Empty query: the newest.', inputSchema: { type: 'object', properties: { query: { type: 'string' } } }, annotations: { readOnlyHint: true } },
   { name: 'extension_info', title: 'About an extension', description: 'One extension: author, versions and what changed, what it says it uses (internet, connections), automated check warnings, likes and installs, and whether they have it installed.', inputSchema: { type: 'object', properties: { name: NAME } , required: ['name'] }, annotations: { readOnlyHint: true } },
   { name: 'install_extension', title: 'Install or update', description: 'Install an extension, or update an installed one to its newest version (or `version`). The person confirms in their browser (a request pops up in Life Console, or they open the link this returns); waits up to 45 seconds for them.', inputSchema: { type: 'object', properties: { name: NAME, version: { type: 'string' } }, required: ['name'] } },
@@ -124,10 +122,10 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
   const needWorkshop = (req) => `The workshop isn't open. Ask the person to open ${siteOf(req)}${WORKSHOP} in their browser (signed in), then try again.`
 
   async function afterWrite(req, uid, draft) {
-    const s = staticCheck(draft.code)
+    const s = staticCheck(draft.files)
     // the server's own previewer: no browser of theirs needed (server/previewer.mjs)
     if (previewer.on && !s.errors.length) {
-      const r = await previewer.run({ code: draft.code, name: draft.slug || 'draft' })
+      const r = await previewer.run({ files: draft.files, name: draft.slug || 'draft' })
       if (r.previewerFailed) s.warnings.unshift(`the server's previewer failed (${r.errors[0]}): checked without it`)
       else {
         live.report(uid, draft.key, r, { byServer: true })
@@ -182,10 +180,10 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       const v = await registry.version(user, inst?.hash ?? p.latest?.hash)
       if (v?.code) {
         const own = !!p.mine
-        const draft = live.setDraft(user.id, { code: v.code, slug: pkg.split('/')[1], editing: own ? pkg : null, forkOf: own ? p.forkedFrom ?? null : pkg }, 'ai')
+        const draft = live.setDraft(user.id, { files: v.files ?? { [ENTRY]: v.code }, slug: pkg.split('/')[1], editing: own ? pkg : null, forkOf: own ? p.forkedFrom ?? null : pkg }, 'ai')
         const about = own ? `Editing their extension ${pkg} (${inst ? `installed ${inst.version}` : `version ${v.version}`}).` : `Their own copy of ${pkg} (named ${draft.slug}): using it replaces the original for them.`
         const res = await afterWrite(req, user.id, draft)
-        return text(`${about} Their installed copy keeps running until they update it.\n\n${res.content[0].text}\n\nThe code:\n${draft.code}`, res.isError)
+        return text(`${about} Their installed copy keeps running until they update it.\n\n${res.content[0].text}\n\nThe files:\n${showFiles(draft)}`, res.isError)
       }
       if (!live.open(user.id)) return fail(needWorkshop(req))
       const since = Date.now()
@@ -193,28 +191,46 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       const d = await live.until(user.id, (r) => r.draft && r.draft.at >= since && r.draft.from === 'you' && (r.draft.editing === pkg || r.draft.forkOf === pkg) && r.draft, 10000)
       if (!d) return fail("The workshop didn't open it (try again, or ask the person to reload the workshop).")
       const r = await live.resultFor(user.id, d.key)
-      return text(`${d.editing ? `Editing their extension ${pkg}.` : `Their own copy of ${pkg} (named ${d.slug}): using it replaces the original for them.`}\n\n${describeResult(r)}\n\nThe code:\n${d.code}`)
+      return text(`${d.editing ? `Editing their extension ${pkg}.` : `Their own copy of ${pkg} (named ${d.slug}): using it replaces the original for them.`}\n\n${describeResult(r)}\n\nThe files:\n${showFiles(d)}`)
     },
     async read_draft(_a, user) {
       const d = live.draft(user.id)
       if (!d) return text(live.open(user.id) ? 'The workshop is open but has sent no draft yet: ask the person to reload it.' : 'No draft yet. Write one with write_draft.')
       const about = d.editing ? `Editing ${d.editing}.` : d.forkOf ? `Their own copy of ${d.forkOf}.` : `A new extension called ${d.slug || '(unnamed)'}.`
-      return text(`${about}${d.from === 'you' ? ' Last changed by the person.' : ''}\n\n${describeResult(live.result(user.id, d.key))}\n\nThe code:\n${d.code}`)
+      return text(`${about}${d.from === 'you' ? ' Last changed by the person.' : ''}\n\n${describeResult(live.result(user.id, d.key))}\n\nThe files:\n${showFiles(d)}`)
     },
     async write_draft(a, user, req) {
-      if (typeof a.code !== 'string' || !a.code.trim()) return fail('code is required')
-      const code = a.code.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/, '').trimEnd() + '\n'
+      const given = a.files && typeof a.files === 'object' ? Object.fromEntries(Object.entries(a.files).map(([n, c]) => [n, stripFence(c)])) : typeof a.code === 'string' && a.code.trim() ? stripFence(a.code) : null
+      if (!given) return fail('files (or code) is required')
       const name = a.name ? String(a.name).toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40) : undefined
-      const draft = live.setDraft(user.id, { code, slug: name, ...(name ? { editing: null, forkOf: null } : {}) }, 'ai')
+      const draft = live.setDraft(user.id, { files: filesOf(given), slug: name, ...(name ? { editing: null, forkOf: null } : {}) }, 'ai')
       return afterWrite(req, user.id, draft)
+    },
+    async write_file(a, user, req) {
+      const d = live.draft(user.id)
+      if (!d) return fail('There is no draft yet: use write_draft first.')
+      const path = String(a.path ?? '').replace(/^\.\//, '')
+      if (typeof a.code !== 'string') return fail('code is required')
+      return afterWrite(req, user.id, live.setDraft(user.id, { files: { ...d.files, [path]: stripFence(a.code) } }, 'ai'))
+    },
+    async delete_file(a, user, req) {
+      const d = live.draft(user.id)
+      const path = String(a.path ?? '').replace(/^\.\//, '')
+      if (!d || !(path in d.files)) return fail(`The draft has no file ${path}.`)
+      if (path === ENTRY) return fail(`${ENTRY} is the entry: it can't be deleted.`)
+      const files = { ...d.files }
+      delete files[path]
+      return afterWrite(req, user.id, live.setDraft(user.id, { files }, 'ai'))
     },
     async edit_draft(a, user, req) {
       const d = live.draft(user.id)
       if (!d) return fail('There is no draft yet: use write_draft or open_extension first.')
+      const file = String(a.file ?? ENTRY).replace(/^\.\//, '')
+      if (!(file in d.files)) return fail(`The draft has no file ${file} (it has ${Object.keys(d.files).join(', ')}).`)
       const from = String(a.old_text ?? '')
-      const n = from ? d.code.split(from).length - 1 : 0
+      const n = from ? d.files[file].split(from).length - 1 : 0
       if (n !== 1) return fail(n ? `old_text appears ${n} times: include more of the surrounding code.` : 'old_text is not in the draft (read_draft shows the current code).')
-      const draft = live.setDraft(user.id, { code: d.code.replace(from, () => String(a.new_text ?? '')) }, 'ai')
+      const draft = live.setDraft(user.id, { files: { ...d.files, [file]: d.files[file].replace(from, () => String(a.new_text ?? '')) } }, 'ai')
       return afterWrite(req, user.id, draft)
     },
     async search_extensions(a, user) {
@@ -280,13 +296,15 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
     async publish_extension(a, user) {
       const d = live.draft(user.id)
       if (!d) return fail('There is no draft: write one with write_draft or open_extension first.')
-      const r = live.result(user.id, d.key)
-      if (!r?.ok) return fail('The draft must preview without errors first (the workshop must be open to preview it).')
+      let r = live.result(user.id, d.key)
+      // no result kept (e.g. after a restart): the server's previewer runs it now
+      if (!r && previewer.on) { r = await previewer.run({ files: d.files, name: d.slug || 'draft' }); if (!r.previewerFailed) live.report(user.id, d.key, r, { byServer: true }) }
+      if (!r?.ok) return fail(`The draft must preview without errors first${previewer.on ? '' : ' (the workshop must be open to preview it)'}.`)
       const m = r.manifest ?? {}
       const slug = d.editing ? d.editing.split('/')[1] : d.slug || slugOf(m.title)
       if (!slug) return fail('The draft has no name or title: give the manifest a title.')
       const out = await registry.publish(user, {
-        name: slug, code: d.code, visibility: a.visibility === 'public' ? 'public' : undefined, changelog: a.changelog, forkOf: d.forkOf,
+        name: slug, files: d.files, visibility: a.visibility === 'public' ? 'public' : undefined, changelog: a.changelog, forkOf: d.forkOf,
         manifest: { title: m.title, description: m.description, icon: m.icon, sdk: m.sdk, says: m.says, replaces: m.replaces, shows: { slots: m.slots ?? [], pages: m.pages ?? 0 } },
       })
       changed(user, out.name, `Claude published ${out.name} ${out.version}`)
@@ -311,7 +329,7 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       const d = live.draft(user.id)
       if (!d) return fail('There is no draft yet: use write_draft or open_extension first.')
       const viewports = a.viewport === 'both' ? ['phone', 'desktop'] : [a.viewport === 'phone' ? 'phone' : 'desktop']
-      const r = await previewer.run({ code: d.code, name: d.slug || 'draft', theme: a.theme === 'light' ? 'light' : 'dark', viewports, steps: a.steps ?? [], shots: a.screenshots !== false })
+      const r = await previewer.run({ files: d.files, name: d.slug || 'draft', theme: a.theme === 'light' ? 'light' : 'dark', viewports, steps: a.steps ?? [], shots: a.screenshots !== false })
       if (r.previewerFailed) return fail(`The previewer isn't working right now (${r.errors[0]}). read_draft shows the workshop's preview if it's open.`)
       if (!a.steps?.length) live.report(user.id, d.key, r, { byServer: true })
       const lines = [describeResult(r)]
@@ -323,7 +341,7 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       if (!a.on) return text(live.stopDev(user.id) ? 'Stopped the live test. What it saved stays; they can undo from a snapshot if needed.' : 'No live test was on.')
       const d = live.draft(user.id)
       if (!d) return fail('There is no draft: write one first.')
-      const s = staticCheck(d.code)
+      const s = staticCheck(d.files)
       if (s.errors.length) return fail(`The draft can't run as it is: ${s.errors.join('; ')}`)
       if (live.dev(user.id)) return text('The live test is already on: each edit loads in their console.')
       return ask(req, user, 'dev-test', {}, 'Live test the draft on your real planner (60 minutes, with undo)', async () => !!live.dev(user.id))
@@ -351,6 +369,7 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       if (!h) throw Object.assign(new Error(`Unknown tool: ${params.name}`), { code: -32602 })
       limit(`mcp:${user.id}`, 600, 3600000)
       if (PLANNER_TOOLS.has(params.name) && (!planner || !scopes.includes('planner'))) return askPlanner(req)
+      await live.ensure?.(user.id) // the saved draft, after a restart
       try { return await h(params.arguments ?? {}, user, req) } catch (e) { if (e.status && e.status < 500) return fail(e.message); throw e }
     }
     throw Object.assign(new Error(`Method not found: ${method}`), { code: -32601 })

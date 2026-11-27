@@ -29,6 +29,10 @@ draft: true
 | `says` | no | What the author says it does: `internet` (sites), `connections` (e.g. `strava`), `replaces`. Shown at install; the registry's checks compare it with the code |
 | `seed` | no | Sample records for previews and the workshop |
 
+## Files and libraries
+
+A plugin is `index.js` (its default export is the manifest) plus any files it imports with relative paths (`import { layout } from './layout.js'`), up to 30 files. Besides its own files it may import only the curated libraries Life Console serves itself, such as `import * as d3 from 'lc:d3'`, never code from another site. One version's hash covers all its files, so it still names exactly what runs, and every file goes through the same automated checks.
+
 ## Extension points
 
 | Point | Example | Notes |

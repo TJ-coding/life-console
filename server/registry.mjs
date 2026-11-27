@@ -9,6 +9,7 @@ import crypto from 'node:crypto'
 import { and, eq, desc, inArray, or, sql } from 'drizzle-orm'
 import { pluginPackages, pluginVersions, pluginInstalls, pluginReports, pluginLikes, pluginProposals, users } from './db/schema.js'
 import { httpError } from './auth.mjs'
+import { ENTRY, filesOf, canonical, checkFiles } from '../src/sdk/files.js'
 
 export const MAX_CODE = 512 * 1024
 const NAME = /^[a-z0-9][a-z0-9-]{1,29}\/[a-z0-9][a-z0-9-]{1,39}$/
@@ -18,6 +19,23 @@ const RESERVED_HANDLES = new Set(['life-console', 'lifeconsole', 'core', 'common
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex')
 /** A version's id: the SHA-256 of its plugin's name and its code, so the same code under two names is two versions. */
 export const versionHash = (name, code) => sha256(`${name}\n${code}`)
+/** A version's files ({ 'index.js': … }) → its hash: one file hashes as before; several as their canonical form. */
+export const filesHash = (name, files) => versionHash(name, canonical(files))
+/** The automated checks over every file: blocked and warnings merged, each saying which file. */
+export function checkFilesCode(files, says = {}) {
+  const names = Object.keys(files)
+  const all = { blocked: [], warnings: [], passed: [] }
+  const structure = checkFiles(files).errors
+  for (const e of structure) all.blocked.push({ id: 'files', msg: e })
+  for (const n of names) {
+    const c = checkCode(files[n], says)
+    const tag = names.length > 1 ? (m) => ({ ...m, msg: `${n}: ${m.msg}` }) : (m) => m
+    all.blocked.push(...c.blocked.map(tag)); all.warnings.push(...c.warnings.map(tag))
+    for (const p of c.passed) if (!all.passed.some((x) => x.id === p.id)) all.passed.push(p)
+  }
+  all.passed = all.passed.filter((p) => !all.blocked.some((b) => b.id === p.id) && !all.warnings.some((w) => w.id === p.id))
+  return all
+}
 const clip = (v, n) => String(v ?? '').slice(0, n)
 
 /**
@@ -70,13 +88,20 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
   async function mirrorUpstream(uid, name, hash) {
     const v = await upstreamVersion(hash)
     if (!v || v.packageName !== name || v.pulled) throw httpError(404, 'no such version')
-    const r = await fetchImpl(`${upstream}/api/registry/code/${hash}.js`)
-    const code = r.ok ? await r.text() : ''
-    if (versionHash(name, code) !== hash) throw httpError(502, "the upstream registry's code doesn't match its hash")
-    const checks = checkCode(code, v.manifest?.says ?? {}) // checked again here: never trust another server's results
+    // every file as published (raw: no library imports rewritten), then the hash must match
+    const names = Array.isArray(v.files) && v.files.length ? v.files.map(String) : [ENTRY]
+    const files = {}
+    for (const n of names) {
+      // an older registry names no files and serves only /code/<hash>.js (its one file, as published)
+      const r = await fetchImpl(Array.isArray(v.files) ? `${upstream}/api/registry/code/${hash}/${n}?raw=1` : `${upstream}/api/registry/code/${hash}.js`)
+      files[n] = r.ok ? await r.text() : ''
+    }
+    if (filesHash(name, files) !== hash) throw httpError(502, "the upstream registry's code doesn't match its hash")
+    const code = files[ENTRY]
+    const checks = checkFilesCode(files, v.manifest?.says ?? {}) // checked again here: never trust another server's results
     if (checks.blocked.length) throw httpError(422, `Not installed: ${checks.blocked.map((c) => c.msg).join('; ')}`)
     await db.insert(pluginPackages).values({ name, ownerId: uid, visibility: 'public', title: clip(v.manifest?.title, 80), description: clip(v.manifest?.description, 400), icon: clip(v.manifest?.icon || 'extension', 40), upstream }).onConflictDoNothing()
-    await db.insert(pluginVersions).values({ hash, packageName: name, version: v.version, code, manifest: v.manifest ?? {}, checks, changelog: clip(v.changelog, 4000) }).onConflictDoNothing()
+    await db.insert(pluginVersions).values({ hash, packageName: name, version: v.version, code, files: names.length > 1 ? files : null, manifest: v.manifest ?? {}, checks, changelog: clip(v.changelog, 4000) }).onConflictDoNothing()
   }
 
   const pkgOf = (name) => db.select().from(pluginPackages).where(eq(pluginPackages.name, name)).then((r) => r[0] ?? null)
@@ -114,10 +139,13 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     if (!name.includes('/')) name = `${user.handle}/${name}`
     if (!NAME.test(name)) throw httpError(400, 'An extension name looks like your-handle/extension-name')
     if (name.split('/')[0] !== user.handle) throw httpError(403, `You can only publish under ${user.handle}/`)
-    const code = String(b.code ?? '')
+    // one file (`code`) or several (`files`: { 'index.js': …, 'layout.js': … }); index.js is the entry
+    const files = b.files && typeof b.files === 'object' ? filesOf(b.files) : filesOf(String(b.code ?? ''))
+    const code = files[ENTRY] ?? ''
+    const hashOf = filesHash(name, files)
     // no version given ("Use it" in the workshop): the same code reuses its version, new code gets the next one
     if (!b.version) {
-      const [same] = await db.select().from(pluginVersions).where(and(eq(pluginVersions.packageName, name), eq(pluginVersions.hash, versionHash(name, code))))
+      const [same] = await db.select().from(pluginVersions).where(and(eq(pluginVersions.packageName, name), eq(pluginVersions.hash, hashOf)))
       if (same) { await accepted(user, name, b.proposal); return { name, version: same.version, hash: same.hash, visibility: (await pkgOf(name))?.visibility ?? 'private', checks: same.checks, reused: true } }
       const vs = await db.select({ v: pluginVersions.version }).from(pluginVersions).where(eq(pluginVersions.packageName, name))
       const top = vs.map((x) => x.v.split('-')[0].split('.').map(Number)).sort((a, c) => c[0] - a[0] || c[1] - a[1] || c[2] - a[2])[0]
@@ -125,7 +153,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     }
     if (!VERSION.test(String(b.version ?? ''))) throw httpError(400, 'version must look like 1.0.0')
     if (!code.trim()) throw httpError(400, 'code is empty')
-    if (Buffer.byteLength(code) > MAX_CODE) throw httpError(413, `An extension is at most ${MAX_CODE / 1024} KB`)
+    if (Buffer.byteLength(canonical(files)) > MAX_CODE) throw httpError(413, `An extension is at most ${MAX_CODE / 1024} KB`)
     if (!/export\s+default\b/.test(code)) throw httpError(400, 'The extension file needs `export default { … }` (its manifest)')
     const m = b.manifest && typeof b.manifest === 'object' ? b.manifest : {}
     const manifest = {
@@ -134,9 +162,9 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
       // where it shows up (from the workshop's preview; shown at install, so people know where to look)
       shows: { slots: (Array.isArray(m.shows?.slots) ? m.shows.slots : []).filter((x) => /^[a-z]+\.[a-z]+$/.test(x)).slice(0, 10), pages: Math.max(0, Math.min(10, Number(m.shows?.pages) || 0)) },
     }
-    const checks = checkCode(code, manifest.says)
+    const checks = checkFilesCode(files, manifest.says)
     if (checks.blocked.length) throw httpError(422, `Not published: ${checks.blocked.map((c) => c.msg).join('; ')}`)
-    const hash = versionHash(name, code)
+    const hash = hashOf
     const existing = await pkgOf(name)
     const visibility = b.visibility === 'public' ? 'public' : existing?.visibility ?? 'private'
     if (existing?.upstream) throw httpError(403, `${name} comes from ${existing.upstream}: publish it there`)
@@ -150,7 +178,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
       // a new version never hides a shared extension, and never overwrites the listing details its owner edited
       if (existing) await tx.update(pluginPackages).set({ visibility, updatedAt: new Date() }).where(eq(pluginPackages.name, name))
       else await tx.insert(pluginPackages).values({ name, ownerId: user.id, visibility, title: manifest.title, description: manifest.description, icon: manifest.icon, forkedFrom })
-      await tx.insert(pluginVersions).values({ hash, packageName: name, version: b.version, code, manifest, checks, changelog: clip(b.changelog, 4000) }).onConflictDoNothing()
+      await tx.insert(pluginVersions).values({ hash, packageName: name, version: b.version, code, files: Object.keys(files).length > 1 ? files : null, manifest, checks, changelog: clip(b.changelog, 4000) }).onConflictDoNothing()
     })
     log(`[registry] ${user.handle} published ${name}@${b.version} (${visibility}) ${hash.slice(0, 12)}`)
     await accepted(user, name, b.proposal)
@@ -237,7 +265,7 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
     const [v] = await db.select().from(pluginVersions).where(eq(pluginVersions.hash, String(hash)))
     const p = v && (await pkgOf(v.packageName))
     if (!v || !['public', 'unlisted'].includes(p?.visibility) || p.upstream) return null
-    return { packageName: v.packageName, version: v.version, manifest: v.manifest, checks: v.checks, changelog: v.changelog, pulled: v.pulled, pulledReason: v.pulledReason }
+    return { packageName: v.packageName, version: v.version, manifest: v.manifest, checks: v.checks, changelog: v.changelog, pulled: v.pulled, pulledReason: v.pulledReason, files: v.files ? Object.keys(v.files) : [ENTRY] }
   }
   async function likesFor(names, user) {
     if (!names.length) return { n: {}, mine: new Set() }
