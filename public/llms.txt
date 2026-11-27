@@ -32,6 +32,7 @@
 - Life Console vs Amazing Marvin: https://life-console.dev/vs/amazing-marvin
 - Best time blocking apps compared (Life Console, Sunsama, Akiflow, Structured, TickTick, Super Productivity, Google Calendar): https://life-console.dev/alternatives/time-blocking-apps
 - Todoist alternatives for planning your day: https://life-console.dev/alternatives/todoist
+- Life Console vs Structured, the visual day planner app: https://life-console.dev/vs/structured
 - What it doesn't do: no calendar sync, no integrations with other task apps, no AI scheduling, no native phone apps (installable web app instead; a Mac menu-bar app exists).
 
 ## Free templates

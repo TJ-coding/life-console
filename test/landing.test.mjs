@@ -324,6 +324,11 @@ test('scripts/compare-pages.mjs: front matter is checked, pages link to each oth
   assert.ok(!tHtml.includes('href="/alternatives">Comparisons</a> /'), 'a template has no Comparisons crumb')
   assert.ok(tHtml.includes('data-umami-event-place="/templates/personal-strategic-plan"'))
   assert.ok(!renderHub([a, b]).includes('/templates/'))
+  // every comparison page and the hub link the templates, so Google finds them without the sitemap
+  assert.ok(renderPage(a, [b], [t]).includes('<a href="/templates/personal-strategic-plan">'))
+  assert.ok(renderHub([a, b], [t]).includes('id="free-templates"'))
+  const linked = { ...a, body: a.body + '\nSee the [template](/templates/personal-strategic-plan).\n' }
+  assert.ok(!renderPage(linked, [b], [t]).includes('id="free-templates"'), 'a template the text already links is not listed again')
   assert.throws(() => parsePage('---\npath: /vs/x\n---\n'), /needs "title"/)
   assert.throws(() => parsePage('# no front matter'), /no front matter/)
 })
