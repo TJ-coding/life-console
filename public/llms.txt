@@ -42,6 +42,7 @@
 
 ## Links
 - User guide (every screen and shortcut): https://life-console.dev/docs/guide
+- How data is stored and synced (local-first, three-way merge, snapshots, export): https://life-console.dev/docs/data
 - App: https://life-console.dev/app
 - Keyboard tour video: https://life-console.dev/media/tour.mp4
 - Launch trailer: https://life-console.dev/media/trailer.mp4

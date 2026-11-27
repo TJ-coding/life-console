@@ -13,18 +13,26 @@ const SITE = 'https://life-console.dev'
 export const DOC_PAGES = {
   'self-hosting': {
     src: 'docs/SELF_HOSTING.md',
+    label: 'Self-hosting',
     title: 'Self-host Life Console with Docker: open-source planner setup guide',
     description: 'Run Life Console, the open-source (AGPL-3.0) time-blocking planner, on your own server: Docker Compose with PostgreSQL, HTTPS, Google sign-in, backups and updates.',
   },
   guide: {
     src: 'docs/GUIDE.md',
+    label: 'User guide',
     title: 'Life Console user guide: time-blocking, goals and shortcuts',
     description: 'Every Life Console screen and feature: the Command Center, planning the week, quick-add syntax, deadline countdowns, strategic goals, pomodoro planning, shortcuts and notifications.',
+  },
+  data: {
+    src: 'docs/DATA.md',
+    label: 'How data is stored',
+    title: 'How Life Console stores your data: local-first sync, merging and backups',
+    description: 'How the Life Console planner stores and syncs your data: one document per account, a full copy in your browser for offline use, three-way merging between devices, snapshots, backups and JSON export.',
   },
 }
 
 // links between the markdown files become site links; links to other repo files go to GitHub
-const LOCAL = { 'SELF_HOSTING.md': '/docs/self-hosting', 'GUIDE.md': '/docs/guide', '../README.md': '/' }
+const LOCAL = { 'SELF_HOSTING.md': '/docs/self-hosting', 'GUIDE.md': '/docs/guide', 'DATA.md': '/docs/data', '../README.md': '/' }
 function rewriteHref(href) {
   if (/^(https?:|mailto:|#)/.test(href)) return href
   const [file, hash = ''] = href.split('#')
@@ -44,7 +52,7 @@ const docLd = (slug, page) => JSON.stringify({
   inLanguage: 'en', isPartOf: { '@id': `${SITE}/#website` }, about: { '@id': `${SITE}/#app` },
   breadcrumb: {
     '@type': 'BreadcrumbList',
-    itemListElement: [['Life Console', '/'], [slug === 'guide' ? 'User guide' : 'Self-hosting', `/docs/${slug}`]]
+    itemListElement: [['Life Console', '/'], [page.label, `/docs/${slug}`]]
       .map(([name, p], i) => ({ '@type': 'ListItem', position: i + 1, name, item: `${SITE}${p}` })),
   },
 }).replace(/</g, '\\u003c')
@@ -59,7 +67,7 @@ export function renderDoc(slug, md) {
     return `<h${depth} id="${slugify(text)}">${text}</h${depth}>\n`
   }
   const body = marked.parse(md, { renderer, gfm: true })
-  const nav = Object.entries(DOC_PAGES).map(([s, p]) => s === slug ? '' : ` · <a href="/docs/${s}">${s === 'guide' ? 'User guide' : 'Self-hosting'}</a>`).join('')
+  const nav = Object.entries(DOC_PAGES).map(([s, p]) => s === slug ? '' : ` · <a href="/docs/${s}">${p.label}</a>`).join('')
   return `<!doctype html>
 <html lang="en">
 <head>

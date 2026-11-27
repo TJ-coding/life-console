@@ -25,8 +25,8 @@ const MIME = {
   '.pdf': 'application/pdf', // printable templates in /media/templates/
 }
 const LEGAL = new Set(['/privacy', '/terms'])
-const DOCS = new Set(['/docs/guide', '/docs/self-hosting']) // built from docs/*.md by scripts/docs-pages.mjs
-const DOCS_DATE = '2026-11-23' // sitemap <lastmod> for the docs pages: bump when they change
+const DOCS = new Set(['/docs/guide', '/docs/self-hosting', '/docs/data']) // built from docs/*.md by scripts/docs-pages.mjs
+const DOCS_DATE = '2026-11-28' // sitemap <lastmod> for the docs pages: bump when they change
 const LANDING_DATE = '2026-11-23' // sitemap <lastmod> for the landing page: bump when it changes
 const SECURITY_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY' }
 
@@ -403,6 +403,7 @@ ${vid('mobile', 'Life Console on a phone', 'The installable app on a phone.', 8)
 ${Object.keys(EDITION_LANDINGS).map((p) => `<url><loc>${site}${p}</loc><lastmod>${LANDING_DATE}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`).join('\n')}
 <url><loc>${site}/docs/self-hosting</loc><lastmod>${DOCS_DATE}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
 <url><loc>${site}/docs/guide</loc><lastmod>${DOCS_DATE}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+<url><loc>${site}/docs/data</loc><lastmod>${DOCS_DATE}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
 ${[...COMPARE].map(([p, d]) => `<url><loc>${site}${p}</loc><lastmod>${d}</lastmod><changefreq>monthly</changefreq><priority>${p === '/alternatives' ? '0.7' : '0.8'}</priority></url>`).join('\n')}
 <url><loc>${site}/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 <url><loc>${site}/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
