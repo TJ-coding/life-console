@@ -153,8 +153,9 @@ export function pickCards(html) {
 
 const cards = (list) => `<nav class="cards">${list.map((o) => `<a href="${o.path}">${esc(o.card)}</a>`).join('')}</nav>`
 
-/** One comparison page. `others`: the rest of the pages, linked at the bottom so each page leads to the next. */
-export function renderPage(page, others = []) {
+/** One page. `others`: the rest of the comparison pages, and `templates` the free templates (without this one),
+ * linked at the bottom so each page leads to the next and every template is a link away from every page. */
+export function renderPage(page, others = [], templates = []) {
   const renderer = new marked.Renderer()
   renderer.heading = function ({ tokens, depth }) {
     const text = this.parser.parseInline(tokens)
@@ -164,12 +165,17 @@ export function renderPage(page, others = []) {
   const more = others.length
     ? `<h2 id="more-comparisons">More comparisons</h2>\n${cards(others)}`
     : ''
-  const body = pickCards(labelCells(marked.parse(page.body, { renderer, gfm: true }))) + more
+  // a template the page already links to in its own words isn't listed again
+  templates = templates.filter((t) => !page.body.includes(`(${t.path})`))
+  const free = templates.length
+    ? `\n<div class="no-print"><h2 id="free-templates">${isTemplate(page.path) ? 'More free templates' : 'Free planning templates'}</h2>\n${cards(templates)}</div>`
+    : ''
+  const body = pickCards(labelCells(marked.parse(page.body, { renderer, gfm: true }))) + more + free
   return shell({ title: page.title, description: page.description, canonical: page.path, body, place: page.path, updated: page.updated })
 }
 
-/** The /alternatives hub: every page, grouped into head-to-heads and roundups. */
-export function renderHub(pages) {
+/** The /alternatives hub: every page, grouped into head-to-heads and roundups, then the free templates. */
+export function renderHub(pages, templates = []) {
   const updated = pages.map((p) => p.updated).sort().at(-1)
   const list = (kind) => { const l = pages.filter((p) => p.path.startsWith(`/${kind}/`)); return l.length ? cards(l) : '' }
   const vs = list('vs'), alt = list('alternatives')
@@ -177,6 +183,7 @@ export function renderHub(pages) {
 <p class="summary">Life Console is a free, open-source planner: time-block your week, count down every deadline and link tasks to long-term goals. These pages compare it with the apps people usually look at instead, including where those apps are the better pick.</p>
 ${alt ? `<h2 id="alternatives">Alternatives to…</h2>\n${alt}` : ''}
 ${vs ? `<h2 id="head-to-head">Head to head</h2>\n${vs}` : ''}
+${templates.length ? `<h2 id="free-templates">Free planning templates</h2>\n${cards(templates)}` : ''}
 <h2 id="what-life-console-doesnt-do">What Life Console doesn't do</h2>
 <p>No calendar sync, no integrations with other task apps, no AI scheduling and no native phone apps (it installs from the browser instead, and has a Mac menu-bar app). If you need those, the pages above say which app does them.</p>`
   return shell({
@@ -202,10 +209,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     seen.add(p.path)
     const file = path.join(dist, `${p.path}.html`)
     fs.mkdirSync(path.dirname(file), { recursive: true })
-    fs.writeFileSync(file, renderPage(p, isTemplate(p.path) ? [] : pages.filter((o) => o !== p && !isTemplate(o.path))))
+    const templates = pages.filter((o) => o !== p && isTemplate(o.path))
+    fs.writeFileSync(file, renderPage(p, isTemplate(p.path) ? [] : pages.filter((o) => o !== p && !isTemplate(o.path)), templates))
   }
   const comparisons = pages.filter((p) => !isTemplate(p.path))
-  fs.writeFileSync(path.join(dist, 'alternatives.html'), renderHub(comparisons))
+  fs.writeFileSync(path.join(dist, 'alternatives.html'), renderHub(comparisons, pages.filter((p) => isTemplate(p.path))))
   const updated = comparisons.map((p) => p.updated).sort().at(-1)
   const manifest = [{ path: '/alternatives', updated }, ...pages.map((p) => ({ path: p.path, updated: p.updated }))]
   fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify(manifest, null, 1) + '\n')
