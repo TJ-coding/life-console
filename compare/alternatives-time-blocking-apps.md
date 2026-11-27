@@ -1,9 +1,9 @@
 ---
 path: /alternatives/time-blocking-apps
 title: Best time blocking apps (2026): 7 compared, free and paid
-description: Seven time blocking apps compared: Life Console, Sunsama, Akiflow, Structured, TickTick, Super Productivity and Google Calendar. Prices from free to $34 a month.
+description: Seven time blocking and timeboxing apps compared: Life Console, Sunsama, Akiflow, Structured, TickTick, Super Productivity and Google Calendar. Free to $34 a month.
 card: Best time blocking apps: Life Console, Sunsama, Akiflow, Structured, TickTick, Super Productivity, Google Calendar
-updated: 2026-11-27
+updated: 2026-11-28
 ---
 # The best time blocking apps, compared
 
@@ -69,7 +69,7 @@ A free, open-source task manager for focused solo work. Its schedule view sits n
 
 The free option you probably already have: make an event for each task and the calendar becomes your time-blocked day. Work and school accounts can also schedule **Focus time**, blocks with no conflicting meetings. What it doesn't do is know your tasks: nothing moves an unfinished task forward or tells you a day is overbooked.
 
-- **Pick it** if your blocks are few and you don't want another app.
+- **Pick it** if your blocks are few and you don't want another app. [How to time block in Google Calendar →](/guides/google-calendar-time-blocking)
 
 ## Time blocking with ADHD
 
@@ -90,6 +90,14 @@ Prefer paper? The free [weekly time blocking planner template](/templates/weekly
 ### What is the best free time blocking app?
 
 For planning from your own task list, Life Console (free and open source, no paid tier) or Super Productivity (free and open source, with time tracking). For blocking time around meetings, Google Calendar is free and already on most phones. TickTick's and Structured's free plans also work, but their timeline view (TickTick) and calendar import (Structured) are paid.
+
+### Does time blocking really work?
+
+For most people, yes, with one condition: the plan has to fit the day. Blocking eight hours of tasks into a day with two hours of meetings fails by lunchtime, and a failed plan feels worse than none. Plan about 6 or 7 hours of work, leave gaps, and spend five minutes each evening moving what slipped. Cal Newport, who popularised the method, puts it this way: when you get knocked off the schedule, "you simply update it".
+
+### What is a good free time blocking app for iPhone?
+
+**Structured** has a free native iPhone app with a visual day timeline (calendar import is paid). **Google Calendar** is free and can put tasks with a length on the grid. **Life Console** is free with no paid tier and installs from Safari to the home screen (Share → Add to Home Screen), with no App Store app.
 
 ### Is time blocking the same as timeboxing?
 

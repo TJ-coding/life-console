@@ -3,7 +3,7 @@ path: /vs/structured
 title: Structured app alternative: Life Console, a free day planner
 description: Life Console and the Structured day planner compared: timeline, time blocking, goals, apps and price. Life Console is free and open source; Structured Pro is a subscription or $99.99 once.
 card: Life Console vs Structured: planning from goals vs a visual day timeline on your phone
-updated: 2026-11-27
+updated: 2026-11-28
 ---
 # Life Console vs Structured
 
@@ -53,3 +53,21 @@ updated: 2026-11-27
 5. **Long-term plans → Strategy.** Write goals and milestones, and tag tasks with a goal so the week shows what it moves forward.
 
 There's no importer from Structured. Most people only need to bring over the tasks still ahead, and pasting them one line each is quick.
+
+## Questions about Structured
+
+### Is the Structured app free?
+
+Mostly. Its help centre says the app "can always be downloaded and used for free", without ads: the timeline, inbox, subtasks, notes, widgets, the Energy Monitor and sync are free. **Calendar import, recurring tasks, Structured AI, Replan** and some customisation are Structured Pro.
+
+### How much is Structured Pro?
+
+It's sold monthly, yearly or as a one-time lifetime purchase, which is $99.99 on the US App Store. Structured says prices depend on your region and currency, and some regions get a 12-month plan instead of monthly, so check the price in the app before you buy.
+
+### Does Structured work on Windows?
+
+There's no Windows app. On a Windows PC you use Structured's web app in the browser. Life Console is the same on every computer: it runs in the browser and installs as an app from Chrome or Edge.
+
+### Is Structured good for ADHD?
+
+It can help: everything sits on one colourful timeline, and the Energy Monitor lets you plan around your energy. If what you need is fewer decisions while you work, Life Console's Focus mode shows only the top three actions and the block you're in, counting down. [Time blocking with ADHD →](/alternatives/time-blocking-apps#time-blocking-with-adhd)

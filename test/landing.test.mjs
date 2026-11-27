@@ -31,7 +31,9 @@ fs.writeFileSync(path.join(dist, 'vs', 'sunsama.html'), '<head><title>VS-SUNSAMA
 fs.writeFileSync(path.join(dist, 'alternatives.html'), '<head><title>HUB</title></head>')
 fs.mkdirSync(path.join(dist, 'templates'))
 fs.writeFileSync(path.join(dist, 'templates', 'personal-strategic-plan.html'), '<head><title>TEMPLATE</title></head>')
-fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify([{ path: '/alternatives', updated: '2026-11-18' }, { path: '/vs/sunsama', updated: '2026-11-17' }, { path: '/templates/personal-strategic-plan', updated: '2026-11-23' }, { path: '/../index', updated: 'x' }]))
+fs.mkdirSync(path.join(dist, 'guides'))
+fs.writeFileSync(path.join(dist, 'guides', 'google-calendar-time-blocking.html'), '<head><title>GUIDE</title></head>')
+fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify([{ path: '/alternatives', updated: '2026-11-18' }, { path: '/vs/sunsama', updated: '2026-11-17' }, { path: '/templates/personal-strategic-plan', updated: '2026-11-23' }, { path: '/guides/google-calendar-time-blocking', updated: '2026-11-28' }, { path: '/../index', updated: 'x' }]))
 fs.mkdirSync(path.join(dist, 'media'))
 const VIDEO = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 256))
 fs.writeFileSync(path.join(dist, 'media', 'clip.mp4'), VIDEO)
@@ -276,7 +278,7 @@ test('printable templates: PDFs are served as application/pdf, cached like other
 })
 
 test('comparison pages: served and listed in the sitemap on the public site only, tagged "compare"', async () => {
-  for (const [p, title] of [['/vs/sunsama', 'VS-SUNSAMA'], ['/alternatives', 'HUB'], ['/templates/personal-strategic-plan', 'TEMPLATE']]) {
+  for (const [p, title] of [['/vs/sunsama', 'VS-SUNSAMA'], ['/alternatives', 'HUB'], ['/templates/personal-strategic-plan', 'TEMPLATE'], ['/guides/google-calendar-time-blocking', 'GUIDE']]) {
     const r = await get(on, p)
     assert.equal(r.status, 200, p)
     assert.match(r.body.toString(), new RegExp(`<title>${title}</title>`))
@@ -329,6 +331,12 @@ test('scripts/compare-pages.mjs: front matter is checked, pages link to each oth
   assert.ok(renderHub([a, b], [t]).includes('id="free-templates"'))
   const linked = { ...a, body: a.body + '\nSee the [template](/templates/personal-strategic-plan).\n' }
   assert.ok(!renderPage(linked, [b], [t]).includes('id="free-templates"'), 'a template the text already links is not listed again')
+  // guides (/guides/…): allowed, no Comparisons crumb, listed under Guides on the hub, end with the templates
+  const g = parsePage(src('/guides/google-calendar-time-blocking'))
+  const gHtml = renderPage(g, [], [t])
+  assert.ok(!gHtml.includes('href="/alternatives">Comparisons</a> /') && gHtml.includes('id="free-templates"'))
+  const gHub = renderHub([a, b], [t], [g])
+  assert.ok(gHub.includes('id="guides"') && gHub.includes('href="/guides/google-calendar-time-blocking"'))
   assert.throws(() => parsePage('---\npath: /vs/x\n---\n'), /needs "title"/)
   assert.throws(() => parsePage('# no front matter'), /no front matter/)
 })

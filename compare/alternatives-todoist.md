@@ -3,7 +3,7 @@ path: /alternatives/todoist
 title: Todoist alternatives for planning your day (2026), incl. free
 description: Five Todoist alternatives compared: Life Console, TickTick, Things 3, Super Productivity and Vikunja. Free and open-source picks, self-hosting, time-blocking and price.
 card: Todoist alternatives: Life Console, TickTick, Things 3, Super Productivity, Vikunja
-updated: 2026-11-23
+updated: 2026-11-28
 ---
 # Todoist alternatives for planning your day
 
@@ -54,6 +54,12 @@ The most direct **self-hosted Todoist alternative**: open source (AGPL-3.0), wit
 
 - **Pick it** if you want your Todoist projects, as they are, on your own server.
 - **Lacks:** a day timeline or planning ritual: it's a task and project manager.
+
+## Can you time block in Todoist?
+
+Partly. On the free plan, a task can have a date and a time but no length, and there's no calendar layout. **Todoist Pro** ($5 a month billed yearly, $7 monthly) adds **task durations** and the **calendar layout**, so you can see tasks laid out on a day and week, and connects up to 3 calendars (1 on the free plan) so your events show next to your tasks.
+
+That's enough if your tasks are few and your days are mostly fixed. What Todoist doesn't do is tell you when a day holds more work than hours, or move what slipped. If time blocking is the reason you're looking, compare [the best time blocking apps →](/alternatives/time-blocking-apps), or see [how to time block in Google Calendar](/guides/google-calendar-time-blocking) for free.
 
 ## Which one?
 

@@ -4,7 +4,7 @@
 //
 // Each source file starts with a front-matter block:
 //   ---
-//   path: /vs/sunsama                  (or /alternatives/sunsama, or /templates/<name>)
+//   path: /vs/sunsama                  (or /alternatives/sunsama, /templates/<name> or /guides/<name>)
 //   title: …                           (<title>, ~60 characters, the search phrase first)
 //   description: …                     (meta description, ~155 characters)
 //   card: …                            (one line for the hub)
@@ -20,9 +20,13 @@ import { marked } from 'marked'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SITE = 'https://life-console.dev'
 const REPO = 'https://github.com/TJ-coding/life-console'
-export const PATH_RE = /^\/(vs|alternatives|templates)\/[a-z0-9-]+$/
+export const PATH_RE = /^\/(vs|alternatives|templates|guides)\/[a-z0-9-]+$/
 /** Templates aren't comparisons: no Comparisons crumb, not on the hub, and they don't list the comparison pages. */
 export const isTemplate = (p) => p.startsWith('/templates/')
+/** Guides (/guides/…) are how-tos: no Comparisons crumb and not in the hub's comparison lists (they get their own). */
+export const isGuide = (p) => p.startsWith('/guides/')
+/** Not a comparison: a template or a guide. */
+export const isStandalone = (p) => isTemplate(p) || isGuide(p)
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const slugify = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -37,7 +41,7 @@ export function parsePage(src, name = 'page') {
     if (kv) meta[kv[1]] = kv[2].trim()
   }
   for (const k of ['path', 'title', 'description', 'card', 'updated']) if (!meta[k]) throw new Error(`${name}: front matter needs "${k}"`)
-  if (!PATH_RE.test(meta.path)) throw new Error(`${name}: path must look like /vs/<app>, /alternatives/<app> or /templates/<name>`)
+  if (!PATH_RE.test(meta.path)) throw new Error(`${name}: path must look like /vs/<app>, /alternatives/<app>, /templates/<name> or /guides/<name>`)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(meta.updated)) throw new Error(`${name}: updated must be YYYY-MM-DD`)
   return { ...meta, body: m[2] }
 }
@@ -52,7 +56,7 @@ const APP = {
 }
 /** This page (with its last update and breadcrumb trail) and the app it is about. */
 function pageLd({ title, description, canonical, updated }) {
-  const crumbs = [['Life Console', '/'], ...(canonical === '/alternatives' || isTemplate(canonical) ? [] : [['Comparisons', '/alternatives']]), [title, canonical]]
+  const crumbs = [['Life Console', '/'], ...(canonical === '/alternatives' || isStandalone(canonical) ? [] : [['Comparisons', '/alternatives']]), [title, canonical]]
   return JSON.stringify({
     '@context': 'https://schema.org',
     '@graph': [
@@ -117,7 +121,7 @@ function shell({ title, description, canonical, body, place, updated }) {
 ${header(place)}
 <main>
 <article>
-${place === '/alternatives' || isTemplate(place) ? '' : '<p class="crumbs"><a href="/alternatives">Comparisons</a> /</p>\n'}${body}
+${place === '/alternatives' || isStandalone(place) ? '' : '<p class="crumbs"><a href="/alternatives">Comparisons</a> /</p>\n'}${body}
 </article>
 ${cta(place)}
 </main>
@@ -175,7 +179,7 @@ export function renderPage(page, others = [], templates = []) {
 }
 
 /** The /alternatives hub: every page, grouped into head-to-heads and roundups, then the free templates. */
-export function renderHub(pages, templates = []) {
+export function renderHub(pages, templates = [], guides = []) {
   const updated = pages.map((p) => p.updated).sort().at(-1)
   const list = (kind) => { const l = pages.filter((p) => p.path.startsWith(`/${kind}/`)); return l.length ? cards(l) : '' }
   const vs = list('vs'), alt = list('alternatives')
@@ -184,6 +188,7 @@ export function renderHub(pages, templates = []) {
 ${alt ? `<h2 id="alternatives">Alternatives to…</h2>\n${alt}` : ''}
 ${vs ? `<h2 id="head-to-head">Head to head</h2>\n${vs}` : ''}
 ${templates.length ? `<h2 id="free-templates">Free planning templates</h2>\n${cards(templates)}` : ''}
+${guides.length ? `<h2 id="guides">Guides</h2>\n${cards(guides)}` : ''}
 <h2 id="what-life-console-doesnt-do">What Life Console doesn't do</h2>
 <p>No calendar sync, no integrations with other task apps, no AI scheduling and no native phone apps (it installs from the browser instead, and has a Mac menu-bar app). If you need those, the pages above say which app does them.</p>`
   return shell({
@@ -210,10 +215,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const file = path.join(dist, `${p.path}.html`)
     fs.mkdirSync(path.dirname(file), { recursive: true })
     const templates = pages.filter((o) => o !== p && isTemplate(o.path))
-    fs.writeFileSync(file, renderPage(p, isTemplate(p.path) ? [] : pages.filter((o) => o !== p && !isTemplate(o.path)), templates))
+    fs.writeFileSync(file, renderPage(p, isTemplate(p.path) ? [] : pages.filter((o) => o !== p && !isStandalone(o.path)), templates))
   }
-  const comparisons = pages.filter((p) => !isTemplate(p.path))
-  fs.writeFileSync(path.join(dist, 'alternatives.html'), renderHub(comparisons, pages.filter((p) => isTemplate(p.path))))
+  const comparisons = pages.filter((p) => !isStandalone(p.path))
+  fs.writeFileSync(path.join(dist, 'alternatives.html'), renderHub(comparisons, pages.filter((p) => isTemplate(p.path)), pages.filter((p) => isGuide(p.path))))
   const updated = comparisons.map((p) => p.updated).sort().at(-1)
   const manifest = [{ path: '/alternatives', updated }, ...pages.map((p) => ({ path: p.path, updated: p.updated }))]
   fs.writeFileSync(path.join(dist, 'compare-pages.json'), JSON.stringify(manifest, null, 1) + '\n')

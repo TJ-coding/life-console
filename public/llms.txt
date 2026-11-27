@@ -38,6 +38,7 @@
 ## Free templates
 - Personal strategic plan template (vision, prioritised goals, measurable milestones, check schedule; printable, with a worked example): https://life-console.dev/templates/personal-strategic-plan (PDF: https://life-console.dev/media/templates/personal-strategic-plan.pdf)
 - Weekly planner template with time blocking (backlog, a 7-hour workload per day, hourly schedule): https://life-console.dev/templates/weekly-time-blocking-planner (PDFs: https://life-console.dev/media/templates/weekly-time-blocking-planner.pdf and the one-page daily sheet https://life-console.dev/media/templates/daily-time-blocking.pdf)
+- Daily time blocking template (top 3, tasks with minutes, a 7-hour workload bar, an hourly schedule, an evening review; printable): https://life-console.dev/templates/daily-time-blocking-planner (PDF: https://life-console.dev/media/templates/daily-time-blocking.pdf)
 
 ## Links
 - User guide (every screen and shortcut): https://life-console.dev/docs/guide
@@ -45,3 +46,6 @@
 - Keyboard tour video: https://life-console.dev/media/tour.mp4
 - Launch trailer: https://life-console.dev/media/trailer.mp4
 - Community (Discord): https://discord.gg/bWZS5QvPYd
+
+## Guides
+- How to time block in Google Calendar, step by step (tasks with a length, recurring blocks, Focus time, an evening review): https://life-console.dev/guides/google-calendar-time-blocking
