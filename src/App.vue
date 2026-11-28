@@ -304,7 +304,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </div>
         <div v-if="loadedPlugins.dev" class="banner devtest" role="status">
           <span class="icon sm">science</span>
-          <span class="grow"><b>Live test</b> · the draft <span class="mono">{{ loadedPlugins.dev.pkg }}</span> runs on your real planner<span class="muted"> · until <span class="mono">{{ new Date(loadedPlugins.dev.until).toTimeString().slice(0, 5) }}</span></span></span>
+          <span class="grow"><b>Live test</b> · {{ loadedPlugins.dev.drafts.length === 1 ? 'the draft' : 'the drafts' }} <span class="mono">{{ loadedPlugins.dev.drafts.map((x) => x.pkg).join(', ') }}</span> {{ loadedPlugins.dev.drafts.length === 1 ? 'runs' : 'run' }} on your real planner<span class="muted"> · until <span class="mono">{{ new Date(loadedPlugins.dev.until).toTimeString().slice(0, 5) }}</span></span></span>
           <button class="btn sm" @click="stopDevTest(false)">Stop</button>
           <button v-if="loadedPlugins.dev.undo" class="btn sm" @click="stopDevTest(true)">Stop and undo</button>
         </div>

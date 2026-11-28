@@ -142,7 +142,8 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
     if (named) return pick(named)
     if (s?.slug && live.draft(user.id, s.slug)) return pick(s.slug)
     const list = live.drafts(user.id)
-    if (!s) return { slug: live.current(user.id), d: live.draft(user.id) }
+    // a client without a session id (an older one, or one that hasn't reconnected): the only draft, never a guess
+    if (!s) return list.length > 1 ? { ask: `There are several drafts (${list.map((x) => x.slug).join(', ')}): say which with name. Another session may be working on the others: don't change a draft that isn't yours.` } : { slug: list[0]?.slug ?? null, d: list[0] ? live.draft(user.id, list[0].slug) : null }
     // this session's draft was renamed or thrown away in the workshop: ask, rather than hand it another one
     if (s.slug) return { ask: `The draft ${s.slug} isn't there any more (renamed or thrown away in the workshop).${list.length ? ` Drafts now: ${list.map((x) => x.slug).join(', ')}: say which with name, or write_draft to start again.` : ' Write it again with write_draft.'}` }
     if (list.length <= 1) return pick(list[0]?.slug ?? null)
@@ -241,7 +242,7 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       const named = slugName(String(a.name ?? '').split('/').pop())
       const mine = req.mcpSession?.slug && live.draft(user.id, req.mcpSession.slug) ? req.mcpSession.slug : ''
       const titled = slugName(/\btitle\s*:\s*(['"`])([^'"`]{1,80})\1/.exec(files[ENTRY] ?? '')?.[2])
-      const slug = named || mine || (req.mcpSession ? titled : '') || live.current(user.id) || titled || 'draft'
+      const slug = named || mine || titled || (live.drafts(user.id).length <= 1 ? live.current(user.id) : '') || 'draft'
       if (req.mcpSession) req.mcpSession.slug = slug
       const isNew = !live.draft(user.id, slug)
       const draft = live.setDraft(user.id, { files, slug, ...(isNew ? { editing: null, forkOf: null } : {}) }, 'ai')
@@ -396,19 +397,24 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       return { content: [{ type: 'text', text: lines.join('\n') }, ...r.shots.map((sh) => ({ type: 'image', data: sh.png, mimeType: 'image/png' }))], ...(r.ok ? {} : { isError: true }) }
     },
     async live_test(a, user, req) {
-      if (!a.on) return text(live.stopDev(user.id) ? 'Stopped the live test. What it saved stays; they can undo from a snapshot if needed.' : 'No live test was on.')
       const t = target(a, user, req)
       if (t.ask) return fail(t.ask)
       const d = t.d
+      if (!a.on) {
+        // off: only this draft (another session's draft may be under the same test)
+        const was = live.stopDev(user.id, d?.slug)
+        return text(!was ? 'No live test of this draft was on.' : was.partial ? `Took ${d.slug} out of the live test; the others carry on. Their console reloads.` : 'Stopped the live test. What it saved stays; they can undo from a snapshot if needed.')
+      }
       if (!d) return fail('There is no draft: write one first.')
       const s = staticCheck(d.files)
       if (s.errors.length) return fail(`The draft can't run as it is: ${s.errors.join('; ')}`)
       const dev = live.dev(user.id)
-      if (dev) return text(dev.slug === d.slug ? 'The live test is already on: each edit loads in their console.' : `A live test of ${dev.slug} is on: stop it first (live_test on: false).`)
-      // the consent page tests the workshop's current draft: make it this one, and show it there
+      if (dev?.slugs.includes(d.slug)) return text('The live test is already on for this draft: each edit loads in their console.')
+      // the consent page names the draft: show it in the workshop too
       live.select(user.id, d.slug)
       live.tell(user.id, { type: 'draft', draft: d, drafts: live.drafts(user.id) })
-      return ask(req, user, 'dev-test', {}, 'Live test the draft on your real planner (60 minutes, with undo)', async () => !!live.dev(user.id))
+      const what = dev ? `Add ${d.slug} to the live test that's on (same end time and undo snapshot)` : `Live test ${d.slug} on your real planner (60 minutes, with undo)`
+      return ask(req, user, 'dev-test', { slug: d.slug }, what, async () => !!live.dev(user.id)?.slugs.includes(d.slug))
     },
     async use_draft(a, user, req) {
       if (!live.open(user.id)) return fail(needWorkshop(req))
@@ -444,17 +450,19 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
   }
 
   // MCP sessions (the Mcp-Session-Id header): each connected AI session remembers which draft it works on, so two
-  // sessions on different extensions never edit each other's. In memory only: after a restart a session starts
-  // with no draft picked, and its tools ask which one (or use the only one).
+  // sessions on different extensions never edit each other's. The id is checked against the token's account; which
+  // draft it works on is saved with the drafts, so the session carries on after a restart without reconnecting.
   const sessions = new Map()
   function sessionOf(req, user, fresh) {
     const now = Date.now()
     if (sessions.size > 5000) for (const [k, v] of sessions) if (now - v.at > 7 * 86400000 || sessions.size > 4000) sessions.delete(k)
-    if (fresh) { const id = randomBytes(16).toString('hex'); const s = { id, uid: user.id, slug: null, at: now }; sessions.set(id, s); return s }
+    // its draft is kept in the account's room (server/workshop-live.mjs), saved with the drafts: it survives a restart
+    const make = (id) => Object.defineProperty({ id, uid: user.id, at: now }, 'slug', { get: () => live.sessionSlug(user.id, id), set: (v) => { if (v) live.sessionSlug(user.id, id, v) } })
+    if (fresh) { const s = make(randomBytes(16).toString('hex')); sessions.set(s.id, s); return s }
     const id = String(req.headers['mcp-session-id'] ?? '')
     if (!/^[a-f0-9]{32}$/.test(id)) return null
     let s = sessions.get(id)
-    if (!s) sessions.set(id, (s = { id, uid: user.id, slug: null, at: now })) // a session from before a restart
+    if (!s) sessions.set(id, (s = make(id))) // a session from before a restart: its draft comes back from the room
     if (s.uid !== user.id) return null // another account's id: ignore it
     s.at = now
     return s

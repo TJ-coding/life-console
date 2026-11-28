@@ -59,9 +59,11 @@ export async function loadPlugins() {
       const r = await fetch('/api/workshop/dev', { credentials: 'same-origin' })
       const d = r.ok ? await r.json() : null
       if (d?.on && d.key) {
-        plugins.dev = d
-        delete plugins.failed[d.pkg]
-        list = [...list.filter((p) => p.pkg !== d.pkg), { pkg: d.pkg, enabled: true, devKey: d.key }]
+        // one test can hold several drafts (two Claude sessions, two extensions); each replaces what it edits
+        const drafts = d.drafts ?? [{ pkg: d.pkg, key: d.key }]
+        plugins.dev = { ...d, drafts }
+        for (const x of drafts) delete plugins.failed[x.pkg]
+        list = [...list.filter((p) => !drafts.some((x) => x.pkg === p.pkg)), ...drafts.map((x) => ({ pkg: x.pkg, enabled: true, devKey: x.key }))]
       }
     } catch { /* offline: no live test */ }
   }

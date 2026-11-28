@@ -152,15 +152,18 @@ ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : 
       }
     } else if (kind === 'dev-test') {
       await live?.ensure?.(user.id)
-      const d = live?.draft(user.id)
+      const d = q.get('slug') ? live?.draft(user.id, q.get('slug')) : live?.draft(user.id)
       if (!d) return { noDraft: true }
+      const on = live.dev(user.id)
+      const adding = on && !on.slugs.includes(d.slug) ? on : null // a test is on for another draft: this one joins it
       const name = d.editing ?? `${user.handle || 'you'}/${d.slug || 'draft'}`
       action.name = name
       action.slug = d.slug // the draft shown here is the one that runs, even if the workshop switches meanwhile
       const blocked = checkDraft(d.files).errors
       warning = 'The draft will see and change everything in your planner. Unlike an installed version, its code can change while it runs: each time Claude (or you) edits it, the new version loads without asking you again.'
-      details = `<dl><dt>Draft</dt><dd><code>${esc(name)}</code>${d.editing ? ' (in place of your installed version)' : ''}</dd><dt>For</dt><dd>60 minutes at most. A server restart ends it too.</dd>
-<dt>Safety net</dt><dd>A snapshot of your planner is taken now. The <b>Live test</b> bar in the console has <b>Stop</b> and <b>Stop and undo</b>: undo puts your planner back as it is now (your own changes in the meantime too).</dd>
+      details = `<dl><dt>Draft</dt><dd><code>${esc(name)}</code>${d.editing ? ' (in place of your installed version)' : ''}${adding ? `, joining the live test that's on (${adding.slugs.map(esc).join(', ')})` : ''}</dd>
+<dt>For</dt><dd>${adding ? `Until the test ends, at <b>${new Date(adding.until).toISOString().slice(11, 16)}</b> UTC.` : '60 minutes at most, through a server restart too.'}</dd>
+<dt>Safety net</dt><dd>${adding ? 'The snapshot taken when the test started.' : 'A snapshot of your planner is taken now.'} The <b>Live test</b> bar in the console has <b>Stop</b> and <b>Stop and undo</b>: undo puts your planner back as it was ${adding ? 'when the test started' : 'now'} (your own changes in the meantime too).</dd>
 <dt>Checks</dt><dd>${blocked.length ? `<span class="warn">This version is blocked: ${esc(blocked.join('; '))}</span>` : 'Each version is checked before it runs (no code from elsewhere, no eval); a blocked one doesn\'t load.'}</dd></dl>
 <p class="muted">Anything it saves in your planner stays after the test, unless you undo.</p>`
     } else if (kind === 'vault-save') {
@@ -283,9 +286,11 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       }
       case 'dev-test': {
         await live?.ensure?.(uid)
-        if (!(a.slug ? live?.select(uid, a.slug) : live?.draft(uid))) return { msg: 'There is no draft to test any more.' }
-        const checkpoint = await planner.checkpoint(uid, 'before live test')
-        live.startDev(uid, { checkpoint })
+        const d = a.slug ? live?.draft(uid, a.slug) : live?.draft(uid)
+        if (!d) return { msg: 'There is no draft to test any more.' }
+        // joining a test that's on keeps its end and its snapshot; a new test takes a snapshot first
+        const checkpoint = live.dev(uid) ? null : await planner.checkpoint(uid, 'before live test')
+        live.startDev(uid, { checkpoint, slug: d.slug })
         log(`[consent] live test on for ${uid.slice(0, 8)}`)
         return { msg: 'Live test on for 60 minutes: the draft runs on your planner. Stop it from the bar at the top.' }
       }

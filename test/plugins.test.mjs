@@ -896,3 +896,55 @@ test('several drafts: two Claude sessions on different extensions never overwrit
   assert.match(gone.text, /papers isn't there any more[\s\S]*Drafts now: money/)
   assert.match((await b('read_draft')).text, /Money two/, "b's draft is untouched")
 })
+
+test('two sessions at once: no guessing without a session, one live test holding both drafts, both survive a restart', async () => {
+  const una = client()
+  await una('POST', '/api/auth/signup', { email: 'two-una@x.test', password: 'pw-two-12345' }, { 'X-Forwarded-For': '10.5.5.8' })
+  const tok = await mcpToken(una)
+  const H = (sid) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${tok}`, ...(sid ? { 'Mcp-Session-Id': sid } : {}) })
+  const call = async (sid, name, args = {}) => { const x = JSON.parse((await raw('POST', '/mcp', JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } }), H(sid))).text).result; return { ...x, text: x.content[0].text } }
+  const session = async () => (await raw('POST', '/mcp', JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } } }), H())).headers.get('mcp-session-id')
+  const page = (t) => `export default { sdk: 1, title: '${t}', pages: [{ title: '${t}', mount(el) { el.textContent = '${t} one' } }] }\n`
+  const a = await session(), b = await session()
+  await call(a, 'write_draft', { code: page('Alpha') })
+  await call(b, 'write_draft', { code: page('Beta') })
+
+  // a client with no session id is never handed one of several drafts
+  const blind = await call(null, 'edit_draft', { old_text: 'one', new_text: 'two' })
+  assert.equal(blind.isError, true)
+  assert.match(blind.text, /several drafts/)
+  assert.equal((await call(null, 'edit_draft', { name: 'beta', old_text: 'Beta one', new_text: 'Beta two' })).isError, undefined, 'by name it may')
+
+  // one live test, two drafts: the second joins with the person's click, keeping the end and the snapshot
+  await call(a, 'live_test', { on: true })
+  await confirm(una, 'do=dev-test&slug=alpha')
+  const one = (await una('GET', '/api/workshop/dev')).body
+  assert.deepEqual(one.drafts.map((x) => x.pkg.split('/')[1]), ['alpha'])
+  const asked = await call(b, 'live_test', { on: true })
+  assert.match(asked.text, /slug=beta/)
+  assert.match((await una('GET', '/trust?do=dev-test&slug=beta', undefined, NAV)).text, /joining the live test that's on \(alpha\)[\s\S]*snapshot taken when the test started/)
+  await confirm(una, 'do=dev-test&slug=beta')
+  const both = (await una('GET', '/api/workshop/dev')).body
+  assert.deepEqual(both.drafts.map((x) => x.pkg.split('/')[1]), ['alpha', 'beta'])
+  assert.equal(both.until, one.until, 'the same end')
+  for (const x of both.drafts) assert.equal((await una('GET', `/api/workshop/dev/code/${x.key}/index.js`)).status, 200)
+
+  // after a restart: the drafts, each session's draft and the live test (same end) are all still there
+  await new Promise((r) => setTimeout(r, 200))
+  const { createWorkshopLive } = await import('../server/workshop-live.mjs')
+  const me = (await una('GET', '/api/auth/me')).body
+  const uid = me.user?.id ?? me.id
+  const fresh = createWorkshopLive({ db: conn.db })
+  await fresh.ensure(uid)
+  assert.equal(fresh.sessionSlug(uid, a), 'alpha')
+  assert.equal(fresh.sessionSlug(uid, b), 'beta')
+  assert.deepEqual(fresh.dev(uid).slugs, ['alpha', 'beta'])
+  assert.equal(fresh.dev(uid).until, one.until)
+  fresh.close()
+
+  // one session switching its draft off leaves the other's running
+  assert.match((await call(b, 'live_test', { on: false })).text, /Took beta out/)
+  assert.deepEqual((await una('GET', '/api/workshop/dev')).body.drafts.map((x) => x.pkg.split('/')[1]), ['alpha'])
+  assert.match((await call(a, 'live_test', { on: false })).text, /Stopped the live test/)
+  assert.equal((await una('GET', '/api/workshop/dev')).body.on, false)
+})

@@ -303,9 +303,11 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       /* ── live test: the draft runs in this person's console on their real planner (consented on /trust?do=dev-test) ── */
       case 'GET /api/workshop/dev': {
         const dev = live.dev(uid)
-        const d = live.devDraft(uid)
-        if (!dev || !d) return send(res, 200, { on: false }, { 'Cache-Control': 'no-store' })
-        return send(res, 200, { on: true, pkg: d.editing ?? `${user.handle || 'you'}/${d.slug || 'draft'}`, key: d.key, until: dev.until, undo: !!dev.checkpoint }, { 'Cache-Control': 'no-store' })
+        const ds = live.devDrafts(uid)
+        if (!dev || !ds.length) return send(res, 200, { on: false }, { 'Cache-Control': 'no-store' })
+        // every draft under the test (two sessions can each have one in it); pkg/key: the first, for older pages
+        const drafts = ds.map((d) => ({ pkg: d.editing ?? `${user.handle || 'you'}/${d.slug || 'draft'}`, key: d.key }))
+        return send(res, 200, { on: true, ...drafts[0], drafts, until: dev.until, undo: !!dev.checkpoint }, { 'Cache-Control': 'no-store' })
       }
       case 'POST /api/workshop/dev/stop': {
         const b = await body(req)
@@ -566,8 +568,8 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       const who = await auth.identify(req)
       if (!who || who.via !== 'session') return send(res, 401, 'signed out')
       await live.ensure(who.user.id)
-      const d = live.devDraft(who.user.id)
-      if (!live.dev(who.user.id) || !d || d.key !== devKey) return send(res, 404, 'not under a live test')
+      const d = live.devDrafts(who.user.id).find((x) => x.key === devKey)
+      if (!live.dev(who.user.id) || !d) return send(res, 404, 'not under a live test')
       const blocked = staticCheck(d.files).errors
       if (blocked.length) return send(res, 409, `// blocked: ${blocked.join('; ')}`, { 'Content-Type': MIME['.js'] })
       const file = devMatch[2] ?? ENTRY
