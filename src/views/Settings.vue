@@ -7,7 +7,7 @@ import { state, ui, toggleTheme, setAccent, ACCENTS, resetDemo, clearPlanner, to
 import { sync, pull, deviceName, setDeviceName, leaveGuest } from '../sync'
 import { push, env, enablePush, disablePush, testPush, listDevices, refreshPush, install, promptInstall } from '../push'
 import { rhythm, wallMin } from '../../server/pomodoro.mjs'
-import { auth, signOut, changePassword, deleteAccount, rename, macAppToken } from '../auth'
+import { auth, signOut, changePassword, deleteAccount, rename, macAppToken, setPublisherName } from '../auth'
 import { analyticsAvailable } from '../analytics'
 import { serverUpdate, loadUpdate, checkUpdate, applyUpdate, setAutoUpdate } from '../updates'
 import { signupsAdmin, loadSignups, setSignups } from '../signups'
@@ -23,6 +23,11 @@ onMounted(async () => { if (auth.user) try { claude.value = await api('GET', '/a
 /* ── account ── */
 const acctName = ref(auth.user?.name ?? '')
 const saveAcctName = async () => { try { await rename(acctName.value); toast('Name saved') } catch (e) { toast(e.message) } }
+const pubName = ref(auth.user?.handle ?? '')
+async function savePubName() {
+  const from = auth.user?.handle
+  try { await setPublisherName(pubName.value); toast(from && from !== auth.user.handle ? `You publish as ${auth.user.handle} now: your extensions moved with you` : 'Publisher name saved') } catch (e) { toast(e.message) }
+}
 const pw = ref({ current: '', next: '' })
 async function savePassword() {
   try { await changePassword(pw.value.current, pw.value.next); pw.value = { current: '', next: '' }; toast('Password changed — your other devices must sign in again') } catch (e) { toast(e.message) }
@@ -209,6 +214,11 @@ function toggleBoDay(b, i) {
           <label class="field"><span>Name</span><input v-model="acctName" class="input" maxlength="80" @keydown.enter="saveAcctName" /></label>
           <button class="btn acct-btn" @click="saveAcctName">Save name</button>
         </div>
+        <div class="row wrap">
+          <label class="field"><span>Publisher name</span><input v-model.trim="pubName" class="input mono" maxlength="30" placeholder="e.g. tj-coding" autocapitalize="off" spellcheck="false" @keydown.enter="savePubName" /></label>
+          <button class="btn acct-btn" :disabled="!pubName || pubName === auth.user.handle" @click="savePubName">Save publisher name</button>
+        </div>
+        <p class="tiny muted">Shown instead of your name before your extensions (<span class="mono">{{ pubName || 'name' }}/water</span>) and in your sharing address. Lower-case letters, digits and dashes.</p>
         <details v-if="auth.password && hasPw" class="phone-help">
           <summary>Change password</summary>
           <form class="row wrap" @submit.prevent="savePassword">

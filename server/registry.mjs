@@ -6,8 +6,8 @@
 // The server never runs plugin code. The manifest fields it stores (title, version, sdk, says, replaces) come with
 // the upload; the checks compare what the code does with what it says.
 import crypto from 'node:crypto'
-import { and, eq, desc, inArray, or, sql } from 'drizzle-orm'
-import { pluginPackages, pluginVersions, pluginInstalls, pluginReports, pluginLikes, pluginProposals, users } from './db/schema.js'
+import { and, eq, desc, inArray, isNull, or, sql } from 'drizzle-orm'
+import { pluginPackages, pluginVersions, pluginInstalls, pluginReports, pluginLikes, pluginProposals, users, shares, workshopDrafts } from './db/schema.js'
 import { httpError } from './auth.mjs'
 import { ENTRY, filesOf, canonical, checkFiles } from '../src/sdk/files.js'
 
@@ -108,19 +108,73 @@ export function createRegistry(db, { log = () => {}, upstream = '', fetchImpl = 
   // unlisted: off the listing (its owner removed it from the registry) but still works for people who installed it
   const canSee = (p, user) => p && (p.visibility === 'public' || p.visibility === 'unlisted' || (user && p.ownerId === user.id))
 
-  /** Claim a handle (once): the author part of every package name. */
+  /**
+   * Choose your publisher name (handle): the author part of every package name. It can be changed later (Settings →
+   * Account): your extensions move to the new name (alice/water → al/water) with their versions, installs, likes
+   * and suggestions. A version's hash includes its name, so each version gets a new hash. Not while something outside
+   * this server knows you by the old name: plans shared over ActivityPub, or a public extension someone else installed.
+   */
   async function setHandle(user, handle) {
     handle = String(handle ?? '').toLowerCase().trim()
-    if (!HANDLE.test(handle) || RESERVED_HANDLES.has(handle)) throw httpError(400, 'A handle is 2-30 lower-case letters, digits or dashes, and some names are reserved')
-    if (user.handle && user.handle !== handle) throw httpError(409, `Your handle is already ${user.handle}`)
+    if (!HANDLE.test(handle) || RESERVED_HANDLES.has(handle)) throw httpError(400, 'A publisher name is 2-30 lower-case letters, digits or dashes, and some names are reserved')
+    const old = user.handle
+    if (old === handle) return handle
     const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.handle, handle))
-    if (taken && taken.id !== user.id) throw httpError(409, 'That handle is taken')
-    await db.update(users).set({ handle, updatedAt: new Date() }).where(eq(users.id, user.id))
+    if (taken && taken.id !== user.id) throw httpError(409, 'That name is taken')
+    if (!old) {
+      await db.update(users).set({ handle, updatedAt: new Date() }).where(eq(users.id, user.id))
+      user.handle = handle
+      return handle
+    }
+    const pkgs = (await db.select().from(pluginPackages).where(eq(pluginPackages.ownerId, user.id))).filter((p) => !p.upstream && p.name.startsWith(`${old}/`))
+    const names = pkgs.map((p) => p.name)
+    const [shared] = await db.select({ id: shares.id }).from(shares).where(and(eq(shares.ownerId, user.id), isNull(shares.revokedAt))).limit(1)
+    if (shared) throw httpError(409, `People on other servers know you as ${old} through plans you share. Stop sharing them (Sharing) before changing your name.`)
+    if (names.length) {
+      const listed = pkgs.filter((p) => p.visibility !== 'private').map((p) => p.name)
+      const [used] = listed.length ? await db.select({ pkg: pluginInstalls.packageName }).from(pluginInstalls).where(and(inArray(pluginInstalls.packageName, listed), sql`${pluginInstalls.userId} <> ${user.id}`)).limit(1) : []
+      if (used) throw httpError(409, `Other people installed ${used.pkg}, so it keeps its name. Your publisher name can't change while they have it.`)
+    }
+    const rename = (n) => `${handle}/${n.slice(old.length + 1)}`
+    await db.transaction(async (tx) => {
+      await tx.update(users).set({ handle, updatedAt: new Date() }).where(eq(users.id, user.id))
+      for (const p of pkgs) {
+        const to = rename(p.name)
+        const { name: _n, ...rest } = p
+        await tx.insert(pluginPackages).values({ ...rest, name: to, updatedAt: new Date() })
+        const hashes = new Map()
+        for (const v of await tx.select().from(pluginVersions).where(eq(pluginVersions.packageName, p.name))) {
+          const files = v.files ?? { [ENTRY]: v.code }
+          const hash = filesHash(to, files)
+          hashes.set(v.hash, hash)
+          await tx.insert(pluginVersions).values({ ...v, hash, packageName: to })
+        }
+        for (const [from, hash] of hashes) {
+          await tx.update(pluginInstalls).set({ hash }).where(eq(pluginInstalls.hash, from))
+          await tx.update(pluginReports).set({ hash }).where(eq(pluginReports.hash, from))
+          await tx.update(pluginProposals).set({ fromHash: hash }).where(eq(pluginProposals.fromHash, from))
+        }
+        await tx.update(pluginInstalls).set({ packageName: to }).where(eq(pluginInstalls.packageName, p.name))
+        await tx.update(pluginReports).set({ packageName: to }).where(eq(pluginReports.packageName, p.name))
+        await tx.update(pluginLikes).set({ packageName: to }).where(eq(pluginLikes.packageName, p.name))
+        await tx.update(pluginProposals).set({ packageName: to }).where(eq(pluginProposals.packageName, p.name))
+        await tx.update(pluginPackages).set({ forkedFrom: to }).where(eq(pluginPackages.forkedFrom, p.name))
+        await tx.delete(pluginPackages).where(eq(pluginPackages.name, p.name)) // its old versions go with it
+      }
+      // workshop drafts that edit or fork a renamed extension follow it
+      for (const d of await tx.select().from(workshopDrafts)) {
+        const fix = (n) => (typeof n === 'string' && names.includes(n) ? rename(n) : n)
+        const draft = { ...d.draft, editing: fix(d.draft?.editing), forkOf: fix(d.draft?.forkOf) }
+        if (draft.editing !== d.draft?.editing || draft.forkOf !== d.draft?.forkOf) await tx.update(workshopDrafts).set({ draft }).where(eq(workshopDrafts.userId, d.userId))
+      }
+    })
+    user.handle = handle
+    log(`[registry] publisher ${old} is now ${handle} (${names.length} extension${names.length === 1 ? '' : 's'} renamed)`)
     return handle
   }
 
   /** Publish a version. b: { name, version, code, manifest: { title, description, icon, sdk, says, replaces }, visibility, changelog } */
-  /** A publisher name for someone who hasn't chosen one: from their email, made unique. They can't change it later. */
+  /** A publisher name for someone who hasn't chosen one: from their email, made unique. They can change it in Settings. */
   async function autoHandle(user) {
     let base = String(user.email ?? 'me').split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').slice(0, 24)
     if (base.length < 2 || RESERVED_HANDLES.has(base)) base = `user-${base}`.slice(0, 24)

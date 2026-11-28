@@ -94,6 +94,8 @@ export const requestReset = (email) => api('POST', '/auth/forgot', { email })
 export const resetPassword = async (password) => finish(await api('POST', '/auth/reset', { token: auth.resetToken, password }))
 export const changePassword = (current, password) => api('POST', '/auth/password', { current, password })
 export async function rename(name) { auth.user = (await api('PATCH', '/auth/me', { name })).user }
+/** Your publisher name (handle): shown before your extensions' names and in your sharing address. */
+export async function setPublisherName(handle) { auth.user = (await api('POST', '/registry/handle', { handle })).user }
 
 /** Sign out here: the server ends the session, and this browser forgets the planner copy. */
 export async function signOut(endpoint) {

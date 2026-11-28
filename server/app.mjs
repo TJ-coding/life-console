@@ -334,8 +334,13 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
         return send(res, 200, { publicPlugins: !!user.publicPlugins, plugins: user.publicPlugins ? await registry.installed(uid) : [] })
       case 'GET /api/registry/plugins':
         return send(res, 200, { plugins: await registry.list(user, url.searchParams.get('q') ?? '') })
-      case 'POST /api/registry/handle':
-        return send(res, 200, { handle: await registry.setHandle(user, (await body(req)).handle) })
+      case 'POST /api/registry/handle': {
+        limit(`handle:${uid}`, 10, 3600000)
+        const from = user.handle
+        const handle = await registry.setHandle(user, (await body(req)).handle)
+        if (from && from !== handle) live.renamed?.(from, handle) // drafts in memory follow (the saved ones already did)
+        return send(res, 200, { handle, user: publicUser(user) })
+      }
       case 'POST /api/registry/publish': {
         limit(`publish:${uid}`, 30, 3600000)
         return send(res, 201, await registry.publish(user, await body(req, 700 * 1024)))

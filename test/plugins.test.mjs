@@ -814,3 +814,29 @@ test('workshop drafts in several files, saved in the database: a restart keeps t
   assert.equal(d.slug, 'parts')
   fresh.close()
 })
+
+test('publisher name: change it in Settings; your extensions move with it, with new hashes, unless others depend on the old one', async () => {
+  const frank = client()
+  await frank('POST', '/api/auth/signup', { email: 'frank.real-name@x.test', password: 'pw-frank-12345' })
+  const code = CODE.replace("title: 'Habits'", "title: 'Budget'")
+  assert.equal((await frank('POST', '/api/registry/publish', { name: 'budget', code })).body.name, 'frank-real-name/budget', 'from the email at first')
+  await frank('POST', '/api/registry/publish', { name: 'budget', code: code + '\n// 2' })
+  assert.equal((await frank('POST', '/api/registry/handle', { handle: 'alice' })).status, 409, 'taken')
+  const r = await frank('POST', '/api/registry/handle', { handle: 'fr-coding' })
+  assert.equal(r.status, 200)
+  assert.equal(r.body.user.handle, 'fr-coding', 'the account says the new name at once')
+  assert.equal((await frank('GET', '/api/auth/me')).body.user.handle, 'fr-coding')
+  const mine = (await conn.pool.query(`select v.hash, v.package_name, v.version, v.code from plugin_versions v join plugin_packages p on p.name = v.package_name join users u on u.id = p.owner_id where u.handle = 'fr-coding' order by v.version`)).rows
+  assert.deepEqual(mine.map((v) => `${v.package_name}@${v.version}`), ['fr-coding/budget@0.1.0', 'fr-coding/budget@0.1.1'])
+  for (const v of mine) assert.equal(v.hash, crypto.createHash('sha256').update(`fr-coding/budget\n${v.code}`).digest('hex'), 'hashed under the new name')
+  assert.equal((await conn.pool.query(`select count(*)::int n from plugin_packages where name like 'frank-real-name/%'`)).rows[0].n, 0, 'the old name is gone')
+  assert.match((await frank('GET', `/api/registry/code/${mine[0].hash}.js`)).text, /export default/, 'loads under its new hash')
+  assert.equal((await frank('POST', '/api/registry/publish', { name: 'budget', code: code + '\n// 3' })).body.name, 'fr-coding/budget', 'publishing goes on under the new name')
+  // a public extension someone else installed keeps its name, so the publisher name can't change
+  const p = await frank('POST', '/api/registry/publish', { name: 'shared', code: CODE.replace("title: 'Habits'", "title: 'Shared'"), visibility: 'public' })
+  const [other] = (await conn.pool.query(`select id from users where handle is distinct from 'fr-coding' limit 1`)).rows
+  await conn.pool.query('insert into plugin_installs (user_id, package_name, hash) values ($1, $2, $3)', [other.id, p.body.name, p.body.hash])
+  const blocked = await frank('POST', '/api/registry/handle', { handle: 'fr-other' })
+  assert.equal(blocked.status, 409)
+  assert.match(blocked.body.error, /installed fr-coding\/shared/)
+})

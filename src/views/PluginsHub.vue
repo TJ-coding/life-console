@@ -222,7 +222,7 @@ function addKey() { if (canConnect.value) location.href = trustUrl('vault-save',
           <a href="/app?safe=1">Open once without extensions</a>
         </div>
         <details v-if="plugins.conflicts.length" class="small"><summary class="muted">{{ plugins.conflicts.length }} things extensions asked for but didn't get</summary><ul><li v-for="c in plugins.conflicts" :key="c" class="mono">{{ c }}</li></ul></details>
-        <p v-if="auth.user?.handle" class="small muted">You publish extensions as <span class="mono">{{ auth.user.handle }}</span>.</p>
+        <p v-if="auth.user?.handle" class="small muted">You publish extensions as <span class="mono">{{ auth.user.handle }}</span> (<router-link to="/settings">change</router-link>).</p>
       </div>
     </details>
   </div>
