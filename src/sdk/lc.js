@@ -32,7 +32,16 @@ export function setVocabulary(list) {
 const nsOf = (id) => (id === 'core' ? 'core' : (pluginVocab.find((p) => p.id === id)?.ns ?? String(id).split('/').pop()))
 
 /* ── one data door over the reactive planner (writes sync, merge and undo like any edit) ── */
-export const door = createDataDoor({ getState: () => state, taxonomy: () => taxonomy, emit: (e, p) => bus.emit(e, p), nsOf })
+// extensions' records changed by something other than the door (another device, or Claude over MCP:
+// server/mcp-extdata.mjs) arrive by sync: tell the extensions, so open pages redraw. The door's own writes
+// update the signature first, so they aren't announced twice.
+const entitiesSig = () => (state.entities ?? []).map((r) => `${r.id}:${r.updatedAt ?? ''}`).join(',')
+let lastEntitiesSig = entitiesSig()
+export const door = createDataDoor({
+  getState: () => state, taxonomy: () => taxonomy, nsOf,
+  emit: (e, p) => { if (e === 'record.changed') lastEntitiesSig = entitiesSig(); bus.emit(e, p) },
+})
+watch(entitiesSig, (sig) => { if (sig === lastEntitiesSig) return; lastEntitiesSig = sig; bus.emit('record.changed', { op: 'sync', type: null, id: null, by: 'core' }) })
 
 // core events for changes made anywhere (screens edit the store directly): a todo ticked off
 let doneBefore = new Set((state.todos ?? []).filter((t) => t.done).map((t) => t.id))

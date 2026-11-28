@@ -585,6 +585,75 @@ test('planner over MCP: a separate permission on the trusted page, read today, a
   assert.equal((await mcpTool(fresh, 'today')).isError, true, 'a new connection starts without planner access')
 })
 
+test("an extension's data over MCP: read and change its own records with planner access, nothing else", async () => {
+  const gil = client()
+  await gil('POST', '/api/auth/signup', { email: 'extdata-gil@x.test', password: 'pw-extdata-1234' }, OWN_IP)
+  const pub = await gil('POST', '/api/registry/publish', { name: 'pots', code: CODE.replace("title: 'Habits'", "title: 'Pots'").replaceAll('habits.', 'pots.'), visibility: 'private', manifest: { title: 'Pots' } })
+  assert.equal(pub.status, 201, JSON.stringify(pub.body))
+  const handle = (await gil('GET', '/api/auth/me')).body.user.handle
+  const pkg = `${handle}/pots`
+  const state = { schemaVersion: 2, settings: { timezone: 'UTC' }, todos: [], deadlines: [], plans: [], relations: [], entities: [
+    { id: 'p1', type: 'pots.Pot', by: pkg, title: 'House', until: '2032-04-01', lump: null, createdAt: 'x', updatedAt: 'x' },
+    { id: 'p2', type: 'pots.Pot', by: pkg, title: 'Retirement', until: '2058-05-13', createdAt: 'x', updatedAt: 'x' },
+    { id: 'o1', type: 'other.Thing', by: 'someone/other', title: 'Not yours', createdAt: 'x', updatedAt: 'x' },
+  ] }
+  assert.equal((await gil('PUT', '/api/state', { state, baseVersion: 0 })).status, 200)
+  const tok = await mcpToken(gil)
+  const t = async (name, args) => { const r = await mcpTool(tok, name, args); return { ...r, text: r.content[0].text } }
+
+  // planner permission first, and only for an installed extension
+  assert.match((await t('extension_data', { name: pkg })).text, /separate permission/)
+  await confirm(gil, 'do=claude-planner')
+  assert.match((await t('extension_data', { name: pkg })).text, /isn't installed/)
+  await confirm(gil, `do=install&pkg=${pkg}&hash=${pub.body.hash}`)
+
+  const read = (await t('extension_data', { name: pkg })).text
+  assert.match(read, /2 records \(pots\.Pot 2\)/)
+  assert.deepEqual(JSON.parse(/pots\.Pot\/p1 (\{.*\})/.exec(read)[1]), { title: 'House', until: '2032-04-01', lump: null })
+  assert.doesNotMatch(read, /Not yours/, "another extension's records stay out")
+  assert.match((await t('extension_data', { name: pkg, type: 'Pot' })).text, /2 records/)
+
+  const changed = await t('change_extension_data', { name: pkg, changes: [
+    { op: 'update', ref: 'pots.Pot/p1', fields: { lump: 1500000, id: 'hijack', by: 'x' } },
+    { op: 'update', ref: 'pots.Pot/p2', fields: { until: '2058-05-13', title: 'Sixties' } },
+    { op: 'create', type: 'Pot', fields: { title: 'Fun' } },
+  ] })
+  assert.equal(changed.isError, undefined, changed.text)
+  assert.match(changed.text, /Changed pots\.Pot\/p1[^\n]*"lump":1500000/)
+  assert.match(changed.text, /Created pots\.Pot\/[a-z0-9]{12} \{"title":"Fun"\}/)
+
+  // all or none: one bad change and nothing is written
+  for (const changes of [
+    [{ op: 'update', ref: 'pots.Pot/p1', fields: { lump: 1 } }, { op: 'update', ref: 'other.Thing/o1', fields: { title: 'Mine now' } }],
+    [{ op: 'create', type: 'other.Thing', fields: {} }],
+    [{ op: 'update', ref: 'pots.Pot/nope', fields: { a: 1 } }],
+    [{ op: 'delete', ref: 'other.Thing/o1' }],
+    [{ op: 'explode' }],
+  ]) assert.equal((await t('change_extension_data', { name: pkg, changes })).isError, true, JSON.stringify(changes))
+
+  const doc = (await gil('GET', '/api/state')).body
+  const ents = doc.state.entities
+  assert.equal(doc.device, 'Claude')
+  const p1 = ents.find((r) => r.id === 'p1')
+  assert.equal(p1.lump, 1500000)
+  assert.equal(p1.by, pkg, 'id, type and by never change')
+  assert.equal(ents.find((r) => r.id === 'p2').title, 'Sixties')
+  assert.equal(ents.find((r) => r.id === 'o1').title, 'Not yours')
+  const fun = ents.find((r) => r.title === 'Fun')
+  assert.equal(fun.by, pkg)
+  assert.equal(fun.type, 'pots.Pot')
+
+  // delete only its own; null removes a field
+  assert.match((await t('change_extension_data', { name: pkg, changes: [{ op: 'delete', ref: `pots.Pot/${fun.id}` }, { op: 'update', ref: 'pots.Pot/p1', fields: { lump: null } }] })).text, /Deleted pots\.Pot/)
+  const after = (await gil('GET', '/api/state')).body.state.entities
+  assert.equal(after.length, 3)
+  assert.equal('lump' in after.find((r) => r.id === 'p1'), false)
+
+  // switching planner access off closes these too
+  await confirm(gil, 'do=claude-planner-off')
+  assert.equal((await t('extension_data', { name: pkg })).isError, true)
+})
+
 test('workshop drafts are checked on the server when no workshop is open', async () => {
   const fay = client()
   await fay('POST', '/api/auth/signup', { email: 'static-fay@x.test', password: 'pw-static-1234' }, OWN_IP)
