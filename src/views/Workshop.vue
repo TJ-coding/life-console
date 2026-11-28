@@ -58,22 +58,53 @@ const persist = () => {
 
 // live: Claude (or another AI app connected over MCP, server/mcp.mjs) changes this draft; the preview reports back
 const aiAt = ref(0) // when Claude last changed something here
+// the server keeps one draft per extension (server/workshop-live.mjs): Claude sessions working on other extensions
+// never overwrite this one. drafts: [{ slug, at, from }], newest first; the switcher shows when there's more than one
+const drafts = ref([])
+let serverSlug = '' // the name the server has this page's draft under (a rename here moves it)
+let typedAt = 0 // when the person last changed the draft here
 let fromAi = false // the draft on screen is the one Claude sent (the server has it already)
 let sentKey = ''
 let sendTimer = 0
+function postDraft() {
+  const key = draftKey(canonical(files.value))
+  if (key === sentKey && serverSlug === slugName(slug.value)) return
+  sentKey = key
+  return api('POST', '/api/workshop/live/draft', { files: files.value, slug: slug.value, was: serverSlug, forkOf: forkOf.value, editing: editing.value?.pkg ?? null })
+    .then((r) => { if (r?.slug) serverSlug = r.slug }).catch(() => { sentKey = '' })
+}
 function sendDraft() {
   if (fromAi) return
+  typedAt = Date.now()
   clearTimeout(sendTimer)
-  sendTimer = setTimeout(() => {
-    const key = draftKey(canonical(files.value))
-    if (key === sentKey) return
-    sentKey = key
-    api('POST', '/api/workshop/live/draft', { files: files.value, slug: slug.value, forkOf: forkOf.value, editing: editing.value?.pkg ?? null }).catch(() => { sentKey = '' })
-  }, 150)
+  sendTimer = setTimeout(postDraft, 150)
 }
-function applyAiDraft(d) {
+/** Send what's waiting right away (before switching to another draft). */
+async function flushDraft() { if (sendTimer) { clearTimeout(sendTimer); sendTimer = 0; await postDraft() } }
+const slugName = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+async function switchDraft(to) {
+  if (!to || to === serverSlug) return
+  await flushDraft()
+  try {
+    const r = await api('POST', '/api/workshop/live/select', { slug: to })
+    drafts.value = r.drafts ?? drafts.value
+    showDraft(r.draft)
+  } catch (e) { toast(e.message) }
+}
+async function discardDraft() {
+  const s = serverSlug || slugName(slug.value)
+  if (!confirm(`Throw away the draft ${s}? Its published versions stay.`)) return
+  try {
+    const r = await api('POST', '/api/workshop/live/discard', { slug: s })
+    drafts.value = r.drafts ?? []
+    if (r.draft) showDraft(r.draft)
+  } catch (e) { toast(e.message) }
+}
+/** Show a draft from the server (switching, or Claude's) without sending it back. */
+function showDraft(d, { ai = false } = {}) {
   fromAi = true
   sentKey = d.key
+  serverSlug = d.slug
   if (d.slug && d.slug !== slug.value) { slugQuiet = true; slug.value = d.slug }
   // Claude opened one of theirs to edit (server/mcp.mjs open_extension), or started a new one
   if (d.editing && editing.value?.pkg !== d.editing) editing.value = { pkg: d.editing, mine: true }
@@ -81,9 +112,15 @@ function applyAiDraft(d) {
   if ((d.forkOf ?? null) !== forkOf.value) forkOf.value = d.forkOf ?? null
   files.value = d.files ?? { [ENTRY]: d.code }
   if (!(current.value in files.value)) current.value = ENTRY
-  aiAt.value = Date.now()
+  if (ai) aiAt.value = Date.now()
+  try { localStorage.setItem(DRAFT, JSON.stringify({ describe: describe.value, files: files.value, slug: slug.value, version: version.value, forkOf: forkOf.value })) } catch { /* storage off */ }
   run()
   fromAi = false
+}
+function applyAiDraft(d) {
+  // Claude changed another draft while the person is working on this one: don't pull them away
+  if (serverSlug && d.slug !== serverSlug && Date.now() - typedAt < 60000) { aiAt.value = Date.now(); toast(`Claude changed the draft ${d.slug}: switch to it above`); return }
+  showDraft(d, { ai: true })
 }
 let source = null
 let useAfterRun = false // Claude asked to use it while the preview was still running
@@ -98,7 +135,13 @@ function listen() {
   source.onmessage = (e) => {
     let m
     try { m = JSON.parse(e.data) } catch { return }
-    if (m.type === 'hello') { if (m.aiAt) aiAt.value = m.aiAt; if (m.draft) applyAiDraft(m.draft); else { sentKey = ''; sendDraft() } }
+    if (m.drafts) drafts.value = m.drafts
+    if (m.type === 'hello') {
+      if (m.aiAt) aiAt.value = m.aiAt
+      if (m.draft) applyAiDraft(m.draft)
+      // this page's own draft (from this browser) goes to the server under its name, as the current one
+      else { const mine = slugName(slug.value); serverSlug = (m.drafts ?? []).some((x) => x.slug === mine) ? mine : ''; sentKey = ''; postDraft() }
+    }
     else if (m.type === 'draft') applyAiDraft(m.draft)
     else if (m.type === 'open') { aiAt.value = Date.now(); load(m.pkg) }
     else if (m.type === 'use') { aiAt.value = Date.now(); if (result.value) useWhenReady(); else useAfterRun = true }
@@ -298,6 +341,14 @@ async function shareIt() {
           <div class="panel-h"><span class="mono muted">1</span><h2>Describe it</h2></div>
           <div class="panel-b col">
             <label class="small name">Name <input v-model="slug" class="mono" @change="persist" /><span v-if="forkOf" class="tiny muted"> your copy of {{ forkOf }}</span></label>
+            <div v-if="drafts.length > 1" class="row small drafts">
+              <label class="row">Drafts
+                <select class="mono" :value="slugName(slug)" aria-label="Switch to another draft" @change="switchDraft($event.target.value)">
+                  <option v-for="d in drafts" :key="d.slug" :value="d.slug">{{ d.slug }}{{ d.from === 'ai' ? ' · Claude' : '' }}</option>
+                </select>
+              </label>
+              <button class="btn sm" title="Throw this draft away" aria-label="Throw this draft away" @click="discardDraft"><span class="icon sm" aria-hidden="true">delete</span></button>
+            </div>
             <label class="small col">What should it do?
               <textarea v-model="describe" rows="4" placeholder="e.g. Track my reading: books with a status, a Today card with what I'm reading, and a reminder at 21:00" @change="persist"></textarea>
             </label>
@@ -387,6 +438,8 @@ textarea, input, select { width: 100%; background: var(--surface-2); color: var(
 .row input, .row select { width: auto; }
 .ver { width: 90px !important; }
 .name input { width: 220px; margin-left: 6px; }
+.drafts { gap: 6px; align-items: center; }
+.drafts label { gap: 6px; align-items: center; }
 .share { gap: 8px; margin-top: 8px; }
 .big { padding: 10px 18px; font-size: 14px; }
 .code { font-size: 12px; line-height: 1.45; tab-size: 2; white-space: pre; }

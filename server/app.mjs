@@ -303,7 +303,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       /* ── live test: the draft runs in this person's console on their real planner (consented on /trust?do=dev-test) ── */
       case 'GET /api/workshop/dev': {
         const dev = live.dev(uid)
-        const d = live.draft(uid)
+        const d = live.devDraft(uid)
         if (!dev || !d) return send(res, 200, { on: false }, { 'Cache-Control': 'no-store' })
         return send(res, 200, { on: true, pkg: d.editing ?? `${user.handle || 'you'}/${d.slug || 'draft'}`, key: d.key, until: dev.until, undo: !!dev.checkpoint }, { 'Cache-Control': 'no-store' })
       }
@@ -316,8 +316,18 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       }
       case 'POST /api/workshop/live/draft': {
         const b = await body(req, 800 * 1024)
-        const d = live.setDraft(uid, { files: b.files, code: b.code, slug: b.slug, forkOf: b.forkOf ?? null, editing: b.editing ?? null }, 'you')
-        return send(res, 200, { key: d.key })
+        const d = live.setDraft(uid, { files: b.files, code: b.code, slug: b.slug, was: b.was, forkOf: b.forkOf ?? null, editing: b.editing ?? null }, 'you')
+        return send(res, 200, { key: d.key, slug: d.slug })
+      }
+      case 'POST /api/workshop/live/select': { // the workshop switches to another of its drafts
+        const d = live.select(uid, (await body(req)).slug)
+        if (!d) return send(res, 404, { error: 'no such draft' })
+        return send(res, 200, { draft: d, drafts: live.drafts(uid) })
+      }
+      case 'POST /api/workshop/live/discard': {
+        if (!live.discard(uid, (await body(req)).slug)) return send(res, 409, { error: 'no such draft, or it is under a live test' })
+        const d = live.draft(uid)
+        return send(res, 200, { draft: d, drafts: live.drafts(uid) })
       }
       case 'POST /api/workshop/live/result': {
         const b = await body(req, 128 * 1024)
@@ -556,7 +566,7 @@ export async function createApp({ cfg, db, pool, log = console.log }) {
       const who = await auth.identify(req)
       if (!who || who.via !== 'session') return send(res, 401, 'signed out')
       await live.ensure(who.user.id)
-      const d = live.draft(who.user.id)
+      const d = live.devDraft(who.user.id)
       if (!live.dev(who.user.id) || !d || d.key !== devKey) return send(res, 404, 'not under a live test')
       const blocked = staticCheck(d.files).errors
       if (blocked.length) return send(res, 409, `// blocked: ${blocked.join('; ')}`, { 'Content-Type': MIME['.js'] })

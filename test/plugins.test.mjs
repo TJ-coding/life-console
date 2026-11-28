@@ -840,3 +840,59 @@ test('publisher name: change it in Settings; your extensions move with it, with 
   assert.equal(blocked.status, 409)
   assert.match(blocked.body.error, /installed fr-coding\/shared/)
 })
+
+test('several drafts: two Claude sessions on different extensions never overwrite each other', async () => {
+  const sue = client()
+  await sue('POST', '/api/auth/signup', { email: 'drafts-sue@x.test', password: 'pw-drafts-1234' }, { 'X-Forwarded-For': '10.5.5.7' })
+  const tok = await mcpToken(sue)
+  const H = (sid) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${tok}`, ...(sid ? { 'Mcp-Session-Id': sid } : {}) })
+  const session = async () => {
+    const r = await raw('POST', '/mcp', JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } } }), H())
+    const sid = r.headers.get('mcp-session-id')
+    assert.match(sid, /^[a-f0-9]{32}$/, 'initialize gives a session id')
+    return async (name, args = {}) => { const x = JSON.parse((await raw('POST', '/mcp', JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } }), H(sid))).text).result; return { ...x, text: x.content[0].text } }
+  }
+  const page = (t) => `export default { sdk: 1, title: '${t}', pages: [{ title: '${t}', mount(el) { el.textContent = '${t} one' } }] }\n`
+  const a = await session(), b = await session()
+  assert.equal((await a('write_draft', { code: page('Papers') })).isError, undefined, 'named after its title')
+  assert.equal((await b('write_draft', { code: page('Money'), name: 'money' })).isError, undefined)
+  // each session edits its own draft without naming it
+  assert.equal((await a('edit_draft', { old_text: 'Papers one', new_text: 'Papers two' })).isError, undefined)
+  assert.equal((await b('edit_draft', { old_text: 'Money one', new_text: 'Money two' })).isError, undefined)
+  assert.match((await a('read_draft')).text, /A new extension called papers[\s\S]*Other drafts: money[\s\S]*Papers two/)
+  assert.match((await b('read_draft')).text, /called money[\s\S]*Money two/)
+  assert.match((await a('read_draft', { name: 'money' })).text, /Money two/, 'by name')
+  // a new session that hasn't picked one is asked which, never given someone else's
+  const c = await session()
+  const asked = await c('edit_draft', { old_text: 'two', new_text: 'three' })
+  assert.equal(asked.isError, true)
+  assert.match(asked.text, /several drafts \((money, papers|papers, money)\): say which/)
+
+  // the workshop page lists them, switches, renames and discards
+  const listed = await sue('POST', '/api/workshop/live/select', { slug: 'papers' })
+  assert.equal(listed.status, 200)
+  assert.deepEqual(listed.body.drafts.map((d) => d.slug).sort(), ['money', 'papers'])
+  assert.match(listed.body.draft.files['index.js'], /Papers two/)
+  const renamed = await sue('POST', '/api/workshop/live/draft', { code: page('Papers'), slug: 'reading', was: 'papers' })
+  assert.equal(renamed.body.slug, 'reading')
+  assert.deepEqual((await sue('POST', '/api/workshop/live/select', { slug: 'money' })).body.drafts.map((d) => d.slug).sort(), ['money', 'reading'], 'a rename moves the draft')
+  assert.equal((await sue('POST', '/api/workshop/live/select', { slug: 'nope' })).status, 404)
+
+  // after a restart both are still there, and the current one is remembered
+  await new Promise((r) => setTimeout(r, 200))
+  const { createWorkshopLive } = await import('../server/workshop-live.mjs')
+  const me = (await sue('GET', '/api/auth/me')).body
+  const fresh = createWorkshopLive({ db: conn.db })
+  await fresh.ensure(me.user?.id ?? me.id)
+  assert.deepEqual(fresh.drafts(me.user?.id ?? me.id).map((d) => d.slug).sort(), ['money', 'reading'])
+  assert.equal(fresh.current(me.user?.id ?? me.id), 'money')
+  fresh.close()
+
+  assert.equal((await sue('POST', '/api/workshop/live/discard', { slug: 'reading' })).status, 200)
+  assert.deepEqual((await sue('POST', '/api/workshop/live/select', { slug: 'money' })).body.drafts.map((d) => d.slug), ['money'])
+  // with one draft left, the session that had the other one is told it's gone, not handed this one
+  const gone = await a('edit_draft', { old_text: 'Money two', new_text: 'Mine now' })
+  assert.equal(gone.isError, true)
+  assert.match(gone.text, /papers isn't there any more[\s\S]*Drafts now: money/)
+  assert.match((await b('read_draft')).text, /Money two/, "b's draft is untouched")
+})

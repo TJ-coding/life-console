@@ -156,6 +156,7 @@ ${v.changelog ? `<p><b>What's new:</b> ${esc(v.changelog.slice(0, 600))}</p>` : 
       if (!d) return { noDraft: true }
       const name = d.editing ?? `${user.handle || 'you'}/${d.slug || 'draft'}`
       action.name = name
+      action.slug = d.slug // the draft shown here is the one that runs, even if the workshop switches meanwhile
       const blocked = checkDraft(d.files).errors
       warning = 'The draft will see and change everything in your planner. Unlike an installed version, its code can change while it runs: each time Claude (or you) edits it, the new version loads without asking you again.'
       details = `<dl><dt>Draft</dt><dd><code>${esc(name)}</code>${d.editing ? ' (in place of your installed version)' : ''}</dd><dt>For</dt><dd>60 minutes at most. A server restart ends it too.</dd>
@@ -282,7 +283,7 @@ ${action.site ? '' : '<label for="s">Site</label><input id="s" type="text" name=
       }
       case 'dev-test': {
         await live?.ensure?.(uid)
-        if (!live?.draft(uid)) return { msg: 'There is no draft to test any more.' }
+        if (!(a.slug ? live?.select(uid, a.slug) : live?.draft(uid))) return { msg: 'There is no draft to test any more.' }
         const checkpoint = await planner.checkpoint(uid, 'before live test')
         live.startDev(uid, { checkpoint })
         log(`[consent] live test on for ${uid.slice(0, 8)}`)
