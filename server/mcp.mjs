@@ -23,6 +23,8 @@ shows), and the draft appears in their workshop (at once if it's open). Read \`g
 extension. Keep the draft working: after a change, fix any errors it reports.
 Each extension has its own draft. Start a new one with write_draft and a name; later tools work on your session's draft
 (or say name). Other drafts may be another session's work in progress: don't change them unless the person asks.
+Save context: edit_draft changes only what differs; read_draft shows file names and sizes, and the code only for the
+file you ask for; ask for screenshots when a picture tells you something the preview's text doesn't.
 If this server has a previewer you don't need their browser: preview_draft returns screenshots and can click, type and
 drag through the draft. Check it at phone and desktop width before you say it's ready; they open the workshop to try it.
 You can also manage their extensions: search the registry, publish versions, edit listings, remove or switch off.
@@ -58,6 +60,9 @@ export function staticCheck(filesOrCode, says = {}) {
 }
 /** The draft's files as text for the AI: each under its name. */
 const showFiles = (d) => Object.entries(d.files ?? { [ENTRY]: d.code }).map(([n, c]) => `--- ${n} ---\n${c}`).join('\n')
+/** The files as a list (names, sizes): what a summary shows instead of the code, which costs the AI's context. */
+const fileList = (d) => Object.entries(d.files ?? { [ENTRY]: d.code }).map(([n, c]) => `${n} (${c.length < 1024 ? `${c.length} B` : `${(c.length / 1024).toFixed(1)} KB`})`).join(', ')
+const readHint = (d) => `Files: ${fileList(d)}\nThe code: read_draft with file: '<name>' for one file, or files: true for all.`
 const stripFence = (s) => String(s ?? '').replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/, '').trimEnd() + '\n'
 const slugOf = (title) => String(title ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
 
@@ -65,7 +70,8 @@ const TOOLS = [
   { name: 'guide', title: 'How to write an extension', description: 'The extension SDK: the file format, the data API, the shared vocabulary and the look kit (CSS classes that make it look native). Read it before writing an extension.', inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
   { name: 'list_extensions', title: 'List extensions', description: "The person's installed extensions and the ones they made, with their names (handle/name) for open_extension.", inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
   { name: 'open_extension', title: 'Open an extension', description: "Open an extension in the workshop to change it: the installed version if they have it, else the newest. The person's own opens for editing; anyone else's becomes their own copy (it replaces the original when they use it). Returns its code and preview. Their installed copy keeps running unchanged until they update it.", inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'handle/name, e.g. ann/water' } }, required: ['name'] } },
-  { name: 'read_draft', title: 'Read a draft', description: "A draft in the person's workshop (they may have edited it by hand), its latest preview, and the names of their other drafts.", inputSchema: { type: 'object', properties: withDraft() }, annotations: { readOnlyHint: true } },
+  { name: 'read_draft', title: 'Read a draft', description: "A draft in the person's workshop (they may have edited it by hand): its files and sizes, its latest preview and their other drafts. The code only when asked: `file` for one file, `files: true` for all (it costs context: ask for what you need).", inputSchema: { type: 'object', properties: withDraft({ file: { type: 'string', description: "One file's code, e.g. 'page.js'" }, files: { type: 'boolean', description: 'Every file\'s code' } }) }, annotations: { readOnlyHint: true } },
+  { name: 'list_drafts', title: 'List the drafts', description: "The person's drafts (one per extension), newest first: who changed each last, which one is yours in this session, which are under a live test.", inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } },
   { name: 'write_draft', title: 'Write the draft', description: "Replace the whole draft: `files` ({ 'index.js': …, 'layout.js': … }; index.js is the entry with the manifest) or just `code` (one file, index.js). Files import each other with relative paths ('./layout.js') and may import the curated libraries ('lc:d3'). It shows in the workshop at once; returns the preview.", inputSchema: { type: 'object', properties: { files: { type: 'object', additionalProperties: { type: 'string' }, description: 'file name → code' }, code: { type: 'string', description: 'The whole extension as one file (index.js)' }, name: { type: 'string', description: "The extension's name (lowercase, a-z 0-9 -): its draft. Give it for a new extension; other sessions' drafts are never touched" } } } },
   { name: 'write_file', title: 'Write one file', description: "Add or replace one file of the draft (e.g. 'layout.js'). Returns the preview.", inputSchema: { type: 'object', properties: withDraft({ path: { type: 'string' }, code: { type: 'string' } }), required: ['path', 'code'] } },
   { name: 'delete_file', title: 'Delete one file', description: 'Remove one file from the draft (not index.js). Returns the preview.', inputSchema: { type: 'object', properties: withDraft({ path: { type: 'string' } }), required: ['path'] } },
@@ -84,7 +90,7 @@ const TOOLS = [
   { name: 'add_task', title: 'Add a task', description: 'Add a task. Without a date it goes to the backlog. Needs planner access.', inputSchema: { type: 'object', properties: TASK_FIELDS({ parent: { type: 'string', description: 'Optional: the id of the task this is a subtask of' } }), required: ['title'] } },
   { name: 'change_task', title: 'Change a task', description: 'Change a task by id (T-123): only the fields given. done: true completes it. date: null moves it to the backlog. Needs planner access.', inputSchema: { type: 'object', properties: TASK_FIELDS({ id: { type: 'string' }, done: { type: 'boolean' } }), required: ['id'] } },
   { name: 'add_deadline', title: 'Add a deadline', description: 'Add a deadline (an external due date, e.g. a submission). Needs planner access.', inputSchema: { type: 'object', properties: { title: { type: 'string' }, due: { type: 'string', description: 'YYYY-MM-DD or YYYY-MM-DDTHH:MM (their time zone; end of day if no time)' }, source: { type: 'string', description: 'Optional: who set it' } }, required: ['title', 'due'] } },
-  { name: 'preview_draft', title: 'Preview with screenshots', description: "Run the draft in the server's previewer (no browser of theirs needed) and see it: screenshots, the text each part shows, errors. steps act on it first, as a person would: { click: sel } · { type: text, into?: sel } · { key: 'Enter'|'Tab'|'ArrowLeft'…, shift? } · { drag: sel, by: [dx, dy] } · { select: sel, value: 'option value or text' } · { screenshot: true | 'label' } (a picture mid-way, e.g. before and after a drag) · { wait: ms }. Up to 80 steps. A selector is CSS (it reaches inside each part's shadow root) or text=Exact text. Data changes from steps last for this run only. Icons show as dashed boxes (no icon font in the previewer).", inputSchema: { type: 'object', properties: { name: DRAFT, viewport: { type: 'string', enum: ['desktop', 'phone', 'both'], description: 'default desktop' }, theme: { type: 'string', enum: ['dark', 'light'] }, steps: { type: 'array', items: { type: 'object' } }, screenshots: { type: 'boolean', description: 'default true; false for text only' } } } },
+  { name: 'preview_draft', title: 'Preview with screenshots', description: "Run the draft in the server's previewer (no browser of theirs needed) and see it: screenshots, the text each part shows, errors. steps act on it first, as a person would: { click: sel } · { type: text, into?: sel } · { key: 'Enter'|'Tab'|'ArrowLeft'…, shift? } · { drag: sel, by: [dx, dy] } · { select: sel, value: 'option value or text' } · { screenshot: true | 'label' } (a picture mid-way, e.g. before and after a drag) · { wait: ms }. Up to 80 steps. A selector is CSS (it reaches inside each part's shadow root) or text=Exact text. Data changes from steps last for this run only. Icons show as dashed boxes (no icon font in the previewer). Screenshots cost context: by default you get them only when there are no steps (after steps the text shows the result), one screen high.", inputSchema: { type: 'object', properties: { name: DRAFT, viewport: { type: 'string', enum: ['desktop', 'phone', 'both'], description: 'default desktop' }, theme: { type: 'string', enum: ['dark', 'light'] }, steps: { type: 'array', items: { type: 'object' } }, screenshots: { type: 'boolean', description: 'final screenshots: default true without steps, false with steps' }, fullPage: { type: 'boolean', description: 'the whole page, not one screen high (default false)' } } } },
   { name: 'live_test', title: 'Live test on their planner', description: "on: ask the person to run the draft in their console on their real planner for up to 60 minutes; they confirm on the trusted page (a snapshot is taken first, and they can stop and undo). While it's on, each edit loads in their console at once. off: stop it. Only when they ask to try it for real; the previewer is for checking.", inputSchema: { type: 'object', properties: withDraft({ on: { type: 'boolean' } }), required: ['on'] } },
   { name: 'use_draft', title: 'Use the draft', description: 'When the draft works and the person wants it: takes their workshop to the confirmation page, where they install it (or update theirs). Nothing is installed without their click.', inputSchema: { type: 'object', properties: withDraft() } },
 ]
@@ -216,7 +222,7 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
         if (req.mcpSession) req.mcpSession.slug = draft.slug
         const about = own ? `Editing their extension ${pkg} (${inst ? `installed ${inst.version}` : `version ${v.version}`}).` : `Their own copy of ${pkg} (named ${draft.slug}): using it replaces the original for them.`
         const res = await afterWrite(req, user.id, draft)
-        return text(`${about} Their installed copy keeps running until they update it.\n\n${res.content[0].text}\n\nThe files:\n${showFiles(draft)}`, res.isError)
+        return text(`${about} Their installed copy keeps running until they update it.\n\n${res.content[0].text}\n\n${readHint(draft)}`, res.isError)
       }
       if (!live.open(user.id)) return fail(needWorkshop(req))
       const since = Date.now()
@@ -224,7 +230,7 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       const d = await live.until(user.id, (r) => r.draft && r.draft.at >= since && r.draft.from === 'you' && (r.draft.editing === pkg || r.draft.forkOf === pkg) && r.draft, 10000)
       if (!d) return fail("The workshop didn't open it (try again, or ask the person to reload the workshop).")
       const r = await live.resultFor(user.id, d.key)
-      return text(`${d.editing ? `Editing their extension ${pkg}.` : `Their own copy of ${pkg} (named ${d.slug}): using it replaces the original for them.`}\n\n${describeResult(r)}\n\nThe files:\n${showFiles(d)}`)
+      return text(`${d.editing ? `Editing their extension ${pkg}.` : `Their own copy of ${pkg} (named ${d.slug}): using it replaces the original for them.`}\n\n${describeResult(r)}\n\n${readHint(d)}`)
     },
     async read_draft(a, user, req) {
       const t = target(a, user, req, { adopt: false })
@@ -232,7 +238,20 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       const d = t.d
       if (!d) return text(t.slug ? `There is no draft called ${t.slug}.${otherDrafts(user.id, t.slug)}` : live.open(user.id) ? 'The workshop is open but has sent no draft yet: ask the person to reload it.' : 'No draft yet. Write one with write_draft.')
       const about = d.editing ? `Editing ${d.editing} (draft ${d.slug}).` : d.forkOf ? `Their own copy of ${d.forkOf} (draft ${d.slug}).` : `A new extension called ${d.slug}.`
-      return text(`${about}${d.from === 'you' ? ' Last changed by the person.' : ''}${otherDrafts(user.id, d.slug)}\n\n${describeResult(live.result(user.id, d.key))}\n\nThe files:\n${showFiles(d)}`)
+      const head = `${about}${d.from === 'you' ? ' Last changed by the person.' : ''}${otherDrafts(user.id, d.slug)}`
+      if (a.file) {
+        const f = String(a.file).replace(/^\.\//, '')
+        if (!(f in d.files)) return fail(`The draft has no file ${f} (it has ${Object.keys(d.files).join(', ')}).`)
+        return text(`${head}\n\n--- ${f} ---\n${d.files[f]}`)
+      }
+      return text(`${head}\n\n${describeResult(live.result(user.id, d.key))}\n\n${a.files ? `The files:\n${showFiles(d)}` : readHint(d)}`)
+    },
+    async list_drafts(_a, user, req) {
+      const list = live.drafts(user.id)
+      if (!list.length) return text('No drafts yet. Start one with write_draft and a name.')
+      const mine = req.mcpSession?.slug, dev = live.dev(user.id)?.slugs ?? [], cur = live.current(user.id)
+      const when = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago` }
+      return text(list.map((x) => `- ${x.slug}${x.editing ? ` (editing ${x.editing})` : x.forkOf ? ` (copy of ${x.forkOf})` : ''}: changed ${when(x.at)} by ${x.from === 'ai' ? 'Claude' : 'the person'}${x.slug === mine ? ' · yours in this session' : ''}${x.slug === cur ? ' · shown in the workshop' : ''}${dev.includes(x.slug) ? ' · under a live test' : ''}`).join('\n'))
     },
     async write_draft(a, user, req) {
       const given = a.files && typeof a.files === 'object' ? Object.fromEntries(Object.entries(a.files).map(([n, c]) => [n, stripFence(c)])) : typeof a.code === 'string' && a.code.trim() ? stripFence(a.code) : null
@@ -388,7 +407,10 @@ export function createMcp({ auth, registry, live, limit, log = () => {}, build =
       const d = t.d
       if (!d) return fail(t.slug ? `There is no draft called ${t.slug}.` : 'There is no draft yet: use write_draft or open_extension first.')
       const viewports = a.viewport === 'both' ? ['phone', 'desktop'] : [a.viewport === 'phone' ? 'phone' : 'desktop']
-      const r = await previewer.run({ files: d.files, name: d.slug || 'draft', theme: a.theme === 'light' ? 'light' : 'dark', viewports, steps: a.steps ?? [], shots: a.screenshots !== false })
+      // final screenshots: by default only without steps (after steps the text shows what happened; ask for a
+      // picture with a { screenshot } step or screenshots: true). One screen high unless fullPage
+      const shots = a.screenshots ?? !(a.steps?.length)
+      const r = await previewer.run({ files: d.files, name: d.slug || 'draft', theme: a.theme === 'light' ? 'light' : 'dark', viewports, steps: a.steps ?? [], shots, fullPage: !!a.fullPage })
       if (r.previewerFailed) return fail(`The previewer isn't working right now (${r.errors[0]}). read_draft shows the workshop's preview if it's open.`)
       if (!a.steps?.length) live.report(user.id, d.key, r, { byServer: true })
       const lines = [describeResult(r)]

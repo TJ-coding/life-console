@@ -426,7 +426,7 @@ test('live workshop over MCP: a workshop-only token, drafts reach the open works
   // the person edits by hand: Claude reads their version
   const mine = WATER.replace('0 / 8', '0 / 12')
   await bob('POST', '/api/workshop/live/draft', { code: mine, slug: 'water' })
-  const theirs = (await tool(token, 'read_draft')).content[0].text
+  const theirs = (await tool(token, 'read_draft', { files: true })).content[0].text
   assert.match(theirs, /0 \/ 12/)
   assert.match(theirs, /changed by the person/)
   await bob('POST', '/api/workshop/live/result', { key: (await bob('POST', '/api/workshop/live/draft', { code: mine, slug: 'water' })).body.key, result: { ok: true } })
@@ -650,13 +650,22 @@ test('server previewer: Claude previews, screenshots and clicks through a draft 
       assert.match(w.content[0].text, /Preview: works[\s\S]*\[Page 1: Counter\] 0 Add one/)
       assert.match((await mcpTool(tok, 'read_draft')).content[0].text, /Preview: works/, 'the result is kept for publish and use_draft')
 
-      const p = await mcpTool(tok, 'preview_draft', { viewport: 'both', steps: [{ click: '#up' }, { click: 'text=Add one' }, { type: 'Ann', into: '#name' }] })
+      const p = await mcpTool(tok, 'preview_draft', { viewport: 'both', screenshots: true, steps: [{ click: '#up' }, { click: 'text=Add one' }, { type: 'Ann', into: '#name' }] })
       assert.equal(p.isError, undefined, p.content[0].text)
       assert.match(p.content[0].text, /\[Page 1: Counter\] 2 Add one/)
       assert.match(p.content[0].text, /clicked #up[\s\S]*clicked text=Add one[\s\S]*typed "Ann" into #name/)
       const imgs = p.content.filter((x) => x.type === 'image')
       assert.equal(imgs.length, 2, 'phone and desktop')
       assert.equal(Buffer.from(imgs[0].data, 'base64').subarray(1, 4).toString(), 'PNG')
+      // one screen high, at 1 CSS pixel per pixel: a phone shot is 390 wide, not 780 (4× fewer pixels to read)
+      const size = (b64) => { const b = Buffer.from(b64, 'base64'); return [b.readUInt32BE(16), b.readUInt32BE(20)] }
+      const [pw, ph] = size(imgs[0].data)
+      assert.equal(pw, 390); assert.ok(ph <= 844, `phone shot ${ph} high`)
+      const [dw, dh] = size(imgs[1].data)
+      assert.equal(dw, 1280); assert.ok(dh <= 900)
+      // with steps and no screenshots asked for: the text only
+      const quiet = await mcpTool(tok, 'preview_draft', { steps: [{ click: '#up' }] })
+      assert.equal(quiet.content.filter((x) => x.type === 'image').length, 0)
 
       // the step tools: choose in a select, text= prefers what you can act on, a picture mid-way, icons out of the text
       const FORM = `export default { sdk: 1, title: 'Form', pages: [{ title: 'Form', mount(el) {
@@ -664,13 +673,13 @@ test('server previewer: Claude previews, screenshots and clicks through a draft 
         el.querySelector('#go').onclick = () => { el.querySelector('#o').textContent = 'picked ' + el.querySelector('#s').value }
       } }] }\n`
       await mcpTool(tok, 'write_draft', { code: FORM })
-      const f = await mcpTool(tok, 'preview_draft', { steps: [{ select: '#s', value: 'Banana' }, { screenshot: 'before' }, { click: 'text=Go' }, { select: '#s', value: 'Cherry' }] })
+      const f = await mcpTool(tok, 'preview_draft', { name: 'form', steps: [{ select: '#s', value: 'Banana' }, { screenshot: 'before' }, { click: 'text=Go' }, { select: '#s', value: 'Cherry' }] })
       const ft = f.content[0].text
       assert.match(ft, /chose "Banana" in #s[\s\S]*clicked text=Go[\s\S]*no option "Cherry" \(has: Apple, Banana\)/)
       assert.match(ft, /\[Page 1: Form\] Go Apple Banana Go ?picked b/, 'text=Go clicked the button, not the label')
       assert.doesNotMatch(ft, /close/, 'icon names are left out of the text')
-      assert.equal(f.content.filter((x) => x.type === 'image').length, 2, 'the mid-way picture and the final one')
-      const many = await mcpTool(tok, 'preview_draft', { screenshots: false, steps: Array.from({ length: 85 }, () => ({ wait: 1 })) })
+      assert.equal(f.content.filter((x) => x.type === 'image').length, 1, 'the mid-way picture it asked for (no final one with steps)')
+      const many = await mcpTool(tok, 'preview_draft', { name: 'form', screenshots: false, steps: Array.from({ length: 85 }, () => ({ wait: 1 })) })
       assert.match(many.content[0].text, /only the first 80 of 85 steps run/)
 
       // several files and a curated library, run for real in the browser
@@ -748,7 +757,8 @@ test('open_extension works with no workshop open: the installed version, theirs 
   const kt = await mcpToken(kim)
   const mine = await mcpTool(kt, 'open_extension', { name: pub.body.name })
   assert.equal(mine.isError, undefined, mine.content[0].text)
-  assert.match(mine.content[0].text, /Editing their extension[\s\S]*The files:[\s\S]*notes\.Habit/)
+  assert.match(mine.content[0].text, /Editing their extension[\s\S]*Files: index\.js \(/)
+  assert.doesNotMatch(mine.content[0].text, /notes\.Habit/, 'a summary, not the code')
   const lt = await mcpTool(await mcpToken(lee), 'open_extension', { name: pub.body.name })
   assert.match(lt.content[0].text, /Their own copy of/)
 })
@@ -798,7 +808,12 @@ test('workshop drafts in several files, saved in the database: a restart keeps t
   assert.equal(bad.isError, true)
   assert.match(bad.content[0].text, /only its own files/)
   await mcpTool(tok, 'write_file', { path: 'n.js', code: 'export const n = 3\n' })
-  const read = (await mcpTool(tok, 'read_draft')).content[0].text
+  const summary = (await mcpTool(tok, 'read_draft')).content[0].text
+  assert.match(summary, /Files: index\.js \([\d.]+ (B|KB)\), n\.js \(19 B\)/)
+  assert.doesNotMatch(summary, /export const n/, 'the summary leaves the code out')
+  assert.match((await mcpTool(tok, 'read_draft', { file: 'n.js' })).content[0].text, /--- n\.js ---\nexport const n = 3\n$/)
+  assert.equal((await mcpTool(tok, 'read_draft', { file: 'nope.js' })).isError, true)
+  const read = (await mcpTool(tok, 'read_draft', { files: true })).content[0].text
   assert.match(read, /--- index\.js ---[\s\S]*--- n\.js ---\nexport const n = 3/)
   assert.doesNotMatch(read, /m\.js/)
 
@@ -859,9 +874,12 @@ test('several drafts: two Claude sessions on different extensions never overwrit
   // each session edits its own draft without naming it
   assert.equal((await a('edit_draft', { old_text: 'Papers one', new_text: 'Papers two' })).isError, undefined)
   assert.equal((await b('edit_draft', { old_text: 'Money one', new_text: 'Money two' })).isError, undefined)
-  assert.match((await a('read_draft')).text, /A new extension called papers[\s\S]*Other drafts: money[\s\S]*Papers two/)
-  assert.match((await b('read_draft')).text, /called money[\s\S]*Money two/)
-  assert.match((await a('read_draft', { name: 'money' })).text, /Money two/, 'by name')
+  assert.match((await a('read_draft', { files: true })).text, /A new extension called papers[\s\S]*Other drafts: money[\s\S]*Papers two/)
+  assert.match((await b('read_draft', { file: 'index.js' })).text, /called money[\s\S]*Money two/)
+  assert.match((await a('read_draft', { name: 'money', files: true })).text, /Money two/, 'by name')
+  const drafts = (await a('list_drafts')).text
+  assert.match(drafts, /- money: changed just now by Claude/)
+  assert.match(drafts, /- papers: changed just now by Claude · yours in this session/)
   // a new session that hasn't picked one is asked which, never given someone else's
   const c = await session()
   const asked = await c('edit_draft', { old_text: 'two', new_text: 'three' })
@@ -894,7 +912,7 @@ test('several drafts: two Claude sessions on different extensions never overwrit
   const gone = await a('edit_draft', { old_text: 'Money two', new_text: 'Mine now' })
   assert.equal(gone.isError, true)
   assert.match(gone.text, /papers isn't there any more[\s\S]*Drafts now: money/)
-  assert.match((await b('read_draft')).text, /Money two/, "b's draft is untouched")
+  assert.match((await b('read_draft', { files: true })).text, /Money two/, "b's draft is untouched")
 })
 
 test('two sessions at once: no guessing without a session, one live test holding both drafts, both survive a restart', async () => {

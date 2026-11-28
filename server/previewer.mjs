@@ -125,7 +125,7 @@ export function createPreviewer({ url = '', dist = '', log = () => {} } = {}) {
    * Steps (after the first render): { click: sel } · { type: text, into?: sel } · { key: 'Enter'|'Tab'|'ArrowLeft'… }
    * · { drag: sel, by: [dx, dy] } · { wait: ms }. Returns the preview's result plus { steps: [...], shots: [{ viewport, png }] }.
    */
-  async function run({ code, files, name = 'draft', theme = 'dark', viewports = ['desktop'], steps = [], shots = false }) {
+  async function run({ code, files, name = 'draft', theme = 'dark', viewports = ['desktop'], steps = [], shots = false, fullPage = false }) {
     await slot()
     let c, ctx
     const started = Date.now()
@@ -218,7 +218,8 @@ export function createPreviewer({ url = '', dist = '', log = () => {} } = {}) {
           } else if (st.screenshot) {
             // a picture now, in the middle of the steps (the first viewport), e.g. before and after a drag
             await evaluate('window.__lc.iconBoxes()')
-            const { data } = await s('Page.captureScreenshot', { format: 'png' })
+            const v0 = VIEWPORTS[viewports[0] ?? 'desktop']
+            const { data } = await s('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: v0.width, height: v0.height, scale: 1 / v0.deviceScaleFactor } })
             midShots.push({ viewport: `${viewports[0] ?? 'desktop'}: ${String(st.screenshot === true ? `after step ${did.length}` : st.screenshot).slice(0, 60)}`, png: data })
             did.push(`screenshot${st.screenshot === true ? '' : ` "${st.screenshot}"`}`)
           } else if (st.wait) {
@@ -230,14 +231,16 @@ export function createPreviewer({ url = '', dist = '', log = () => {} } = {}) {
       }
       const after = await evaluate('(window.__lc.iconBoxes(), { parts: window.__lc.parts(), errors: window.__lcOut.errors, toasts: window.__lcOut.toasts })')
       const errors = [...new Set([...(result.errors ?? []), ...after.errors])]
-      const out = { ...result, ok: result.ok && !errors.length, parts: after.parts, errors, toasts: after.toasts, steps: did, shots: shots ? midShots : [] }
+      // screenshots asked for mid-way always come back; the final ones only with `shots`
+      const out = { ...result, ok: result.ok && !errors.length, parts: after.parts, errors, toasts: after.toasts, steps: did, shots: midShots }
       if (shots) {
         for (const v of viewports.slice(0, 2)) {
           await vp(v)
           await new Promise((r) => setTimeout(r, 150))
+          // one screen high unless the whole page is asked for, at 1 CSS pixel per pixel (a phone's 2× costs 4× the tokens)
           const { contentSize } = await s('Page.getLayoutMetrics')
-          const height = Math.min(Math.ceil(contentSize.height), 2400)
-          const { data } = await s('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: 0, y: 0, width: VIEWPORTS[v].width, height, scale: 1 } })
+          const height = fullPage ? Math.min(Math.ceil(contentSize.height), 2400) : Math.min(Math.ceil(contentSize.height), VIEWPORTS[v].height)
+          const { data } = await s('Page.captureScreenshot', { format: 'png', captureBeyondViewport: fullPage, clip: { x: 0, y: 0, width: VIEWPORTS[v].width, height, scale: 1 / VIEWPORTS[v].deviceScaleFactor } })
           out.shots.push({ viewport: v, png: data })
         }
       }
